@@ -135,20 +135,36 @@ die **Reihenfolge** bestimmt:
 - **Design-first:** Design-Pages und Plattform-Guidelines vor dem Bauen einer Komponente; Code
   folgt dem Design. Wer eine Design-Page schreibt: unmittelbar vorher frisch laden, fremde
   Änderungen erhalten, danach verifizieren.
+- **Erst recherchieren, dann bauen:** Bevor etwas selbst erfunden wird (Algorithmus, Kennwerte,
+  UI-Muster, Hilfsbibliothek), nach bewährten Lösungen suchen (Web-Recherche, etablierte
+  Bibliotheken, Fachquellen) und das Ergebnis mit Quelle in Spec bzw. Agent-Briefing geben.
+- **Clean Architecture:** Abhängigkeiten zeigen nur nach innen (Adapter → Application → Domain).
+  Domain und Application ohne Framework-, DOM-, Netz- oder Storage-Zugriff; Zeit, Zufall und
+  Persistenz kommen über injizierte Ports. UI enthält keine Fachregeln. Ordnerstruktur und
+  Grenzen aus den Projekt-Regeln; fehlen sie, in der Spec festlegen und per Lint-Regel
+  (z. B. `no-restricted-imports`) erzwingen.
 - **Contract-first bei Parallelität:** Schnittstellen/DTOs/Typen zuerst, dann Domain, Daten, UI
   parallel, Verdrahtung (DI, Routen, zentrale Registries) zuletzt und sequentiell. Hotspot-Dateien
   gehören genau einem Strang.
-- **TDD für Logik:** Test zuerst für Domain/Use-Cases/Parser/Berechnungen.
+- **TDD:** Für Domain- und Application-Code (Use-Cases, Parser, Berechnungen, Zustandsautomaten)
+  zuerst ein fehlschlagender Test, dann der minimale Code, dann aufräumen (Red → Green →
+  Refactor). Adapter: reine Hilfsfunktionen herauslösen und testen, Verhalten per E2E/Smoke.
+  Jedes Agent-Briefing fordert TDD ausdrücklich; der Report nennt Teile ohne Test.
+- **Gates nach jedem Implementierungsschritt:** Nach jedem abgeschlossenen Strang bzw.
+  Agent-Ergebnis laufen die schnellen Gates (Lint, Format-Check, Unit-Tests) über das ganze Repo,
+  vor jedem Commit zusätzlich Build und Smoke/E2E. Nichts wird committet, solange ein Gate rot ist
+  (auch kein „WIP"-Commit mit kaputtem Build auf einem geteilten Branch).
 - **Tests im selben Durchgang:** nach Selektoren/Assertions suchen, die die Änderung bricht
   (Unit, E2E, Snapshots), und jetzt anpassen.
 - **Migrationen sind unveränderlich**, sobald gemerged oder ausgerollt: Korrekturen nur als neue
   Migration.
 - **Fan-out parallelisieren:** unabhängige Dateigruppen → parallele Subagenten in EINER Nachricht,
-  je mit klarer Datei-Ownership, `model: "sonnet"` für Mechanik (Verdrahtung, i18n-Keys,
-  Test-Gerüste, Selektor-Updates).
-- **Tragende Entscheidungen auf `opus`:** neue Feature-Vertikale, Schichtung, Datenmodell/Schema,
-  Migrationen, Sicherheits-relevante Logik. Ab Schritt 3 hält niemand mehr an, um das Modell
-  hochzustellen.
+  je mit klarer Datei-Ownership. Umsetzungs-Agents laufen auf `model: "sonnet"`; auch
+  Ticket-übergreifend parallelisieren, wenn Abhängigkeiten es zulassen (contract-first).
+- **Koordination und tragende Entscheidungen in der Hauptsession (`opus`):** neue
+  Feature-Vertikale, Schichtung, Datenmodell/Schema, Migrationen, Sicherheits-relevante Logik
+  werden in der Spec entschieden und den Sonnet-Agents als Vertrag mitgegeben. Ab Schritt 3 hält
+  niemand mehr an, um das Modell hochzustellen.
 - Manuelle Prüfung, wenn hilfreich, mit dem Test-/Dev-Kommando des Projekts; gestartete Server
   werden in Schritt 8 aufgeräumt.
 - Peer-Sessions (falls `ListAgents` existiert): Test schlägt fehl, den du nicht verursacht hast,
@@ -193,6 +209,9 @@ und Design-QA **parallel** (zwei Agent-Aufrufe in einer Nachricht).
 1. Spec/Konzept/Ticket-Pfade (die Verträge, gegen die geprüft wird);
 2. Absicht in 1-3 Sätzen (nutzersichtbares Ergebnis);
 3. exakte Liste der geänderten Dateien mit absoluten Pfaden.
+Der Code-Review prüft zusätzlich die Schichtgrenzen (keine Fachregeln im UI, keine
+Framework-/DOM-Abhängigkeit in Domain/Application) und ob für neue Domain-/Application-Logik Tests
+existieren; fehlende Tests für Fachlogik sind `major`.
 Ausgabe: Befunde mit Schwere `blocker | major | medium | minor | nitpick`, Datei:Zeile, Begründung,
 Fix-Vorschlag. Halb oder nicht erfüllte Spec-Verifikationskriterien sind `major`.
 
@@ -289,8 +308,8 @@ Validierung vor dem Einfrieren: Dry-Run gegen die Spec erzeugt 0 Rückfragen.
 
 ## Modell-Policy
 
-Projekt-Policy geht vor. Default: Lesephase und mechanischer Fan-out `sonnet`, tragende
-Design-Entscheidungen und **alle** Reviewer/QA `opus`. Jeder Subagent-Aufruf trägt sein `model`
+Projekt-Policy geht vor. Default: Lesephase und **jede Umsetzung** durch Subagents `sonnet`;
+Koordination, Spec/Architektur-Entscheidungen und **alle** Reviewer/QA `opus`. Jeder Subagent-Aufruf trägt sein `model`
 explizit. Werkzeuge, die nur der Hauptsession zur Verfügung stehen (z. B. Design-Schreibzugriffe),
 werden nicht delegiert.
 
@@ -298,7 +317,9 @@ werden nicht delegiert.
 
 - Schritt 3 ist der einzige Stopp; nicht auf Vermutungen daran vorbei, keine zweite Freigabe
   erfinden.
-- Gates sind Pflicht; Ausnahmen nur nach Projekt-Regel und mit genannter Begründung.
+- Gates sind Pflicht, nach jedem Implementierungsschritt und vor jedem Commit; Ausnahmen nur nach
+  Projekt-Regel und mit genannter Begründung.
+- TDD und Clean Architecture für Domain/Application; Recherche vor Eigenbau.
 - Ein roter Gate blockiert, auch wenn er von `<BASE>` kommt.
 - Spec/Konzept zuerst ändern, nie still abweichen.
 - Migrationen unveränderlich nach Merge/Rollout.

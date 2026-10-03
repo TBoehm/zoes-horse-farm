@@ -21,7 +21,7 @@ das „Wie": Module, Schnittstellen, Koordinaten, Datei-Ownership. Abweichungen 
 
 - Meter, Sekunden, Radiant. three.js: Y nach oben.
 - Reitplatz zentriert im Ursprung: `x ∈ [-20, 20]` (Breite 40 m), `z ∈ [-35, 35]` (Länge 70 m),
-  Konstanten `ARENA.width = 40`, `ARENA.length = 70` in `src/game/sim/tuning.js`.
+  Konstanten `ARENA.width = 40`, `ARENA.length = 70` in `src/domain/sim/tuning.js`.
 - Blickrichtung (heading) `h`: Vorwärtsvektor `f = (sin h, 0, cos h)`; `h = 0` blickt nach +Z.
   Modelle sind so gebaut, dass sie in ihrem lokalen Raum nach **+Z** schauen; `object.rotation.y = h`.
 - Rechts vom Reiter: `r = (-cos h, 0, sin h)`.
@@ -56,27 +56,56 @@ Obstacle = {
   Steilsprung = obere Stange rail 0 (+ untere feste Füllstange, fällt nie),
   Oxer = vordere obere rail 0, hintere obere rail 1.
 
-## Modul-Übersicht und Ownership
+## Schichten (Clean Architecture, siehe CLAUDE.md)
 
-| Pfad | Inhalt | Ticket | Strang |
-| --- | --- | --- | --- |
-| `index.html`, `src/main.js`, `src/app/**`, `src/core/**`, `src/styles/**`, `src/i18n/core.js` | Boot, Screens, Menü-Registry, Einstellungen-Registry, Hinweise, Speicher, i18n, Touch-Modus, WebGL-Check | SRT-001 | shell |
-| `vite.config.js`, `scripts/**`, `public/icon.svg`, `.github/**`, `tests/smoke/**`, Configs, `README.md` | Build, Icons, CI/CD, Smoke | SRT-001 | shell |
-| `src/game/sim/**` | reine Reit-/Sprung-Simulation ohne three.js, mit Tests | SRT-002/003 | sim |
-| `src/game/course/**` | Parcours-Layouts, freie Aufstellung, Ritt-Zustandsautomat, Wertung, mit Tests | SRT-003/004 | course |
-| `src/game/view/horse/**`, `src/game/view/rider.js` | prozedurales Pferd + Reiter + Animation, Fellfarben, Abzeichen | SRT-002/003/005 | horse |
-| `src/game/view/{renderer,quality,arena,environment,textures,obstacles,aid-marker,sky}.js` | Szene, Grafikstufen, Reitplatz, Umgebung, Hindernis-Meshes, Absprung-Hilfe | SRT-002/003 | world |
-| `src/game/{session,camera,hud,modes}*.js`, `src/game/input/**`, `src/app/screens/riding*.js` | Spiel-Schleife, Eingabe (Tastatur/Touch), Kamera, Pause, HUD | SRT-002–004 | integration |
-| `src/progress/**` | Auszeichnungen-Logik, Fortschritt (rein), mit Tests | SRT-004/005 | progress |
-| `src/audio/**` | WebAudio-Synthese, Effekte, Menü-Melodie | SRT-006 | audio |
-| `src/i18n/<bereich>.js` | Texte je Bereich (DE+EN) | je Ticket | je Strang |
+Abhängigkeiten zeigen nur nach innen: `adapters → application → domain`; `shared` darf jede Schicht
+nutzen. ESLint (`no-restricted-imports`, `no-restricted-globals`, `no-restricted-properties`)
+erzwingt die Grenzen.
 
-Hotspots (nur der Integrations-Strang bzw. die Hauptsession ändert sie): `src/main.js`,
-`src/app/app.js`, `src/app/menu.js` (Registrierungen), `package.json`.
+| Pfad | Inhalt | Darf importieren |
+| --- | --- | --- |
+| `src/shared/` | reine Helfer ohne Seiteneffekte (Event-Emitter, Mathe) | nichts außer `shared` |
+| `src/domain/sim/` | Reit-/Sprung-Simulation, Spielwerte (`tuning.js`), Geometrie, seedbarer Zufall | `domain`, `shared` |
+| `src/domain/course/` | Parcours-Layouts, freie Aufstellung, Ritt-Zustandsautomat, Wertung | `domain`, `shared` |
+| `src/domain/progress/` | Fortschritt, Bestleistung, Freischaltung, Auszeichnungen | `domain`, `shared` |
+| `src/domain/horse/` | Pferdename, Fellfarben, Abzeichen (Werte und Regeln) | `domain`, `shared` |
+| `src/application/save-schema.js` | Spielstand-Bereiche mit Bereinigung (Regel 47), Einstellungsfelder | `domain`, `shared` |
+| `src/application/ride-session.js` | Anwendungsfall „Ritt": Sim-Schritt, Ereignisse, Stangen-Wiederaufbau, Sprungzähler + Sofort-Auszeichnungen, Absprung-Hilfe, Rückmeldungen | `domain`, `application`, `shared` |
+| `src/application/modes/` | Modus-Strategien `free-mode.js`, `course-mode.js` (Uhr, HUD-Modell, Rittende → Fortschritt + Auszeichnungen) | `domain`, `application`, `shared` |
+| `src/application/progress-service.js` | Sprung zählen, Ritt abschließen, Fortschritt löschen (über Port `store`) | `domain`, `shared` |
+| `src/adapters/storage/` | localStorage-Store (implementiert Port `store`) | innen |
+| `src/adapters/platform/` | WebGL-Prüfung, Touch-Modus, Hochformat, PWA | innen |
+| `src/adapters/input/` | Tastatur, Touch-Bedienung (nipplejs) → `InputState` | innen |
+| `src/adapters/view3d/` | Renderer, Grafikstufen, Welt, Hindernisse, Pferd/Reiter, Kamera, Engine | innen |
+| `src/adapters/audio/` | WebAudio-Synthese | innen |
+| `src/adapters/ui/` | App-Rahmen, Bildschirme, Einstellungs-Abschnitte, i18n + Texte, Styles | innen |
+| `src/main.js` | Composition Root | alles |
+
+### Ports (als Parameter injiziert)
+
+- `store`: `{ get(section), update(section, fn), onChange(section, fn) }` – Adapter: `adapters/storage`.
+- `clock`: `{ nowIso() }` für Auszeichnungs-Datum; Zeit im Spiel kommt als `dt`.
+- `rng`: `() => number` in [0, 1) – Domain nutzt nie `Math.random()` direkt.
+- Die Ritt-Sitzung liefert Ereignisse/Kommandos (`endGallop`, `badgesAwarded`, `feedback`,
+  `finished`, Klang-Ereignisse); der UI-Adapter setzt sie um (Eingabe, Toasts, Klang, Bildschirmwechsel).
+
+### Ritt-Sitzung (application/ride-session.js)
+
+```js
+const session = createRideSession({ mode, store, clock, rng });
+session.restart();                       // Startpose, Stangen auf, Modus zurücksetzen
+const out = session.step(dt, input);     // input = InputState ohne pause/camera
+// out = { events (Sim), commands: [{type:'endGallop'} | {type:'resetTouchGallop'} |
+//         {type:'feedback', key} | {type:'badges', ids} | {type:'finished', summary} |
+//         {type:'sound', name, gait?}] }
+session.view  // { horse, rails, aid: null|{elementId, dir, zone}, highlight, finishMarked,
+              //   lines, hud: mode-spezifisches Modell (reine Daten) }
+```
+Pause, Kamera-Umschaltung, Auto-Pause und DOM bleiben im UI-Adapter (`adapters/ui/screens/ride`).
 
 ## Schnittstellen
 
-### i18n (`src/core/i18n.js`)
+### i18n (`src/adapters/ui/i18n.js`)
 
 ```js
 registerStrings({ de: { 'menu.settings': 'Einstellungen', ... }, en: { ... } });
@@ -84,10 +113,10 @@ t('menu.settings', { name: 'Blitz' });  // {name} Platzhalter
 getLang(); setLang('de'|'en'); onLangChange(fn) → unsubscribe
 detectLang(navigatorLanguages) → 'de'|'en'
 ```
-Jeder Bereich registriert seine Texte in `src/i18n/<bereich>.js` (Default-Export
-`{ de, en }`), importiert in `src/i18n/index.js`. Ein Test prüft: gleiche Schlüssel in de und en.
+Jeder Bereich registriert seine Texte in `src/adapters/ui/i18n/<bereich>.js` (Default-Export
+`{ de, en }`), importiert in `src/adapters/ui/i18n/index.js`. Ein Test prüft: gleiche Schlüssel in de und en.
 
-### Speicher (`src/core/storage.js`, `src/core/save-schema.js`)
+### Speicher (`src/adapters/storage/local-store.js`, `src/application/save-schema.js`)
 
 Ein JSON-Objekt unter `localStorage['zoes-horse-farm.save']`:
 ```js
@@ -106,22 +135,27 @@ API:
 const store = createStore({ backend = localStorage, sessionBackend = sessionStorage });
 store.get('settings')                 // bereinigte Kopie (Defaults für Fehlendes/Ungültiges)
 store.update('settings', s => ({...s, lang: 'en'}))  // speichert sofort
-store.resetProgress()                 // nur progress-Felder aus Regel 48
+store.flush()                         // aktuellen Stand schreiben (erster Start)
 store.canSave                         // false, wenn Schreiben scheitert
 store.shouldShowSaveNotice()          // true höchstens einmal je Sitzung (sessionStorage)
 store.onChange(section, fn)
+store.onSaveFailed(fn)
 ```
+`createStore({ backend, sessionBackend, env, noticeMarker })`: `env.defaultLang` = Startsprache;
+`noticeMarker` = Ersatz-Merker in `history.state`, falls auch sessionStorage fehlt.
+Neue Einstellungsfelder: `addSettingsFields({...})`; „Fortschritt löschen" =
+`progress-service.resetProgress(store)` (nur Regel-48-Felder).
 Jeder Bereich hat einen Sanitizer in `save-schema.js` (Feld für Feld, ungültig → Default,
 unbekannte Felder bleiben). Neue Bereiche: neuen Sanitizer registrieren (`registerSection`).
 
-### Eingabe (`src/game/input/`)
+### Eingabe (`src/adapters/input/`)
 
 `InputState` je Frame: `{ steer: -1..1 (rechts +), throttle: -1..1 (W +), gallop: bool,
 jump: bool (Flanke: in diesem Frame gedrückt), pause: bool (Flanke), camera: bool (Flanke) }`.
 Tastatur: `gallop = shiftHeld && !shiftLatched`; `latchGallop()` setzt `shiftLatched` bis Shift
 losgelassen wird. Touch: Galopp-Umschalter; `latchGallop()` schaltet ihn aus.
 
-### Reit-Simulation (`src/game/sim/`, rein, deterministisch mit injiziertem RNG)
+### Reit-Simulation (`src/domain/sim/`, rein, deterministisch mit injiziertem RNG)
 
 ```js
 const sim = createRidingSim({ obstacles, rules, rng = Math.random, tuning = TUNING });
@@ -146,9 +180,9 @@ Events (Array, je Step): `{type:'takeoff', elementId, dir, self, risk}`,
 (Sprung gezählt), `{type:'refusal', elementId, dir, reason:'gait'|'speed'|'angle'}`,
 `{type:'swerve', elementId}`, `{type:'hop'}`, `{type:'fenceStop'}`,
 `{type:'gallopEnded', reason:'refusal'|'fence'}`.
-Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven) nur in `src/game/sim/tuning.js`.
+Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven) nur in `src/domain/sim/tuning.js`.
 
-### Parcours (`src/game/course/`, rein)
+### Parcours (`src/domain/course/`, rein)
 
 ```js
 COURSES            // [ {id:1, obstacles:[Obstacle], start:{a:[x,z],b:[x,z]}, finish:{...},
@@ -168,7 +202,7 @@ run.missingHint                            // Nummer des fehlenden Hindernisses 
 run.drainRebuilds() → elementIds           // sofort wieder aufzubauen (Kombination neuer Anlauf)
 ```
 
-### View (`src/game/view/`)
+### View (`src/adapters/view3d/`)
 
 ```js
 const world = createWorld(renderer, { quality });  // Szene, Licht, Himmel, Reitplatz, Umgebung
@@ -185,7 +219,7 @@ horse.earAnchor                                      // Object3D für Reiter-Sic
 horse.onFootfall = (gait) => {}                      // für Hufschlag
 ```
 
-### Audio (`src/audio/`)
+### Audio (`src/adapters/audio/`)
 
 ```js
 const audio = createAudio({ settings });   // startet erst nach erster Interaktion (unlock)
@@ -201,4 +235,9 @@ audio.setPaused(bool)                      // Pause → keine Effekte
 `low`: pixelRatio 1, keine Schatten, Lambert-Materialien, wenig Umgebung.
 `medium`: pixelRatio ≤ 1,5, Schatten 1024 (nur Pferd/Hindernisse), Standard-Materialien.
 `high`: pixelRatio ≤ 2, Schatten 2048, mehr Umgebung (Bäume, Gras-Instanzen), Nebel.
-Automatik: `src/game/view/quality.js` (`createQualityGovernor`), misst nur beim Reiten.
+Automatik: `src/adapters/view3d/quality.js` (`createQualityGovernor`), misst nur beim Reiten.
+
+## Arbeitsweise
+
+TDD für `domain` und `application` (Test zuerst). Adapter: reine Hilfsfunktionen mit Tests,
+Verhalten im Browser per Smoke-Test (`tests/smoke/`).
