@@ -122,7 +122,7 @@ function addElementStatic(builder, element, color, { flags, board }) {
   if (board) {
     const zFront = standRows(element)[0] - 0.25;
     add(boxOnGround(0.05, 1.05, 0.05), 0xe0e0e0, { x: STAND_X + 0.75, z: zFront });
-    add(new THREE.BoxGeometry(0.58, 0.5, 0.03), color, { x: STAND_X + 0.75, y: 1.0, z: zFront });
+    add(new THREE.BoxGeometry(0.66, 0.56, 0.03), color, { x: STAND_X + 0.75, y: 1.0, z: zFront });
   }
 }
 
@@ -513,7 +513,10 @@ export function createObstacles({ materialFactory }) {
       );
       const boards = createGeometryBuilder();
       for (const { element, label } of labels) {
-        boards.addPainted(makeSignQuad(0.52, 0.44, atlas.rects.get(label), 0.017), boardMatrix(element));
+        boards.addPainted(
+          makeSignQuad(0.6, 0.5, atlas.rects.get(label), 0.017),
+          boardMatrix(element),
+        );
       }
       boardMats.standard.map = atlas.texture;
       boardMats.lambert.map = atlas.texture;
@@ -608,4 +611,3 @@ function hashId(id) {
   for (let i = 0; i < s.length; i += 1) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return h >>> 0;
 }
-

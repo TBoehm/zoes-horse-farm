@@ -129,7 +129,8 @@ describe('Stangenfall', () => {
     expect(fallCurve(0.78)).toBeCloseTo(1);
     expect(fallCurve(0.89)).toBeLessThan(1);
     expect(fallCurve(0.89)).toBeGreaterThan(0.85);
-    for (let t = 0; t < 0.78; t += 0.05) expect(fallCurve(t + 0.05)).toBeGreaterThanOrEqual(fallCurve(t));
+    for (let t = 0; t < 0.78; t += 0.05)
+      expect(fallCurve(t + 0.05)).toBeGreaterThanOrEqual(fallCurve(t));
   });
 
   it('ein Ende fällt zuerst, beide kommen bei t = 1 an', () => {
@@ -227,14 +228,18 @@ describe('planFence', () => {
     const arena = plan.segments.filter((s) => s.style === 'arena');
     expect(arena.every((s) => s.len <= FENCE.spacing + 1e-9)).toBe(true);
     const posts = plan.posts.filter((p) => p.style === 'arena');
-    expect(posts.every((p) => Math.abs(p.x) >= ARENA.width / 2 || Math.abs(p.z) >= ARENA.length / 2)).toBe(
-      true,
-    );
+    expect(
+      posts.every((p) => Math.abs(p.x) >= ARENA.width / 2 || Math.abs(p.z) >= ARENA.length / 2),
+    ).toBe(true);
   });
 
   it('Torlücke ohne Zaunteile', () => {
     const inGap = plan.segments.filter(
-      (s) => s.style === 'arena' && s.x < 0 && Math.abs(s.z - GATE.z) < GATE.width / 2 - 0.1 && Math.abs(s.x + 20.18) < 0.1,
+      (s) =>
+        s.style === 'arena' &&
+        s.x < 0 &&
+        Math.abs(s.z - GATE.z) < GATE.width / 2 - 0.1 &&
+        Math.abs(s.x + 20.18) < 0.1,
     );
     expect(inGap).toHaveLength(0);
     expect(plan.gate.z1 - plan.gate.z0).toBeCloseTo(GATE.width);
@@ -261,7 +266,7 @@ describe('Umgebung', () => {
 
   it('scatter liefert Punkte im Ring außerhalb gesperrter Flächen', () => {
     let s = 1;
-    const rng = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    const rng = () => (s = (s * 16807) % 2147483647) / 2147483647;
     const pts = scatter(rng, 50, 30, 80, 1);
     expect(pts).toHaveLength(50);
     for (const [x, z] of pts) {

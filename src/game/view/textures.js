@@ -19,7 +19,8 @@ export function createTileNoise(period, seed = 1) {
   const rng = createRng(seed);
   const grid = new Float32Array(period * period);
   for (let i = 0; i < grid.length; i += 1) grid[i] = rng();
-  const at = (x, y) => grid[(((y % period) + period) % period) * period + (((x % period) + period) % period)];
+  const at = (x, y) =>
+    grid[(((y % period) + period) % period) * period + (((x % period) + period) % period)];
   return function noise(u, v) {
     const x = u * period;
     const y = v * period;
@@ -38,7 +39,8 @@ export function createTileNoise(period, seed = 1) {
 /** Kachelbares fbm aus mehreren Oktaven, Ergebnis ca. 0..1. */
 export function createTileFbm(basePeriod, octaves, seed = 1) {
   const layers = [];
-  for (let o = 0; o < octaves; o += 1) layers.push(createTileNoise(basePeriod << o, seed + o * 101));
+  for (let o = 0; o < octaves; o += 1)
+    layers.push(createTileNoise(basePeriod << o, seed + o * 101));
   return function fbm(u, v) {
     let sum = 0;
     let amp = 0.5;
@@ -135,7 +137,16 @@ export function createSandTextures({ size = 512, seed = 7, normal = true } = {})
     for (let s = 0; s < steps; s += 1) {
       const sx = cx + Math.cos(ang) * s * 0.9 * px;
       const sy = cy + Math.sin(ang) * s * 0.9 * px;
-      stampHoof(height, moist, size, sx, sy, ang, (0.045 + rng() * 0.015) * px, 0.12 + rng() * 0.18);
+      stampHoof(
+        height,
+        moist,
+        size,
+        sx,
+        sy,
+        ang,
+        (0.045 + rng() * 0.015) * px,
+        0.12 + rng() * 0.18,
+      );
     }
   }
 
@@ -149,7 +160,8 @@ export function createSandTextures({ size = 512, seed = 7, normal = true } = {})
     const m = moist[i];
     let t = THREE.MathUtils.clamp(0.3 + (0.6 - h) * 0.35 + (m - 0.5) * 0.45, 0, 1);
     const speck = rng();
-    if (speck > 0.985) t = Math.min(1, t + 0.35); // dunkle Körnchen
+    if (speck > 0.985)
+      t = Math.min(1, t + 0.35); // dunkle Körnchen
     else if (speck < 0.02) t = Math.max(0, t - 0.3); // helle Körnchen
     const o = i * 4;
     img.data[o] = light[0] + (dark[0] - light[0]) * t;
@@ -354,7 +366,10 @@ export function paint(geometry, color, { jitter = 0, rng = Math.random } = {}) {
   const g = geometry.index ? geometry.toNonIndexed() : geometry;
   if (g !== geometry) geometry.dispose();
   if (!g.attributes.uv) {
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+    g.setAttribute(
+      'uv',
+      new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2),
+    );
   }
   const n = g.attributes.position.count;
   const colors = new Float32Array(n * 3);

@@ -107,6 +107,10 @@ const views = {
     camera.position.set(-10.8, 2.5, -2.2);
     controls.target.set(-8, 1.0, 8);
   },
+  aid: () => {
+    camera.position.set(-8.6, 2.5, -30);
+    controls.target.set(-8, 0.6, -18);
+  },
   overview: () => {
     camera.position.set(42, 30, -48);
     controls.target.set(0, 0, 0);
@@ -150,7 +154,11 @@ button('Stange abwerfen', () => {
   if (i >= 0) r[i] = false;
 });
 button('Aufbauen', () => {
-  for (const [id, r] of rails) rails.set(id, r.map(() => true));
+  for (const [id, r] of rails)
+    rails.set(
+      id,
+      r.map(() => true),
+    );
 });
 button('Nächstes', () => {
   hlIndex = (hlIndex + 1) % (elementIds.length + 1);

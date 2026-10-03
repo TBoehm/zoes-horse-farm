@@ -119,7 +119,11 @@ export function endProgress(t, lead = 0) {
 export function fallPoint(from, to, t) {
   const k = easeOut(t);
   const f = fallCurve(t);
-  return [from[0] + (to[0] - from[0]) * k, from[1] + (to[1] - from[1]) * f, from[2] + (to[2] - from[2]) * k];
+  return [
+    from[0] + (to[0] - from[0]) * k,
+    from[1] + (to[1] - from[1]) * f,
+    from[2] + (to[2] - from[2]) * k,
+  ];
 }
 
 /**
@@ -200,7 +204,13 @@ export function planLines(lines) {
     f &&
     Math.hypot(s.a.x - f.a.x, s.a.z - f.a.z) + Math.hypot(s.b.x - f.b.x, s.b.z - f.b.z) < 0.5;
   const out = [];
-  if (s) out.push({ kind: 'start', seg: s, text: same ? `${labels.start} · ${labels.finish}` : labels.start, finish: same });
+  if (s)
+    out.push({
+      kind: 'start',
+      seg: s,
+      text: same ? `${labels.start} · ${labels.finish}` : labels.start,
+      finish: same,
+    });
   if (f && !same) out.push({ kind: 'finish', seg: f, text: labels.finish, finish: true });
   return out;
 }
@@ -223,7 +233,8 @@ function fenceRun(a, b, spacing, out, style) {
   const dz = b[1] - a[1];
   const len = Math.hypot(dx, dz);
   const n = Math.max(1, Math.ceil(len / spacing - 1e-6));
-  for (let i = 0; i <= n; i += 1) out.posts.push({ x: a[0] + (dx * i) / n, z: a[1] + (dz * i) / n, style });
+  for (let i = 0; i <= n; i += 1)
+    out.posts.push({ x: a[0] + (dx * i) / n, z: a[1] + (dz * i) / n, style });
   const ang = Math.atan2(dx, dz);
   for (let i = 0; i < n; i += 1) {
     const t = (i + 0.5) / n;
@@ -286,7 +297,10 @@ export function terrainHeight(x, z) {
   if (r < HILL_START) return 0;
   const th = Math.atan2(z, x);
   const ang =
-    0.55 + 0.25 * Math.sin(2 * th + 0.7) + 0.15 * Math.sin(5 * th + 2.1) + 0.08 * Math.sin(11 * th + 4.0);
+    0.55 +
+    0.25 * Math.sin(2 * th + 0.7) +
+    0.15 * Math.sin(5 * th + 2.1) +
+    0.08 * Math.sin(11 * th + 4.0);
   const rise = smooth(r, HILL_START, 260);
   const far = smooth(r, 220, 460);
   const roll = Math.sin(x * 0.031 + 1.3) * Math.cos(z * 0.027) * 3;
@@ -296,7 +310,12 @@ export function terrainHeight(x, z) {
 /** Flächen, auf denen keine Pflanzen stehen dürfen. */
 export const BLOCKED = Object.freeze([
   { x: 0, z: 0, hw: ARENA.width / 2 + 2.5, hd: ARENA.length / 2 + 2.5 },
-  { x: SITE.stable.x, z: SITE.stable.z, hw: SITE.stable.depth / 2 + 2, hd: SITE.stable.length / 2 + 2 },
+  {
+    x: SITE.stable.x,
+    z: SITE.stable.z,
+    hw: SITE.stable.depth / 2 + 2,
+    hd: SITE.stable.length / 2 + 2,
+  },
   { x: -38.8, z: 20, hw: 4, hd: 17 },
   { x: -28.6, z: 22, hw: 9, hd: 3 },
   { x: SITE.hut.x, z: SITE.hut.z, hw: 3.5, hd: 4 },
@@ -304,7 +323,9 @@ export const BLOCKED = Object.freeze([
 ]);
 
 export function isBlocked(x, z, margin = 0) {
-  return BLOCKED.some((r) => Math.abs(x - r.x) < r.hw + margin && Math.abs(z - r.z) < r.hd + margin);
+  return BLOCKED.some(
+    (r) => Math.abs(x - r.x) < r.hw + margin && Math.abs(z - r.z) < r.hd + margin,
+  );
 }
 
 /** Zufällige Punkte in einem Kreisring außerhalb gesperrter Flächen. rng: () → [0, 1). */

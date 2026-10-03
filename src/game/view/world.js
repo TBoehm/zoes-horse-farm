@@ -96,12 +96,9 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
 
   /** Alle Meshes mit Material-Paar und Schatten-Rolle. */
   function managed() {
-    return [
-      ...arena.meshes,
-      ...environment.meshes,
-      ...obstacles.meshes,
-      ...lines.meshes,
-    ].filter((e) => e.mesh);
+    return [...arena.meshes, ...environment.meshes, ...obstacles.meshes, ...lines.meshes].filter(
+      (e) => e.mesh,
+    );
   }
 
   let level = null;
@@ -113,9 +110,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       e.mesh.material = lambert ? e.mats.lambert : e.mats.standard;
       const cast =
         preset.shadows &&
-        (e.shadow === 'all'
-          ? preset.shadowCasters === 'all'
-          : e.shadow === 'obstacles');
+        (e.shadow === 'all' ? preset.shadowCasters === 'all' : e.shadow === 'obstacles');
       e.mesh.castShadow = cast;
       e.mesh.receiveShadow = preset.shadows && e.shadow !== 'none';
     }
@@ -199,6 +194,10 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     sun,
     get level() {
       return level;
+    },
+    /** Aktive Voreinstellung (z. B. damit Pferd/Reiter Schatten passend setzen). */
+    get preset() {
+      return preset;
     },
     setObstacles(list, { flags = false } = {}) {
       obstacles.setObstacles(list, { flags });

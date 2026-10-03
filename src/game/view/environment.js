@@ -1,7 +1,14 @@
 // Umgebung der Reitanlage: Wiese mit Hügeln, Bäume, Büsche, Gras-Büschel (instanziert),
 // Stall, Richterhäuschen und Kleinkram. Alles prozedural.
 import * as THREE from 'three';
-import { SITE, HILL_START, terrainHeight, scatter, instanceCount, isBlocked } from './world-layout.js';
+import {
+  SITE,
+  HILL_START,
+  terrainHeight,
+  scatter,
+  instanceCount,
+  isBlocked,
+} from './world-layout.js';
 import {
   createRng,
   createGrassTexture,
@@ -154,7 +161,10 @@ function tuftGeometry(rng) {
   const normals = new Float32Array(positions.length);
   for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
   g.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((positions.length / 3) * 2), 2));
+  g.setAttribute(
+    'uv',
+    new THREE.Float32BufferAttribute(new Float32Array((positions.length / 3) * 2), 2),
+  );
   return g;
 }
 
@@ -218,13 +228,21 @@ function addStable(b) {
       rz: -s * ang,
     });
   }
-  b.add(new THREE.BoxGeometry(0.35, 0.22, length + 1.3), 0x4f2a20, { x: cx, y: top + rise + 0.1, z: cz });
+  b.add(new THREE.BoxGeometry(0.35, 0.22, length + 1.3), 0x4f2a20, {
+    x: cx,
+    y: top + rise + 0.1,
+    z: cz,
+  });
   // Dachreiter
   b.add(boxOnGround(1.4, 1.1, 1.4), 0xf0ebe0, { x: cx, y: top + rise - 0.1, z: cz });
   const cap = new THREE.ConeGeometry(1.15, 0.9, 4);
   cap.rotateY(Math.PI / 4);
   b.add(cap, 0x4f2a20, { x: cx, y: top + rise + 1.45, z: cz });
-  b.add(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 4), 0x333333, { x: cx, y: top + rise + 2.3, z: cz });
+  b.add(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 4), 0x333333, {
+    x: cx,
+    y: top + rise + 2.3,
+    z: cz,
+  });
   b.add(new THREE.BoxGeometry(0.03, 0.12, 0.45), 0x333333, { x: cx, y: top + rise + 2.55, z: cz });
   // Boxentüren: untere Hälfte geschlossen (grün), oben offen (dunkel), weiße Rahmen
   const doors = 8;
@@ -285,7 +303,11 @@ function addHut(b) {
   b.add(boxOnGround(0.06, 0.95, s - 0.3), 0x2f3d48, { x: cx - s / 2, y: wallY + 0.95, z: cz });
   b.add(boxOnGround(0.14, 0.3, s), white, { x: cx - s / 2, y: wallY + 1.9, z: cz });
   for (const dz of [-1, 0, 1]) {
-    b.add(boxOnGround(0.14, 0.95, 0.1), white, { x: cx - s / 2, y: wallY + 0.95, z: cz + dz * (s / 2 - 0.05) });
+    b.add(boxOnGround(0.14, 0.95, 0.1), white, {
+      x: cx - s / 2,
+      y: wallY + 0.95,
+      z: cz + dz * (s / 2 - 0.05),
+    });
   }
   // Pultdach
   b.add(new THREE.BoxGeometry(s + 0.9, 0.14, s + 0.9), 0x2d4a3a, {
@@ -305,7 +327,11 @@ function addHut(b) {
   b.add(boxOnGround(0.06, 1.8, 0.06), 0x6e5440, { x: cx + 1.05, z: cz + s / 2 + 1.6 });
   // Blumenkästen
   for (const dz of [-0.9, 0.9]) {
-    b.add(boxOnGround(0.25, 0.2, 0.9), 0x7a5c44, { x: cx - s / 2 - 0.2, y: wallY + 0.75, z: cz + dz });
+    b.add(boxOnGround(0.25, 0.2, 0.9), 0x7a5c44, {
+      x: cx - s / 2 - 0.2,
+      y: wallY + 0.75,
+      z: cz + dz,
+    });
     const fl = new THREE.IcosahedronGeometry(0.22, 0);
     b.add(fl, 0xd6455d, { x: cx - s / 2 - 0.2, y: wallY + 1.05, z: cz + dz, sz: 2 });
   }
@@ -336,7 +362,12 @@ function addProps(b, rng) {
   b.add(water, 0x3d6f8a, { x: -33, y: 0.55, z: 26.4 });
   // Schubkarre
   b.add(new THREE.BoxGeometry(0.7, 0.35, 1.0), 0x2e6b9c, { x: -40.2, y: 0.55, z: 3.5, rx: 0.15 });
-  b.add(new THREE.CylinderGeometry(0.2, 0.2, 0.08, 10), 0x222222, { x: -40.2, y: 0.2, z: 4.1, rz: Math.PI / 2 });
+  b.add(new THREE.CylinderGeometry(0.2, 0.2, 0.08, 10), 0x222222, {
+    x: -40.2,
+    y: 0.2,
+    z: 4.1,
+    rz: Math.PI / 2,
+  });
 }
 
 const isBlockedTuft = (x, z) => isBlocked(x, z, -1.3);
@@ -358,7 +389,11 @@ function makeInstanced(geometry, material, items, rng, { scale = [0.85, 1.3], ti
     s.set(k * squash, k, k * (2 - squash));
     m.compose(p, q, s);
     mesh.setMatrixAt(i, m);
-    c.setRGB(1 - tint / 2 + rng() * tint, 1 - tint / 2 + rng() * tint, 1 - tint / 2 + rng() * tint * 0.6);
+    c.setRGB(
+      1 - tint / 2 + rng() * tint,
+      1 - tint / 2 + rng() * tint,
+      1 - tint / 2 + rng() * tint * 0.6,
+    );
     mesh.setColorAt(i, c);
   });
   mesh.count = items.length;
@@ -458,10 +493,15 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   for (let z = SITE.stable.z - 14; z <= SITE.stable.z + 14; z += 4.5) {
     bushItems.push([SITE.stable.x - 7, z, 0.9 + rng() * 0.4]);
   }
-  for (let x = -16; x <= 16; x += 3.2) bushItems.push([x + rng(), -40.5 - rng(), 0.9 + rng() * 0.5]);
-  bushItems.push([SITE.hut.x + 2.5, SITE.hut.z - 2.8, 1.1], [SITE.hut.x + 2.2, SITE.hut.z + 3.4, 0.9]);
+  for (let x = -16; x <= 16; x += 3.2)
+    bushItems.push([x + rng(), -40.5 - rng(), 0.9 + rng() * 0.5]);
+  bushItems.push(
+    [SITE.hut.x + 2.5, SITE.hut.z - 2.8, 1.1],
+    [SITE.hut.x + 2.2, SITE.hut.z + 3.4, 0.9],
+  );
   const bushPriority = bushItems.length;
-  for (const [x, z] of [...nearDeciduous, ...alley]) bushItems.push([x + 1.5 + rng() * 2, z + rng() * 2 - 1]);
+  for (const [x, z] of [...nearDeciduous, ...alley])
+    bushItems.push([x + 1.5 + rng() * 2, z + rng() * 2 - 1]);
   bushItems.push(...scatter(rng, 40, 30, 110, 2));
   const bushMesh = makeInstanced(bushGeometry(rng), plantMats.standard, bushItems, rng, {
     scale: [0.7, 1.4],
@@ -484,9 +524,11 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
     const x = near ? (rng() - 0.5) * 2 * 32 : (rng() - 0.5) * 2 * 75;
     const z = near ? (rng() - 0.5) * 2 * 46 : (rng() - 0.5) * 2 * 90;
     if (isBlockedTuft(x, z)) continue;
-    tuftItems.push([x, z, 0.7 + rng() * 0.8]);
+    tuftItems.push([x, z, 0.5 + rng() * 0.6]);
   }
-  const tuftMesh = makeInstanced(tuftGeometry(rng), tuftMats.standard, tuftItems, rng, { tint: 0.25 });
+  const tuftMesh = makeInstanced(tuftGeometry(rng), tuftMats.standard, tuftItems, rng, {
+    tint: 0.25,
+  });
   tuftMesh.name = 'grass-tufts';
   tuftMesh.userData.priority = 0;
 

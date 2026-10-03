@@ -85,14 +85,36 @@ export function createSky({ sunDirection, radius = 420, cloudCount = 9, seed = 3
       Math.cos(el) * Math.cos(az) * r,
     );
     const toCenter = center.clone().negate().normalize();
-    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), toCenter).normalize();
+    const right = new THREE.Vector3()
+      .crossVectors(new THREE.Vector3(0, 1, 0), toCenter)
+      .normalize();
     const up = new THREE.Vector3().crossVectors(toCenter, right).normalize();
     const v = (k) => positions.push(k.x, k.y, k.z);
     const base = positions.length / 3;
-    v(center.clone().addScaledVector(right, -w / 2).addScaledVector(up, -h / 2));
-    v(center.clone().addScaledVector(right, w / 2).addScaledVector(up, -h / 2));
-    v(center.clone().addScaledVector(right, w / 2).addScaledVector(up, h / 2));
-    v(center.clone().addScaledVector(right, -w / 2).addScaledVector(up, h / 2));
+    v(
+      center
+        .clone()
+        .addScaledVector(right, -w / 2)
+        .addScaledVector(up, -h / 2),
+    );
+    v(
+      center
+        .clone()
+        .addScaledVector(right, w / 2)
+        .addScaledVector(up, -h / 2),
+    );
+    v(
+      center
+        .clone()
+        .addScaledVector(right, w / 2)
+        .addScaledVector(up, h / 2),
+    );
+    v(
+      center
+        .clone()
+        .addScaledVector(right, -w / 2)
+        .addScaledVector(up, h / 2),
+    );
     const k = Math.floor(rng() * 4);
     const u0 = (k % 2) * 0.5;
     const v0 = 0.5 - Math.floor(k / 2) * 0.5;
