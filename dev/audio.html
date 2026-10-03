@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Klang-Demo</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 42rem;
+        margin: 1rem auto;
+        padding: 0 1rem;
+        line-height: 1.4;
+      }
+      fieldset {
+        margin: 1rem 0;
+        border: 1px solid #aaa;
+        border-radius: 8px;
+      }
+      button,
+      select {
+        font: inherit;
+        padding: 0.5rem 0.9rem;
+        margin: 0.2rem;
+        min-height: 44px;
+      }
+      label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin: 0.3rem 0.8rem 0.3rem 0;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      input[type='range'] {
+        width: 12rem;
+      }
+      #status {
+        font-family: monospace;
+        background: #eee;
+        padding: 0.5rem;
+        border-radius: 6px;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Klang-Demo</h1>
+    <p>
+      Dev-Seite, wird nicht ausgeliefert. Der Ton startet nach dem ersten Klick oder Tastendruck.
+    </p>
+    <pre id="status">Warte auf Interaktion …</pre>
+
+    <fieldset>
+      <legend>Effekte</legend>
+      <button data-sfx="takeoff">Absprung</button>
+      <button data-sfx="landing">Landung</button>
+      <button data-sfx="railDown">Fallende Stange</button>
+      <button data-sfx="startSignal">Startsignal</button>
+      <button data-sfx="finishSignal">Zielsignal</button>
+      <div class="row">
+        <button data-hoof="walk">Huf Schritt</button>
+        <button data-hoof="trot">Huf Trab</button>
+        <button data-hoof="canter">Huf Galopp</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Gangart-Loop</legend>
+      <label
+        >Gangart
+        <select id="gait">
+          <option value="halt">Halt (still)</option>
+          <option value="walk">Schritt (Viertakt, 1,8 Hz)</option>
+          <option value="trot">Trab (Zweitakt)</option>
+          <option value="canter">Galopp (Dreitakt)</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Musik und Lautstärke</legend>
+      <label><input type="checkbox" id="musicWanted" /> Musik soll laufen</label>
+      <div class="row">
+        <label
+          >Musik <input type="range" id="musicVolume" min="0" max="1" step="0.01" value="0.5"
+        /></label>
+        <label><input type="checkbox" id="musicMuted" /> Musik stumm</label>
+      </div>
+      <div class="row">
+        <label
+          >Effekte <input type="range" id="sfxVolume" min="0" max="1" step="0.01" value="0.5"
+        /></label>
+        <label><input type="checkbox" id="sfxMuted" /> Effekte stumm</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Zustand</legend>
+      <label><input type="checkbox" id="hidden" /> Hintergrund simulieren (setHidden)</label>
+      <label><input type="checkbox" id="paused" /> Spielpause (setPaused)</label>
+    </fieldset>
+
+    <script type="module" src="./audio.js"></script>
+  </body>
+</html>

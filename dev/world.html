@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Welt-Demo</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #9cc0dc;
+        overflow: hidden;
+        font: 13px system-ui, sans-serif;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+      #ui {
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        max-width: 560px;
+        background: rgba(255, 255, 255, 0.82);
+        padding: 6px;
+        border-radius: 8px;
+      }
+      #ui button,
+      #ui select {
+        font: inherit;
+        padding: 3px 7px;
+      }
+      #stats {
+        position: fixed;
+        right: 8px;
+        top: 8px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        padding: 6px 10px;
+        border-radius: 8px;
+        font-family: ui-monospace, monospace;
+        white-space: pre;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="ui"></div>
+    <div id="stats"></div>
+    <script type="module" src="./world.js"></script>
+  </body>
+</html>

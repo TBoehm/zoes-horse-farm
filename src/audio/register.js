@@ -1,0 +1,66 @@
+// Klang einbinden (SRT-006): Lautstärken speichern, Musik je Bildschirm, Hintergrund stumm.
+import { addSettingsFields, field } from '../core/save-schema.js';
+import { registerSettingsSection, toggleRow } from '../app/settings-screen.js';
+import { createAudio } from './index.js';
+
+addSettingsFields({
+  musicVolume: field.number(0, 1, 0.5),
+  musicMuted: field.bool(false),
+  sfxVolume: field.number(0, 1, 0.5),
+  sfxMuted: field.bool(false),
+});
+
+function volumeRow(ctx, channel) {
+  const { t, h, store } = ctx;
+  const s = store.get('settings');
+  const volKey = `${channel}Volume`;
+  const muteKey = `${channel}Muted`;
+  const slider = h('input', {
+    type: 'range',
+    min: '0',
+    max: '100',
+    step: '5',
+    value: String(Math.round(s[volKey] * 100)),
+    'aria-label': t(`settings.${channel}Volume`),
+    dataset: { name: volKey },
+  });
+  slider.addEventListener('input', () =>
+    store.update('settings', (x) => ({ ...x, [volKey]: Number(slider.value) / 100 })),
+  );
+  const mute = toggleRow({
+    name: muteKey,
+    label: t('settings.sound'),
+    // Schalter zeigt „Ton an"; Stumm = aus (Lautstärke bleibt erhalten, Regel 52)
+    value: !s[muteKey],
+    onChange: (on) => store.update('settings', (x) => ({ ...x, [muteKey]: !on })),
+  });
+  const toggle = mute.querySelector('button');
+  toggle.setAttribute('aria-label', t(`settings.${channel}On`));
+  return h(
+    'div',
+    { class: 'setting-row setting-volume' },
+    h('span', { class: 'setting-label' }, t(`settings.${channel}`)),
+    h('div', { class: 'volume-controls' }, slider, toggle),
+  );
+}
+
+export function registerAudio(app, store) {
+  const audio = createAudio(store.get('settings'));
+  app.services.audio = audio;
+  audio.installUnlock(window);
+
+  store.onChange('settings', (s) => audio.setVolumes(s));
+  app.on('screen', ({ music }) => audio.setMusicWanted(music));
+  const onVisibility = () => audio.setHidden(document.hidden);
+  document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('pagehide', () => audio.setHidden(true));
+  window.addEventListener('pageshow', onVisibility);
+
+  registerSettingsSection({
+    id: 'audio',
+    order: 40,
+    render: (ctx) =>
+      ctx.h('div', { class: 'settings-group' }, volumeRow(ctx, 'music'), volumeRow(ctx, 'sfx')),
+  });
+  return audio;
+}

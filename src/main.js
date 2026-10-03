@@ -1,5 +1,8 @@
 // Einstieg: Prüfungen, Spielstand, Sprache, App-Rahmen.
 import './styles/main.css';
+import './styles/ride.css';
+import './styles/profile.css';
+import './styles/courses.css';
 import { detectLang, getLang, setLang } from './core/i18n.js';
 import { createStore, requestPersistentStorage } from './core/storage.js';
 import { hasWebGL } from './core/webgl.js';
@@ -9,6 +12,11 @@ import { createApp } from './app/app.js';
 import { createMainMenuScreen, registerMenuEntry } from './app/menu.js';
 import { createSettingsScreen } from './app/settings-screen.js';
 import { installRotateNotice, renderNo3dNotice, showSaveNotice } from './app/notices.js';
+import './game/save-sections.js';
+import { createRideScreen } from './game/ride-screen.js';
+import { firstScreen, registerProfile } from './profile/profile.js';
+import { registerCourses } from './course-ui/register.js';
+import { registerAudio } from './audio/register.js';
 
 function boot() {
   const root = document.getElementById('app');
@@ -34,6 +42,16 @@ function boot() {
   const app = createApp({ root, store, inputMode });
   app.register('menu', createMainMenuScreen);
   app.register('settings', createSettingsScreen);
+  app.register('ride', createRideScreen);
+  registerProfile(app);
+  registerCourses(app);
+  registerAudio(app, store);
+  registerMenuEntry({
+    id: 'free',
+    order: 20,
+    labelKey: 'menu.free',
+    onSelect: ({ app }) => app.go('ride', { mode: 'free' }),
+  });
   registerMenuEntry({
     id: 'settings',
     order: 50,
@@ -52,8 +70,14 @@ function boot() {
     if (store.shouldShowSaveNotice()) showSaveNotice(app.layers.overlay);
   });
 
-  app.go('menu');
+  app.go(firstScreen(store));
   window.__zhf = { app, store, inputMode };
 }
 
-boot();
+try {
+  boot();
+} catch (err) {
+  // Unerwarteter Startfehler: kindgerechter Hinweis statt leerer Seite (Sinn von Regel 7)
+  console.error(err);
+  renderNo3dNotice(document.getElementById('app'));
+}

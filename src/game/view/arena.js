@@ -1,0 +1,501 @@
+// Reitplatz: Sandboden mit Hufschlag, Holz-Umzäunung (instanziert), Tor, Start-/Ziellinie.
+import * as THREE from 'three';
+import { ARENA } from '../sim/tuning.js';
+import {
+  createSandTextures,
+  createGeometryBuilder,
+  boxOnGround,
+  createLabelAtlas,
+  fitText,
+  SYSTEM_FONT,
+} from './textures.js';
+
+export const FENCE = Object.freeze({
+  height: 1.2,
+  offset: 0.18, // Abstand Zaunlinie außerhalb der Reitfläche
+  spacing: 2.5,
+  post: 0.12,
+  board: 0.04,
+});
+
+// Tor an der Langseite zum Stall (x = −20)
+export const GATE = Object.freeze({ side: -1, z: 22, width: 3.6 });
+
+/** Sandboden-Shader-Ergänzung: Hufschlag-Spur am Rand und großflächige Variation. */
+function patchSandMaterial(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.arenaHalf = { value: new THREE.Vector2(ARENA.width / 2, ARENA.length / 2) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vGroundPos;')
+      .replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\nvGroundPos = (modelMatrix * vec4(transformed, 1.0)).xz;',
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec2 vGroundPos;
+        uniform vec2 arenaHalf;
+        float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float gNoise(vec2 p) {
+          vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(gHash(i), gHash(i + vec2(1.0, 0.0)), f.x),
+                     mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), f.x), f.y);
+        }`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        {
+          vec2 gp = vGroundPos;
+          float n = gNoise(gp * 0.13) * 0.6 + gNoise(gp * 0.55) * 0.4;
+          diffuseColor.rgb *= 0.9 + 0.2 * n;
+          // Hufschlag: Spur entlang eines abgerundeten Rechtecks ca. 1,7 m innerhalb der Bande
+          vec2 b = arenaHalf - vec2(1.7);
+          float R = 5.0;
+          vec2 q = abs(gp) - (b - vec2(R));
+          float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - R;
+          float wob = gNoise(gp * 0.8) * 0.5;
+          float band = 1.0 - smoothstep(0.35, 1.25, abs(d) + wob * 0.4);
+          diffuseColor.rgb *= mix(vec3(1.0), vec3(0.78, 0.72, 0.66), band);
+          // an der Bande aufgeschobener, hellerer Sand
+          float edge = smoothstep(1.0, 0.0, min(arenaHalf.x - abs(gp.x), arenaHalf.y - abs(gp.y)));
+          diffuseColor.rgb *= 1.0 + edge * 0.08;
+        }`,
+      );
+  };
+  material.customProgramCacheKey = () => 'sand-v1';
+  return material;
+}
+
+/** Bodenfläche: Reitplatz + Weg zum Stall in einer Geometrie (gleiches Material). */
+function buildSandGeometry(path) {
+  const builder = createGeometryBuilder();
+  const w = ARENA.width + 2 * (FENCE.offset + 0.5);
+  const l = ARENA.length + 2 * (FENCE.offset + 0.5);
+  const plane = new THREE.PlaneGeometry(w, l, 4, 6);
+  plane.rotateX(-Math.PI / 2);
+  setWorldUv(plane, 4);
+  builder.add(plane, 0xffffff);
+  if (path) {
+    for (const seg of path) {
+      const g = new THREE.PlaneGeometry(seg.w, seg.l, 1, Math.max(1, Math.round(seg.l / 6)));
+      g.rotateX(-Math.PI / 2);
+      g.rotateY(seg.ry || 0);
+      g.translate(seg.x, 0.004, seg.z);
+      setWorldUv(g, 4);
+      builder.add(g, seg.color ?? 0xd9cfc0);
+    }
+  }
+  return builder.build();
+}
+
+/** UV = Weltkoordinaten / Kachelgröße (Texturen wiederholen sich gleichmäßig). */
+export function setWorldUv(geometry, tile) {
+  const pos = geometry.attributes.position;
+  const uv = geometry.attributes.uv;
+  for (let i = 0; i < pos.count; i += 1) uv.setXY(i, pos.getX(i) / tile, -pos.getZ(i) / tile);
+  uv.needsUpdate = true;
+}
+
+/** Zaun-Segmente entlang einer Strecke a→b mit Pfostenabstand ≤ spacing. */
+function fenceRun(a, b, spacing, out, style) {
+  const dx = b[0] - a[0];
+  const dz = b[1] - a[1];
+  const len = Math.hypot(dx, dz);
+  const n = Math.max(1, Math.ceil(len / spacing - 1e-6));
+  for (let i = 0; i <= n; i += 1) {
+    const t = i / n;
+    out.posts.push({ x: a[0] + dx * t, z: a[1] + dz * t, style });
+  }
+  const ang = Math.atan2(dx, dz);
+  for (let i = 0; i < n; i += 1) {
+    const t = (i + 0.5) / n;
+    out.segments.push({
+      x: a[0] + dx * t,
+      z: a[1] + dz * t,
+      len: len / n,
+      ang,
+      style,
+    });
+  }
+}
+
+/** Plan aller Zaunteile (rein, testbar): Reitplatz-Umzäunung mit Torlücke + Wegzaun. */
+export function planFence({ pathFence = [] } = {}) {
+  const out = { posts: [], segments: [], gate: null };
+  const hx = ARENA.width / 2 + FENCE.offset;
+  const hz = ARENA.length / 2 + FENCE.offset;
+  const g0 = GATE.z - GATE.width / 2;
+  const g1 = GATE.z + GATE.width / 2;
+  const gx = GATE.side * hx;
+  // Ecken im Uhrzeigersinn; Langseite am Tor wird in zwei Stücke geteilt
+  fenceRun([hx, -hz], [hx, hz], FENCE.spacing, out, 'arena');
+  fenceRun([hx, hz], [-hx, hz], FENCE.spacing, out, 'arena');
+  fenceRun([gx, hz], [gx, g1], FENCE.spacing, out, 'arena');
+  fenceRun([gx, g0], [gx, -hz], FENCE.spacing, out, 'arena');
+  fenceRun([-hx, -hz], [hx, -hz], FENCE.spacing, out, 'arena');
+  out.gate = { x: gx, z0: g0, z1: g1 };
+  for (const run of pathFence) fenceRun(run.a, run.b, run.spacing ?? 3, out, 'wood');
+  // doppelte Eckpfosten entfernen
+  const seen = new Set();
+  out.posts = out.posts.filter((p) => {
+    const key = `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return out;
+}
+
+const FENCE_COLORS = { arena: 0xf4f1ea, wood: 0x8a6a4a, gate: 0xe9e4d8 };
+
+/** Erzeugt Pfosten- und Latten-InstancedMeshes für alle Zäune. */
+function buildFence(plan, materials) {
+  const unit = new THREE.BoxGeometry(1, 1, 1);
+  unit.translate(0, 0.5, 0);
+  const posts = [];
+  const boards = [];
+  for (const p of plan.posts) {
+    const h = p.style === 'arena' ? FENCE.height + 0.05 : 1.0;
+    posts.push({ x: p.x, z: p.z, ry: 0, sx: FENCE.post, sy: h, sz: FENCE.post, color: p.style });
+  }
+  for (const s of plan.segments) {
+    const rails =
+      s.style === 'arena'
+        ? [
+            { y: 0.06, h: 0.28 }, // Bande unten
+            { y: 0.62, h: 0.13 },
+            { y: 1.05, h: 0.13 },
+          ]
+        : [
+            { y: 0.45, h: 0.1 },
+            { y: 0.85, h: 0.1 },
+          ];
+    for (const r of rails) {
+      boards.push({
+        x: s.x,
+        y: r.y,
+        z: s.z,
+        ry: s.ang,
+        sx: FENCE.board,
+        sy: r.h,
+        sz: s.len + FENCE.post,
+        color: s.style,
+      });
+    }
+  }
+  // Tor: zwei kräftige Pfosten, zwei Flügel mit Latten und Strebe
+  const g = plan.gate;
+  if (g) {
+    for (const z of [g.z0, g.z1]) {
+      posts.push({ x: g.x, z, ry: 0, sx: 0.18, sy: 1.45, sz: 0.18, color: 'gate' });
+    }
+    const leaf = (g.z1 - g.z0 - 0.3) / 2;
+    for (const [zc, sign] of [
+      [g.z0 + 0.12 + leaf / 2, 1],
+      [g.z1 - 0.12 - leaf / 2, -1],
+    ]) {
+      for (const y of [0.15, 0.55, 0.95]) {
+        boards.push({ x: g.x, y, z: zc, ry: 0, sx: 0.05, sy: 0.12, sz: leaf, color: 'gate' });
+      }
+      // Strebe diagonal im Flügel
+      boards.push({
+        x: g.x,
+        y: 0.52,
+        z: zc,
+        rx: sign * Math.atan2(0.8, leaf),
+        sx: 0.045,
+        sy: 0.1,
+        sz: Math.hypot(0.8, leaf) - 0.1,
+        color: 'gate',
+      });
+      for (const zz of [zc - (sign * leaf) / 2, zc + (sign * leaf) / 2]) {
+        boards.push({ x: g.x, y: 0.12, z: zz, ry: 0, sx: 0.06, sy: 1.0, sz: 0.06, color: 'gate' });
+      }
+    }
+  }
+
+  const make = (list, name) => {
+    const mesh = new THREE.InstancedMesh(unit, materials.standard, list.length);
+    mesh.name = name;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const e = new THREE.Euler();
+    const s = new THREE.Vector3();
+    const p = new THREE.Vector3();
+    const c = new THREE.Color();
+    list.forEach((it, i) => {
+      e.set(it.rx || 0, it.ry || 0, 0);
+      q.setFromEuler(e);
+      s.set(it.sx, it.sy, it.sz);
+      p.set(it.x, it.y || 0, it.z);
+      m.compose(p, q, s);
+      mesh.setMatrixAt(i, m);
+      c.set(FENCE_COLORS[it.color]);
+      const f = 0.94 + ((i * 7919) % 13) / 100;
+      c.multiplyScalar(f);
+      mesh.setColorAt(i, c);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  };
+  return { posts: make(posts, 'fence-posts'), boards: make(boards, 'fence-boards') };
+}
+
+/**
+ * Reitplatz. materialFactory(kind, params) liefert ein Material-Paar { standard, lambert }
+ * (World verwaltet Stufenwechsel).
+ */
+export function createArena({ materialFactory, path, pathFence }) {
+  const group = new THREE.Group();
+  group.name = 'arena';
+  const sand = createSandTextures({ size: 512 });
+  const sandMats = materialFactory('sand', {
+    color: 0xffffff,
+    map: sand.map,
+    normalMap: sand.normalMap,
+    normalScale: new THREE.Vector2(0.9, 0.9),
+    roughness: 0.97,
+    metalness: 0,
+    vertexColors: true,
+  });
+  patchSandMaterial(sandMats.standard);
+  patchSandMaterial(sandMats.lambert);
+  const ground = new THREE.Mesh(buildSandGeometry(path), sandMats.standard);
+  ground.name = 'arena-ground';
+  ground.receiveShadow = true;
+  group.add(ground);
+
+  const fenceMats = materialFactory('fence', { color: 0xffffff, roughness: 0.72 });
+  const plan = planFence({ pathFence });
+  const fence = buildFence(plan, fenceMats);
+  group.add(fence.posts, fence.boards);
+
+  return {
+    group,
+    ground,
+    fence,
+    plan,
+    textures: [sand.map, sand.normalMap],
+    meshes: [
+      { mesh: ground, mats: sandMats, shadow: 'receive' },
+      { mesh: fence.posts, mats: fenceMats, shadow: 'all' },
+      { mesh: fence.boards, mats: fenceMats, shadow: 'all' },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Start- und Ziellinie
+
+function toXZ(p) {
+  if (Array.isArray(p)) return { x: p[0], z: p[1] };
+  return { x: p.x, z: p.z };
+}
+
+function drawSign(kind, text) {
+  return (ctx, w, h) => {
+    const start = kind === 'start';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = start ? '#1f8f46' : '#c62828';
+    roundRect(ctx, 8, 8, w - 16, h - 16, 18);
+    ctx.fill();
+    if (!start) {
+      // Zielflagge: Karomuster-Streifen oben
+      const sq = (h - 16) / 6;
+      for (let i = 0; i * sq < w - 16; i += 1) {
+        ctx.fillStyle = i % 2 ? '#111' : '#fff';
+        ctx.fillRect(8 + i * sq, 8, sq, sq);
+        ctx.fillStyle = i % 2 ? '#fff' : '#111';
+        ctx.fillRect(8 + i * sq, 8 + sq, sq, sq);
+      }
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const size = fitText(ctx, text, w - 40, 800, h * 0.5);
+    ctx.font = `800 ${size}px ${SYSTEM_FONT}`;
+    ctx.fillText(text, w / 2, start ? h / 2 : h * 0.62);
+  };
+}
+
+export function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/**
+ * Start-/Ziellinie: Bodenlinie, Pfosten mit Schild. set(null | { start:{a,b}, finish:{a,b},
+ * labels:{start, finish} }), setFinishMarked(bool), update(dt).
+ */
+export function createCourseLines({ materialFactory }) {
+  const group = new THREE.Group();
+  group.name = 'course-lines';
+  const staticMats = materialFactory('lines', { vertexColors: true, roughness: 0.8 });
+  let staticMesh = null;
+  let signMesh = null;
+  let signMaterial = null;
+  let atlas = null;
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffd21f,
+    transparent: true,
+    opacity: 0.6,
+    depthWrite: false,
+    toneMapped: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  });
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), glowMaterial);
+  glow.rotation.x = -Math.PI / 2;
+  glow.visible = false;
+  glow.renderOrder = 2;
+  group.add(glow);
+  let finishMarked = false;
+  let time = 0;
+  let finishLine = null;
+
+  function clear() {
+    if (staticMesh) {
+      group.remove(staticMesh);
+      staticMesh.geometry.dispose();
+      staticMesh = null;
+    }
+    if (signMesh) {
+      group.remove(signMesh);
+      signMesh.geometry.dispose();
+      signMaterial.dispose();
+      atlas.texture.dispose();
+      signMesh = null;
+    }
+    finishLine = null;
+  }
+
+  function set(lines) {
+    clear();
+    glow.visible = false;
+    if (!lines) return;
+    const labels = lines.labels || { start: 'Start', finish: 'Ziel' };
+    const entries = [];
+    const s = lines.start && { a: toXZ(lines.start.a), b: toXZ(lines.start.b) };
+    const f = lines.finish && { a: toXZ(lines.finish.a), b: toXZ(lines.finish.b) };
+    const same =
+      s && f && Math.hypot(s.a.x - f.a.x, s.a.z - f.a.z) + Math.hypot(s.b.x - f.b.x, s.b.z - f.b.z) < 0.5;
+    if (s) entries.push({ kind: 'start', line: s, text: same ? `${labels.start} · ${labels.finish}` : labels.start });
+    if (f && !same) entries.push({ kind: 'finish', line: f, text: labels.finish });
+    finishLine = f || null;
+
+    atlas = createLabelAtlas(
+      entries.map((e) => ({ key: e.kind, draw: drawSign(e.kind, e.text) })),
+      { cellW: 256, cellH: 128 },
+    );
+    const builder = createGeometryBuilder();
+    const signs = createGeometryBuilder();
+    for (const e of entries) {
+      const { a, b } = e.line;
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const len = Math.hypot(dx, dz);
+      const ang = Math.atan2(dx, dz);
+      // Bodenlinie aus Kalk
+      const line = new THREE.PlaneGeometry(0.14, len);
+      line.rotateX(-Math.PI / 2);
+      builder.add(line, 0xffffff, { x: (a.x + b.x) / 2, y: 0.012, z: (a.z + b.z) / 2, ry: ang });
+      const color = e.kind === 'start' ? 0x1f8f46 : 0xc62828;
+      // Pfosten an beiden Enden, rechts rot / links weiß wie Turnier-Fähnchen
+      [a, b].forEach((p, i) => {
+        builder.add(boxOnGround(0.07, 1.7, 0.07), 0xf2f2f2, { x: p.x, z: p.z });
+        builder.add(new THREE.BoxGeometry(0.02, 0.28, 0.38), i === 0 ? 0xd32f2f : 0xffffff, {
+          x: p.x,
+          y: 1.52,
+          z: p.z,
+          ry: ang + Math.PI / 2,
+        });
+      });
+      // Schild auf dem ersten Pfosten, beidseitig lesbar
+      const r = atlas.rects.get(e.kind);
+      const mid = a;
+      const sign = makeSignQuad(1.1, 0.55, r);
+      const m = new THREE.Matrix4().compose(
+        new THREE.Vector3(mid.x, 2.0, mid.z),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ang + Math.PI / 2, 0)),
+        new THREE.Vector3(1, 1, 1),
+      );
+      signs.addPainted(sign, m);
+      builder.add(new THREE.BoxGeometry(1.16, 0.61, 0.03), color, {
+        x: mid.x,
+        y: 2.0,
+        z: mid.z,
+        ry: ang + Math.PI / 2,
+      });
+    }
+    staticMesh = new THREE.Mesh(builder.build(), staticMats.standard);
+    staticMesh.castShadow = true;
+    staticMesh.receiveShadow = true;
+    group.add(staticMesh);
+    signMaterial = new THREE.MeshBasicMaterial({ map: atlas.texture, toneMapped: false });
+    signMesh = new THREE.Mesh(signs.build(), signMaterial);
+    group.add(signMesh);
+    meshes[0].mesh = staticMesh;
+
+    if (finishLine) {
+      const { a, b } = finishLine;
+      glow.position.set((a.x + b.x) / 2, 0.016, (a.z + b.z) / 2);
+      glow.rotation.set(-Math.PI / 2, 0, Math.atan2(b.x - a.x, b.z - a.z));
+      glow.scale.set(1.4, Math.hypot(b.x - a.x, b.z - a.z) + 0.6, 1);
+      glow.visible = finishMarked;
+    }
+  }
+
+  const meshes = [{ mesh: null, mats: staticMats, shadow: 'obstacles' }];
+
+  return {
+    group,
+    meshes,
+    set,
+    setFinishMarked(on) {
+      finishMarked = Boolean(on);
+      glow.visible = finishMarked && Boolean(finishLine);
+    },
+    update(dt) {
+      time += dt;
+      if (glow.visible) glowMaterial.opacity = 0.45 + 0.3 * (0.5 + 0.5 * Math.sin(time * 5));
+    },
+    dispose() {
+      clear();
+      glow.geometry.dispose();
+      glowMaterial.dispose();
+    },
+  };
+}
+
+/** Doppelseitiges Schild-Quad (Vorder- und Rückseite je richtig lesbar), Atlas-Rechteck r. */
+export function makeSignQuad(w, h, r, thickness = 0.02) {
+  const front = new THREE.PlaneGeometry(w, h);
+  const back = new THREE.PlaneGeometry(w, h);
+  for (const g of [front, back]) {
+    const uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i += 1) {
+      uv.setXY(i, r.u0 + uv.getX(i) * (r.u1 - r.u0), r.v0 + uv.getY(i) * (r.v1 - r.v0));
+    }
+  }
+  front.translate(0, 0, thickness);
+  back.rotateY(Math.PI);
+  back.translate(0, 0, -thickness);
+  const merged = createGeometryBuilder();
+  merged.add(front, 0xffffff);
+  merged.add(back, 0xffffff);
+  return merged.build();
+}

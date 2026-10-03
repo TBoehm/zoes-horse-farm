@@ -1,0 +1,189 @@
+/* Parcours-Auswahl, Vorstart-Karte, Ritt-HUD, Ergebnis (SRT-004) */
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.course-card {
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  min-height: 44px;
+  border-radius: 18px;
+  border: 3px solid #f2d48a;
+  background: #fff7e6;
+  color: var(--c-ink);
+  cursor: pointer;
+  box-shadow: 0 4px 0 #d9b766;
+  transition: transform 0.08s ease;
+}
+
+.course-card:active {
+  transform: translateY(3px);
+}
+
+.course-card:focus-visible {
+  outline: 4px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+.course-card.is-locked {
+  cursor: not-allowed;
+  background: #efebe5;
+  border-color: #d6cfc4;
+  box-shadow: 0 4px 0 #c2b9ab;
+  color: #7b7368;
+}
+
+.course-number {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--c-primary);
+  color: #fff;
+  font-weight: 900;
+  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.course-card.is-locked .course-number {
+  background: #a59c8f;
+}
+
+.course-best {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--c-ink-soft);
+}
+
+.lock {
+  font-size: 1.4rem;
+}
+
+.stars {
+  display: inline-flex;
+  gap: 2px;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.star {
+  color: #d8cfbf;
+}
+
+.star.is-on {
+  color: #f2b632;
+  text-shadow: 0 1px 0 #b8861b;
+}
+
+.panel-results .stars {
+  font-size: 2.6rem;
+  justify-content: center;
+  width: 100%;
+}
+
+.plan-wrap {
+  width: 100%;
+  aspect-ratio: 70 / 40;
+  max-height: 46vh;
+}
+
+.course-plan {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.prestart-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.prestart-info .setting-row {
+  flex: 0 1 auto;
+}
+
+.hud-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.hud-notice {
+  background: rgba(255, 225, 168, 0.95);
+}
+
+.hud-notice[hidden],
+.hud-chip[hidden] {
+  display: none;
+}
+
+.panel-results {
+  text-align: center;
+}
+
+.results-horse {
+  margin: 0 0 6px;
+  font-weight: 700;
+  color: var(--c-ink-soft);
+}
+
+.new-best {
+  margin: 8px auto;
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--c-accent);
+  font-weight: 900;
+}
+
+.unlocked-note {
+  font-weight: 800;
+  color: var(--c-secondary);
+}
+
+.result-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  text-align: left;
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #f6eedf;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-row[data-result='total'] {
+  background: #efe0c4;
+  font-size: 1.1rem;
+}
+
+.new-badges h3 {
+  margin: 10px 0 8px;
+}
+
+@media (max-height: 520px) {
+  .panel {
+    padding: 14px 18px;
+  }
+  .plan-wrap {
+    max-height: 40vh;
+  }
+}

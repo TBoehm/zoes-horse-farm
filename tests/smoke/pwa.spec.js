@@ -64,7 +64,9 @@ test.describe('PWA', () => {
     await page.evaluate(() => navigator.serviceWorker.ready);
     await context.setOffline(true);
     await page.reload();
-    await expect(page.locator('[data-screen="menu"], [data-notice="no3d"]').first()).toBeVisible();
+    await expect(
+      page.locator('[data-screen="menu"], [data-screen="namePrompt"], [data-notice="no3d"]').first(),
+    ).toBeVisible();
     await context.close();
     server.close();
   });
@@ -98,7 +100,7 @@ test.describe('PWA', () => {
     // Neuladen eines offenen Tabs wechselt die Version nicht
     await page.reload();
     expect(await versionOf(page)).toBe('A');
-    await expect(page.locator('[data-screen="menu"]')).toBeVisible();
+    await expect(page.locator('[data-screen="namePrompt"], [data-screen="menu"]').first()).toBeVisible();
 
     // Alle Tabs schließen und neu öffnen → neue Version
     await page.close();
