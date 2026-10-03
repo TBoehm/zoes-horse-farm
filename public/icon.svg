@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Selbst erstelltes App-Icon: Pferdekopf über einer Springstange (Regel 2) -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fd3ff"/>
+      <stop offset="0.62" stop-color="#d9f1ff"/>
+      <stop offset="0.62" stop-color="#6cbf4f"/>
+      <stop offset="1" stop-color="#3f7d3a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#sky)"/>
+  <g transform="translate(16 6)">
+    <path fill="#7a4524" d="M352 456 L352 312 C352 214 324 160 288 128 L304 66 L268 104 L250 74 L240 116
+      C200 124 166 152 140 200 L104 266 C92 290 104 314 130 316 L172 312 C192 310 206 298 218 282
+      C238 296 250 312 250 340 L236 456 Z"/>
+    <path fill="#2b1a10" d="M288 128 C330 160 352 214 352 312 L352 456 L376 456 L376 300
+      C374 210 344 150 300 112 Z"/>
+    <path fill="#f4efe6" d="M228 140 C214 170 196 214 168 262 L150 296 C166 300 178 296 186 288
+      C204 250 222 196 238 146 Z"/>
+    <circle cx="254" cy="184" r="11" fill="#1a0f08"/>
+    <circle cx="128" cy="292" r="6" fill="#2b1a10"/>
+  </g>
+  <g>
+    <rect x="40" y="392" width="16" height="96" rx="4" fill="#ffffff"/>
+    <rect x="456" y="392" width="16" height="96" rx="4" fill="#ffffff"/>
+    <rect x="44" y="404" width="424" height="22" rx="11" fill="#ffffff"/>
+    <rect x="96" y="404" width="56" height="22" fill="#d7322b"/>
+    <rect x="208" y="404" width="56" height="22" fill="#d7322b"/>
+    <rect x="320" y="404" width="56" height="22" fill="#d7322b"/>
+    <rect x="432" y="404" width="30" height="22" fill="#d7322b"/>
+  </g>
+</svg>

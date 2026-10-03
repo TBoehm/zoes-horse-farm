@@ -1,0 +1,40 @@
+name: Deploy
+
+# Veröffentlichung nur nach Merge auf main und nur, wenn alle Gates grün sind.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: Gates
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: gates
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

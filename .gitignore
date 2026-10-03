@@ -1,0 +1,9 @@
+node_modules/
+dist/
+public/generated/
+test-results/
+playwright-report/
+coverage/
+*.log
+.DS_Store
+.shot.mjs
