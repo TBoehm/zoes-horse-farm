@@ -223,6 +223,23 @@ fortgesetzt, nicht neu gestartet. `minor`/`nitpick` fixen, wenn billig, sonst im
 Zwei Runden sind normal; **ab der dritten umdenken statt weiter flicken** und dem User sagen.
 Fertig erst bei 0 blocker und 0 major.
 
+5. **Standards-QA (letzter Pflichtschritt, immer):** Nachdem Tests, Linter und die Reviews oben
+   grün sind, prüft ein **eigener, frischer** QA-Agent (`model: "opus"`) den gesamten Diff gegen
+   **alle** Coding-Standards – unabhängig davon, ob ein Linter sie abdeckt:
+   - Projekt-Regeln (`CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`) und die globalen Regeln des
+     Users (z. B. `~/.claude/CLAUDE.md`), jede Regel einzeln abgehakt;
+   - Code komplett auf Englisch (Bezeichner, Kommentare, Testbeschreibungen, Meldungen);
+   - Clean Architecture: Schichtgrenzen, keine Fachregeln im UI, Ports statt direkter
+     Framework-/DOM-/Storage-/Zeit-/Zufalls-Zugriffe in Domain/Application;
+   - TDD-Nachweis: jede neue Domain-/Application-Logik hat Tests, die das Verhalten (nicht die
+     Implementierung) prüfen; Randfälle aus Spec/Ticket abgedeckt;
+   - Stil und Wartbarkeit: Benennung, Duplikate, tote Pfade, Kommentardichte wie im Umfeld,
+     Spielwerte/Konstanten am vorgesehenen Ort, keine Debug-Reste, keine verbotenen Dateien.
+   Briefing wie oben (Regel-Dateien, Absicht, Dateiliste). Ausgabe: Befunde mit Schwere und eine
+   Checkliste „Regel → erfüllt/verletzt (Datei:Zeile)". Verstöße gegen eine Projekt- oder globale
+   Regel sind mindestens `major`. Schleife wie oben (fixen, Gates neu, **neuer** QA-Agent), bis
+   0 blocker/major. Erst danach gilt Schritt 6 als abgeschlossen.
+
 Lang laufende Schritte im Hintergrund mit Abschluss-Benachrichtigung oder `Monitor`, nie
 `sleep`-Schleifen, nie `| tail` vor einem Exit-Code, der gebraucht wird.
 

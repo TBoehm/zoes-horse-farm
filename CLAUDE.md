@@ -43,3 +43,7 @@ src/main.js       Composition Root: verdrahtet alles, sonst keine Logik.
 README. Nach jedem Implementierungsschritt (jedes Agent-Ergebnis) laufen mindestens Lint,
 Format-Check und Unit-Tests über das ganze Repo; vor jedem Commit alle fünf. Kein Commit mit rotem
 Gate, auch kein WIP-Commit mit kaputtem Build.
+
+Nach den Gates prüft immer ein frischer Opus-QA-Agent den gesamten Diff gegen alle Regeln dieser
+Datei und die globalen Regeln des Users (Englisch, Schichten, TDD, Stil). Verstöße sind `major`;
+erst bei 0 blocker/major ist ein Schritt fertig.
