@@ -1,34 +1,33 @@
-// Reit-Bildschirm: Spielschleife, Eingabe, Pause, HUD und Rückmeldungen (SRT-002 bis SRT-004).
+// Ride screen (thin adapter): builds the DOM, reads the input, pauses automatically, and runs the
+// frame loop. All ride rules live in application/ride-session.js: this screen calls
+// `session.step`, shows `session.view` in the 3D world and executes the returned commands.
 import { onLangChange, t } from '../i18n.js';
 import { h } from '../dom.js';
 import { getEngine } from '../../view3d/engine.js';
 import { createInput } from '../../input/input.js';
-import { createRidingSim } from '../../../domain/sim/riding-sim.js';
-import { createFreeMode } from '../../../application/modes/free-mode.js';
-import { addJump } from '../../../domain/progress/progress.js';
-import { checkInstantBadges } from '../../../domain/progress/badges.js';
+import { createRideMode } from '../../../application/modes/index.js';
+import { createRideSession } from '../../../application/ride-session.js';
 import { showBadgeToast } from './profile/badge-toast.js';
 
-const MODES = { free: createFreeMode };
 const HUDS = {};
-
-/** Further modes (e.g. course, SRT-004) register here. factory(ctx, params) → mode. */
-export function registerRideMode(id, factory) {
-  MODES[id] = factory;
-}
+const FEEDBACK_VISIBLE_S = 2;
 
 /** A mode with a HUD registers a view per mode id: factory() → { el, renderTexts(), render(model) }. */
 export function registerRideHud(id, factory) {
   HUDS[id] = factory;
 }
 
-export function createRideScreen(ctx, params = {}) {
+/**
+ * @param {object} ctx app context
+ * @param {{ mode?: 'free'|'course', courseId?: number }} params
+ * @param {{ rng: () => number }} deps random source, injected by the composition root
+ */
+export function createRideScreen(ctx, params = {}, { rng }) {
   const { app, store, inputMode, services, clock } = ctx;
   const engine = getEngine(ctx);
   const { world, horse, cameraRig, governor } = engine;
-  // Modes get only the ports they need (store, clock); no DOM, no app
-  const mode = MODES[params.mode ?? 'free']({ store, clock }, params);
-  const hudView = mode.hudModel ? HUDS[mode.id]?.() : null;
+  const session = createRideSession({ mode: createRideMode(params), store, clock, rng });
+  const hudView = session.view.hud ? HUDS[session.modeId]?.() : null;
 
   // --- DOM ---
   const hud = h('div', { class: 'ride-hud' });
@@ -54,13 +53,13 @@ export function createRideScreen(ctx, params = {}) {
   );
   const el = h('section', { class: 'ride-screen' }, hud, feedbackEl, hint, controls, pauseMenu);
   if (hudView) hud.append(hudView.el);
-  const renderHud = () => hudView?.render(mode.hudModel());
+  const renderHud = (model = session.view.hud) => hudView?.render(model);
 
   const renderTexts = () => {
     pauseTitle.textContent = t('pause.title');
     resumeBtn.textContent = t('pause.resume');
     restartBtn.textContent = t('pause.restart');
-    quitBtn.textContent = t(mode.quitLabelKey);
+    quitBtn.textContent = t(session.quitLabelKey);
     settingsBtn.textContent = t('pause.settings');
     hint.textContent = t('ride.pauseHint');
     hudView?.renderTexts();
@@ -69,17 +68,15 @@ export function createRideScreen(ctx, params = {}) {
   renderTexts();
   const offLang = onLangChange(renderTexts);
 
-  // --- Spielzustand ---
+  // --- Input and world ---
   const input = createInput({ container: controls, inputMode });
   const updateHint = () => (hint.hidden = inputMode.touch);
   updateHint();
   const offMode = inputMode.onChange(updateHint);
 
-  const sim = createRidingSim({ obstacles: mode.obstacles, rules: mode.rules, rng: Math.random });
-  world.setObstacles(mode.obstacles, { flags: mode.flags });
-  // Mode lines carry label keys; translate them here (language may have changed since last restart)
-  const applyLines = () => {
-    const lines = mode.lines;
+  world.setObstacles(session.obstacles, { flags: session.flags });
+  // Session lines carry label keys; translate them here (the language may have changed)
+  const applyLines = (lines) =>
     world.setLines?.(
       lines
         ? {
@@ -88,59 +85,52 @@ export function createRideScreen(ctx, params = {}) {
           }
         : null,
     );
-  };
-  applyLines();
+  applyLines(session.view.lines);
   world.highlight(null);
   world.setAid(null);
   world.setFinishMarked?.(false);
 
   let paused = false;
-  let rebuilds = [];
   let feedbackTimer = 0;
 
-  const api = {
-    sim,
-    world,
-    rebuildIn(elementId, seconds) {
-      rebuilds = rebuilds.filter((r) => r.elementId !== elementId);
-      rebuilds.push({ elementId, left: seconds });
-    },
-    rebuildNow(elementId) {
-      rebuilds = rebuilds.filter((r) => r.elementId !== elementId);
-      sim.rebuild(elementId);
-    },
-    feedback(key, params) {
-      feedbackEl.textContent = t(key, params);
-      feedbackEl.classList.add('is-visible');
-      feedbackTimer = 2;
-    },
-    /** End of ride: reset the touch gallop, finish signal, then open the next screen. */
-    finish({ screen, params: screenParams }) {
-      input.resetTouchGallop();
-      services.audio?.sfx.finishSignal();
-      app.go(screen, screenParams);
-    },
-    pause: () => setPaused(true),
-    restart: () => restart(),
-  };
+  function showFeedback(key) {
+    feedbackEl.textContent = t(key);
+    feedbackEl.classList.add('is-visible');
+    feedbackTimer = FEEDBACK_VISIBLE_S;
+  }
 
-  function placeHorse() {
-    const s = sim.horse;
-    horse.object.position.set(s.x, s.y ?? 0, s.z);
-    horse.object.rotation.y = s.heading;
+  /** Executes the commands of the session; returns true if the screen is being left. */
+  function execute(commands) {
+    for (const cmd of commands) {
+      if (cmd.type === 'endGallop') input.endGallop();
+      else if (cmd.type === 'resetTouchGallop') input.resetTouchGallop();
+      else if (cmd.type === 'feedback') showFeedback(cmd.key);
+      else if (cmd.type === 'badges')
+        cmd.ids.forEach((id) => showBadgeToast(app.layers.overlay, id));
+      else if (cmd.type === 'sound') services.audio?.sfx[cmd.name]?.();
+      else if (cmd.type === 'finished') {
+        input.resetTouchGallop();
+        services.audio?.sfx.finishSignal();
+        app.go(cmd.screen, cmd.params);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function placeHorse(state) {
+    horse.object.position.set(state.x, state.y ?? 0, state.z);
+    horse.object.rotation.y = state.heading;
   }
 
   function restart() {
-    rebuilds = [];
-    sim.reset(mode.startPose());
-    sim.rebuildAll();
-    input.resetTouchGallop();
+    execute(session.restart().commands);
     input.clearEdges();
-    mode.onRestart?.(api);
-    if (mode.lines) applyLines();
-    renderHud();
+    const view = session.view;
+    applyLines(view.lines);
+    renderHud(view.hud);
     horse.setAppearance?.(store.get('horse'));
-    placeHorse();
+    placeHorse(view.horse);
     cameraRig.snap();
     governor.interrupt();
   }
@@ -161,41 +151,17 @@ export function createRideScreen(ctx, params = {}) {
     restart();
     setPaused(false);
   });
-  quitBtn.addEventListener('click', () => app.go(mode.quitScreen));
+  quitBtn.addEventListener('click', () => app.go(session.quitScreen));
   settingsBtn.addEventListener('click', () => app.push('settings', { fromPause: true }));
 
-  // Auto-Pause bei Fokusverlust und Hochformat (Regeln 12, 38)
+  // Auto-pause on lost focus and portrait orientation (rules 12, 38)
   const onHidden = () => document.hidden && setPaused(true);
   const onBlur = () => setPaused(true);
   document.addEventListener('visibilitychange', onHidden);
   window.addEventListener('blur', onBlur);
   const offRotate = app.on('rotateBlocked', (blocked) => blocked && setPaused(true));
 
-  const offFootfall = (() => {
-    horse.onFootfall = (gait) => !paused && services.audio?.sfx.hoof(gait);
-    return () => (horse.onFootfall = null);
-  })();
-
-  function handleEvents(events) {
-    for (const e of events) {
-      if (e.type === 'gallopEnded') input.endGallop();
-      if (e.type === 'landed') {
-        // Sprungzähler: jeder Sprung über ein Hindernis, sofort gespeichert (Regeln 40, 45)
-        // Sofort-Auszeichnungen (Regel 49) werden kurz eingeblendet
-        let awarded = [];
-        store.update('progress', (p) => {
-          const result = checkInstantBadges(addJump(p), clock.nowIso());
-          awarded = result.awarded;
-          return result.progress;
-        });
-        for (const id of awarded) showBadgeToast(app.layers.overlay, id);
-        services.audio?.sfx.landing();
-      }
-      if (e.type === 'takeoff') services.audio?.sfx.takeoff();
-      if (e.type === 'railDown') services.audio?.sfx.railDown();
-    }
-    mode.onEvents(events, api);
-  }
+  horse.onFootfall = (gait) => !paused && services.audio?.sfx.hoof(gait);
 
   function frame(dt, rawDt) {
     if (paused || app.current !== 'ride') {
@@ -211,32 +177,23 @@ export function createRideScreen(ctx, params = {}) {
       const next = cameraRig.toggle();
       store.update('settings', (s) => ({ ...s, camera: next }));
     }
-    const prev = { x: sim.horse.x, z: sim.horse.z };
-    const events = sim.step(dt, inp);
-    handleEvents(events);
-    mode.update(dt, api, prev);
-    renderHud();
-
-    for (const r of rebuilds) r.left -= dt;
-    for (const r of rebuilds.filter((x) => x.left <= 0)) sim.rebuild(r.elementId);
-    rebuilds = rebuilds.filter((r) => r.left > 0);
+    if (execute(session.step(dt, inp).commands)) return;
 
     if (feedbackTimer > 0) {
       feedbackTimer -= dt;
       if (feedbackTimer <= 0) feedbackEl.classList.remove('is-visible');
     }
 
-    horse.update(dt, sim.horse);
-    placeHorse();
-    world.syncRails(sim.rails, dt);
-    world.setShadowFocus?.(sim.horse.x, sim.horse.z);
-    const aim = mode.aidTarget(api);
-    world.setAid(
-      aim
-        ? { ...aim, zone: sim.zoneFor(aim.elementId, aim.dir, Math.max(sim.horse.speed, 1)) }
-        : null,
-    );
-    cameraRig.update(dt, sim.horse, horse.earAnchor);
+    const view = session.view;
+    renderHud(view.hud);
+    horse.update(dt, view.horse);
+    placeHorse(view.horse);
+    world.syncRails(view.rails, dt);
+    world.setShadowFocus?.(view.horse.x, view.horse.z);
+    world.highlight(view.highlight?.elementId ?? null, view.highlight?.number);
+    world.setFinishMarked?.(view.finishMarked);
+    world.setAid(view.aid);
+    cameraRig.update(dt, view.horse, horse.earAnchor);
     world.update?.(dt, engine.camera);
     governor.frame(rawDt, !document.hidden);
   }
@@ -251,7 +208,7 @@ export function createRideScreen(ctx, params = {}) {
     rerenderOnLang: false,
     screenClass: 'screen-ride',
     onShow() {
-      // Zurück aus den Einstellungen: weiterhin pausiert
+      // Back from the settings: still paused
       if (paused) resumeBtn.focus({ preventScroll: true });
     },
     destroy() {
@@ -259,11 +216,10 @@ export function createRideScreen(ctx, params = {}) {
       offLang();
       offMode();
       offRotate();
-      offFootfall();
+      horse.onFootfall = null;
       document.removeEventListener('visibilitychange', onHidden);
       window.removeEventListener('blur', onBlur);
       input.dispose();
-      mode.dispose?.();
       services.audio?.setPaused(false);
     },
     get paused() {

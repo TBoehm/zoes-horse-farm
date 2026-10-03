@@ -207,28 +207,8 @@ function placeCamera(mode) {
         .add(new THREE.Vector3(0, 1.9, 0)),
       new THREE.Vector3(0, 1.1, 0),
     ],
-    head: [
-      f
-        .clone()
-        .multiplyScalar(2.15)
-        .addScaledVector(r, -0.35)
-        .add(new THREE.Vector3(0, 1.95, 0)),
-      f
-        .clone()
-        .multiplyScalar(1.05)
-        .add(new THREE.Vector3(0, 1.8, 0)),
-    ],
-    headSide: [
-      f
-        .clone()
-        .multiplyScalar(1.1)
-        .addScaledVector(r, -1.6)
-        .add(new THREE.Vector3(0, 1.9, 0)),
-      f
-        .clone()
-        .multiplyScalar(1.05)
-        .add(new THREE.Vector3(0, 1.8, 0)),
-    ],
+    head: [f.clone().multiplyScalar(2.75).addScaledVector(r, -0.45).add(new THREE.Vector3(0, 1.95, 0)), f.clone().multiplyScalar(1.5).add(new THREE.Vector3(0, 1.82, 0))],
+    headSide: [f.clone().multiplyScalar(1.5).addScaledVector(r, -1.5).add(new THREE.Vector3(0, 1.95, 0)), f.clone().multiplyScalar(1.45).add(new THREE.Vector3(0, 1.8, 0))],
     top: [
       f
         .clone()

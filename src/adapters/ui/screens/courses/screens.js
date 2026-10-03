@@ -1,9 +1,10 @@
-// Parcours-Auswahl, Vorstart-Karte und Ergebnis (Regeln 26, 35, 55).
+// Course selection, prestart map and results (rules 26, 35, 55). Display only: which courses are
+// open, the stars and the result figures come from the application layer.
 import { getLang } from '../../i18n.js';
 import { toggleRow } from '../../settings-screen.js';
-import { COURSES, courseById } from '../../../../domain/course/courses.js';
-import { displayName } from '../../../../domain/horse/horse-name.js';
-import { BADGES } from '../../../../domain/progress/badges.js';
+import { getCourse, listCourses } from '../../../../application/course-catalog.js';
+import { displayName } from '../../../../application/horse-service.js';
+import { summarizeResult } from '../../../../application/result-summary.js';
 import { badgeEmblem } from '../profile/badges-screen.js';
 import { drawCoursePlan } from './plan.js';
 import { formatCs } from './format.js';
@@ -26,25 +27,23 @@ function backButton(h, t, onclick) {
 
 export function createCourseSelectScreen(ctx) {
   const { t, h, store, app } = ctx;
-  const progress = store.get('progress');
-  const cards = COURSES.map((course) => {
-    const open = course.id <= progress.unlocked;
-    const best = progress.courses[String(course.id)];
-    const card = h(
+  const cards = listCourses(store).map((course) => {
+    const { id, open, best } = course;
+    return h(
       'button',
       {
         class: `course-card ${open ? 'is-open' : 'is-locked'}`,
         type: 'button',
         disabled: !open,
         'aria-disabled': String(!open),
-        dataset: { course: String(course.id) },
-        onclick: () => open && app.go('prestart', { courseId: course.id }),
+        dataset: { course: String(id) },
+        onclick: () => open && app.go('prestart', { courseId: id }),
       },
-      h('span', { class: 'course-number' }, String(course.id)),
-      h('strong', {}, t('courses.number', { n: course.id })),
-      h('span', {}, t('courses.obstacles', { count: course.obstacles.length })),
+      h('span', { class: 'course-number' }, String(id)),
+      h('strong', {}, t('courses.number', { n: id })),
+      h('span', {}, t('courses.obstacles', { count: course.obstacleCount })),
       open
-        ? stars(h, best?.stars ?? 0, t('courses.starsLabel', { count: best?.stars ?? 0 }))
+        ? stars(h, course.stars, t('courses.starsLabel', { count: course.stars }))
         : h('span', { class: 'lock', 'aria-hidden': 'true' }, '🔒'),
       h(
         'span',
@@ -56,7 +55,6 @@ export function createCourseSelectScreen(ctx) {
             : t('courses.noBest'),
       ),
     );
-    return card;
   });
   const el = h(
     'section',
@@ -74,7 +72,7 @@ export function createCourseSelectScreen(ctx) {
 
 export function createPrestartScreen(ctx, params) {
   const { t, h, store, app, services } = ctx;
-  const course = courseById(params.courseId);
+  const course = getCourse(params.courseId);
   const canvas = h('canvas', {
     class: 'course-plan',
     role: 'img',
@@ -86,7 +84,7 @@ export function createPrestartScreen(ctx, params) {
     t('prestart.go'),
   );
   go.addEventListener('click', () => {
-    // Startsignal nur bei „Los" (Regel 26)
+    // Start signal only on "Go" (rule 26)
     services.audio?.sfx.startSignal();
     app.go('ride', { mode: 'course', courseId: course.id });
   });
@@ -103,7 +101,7 @@ export function createPrestartScreen(ctx, params) {
         name: 'aidCourse',
         label: t('prestart.aid'),
         value: store.get('settings').aidCourse,
-        // ändert die gespeicherte Einstellung „im Parcours" (Regel 42)
+        // changes the saved "in courses" setting (rule 42)
         onChange: (v) => store.update('settings', (s) => ({ ...s, aidCourse: v })),
       }),
     ),
@@ -126,10 +124,8 @@ export function createPrestartScreen(ctx, params) {
 
 export function createResultsScreen(ctx, params) {
   const { t, h, store, app } = ctx;
-  const { result, isNewBest, awarded = [], courseId } = params;
-  const progress = store.get('progress');
-  const nextId = courseId + 1;
-  const nextOpen = nextId <= COURSES.length && nextId <= progress.unlocked;
+  const summary = summarizeResult(store, params);
+  const { courseId, rows } = summary;
   const row = (label, value, field) =>
     h(
       'div',
@@ -137,7 +133,6 @@ export function createResultsScreen(ctx, params) {
       h('span', {}, label),
       h('strong', {}, value),
     );
-  const f = result.faults;
   const el = h(
     'section',
     { class: 'panel panel-results' },
@@ -145,33 +140,25 @@ export function createResultsScreen(ctx, params) {
     h(
       'p',
       { class: 'results-horse' },
-      t('results.horse', { name: displayName(store.get('horse'), t) }),
+      t('results.horse', { name: displayName(store.get('horse'), t('horse.defaultName')) }),
     ),
-    stars(h, result.stars, t('courses.starsLabel', { count: result.stars })),
-    isNewBest
+    stars(h, summary.stars, t('courses.starsLabel', { count: summary.stars })),
+    summary.isNewBest
       ? h('p', { class: 'new-best', dataset: { result: 'newBest' } }, t('results.newBest'))
       : null,
     h(
       'div',
       { class: 'result-table' },
-      row(t('results.time'), formatCs(result.timeCs, ctx.store && getLang()), 'time'),
-      row(
-        t('results.knockdowns'),
-        t('results.points', { count: f.knockdowns, points: f.knockdowns * 4 }),
-        'knockdowns',
-      ),
-      row(
-        t('results.refusals'),
-        t('results.points', { count: f.refusals, points: f.refusals * 4 }),
-        'refusals',
-      ),
-      row(t('results.timeFaults'), String(f.timeFaults), 'timeFaults'),
-      row(t('results.total'), String(f.total), 'total'),
+      row(t('results.time'), formatCs(summary.timeCs, getLang()), 'time'),
+      row(t('results.knockdowns'), t('results.points', rows.knockdowns), 'knockdowns'),
+      row(t('results.refusals'), t('results.points', rows.refusals), 'refusals'),
+      row(t('results.timeFaults'), String(rows.timeFaults), 'timeFaults'),
+      row(t('results.total'), String(rows.total), 'total'),
     ),
-    params.unlockedCourse
-      ? h('p', { class: 'unlocked-note' }, t('results.unlocked', { n: params.unlockedCourse }))
+    summary.unlockedCourse
+      ? h('p', { class: 'unlocked-note' }, t('results.unlocked', { n: summary.unlockedCourse }))
       : null,
-    awarded.length
+    summary.badges.length
       ? h(
           'div',
           { class: 'new-badges', dataset: { result: 'badges' } },
@@ -179,15 +166,14 @@ export function createResultsScreen(ctx, params) {
           h(
             'ul',
             { class: 'badge-grid' },
-            awarded.map((id) => {
-              const b = BADGES.find((x) => x.id === id);
-              return h(
+            summary.badges.map((badge) =>
+              h(
                 'li',
-                { class: 'badge-card is-earned', dataset: { badge: id } },
-                badgeEmblem(h, id, true),
-                h('strong', { class: 'badge-name' }, t(b.nameKey)),
-              );
-            }),
+                { class: 'badge-card is-earned', dataset: { badge: badge.id } },
+                badgeEmblem(h, badge.id, true),
+                h('strong', { class: 'badge-name' }, t(badge.nameKey)),
+              ),
+            ),
           ),
         )
       : null,
@@ -204,14 +190,14 @@ export function createResultsScreen(ctx, params) {
         },
         t('results.again'),
       ),
-      nextOpen
+      summary.nextCourse
         ? h(
             'button',
             {
               class: 'btn',
               type: 'button',
               dataset: { action: 'next' },
-              onclick: () => app.go('prestart', { courseId: nextId }),
+              onclick: () => app.go('prestart', { courseId: summary.nextCourse }),
             },
             t('results.next'),
           )

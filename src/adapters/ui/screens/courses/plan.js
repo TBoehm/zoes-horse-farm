@@ -1,4 +1,4 @@
-// Draufsicht-Plan eines Parcours auf einem Canvas (Vorstart-Karte, Regeln 26, 28).
+// Top-down plan of a course on a canvas (prestart map, rules 26, 28).
 import { ARENA, POLE_LENGTH } from '../../../../domain/sim/tuning.js';
 
 export function drawCoursePlan(canvas, course, { startLabel, finishLabel } = {}) {
@@ -10,7 +10,7 @@ export function drawCoursePlan(canvas, course, { startLabel, finishLabel } = {})
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // Plan quer: Platz-Länge (z) nach rechts, Breite (x) nach oben
+  // Plan in landscape: arena length (z) to the right, width (x) upwards
   const pad = 14;
   const scale = Math.min((cssW - pad * 2) / ARENA.length, (cssH - pad * 2) / ARENA.width);
   const ox = cssW / 2;
@@ -102,7 +102,7 @@ function drawElement(ctx, P, scale, el) {
     ctx.lineTo(x2, y2);
     ctx.stroke();
   }
-  // Fahnen: rot rechts (+t), weiß links (−t)
+  // Flags: red on the right (+t), white on the left (−t)
   const flag = (sign, color) => {
     const [fx, fy] = P(el.x + tx * (half + 0.4) * sign, el.z + tz * (half + 0.4) * sign);
     ctx.fillStyle = color;

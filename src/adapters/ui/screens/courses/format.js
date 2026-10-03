@@ -1,4 +1,4 @@
-// Anzeige von Ritt-Zeiten in Hundertstel (Begriffe „Ritt-Zeit").
+// Display of ride times in hundredths of a second (glossary "ride time").
 export function formatCs(cs, lang = 'de') {
   const total = Math.max(0, Math.round(cs));
   const minutes = Math.floor(total / 6000);

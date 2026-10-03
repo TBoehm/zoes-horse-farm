@@ -41,9 +41,20 @@ describe('course mode', () => {
       timeMs: 0,
       allowedS: course.allowedTimeS,
       faults: 0,
+      overTime: false,
       nextLabel: mode.run.nextLabel,
       missingHint: null,
     });
+  });
+
+  it('flags the HUD when the allowed time is exceeded', () => {
+    const { mode, host } = setup();
+    const start = across(course.start);
+    mode.update(0.1, { horse: start.next, prev: start.prev }, host);
+    mode.update(course.allowedTimeS - 1, { horse: start.next, prev: start.next }, host);
+    expect(mode.hudModel().overTime).toBe(false);
+    mode.update(2, { horse: start.next, prev: start.next }, host);
+    expect(mode.hudModel().overTime).toBe(true);
   });
 
   it('updates the HUD model during the ride and resets it on restart', () => {
@@ -107,7 +118,10 @@ describe('course mode', () => {
     const { mode, host } = setup();
     startRide(mode);
     for (const o of course.obstacles) {
-      mode.onEvents([{ type: 'landed', elementId: o.elements[0].id, dir: 1, knocked: false }], host);
+      mode.onEvents(
+        [{ type: 'landed', elementId: o.elements[0].id, dir: 1, knocked: false }],
+        host,
+      );
     }
     const finish = across(course.finish);
     const out = mode.update(0.1, { horse: finish.next, prev: finish.prev }, host);

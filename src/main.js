@@ -1,4 +1,5 @@
 // Entry point and composition root: checks, save game, language, app frame, wiring of all parts.
+// No rules here: ports (store, clock, rng) are created and handed to the layers.
 import './adapters/ui/styles/main.css';
 import './adapters/ui/styles/ride.css';
 import './adapters/ui/styles/profile.css';
@@ -28,7 +29,7 @@ function boot() {
   setLang(store.get('settings').lang);
   document.documentElement.lang = getLang();
 
-  // Regel 7: ohne 3D statt der ganzen App nur der Hinweis
+  // Rule 7: without 3D only a notice is shown instead of the whole app
   if (!hasWebGL()) {
     renderNo3dNotice(root);
     return;
@@ -44,7 +45,8 @@ function boot() {
   const app = createApp({ root, store, inputMode, clock: systemClock });
   app.register('menu', createMainMenuScreen);
   app.register('settings', createSettingsScreen);
-  app.register('ride', createRideScreen);
+  // The ride use case gets its random source here (the application layer never calls Math.random)
+  app.register('ride', (ctx, params) => createRideScreen(ctx, params, { rng: Math.random }));
   registerProfile(app);
   registerCourses(app);
   registerAudio(app, store);
@@ -79,7 +81,7 @@ function boot() {
 try {
   boot();
 } catch (err) {
-  // Unerwarteter Startfehler: kindgerechter Hinweis statt leerer Seite (Sinn von Regel 7)
+  // Unexpected start error: child-friendly notice instead of an empty page (purpose of rule 7)
   console.error(err);
   renderNo3dNotice(document.getElementById('app'));
 }

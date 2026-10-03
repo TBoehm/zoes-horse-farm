@@ -1,6 +1,6 @@
-// Übersicht aller Auszeichnungen (Regel 50).
+// Overview of all badges (rule 50). Display only: the list comes from application/badge-overview.
 import { getLang } from '../../i18n.js';
-import { BADGES } from '../../../../domain/progress/badges.js';
+import { badgeSummary, listBadges } from '../../../../application/badge-overview.js';
 
 export function formatDate(iso, lang = getLang()) {
   const d = new Date(iso);
@@ -32,13 +32,12 @@ export function badgeEmblem(h, id, earned) {
 
 export function createBadgesScreen(ctx) {
   const { t, h, store, app } = ctx;
-  const badges = store.get('progress').badges ?? {};
-  const earnedCount = BADGES.filter((b) => badges[b.id]).length;
+  const { earned, total } = badgeSummary(store);
   const grid = h(
     'ul',
     { class: 'badge-grid' },
-    BADGES.map((b) => {
-      const date = badges[b.id];
+    listBadges(store).map((b) => {
+      const date = b.earnedAt;
       return h(
         'li',
         { class: `badge-card ${date ? 'is-earned' : 'is-missing'}`, dataset: { badge: b.id } },
@@ -60,7 +59,7 @@ export function createBadgesScreen(ctx) {
       'header',
       { class: 'panel-head' },
       h('h2', {}, t('badges.title')),
-      h('span', { class: 'chip' }, t('badges.count', { count: earnedCount, total: BADGES.length })),
+      h('span', { class: 'chip' }, t('badges.count', { count: earned, total })),
     ),
     grid,
     h(

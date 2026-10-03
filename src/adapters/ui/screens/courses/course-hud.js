@@ -6,7 +6,7 @@ import { formatSeconds } from './format.js';
 
 /**
  * @returns {{ el: HTMLElement, renderTexts(): void, render(model: object): void }}
- * model = { phase, timeMs, allowedS, faults, nextLabel, missingHint }
+ * model = { phase, timeMs, allowedS, faults, overTime, nextLabel, missingHint }
  */
 export function createCourseHud() {
   const chip = (field) => {
@@ -43,7 +43,7 @@ export function createCourseHud() {
         model.nextLabel === 'finish' ? t('hud.finish') : String(model.nextLabel);
       time.el.hidden = !riding;
       faults.el.hidden = !riding;
-      time.el.classList.toggle('is-warning', model.timeMs > model.allowedS * 1000);
+      time.el.classList.toggle('is-warning', model.overTime);
       if (model.phase === 'prestart') {
         notice.textContent = t('ride.prestartHint');
         notice.hidden = false;

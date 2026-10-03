@@ -1,8 +1,13 @@
-// „Mein Pferd": Name, Fellfarbe, Kopfabzeichen mit 3D-Vorschau (Regel 43).
+// "My horse": name, coat color and head marking with a 3D preview (rule 43).
 import { choiceGroup } from '../../settings-screen.js';
 import { getEngine } from '../../../view3d/engine.js';
-import { COATS, MARKINGS } from '../../../../domain/horse/appearance.js';
-import { cleanName, NAME_MAX } from '../../../../domain/horse/horse-name.js';
+import {
+  appearanceOptions,
+  displayName,
+  NAME_MAX_LENGTH,
+  rename,
+  setAppearance,
+} from '../../../../application/horse-service.js';
 
 const IDLE = { speed: 0, gait: 'halt', turnRate: 0, y: 0, jump: null, hop: null, refusal: null };
 
@@ -15,32 +20,22 @@ export function createMyHorseScreen(ctx) {
   const nameInput = h('input', {
     class: 'text-input',
     type: 'text',
-    maxlength: String(NAME_MAX * 2),
-    value: horseData.name ?? t('horse.defaultName'),
+    maxlength: String(NAME_MAX_LENGTH * 2),
+    value: displayName(horseData, t('horse.defaultName')),
     autocomplete: 'off',
     spellcheck: 'false',
     'aria-label': t('myHorse.name'),
     dataset: { field: 'horseName' },
   });
-  // Ungültige Eingabe wird nicht gespeichert; es gilt der letzte gültige Name (Regel 43)
-  const saveName = () => {
-    const name = cleanName(nameInput.value);
-    if (name === null) return;
-    const current = store.get('horse');
-    const isDefault = current.name === null && name === t('horse.defaultName');
-    if (isDefault || name === current.name) return;
-    store.update('horse', (x) => ({ ...x, name, nameAnswered: true }));
-  };
+  // An invalid input is not saved; the last valid name stays (rule 43)
+  const saveName = () => rename(store, nameInput.value, { defaultName: t('horse.defaultName') });
   nameInput.addEventListener('input', saveName);
   nameInput.addEventListener('blur', () => {
-    const current = store.get('horse');
-    nameInput.value = current.name ?? t('horse.defaultName');
+    nameInput.value = displayName(store.get('horse'), t('horse.defaultName'));
   });
 
-  const update = (key) => (value) => {
-    const next = store.update('horse', (x) => ({ ...x, [key]: value }));
-    horse.setAppearance({ coat: next.coat, marking: next.marking });
-  };
+  const choose = (key) => (value) => horse.setAppearance(setAppearance(store, { [key]: value }));
+  const { coats, markings } = appearanceOptions();
 
   const panel = h(
     'section',
@@ -59,15 +54,15 @@ export function createMyHorseScreen(ctx) {
         name: 'coat',
         label: t('myHorse.coat'),
         value: horseData.coat,
-        options: COATS.map((c) => ({ value: c, label: t(`coat.${c}`) })),
-        onChange: update('coat'),
+        options: coats.map((c) => ({ value: c, label: t(`coat.${c}`) })),
+        onChange: choose('coat'),
       }),
       choiceGroup({
         name: 'marking',
         label: t('myHorse.marking'),
         value: horseData.marking,
-        options: MARKINGS.map((m) => ({ value: m, label: t(`marking.${m}`) })),
-        onChange: update('marking'),
+        options: markings.map((m) => ({ value: m, label: t(`marking.${m}`) })),
+        onChange: choose('marking'),
       }),
     ),
     h(
@@ -87,7 +82,7 @@ export function createMyHorseScreen(ctx) {
   );
   const el = h('div', { class: 'horse-layout' }, panel, h('div', { class: 'horse-preview-space' }));
 
-  // 3D-Vorschau: Pferd steht auf dem Platz, Kamera kreist langsam
+  // 3D preview: the horse stands in the arena, the camera circles slowly
   world.setObstacles([], { flags: false });
   world.setAid(null);
   world.highlight(null);
@@ -100,7 +95,7 @@ export function createMyHorseScreen(ctx) {
     angle += dt * 0.25;
     const wide = window.innerWidth > window.innerHeight;
     const r = 5.2;
-    // Pferd im Querformat rechts neben dem Bedienfeld zeigen
+    // In landscape, show the horse to the right of the panel
     const side = wide ? -1.6 : 0;
     camera.position.set(Math.sin(angle) * r + side, 1.9, Math.cos(angle) * r);
     camera.lookAt(side * 0.55, 1.15, 0);

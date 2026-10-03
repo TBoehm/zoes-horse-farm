@@ -1,5 +1,5 @@
-// Bereiche des Spielstands mit Feld-für-Feld-Bereinigung (Regel 47).
-// Ungültige oder fehlende Felder → Anfangswert, lesbare Felder bleiben, unbekannte bleiben erhalten.
+// Save-game sections with field-by-field sanitizing (rule 47).
+// Invalid or missing fields → default value, readable fields stay, unknown fields are preserved.
 
 export const SAVE_VERSION = 1;
 
@@ -17,7 +17,7 @@ export const field = {
   }),
 };
 
-/** Baut einen Sanitizer aus Feld-Spezifikationen. fallback darf eine Funktion (env) sein. */
+/** Builds a sanitizer from field specs. `fallback` may be a function of the env. */
 export function objectSection(fields) {
   const resolve = (spec, env) =>
     typeof spec.fallback === 'function' ? spec.fallback(env) : spec.fallback;

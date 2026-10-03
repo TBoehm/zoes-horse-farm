@@ -1,5 +1,5 @@
-// „Fortschritt löschen" in den Einstellungen, nur aus dem Hauptmenü (Regel 48).
-import { resetProgress } from '../../../../domain/progress/progress.js';
+// "Delete progress" in the settings, only from the main menu (rule 48).
+import { resetProgress } from '../../../../application/progress-service.js';
 
 export function renderResetSection(ctx, { fromPause }) {
   if (fromPause) return null;
@@ -19,7 +19,7 @@ export function renderResetSection(ctx, { fromPause }) {
           type: 'button',
           dataset: { action: 'reset-confirm' },
           onclick: () => {
-            store.update('progress', (p) => resetProgress(p));
+            resetProgress(store);
             confirmBox.hidden = true;
             trigger.hidden = false;
             status.textContent = t('reset.done');

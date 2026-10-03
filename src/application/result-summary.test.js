@@ -39,6 +39,8 @@ describe('summarizeResult', () => {
 
   it('offers the next course only when it is open', () => {
     expect(summarizeResult(fakeStore({ progress: { unlocked: 2 } }), params()).nextCourse).toBe(2);
-    expect(summarizeResult(fakeStore({ progress: { unlocked: 1 } }), params()).nextCourse).toBeNull();
+    expect(
+      summarizeResult(fakeStore({ progress: { unlocked: 1 } }), params()).nextCourse,
+    ).toBeNull();
   });
 });

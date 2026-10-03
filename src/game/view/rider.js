@@ -32,7 +32,7 @@ const J = {
   elbow: [0.19, 0.36, 0.07],
   wrist: [0.09, 0.22, 0.33],
   hip: [0.1, 0.08, -0.02],
-  knee: [0.29, -0.17, 0.28],
+  knee: [0.27, -0.17, 0.28],
   ankle: [0.36, -0.56, 0.15],
   toe: [0.365, -0.59, 0.31],
 };
@@ -168,18 +168,18 @@ function buildRiderGeometry(index, level) {
   b.addIndexed(
     hd.p,
     hd.idx,
-    new THREE.Matrix4().makeTranslation(0, 0.84, 0.0),
+    new THREE.Matrix4().makeTranslation(0, 0.815, 0.0),
     () => [['head', 1]],
-    (v) => ({ color: v.z < -0.02 && v.y > 0.78 ? C.hair : C.skin }),
+    (v) => ({ color: v.z < -0.02 && v.y > 0.755 ? C.hair : C.skin }),
   );
-  limb(b, [[0, 0.84, -0.09], [0, 0.78, -0.13], [0, 0.68, -0.15]], [[0, 0.03], [0.5, 0.026], [1, 0.012]], ['head', 'head'], C.hair, D, { n: 4 });
+  limb(b, [[0, 0.815, -0.09], [0, 0.76, -0.13], [0, 0.66, -0.15]], [[0, 0.03], [0.5, 0.026], [1, 0.012]], ['head', 'head'], C.hair, D, { n: 4 });
   // Helmet (shell) with peak
   const helmet = new THREE.SphereGeometry(1, D.head[0], D.head[1], 0, Math.PI * 2, 0, Math.PI * 0.56);
   helmet.scale(0.096, 0.1, 0.116);
   b.addIndexed(
     Array.from(helmet.attributes.position.array),
     Array.from(helmet.index.array),
-    new THREE.Matrix4().makeRotationX(-0.12).setPosition(0, 0.87, -0.005),
+    new THREE.Matrix4().makeRotationX(-0.12).setPosition(0, 0.845, -0.005),
     () => [['head', 1]],
     () => ({ color: C.helmet }),
   );
@@ -188,7 +188,7 @@ function buildRiderGeometry(index, level) {
   b.addIndexed(
     peak.p,
     peak.idx,
-    new THREE.Matrix4().makeRotationX(0.25).setPosition(0, 0.885, 0.095),
+    new THREE.Matrix4().makeRotationX(0.25).setPosition(0, 0.86, 0.095),
     () => [['head', 1]],
     () => ({ color: C.helmet }),
   );

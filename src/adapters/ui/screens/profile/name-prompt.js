@@ -1,12 +1,17 @@
-// Namensfrage beim ersten Start (Regel 43). Erscheint bei jedem Start, bis beantwortet/übersprungen.
-import { cleanName, NAME_MAX } from '../../../../domain/horse/horse-name.js';
+// Name question on the first start (rule 43). Shown on every start until answered or skipped.
+import {
+  answerName,
+  isValidName,
+  NAME_MAX_LENGTH,
+  skipName,
+} from '../../../../application/horse-service.js';
 
 export function createNamePromptScreen(ctx, params = {}) {
   const { t, h, store, app } = ctx;
   const input = h('input', {
     class: 'text-input',
     type: 'text',
-    maxlength: String(NAME_MAX * 2),
+    maxlength: String(NAME_MAX_LENGTH * 2),
     autocomplete: 'off',
     autocapitalize: 'words',
     spellcheck: 'false',
@@ -26,10 +31,10 @@ export function createNamePromptScreen(ctx, params = {}) {
   );
   const done = () => app.go(params.next ?? 'menu');
   input.addEventListener('input', () => {
-    ok.disabled = cleanName(input.value) === null;
+    ok.disabled = !isValidName(input.value);
   });
   skip.addEventListener('click', () => {
-    store.update('horse', (x) => ({ ...x, name: null, nameAnswered: true }));
+    skipName(store);
     done();
   });
   const form = h(
@@ -41,10 +46,7 @@ export function createNamePromptScreen(ctx, params = {}) {
   );
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    const name = cleanName(input.value);
-    if (!name) return;
-    store.update('horse', (x) => ({ ...x, name, nameAnswered: true }));
-    done();
+    if (answerName(store, input.value)) done();
   });
   const el = h(
     'section',

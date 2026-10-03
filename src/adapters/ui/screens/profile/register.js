@@ -1,11 +1,11 @@
-// Anmeldung von „Mein Pferd", „Auszeichnungen", Namensfrage und „Fortschritt löschen" (SRT-005).
+// Registration of "My horse", "Badges", the name question and "Delete progress" (SRT-005).
 import { registerMenuEntry, registerMenuHeader } from '../../menu.js';
 import { registerSettingsSection } from '../../settings-screen.js';
 import { createBadgesScreen } from './badges-screen.js';
 import { createMyHorseScreen } from './my-horse-screen.js';
 import { createNamePromptScreen } from './name-prompt.js';
 import { renderResetSection } from './reset-section.js';
-import { displayName } from '../../../../domain/horse/horse-name.js';
+import { displayName, needsNamePrompt } from '../../../../application/horse-service.js';
 
 export function registerProfile(app) {
   app.register('namePrompt', createNamePromptScreen);
@@ -27,13 +27,13 @@ export function registerProfile(app) {
     h(
       'p',
       { class: 'menu-greeting', dataset: { field: 'greeting' } },
-      t('menu.greeting', { name: displayName(store.get('horse'), t) }),
+      t('menu.greeting', { name: displayName(store.get('horse'), t('horse.defaultName')) }),
     ),
   );
   registerSettingsSection({ id: 'reset', order: 90, render: renderResetSection });
 }
 
-/** Erster Bildschirm nach dem Start: Namensfrage, bis sie beantwortet wurde (Regel 43). */
+/** First screen after the start: the name question until it was answered (rule 43). */
 export function firstScreen(store) {
-  return store.get('horse').nameAnswered ? 'menu' : 'namePrompt';
+  return needsNamePrompt(store) ? 'namePrompt' : 'menu';
 }

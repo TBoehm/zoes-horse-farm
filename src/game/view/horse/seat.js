@@ -7,7 +7,7 @@ const KEYS = ['rise', 'forward', 'lean', 'handX', 'handY', 'handZ', 'footForward
 
 const SIT = { rise: 0, forward: 0, lean: 0.1, handX: 0.09, handY: 0.2, handZ: 0.36, footForward: 0 };
 const LIGHT = { rise: 0.05, forward: 0.03, lean: 0.5, handX: 0.09, handY: 0.15, handZ: 0.43, footForward: 0 };
-const TWO_POINT = { rise: 0.1, forward: 0.12, lean: 1.0, handX: 0.1, handY: 0.1, handZ: 0.62, footForward: -0.03 };
+const TWO_POINT = { rise: 0.12, forward: 0.12, lean: 1.25, handX: 0.1, handY: 0.1, handZ: 0.62, footForward: -0.03 };
 const BACK = { rise: 0, forward: -0.03, lean: -0.1, handX: 0.09, handY: 0.26, handZ: 0.3, footForward: 0.04 };
 
 function posting(phi) {

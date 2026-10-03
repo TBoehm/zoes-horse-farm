@@ -46,6 +46,7 @@ export function createCourseMode(params = {}) {
         timeMs: run.timeMs,
         allowedS: course.allowedTimeS,
         faults: run.faults.total,
+        overTime: run.timeMs > course.allowedTimeS * 1000,
         nextLabel: run.nextLabel,
         missingHint: run.missingHint ?? null,
       };
@@ -79,7 +80,9 @@ export function createCourseMode(params = {}) {
       run.update(horse, clockMs);
       for (const id of run.drainRebuilds()) host.rebuildNow(id);
       if (run.phase !== 'finished') return null;
-      return { finished: { screen: 'results', result: run.result, params: { courseId: course.id } } };
+      return {
+        finished: { screen: 'results', result: run.result, params: { courseId: course.id } },
+      };
     },
     aidTarget({ settings }) {
       if (!settings.aidCourse) return null;

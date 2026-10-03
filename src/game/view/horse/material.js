@@ -87,8 +87,9 @@ vec3 horseCoat(){
   // Apfelschimmel: helle Flecken in dunklerem Netz, feine Sprenkel
   if (uDapple > 0.5) {
     float d = hzNoise(p * 6.5);
-    float net = smoothstep(0.08, 0.42, abs(d));
-    vec3 g = mix(uDark, uBase, 0.35 + 0.65 * net);
+    float d2 = hzNoise(p * 13.0 + 3.0);
+    float net = smoothstep(0.0, 0.55, abs(d + 0.35 * d2));
+    vec3 g = mix(uBase, uDark, (1.0 - net) * 0.5);
     g = mix(g, uBase * 1.04, smoothstep(1.2, 0.95, p.y) * 0.5);
 #ifndef HORSE_LOW
     float sp = smoothstep(0.72, 0.85, hzNoise(p * 55.0));

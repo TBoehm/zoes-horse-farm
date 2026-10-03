@@ -37,7 +37,9 @@ describe('free mode', () => {
 
   it('never ends the ride by itself', () => {
     const mode = createFreeMode();
-    expect(mode.update(0.1, { horse: { x: 0, z: 0 }, prev: { x: 0, z: 0 } }, fakeHost())).toBeNull();
+    expect(
+      mode.update(0.1, { horse: { x: 0, z: 0 }, prev: { x: 0, z: 0 } }, fakeHost()),
+    ).toBeNull();
   });
 
   it('shows the jump aid at the approached element only when enabled', () => {
