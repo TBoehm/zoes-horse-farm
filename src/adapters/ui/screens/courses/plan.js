@@ -53,14 +53,14 @@ export function drawCoursePlan(canvas, course, { startLabel, finishLabel } = {})
     const last = obstacle.elements[obstacle.elements.length - 1];
     const cx = (first.x + last.x) / 2;
     const cz = (first.z + last.z) / 2;
-    // Pfeil in Sprungrichtung
+    // Arrow in jump direction
     const nx = Math.sin(first.rot);
     const nz = Math.cos(first.rot);
     const [s0x, s0y] = P(cx - nx * 3.2, cz - nz * 3.2);
     const [s1x, s1y] = P(cx + nx * 3.2, cz + nz * 3.2);
     arrow(ctx, s0x, s0y, s1x, s1y, '#1f3b8a');
     if (obstacle.number) {
-      // Nummer seitlich (links in Sprungrichtung)
+      // Number on the side (left in jump direction)
       const tx = Math.cos(first.rot);
       const tz = -Math.sin(first.rot);
       const off = POLE_LENGTH / 2 + 2.4;

@@ -4,7 +4,7 @@ import { h } from '../ui/dom.js';
 import { createRenderer, resizeRenderer, setMaxPixelRatio } from './renderer.js';
 import { createQualityGovernor, pickInitialLevel, QUALITY_PRESETS } from './quality.js';
 import { createWorld } from './world.js';
-import { createHorse } from '../../game/view/horse/index.js';
+import { createHorse } from './horse/index.js';
 import { createCameraRig } from './camera.js';
 
 function rendererString(renderer) {

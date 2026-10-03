@@ -4,6 +4,7 @@ import { getLang } from '../../i18n.js';
 import { toggleRow } from '../../settings-screen.js';
 import { getCourse, listCourses } from '../../../../application/course-catalog.js';
 import { displayName } from '../../../../application/horse-service.js';
+import { KNOCKDOWN_FAULTS, REFUSAL_FAULTS } from '../../../../domain/course/scoring.js';
 import { summarizeResult } from '../../../../application/result-summary.js';
 import { badgeEmblem } from '../profile/badges-screen.js';
 import { drawCoursePlan } from './plan.js';
@@ -150,8 +151,16 @@ export function createResultsScreen(ctx, params) {
       'div',
       { class: 'result-table' },
       row(t('results.time'), formatCs(summary.timeCs, getLang()), 'time'),
-      row(t('results.knockdowns'), t('results.points', rows.knockdowns), 'knockdowns'),
-      row(t('results.refusals'), t('results.points', rows.refusals), 'refusals'),
+      row(
+        t('results.knockdowns'),
+        t('results.points', { ...rows.knockdowns, each: KNOCKDOWN_FAULTS }),
+        'knockdowns',
+      ),
+      row(
+        t('results.refusals'),
+        t('results.points', { ...rows.refusals, each: REFUSAL_FAULTS }),
+        'refusals',
+      ),
       row(t('results.timeFaults'), String(rows.timeFaults), 'timeFaults'),
       row(t('results.total'), String(rows.total), 'total'),
     ),

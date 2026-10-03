@@ -202,7 +202,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   restart();
   engine.run(frame);
 
-  return {
+  const instance = {
     el,
     music: false,
     rerenderOnLang: false,
@@ -221,9 +221,13 @@ export function createRideScreen(ctx, params = {}, { rng }) {
       window.removeEventListener('blur', onBlur);
       input.dispose();
       services.audio?.setPaused(false);
+      if (services.ride?.session === session) delete services.ride;
     },
     get paused() {
       return paused;
     },
   };
+  // Lets the test hook (adapters/platform/test-hooks.js) look at the running ride
+  services.ride = { session, engine, screen: instance };
+  return instance;
 }

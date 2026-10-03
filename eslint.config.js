@@ -94,14 +94,7 @@ export default [
     files: ['src/shared/**/*.js'],
     rules: {
       ...restrictImports(
-        [
-          ...THREE_AND_NIPPLE,
-          '**/domain/**',
-          '**/application/**',
-          '**/adapters/**',
-          '**/game/**',
-          '**/main.js',
-        ],
+        [...THREE_AND_NIPPLE, '**/domain/**', '**/application/**', '**/adapters/**', '**/main.js'],
         'shared may only import shared.',
       ),
       ...noDomGlobals,
