@@ -40,8 +40,8 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
   };
 
   // Licht
-  const sunDirection = new THREE.Vector3(-0.42, 0.66, -0.62).normalize();
-  const hemi = new THREE.HemisphereLight(0xcfe4ff, 0x6f6448, 1.0);
+  const sunDirection = new THREE.Vector3(-0.52, 0.74, -0.42).normalize();
+  const hemi = new THREE.HemisphereLight(0xdde9f7, 0x7a6c50, 1.0);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff0dc, 2.7);
   sun.shadow.camera.left = -SHADOW_HALF;
@@ -156,17 +156,17 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     // Licht: ohne Umgebungs-Map mehr Himmelslicht
     if (p.envMap) {
       scene.environment = buildEnvironmentMap();
-      scene.environmentIntensity = 0.55;
-      hemi.intensity = 0.55;
+      scene.environmentIntensity = 0.8;
+      hemi.intensity = 0.6;
     } else {
       scene.environment = null;
-      hemi.intensity = 1.25;
+      hemi.intensity = 1.5;
     }
 
     // Nebel
     scene.fog = p.fog ? new THREE.Fog(SKY_COLORS.horizon, p.fog.near, p.fog.far) : null;
 
-    environment.setDensity(p.envDensity, p.grassTufts);
+    environment.setDensity(p.envDensity, p.grassTufts, p.envDetail);
   }
 
   function updateShadowCamera() {

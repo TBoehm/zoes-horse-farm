@@ -1,7 +1,7 @@
 // Hindernis-Meshes: Ständer, gestreifte Stangen (instanziert, fallen sichtbar), Füllteile,
 // Richtungsfahnen, Nummernschilder und Hervorhebung des Hindernisses, das an der Reihe ist.
 import * as THREE from 'three';
-import { POLE_LENGTH, STAND_WIDTH } from '../sim/tuning.js';
+import { STAND_WIDTH } from '../sim/tuning.js';
 import {
   createGeometryBuilder,
   boxOnGround,
@@ -11,62 +11,31 @@ import {
   SYSTEM_FONT,
   createRng,
 } from './textures.js';
-import { makeSignQuad, roundRect } from './arena.js';
+import { makeSignQuad } from './arena.js';
+import {
+  POLE_RADIUS,
+  POLE_GEOM_LENGTH,
+  STAND_X,
+  FALL_DURATION,
+  RISE_DURATION,
+  standHeight,
+  standRows,
+  polesOf,
+  labelOf,
+  highlightText,
+  flagSides,
+  easeOut,
+  easeInOut,
+  endProgress,
+  fallPoint,
+  fallTarget,
+} from './world-layout.js';
 
-export const POLE_RADIUS = 0.05;
-const POLE_GEOM_LENGTH = POLE_LENGTH - 0.02;
 const STRIPES = 11; // ungerade: weiße Enden
-const STAND_X = POLE_LENGTH / 2 + STAND_WIDTH / 2;
-const CROSS_LOW_Y = 0.17; // untere Enden der Kreuzstangen in tiefen Auflagen
-export const FALL_DURATION = 0.7;
-export const RISE_DURATION = 0.45;
 const MAX_POLES = 128;
 
 // Farbpaare der Hindernisse (Stangenstreifen, Ständerabschnitte, Planke)
 export const OBSTACLE_COLORS = [0xc62828, 0x1e56b8, 0x2e7d32, 0xef8f00, 0x6a3fa0, 0x00838f];
-
-/** Höhe der Ständer für ein Element. */
-export function standHeight(element) {
-  return Math.max(1.45, element.height + 0.55);
-}
-
-/**
- * Lokale Ruhelagen aller Stangen eines Elements (rein, testbar).
- * Lokales System: +Z = Sprungachse n, +X = −t. Liefert [{ rail, a:[x,y,z], b:[x,y,z] }] mit
- * rail = Index der fallenden Stange oder −1 (fest, fällt nie).
- */
-export function polesOf(element) {
-  const h = element.height;
-  const s = element.kind === 'oxer' ? element.spread || 0 : 0;
-  const half = POLE_GEOM_LENGTH / 2;
-  const top = h - POLE_RADIUS;
-  const out = [];
-  if (element.kind === 'cross') {
-    const y1 = Math.max(CROSS_LOW_Y + 0.1, 2 * top - CROSS_LOW_Y);
-    const dz = POLE_RADIUS + 0.004;
-    out.push({ rail: 0, a: [-half, CROSS_LOW_Y, -dz], b: [half, y1, -dz] });
-    out.push({ rail: 0, a: [-half, y1, dz], b: [half, CROSS_LOW_Y, dz] });
-    out.push({ rail: -1, a: [-half, POLE_RADIUS, 0.32], b: [half, POLE_RADIUS, 0.32] });
-  } else if (element.kind === 'vertical') {
-    out.push({ rail: 0, a: [-half, top, 0], b: [half, top, 0] });
-    if (h >= 0.7) {
-      const y = (0.32 + top) / 2;
-      out.push({ rail: -1, a: [-half, y, 0], b: [half, y, 0] });
-    }
-  } else {
-    out.push({ rail: 0, a: [-half, top, -s / 2], b: [half, top, -s / 2] });
-    out.push({ rail: 1, a: [-half, top, s / 2], b: [half, top, s / 2] });
-    out.push({ rail: -1, a: [-half, h * 0.45, -s / 2], b: [half, h * 0.45, -s / 2] });
-  }
-  return out;
-}
-
-/** Ständerpaare entlang n (Oxer: zwei). */
-function standRows(element) {
-  if (element.kind !== 'oxer') return [0];
-  const s = element.spread || 0;
-  return [-s / 2, s / 2];
-}
 
 /** Pole-Geometrien (entlang X, zentriert): weiße und farbige Streifen getrennt. */
 function buildPoleGeometries(radialSegments = 10) {
@@ -129,7 +98,7 @@ function addElementStatic(builder, element, color, { flags, board }) {
       }
       // Richtungsfahne: rot auf der +t-Seite (lokal −X), weiß auf −t
       if (flags) {
-        const red = sx < 0;
+        const red = sx === flagSides().red;
         add(new THREE.CylinderGeometry(0.012, 0.012, 0.55, 5), 0x9e9e9e, {
           x,
           y: H + 0.27,
@@ -180,28 +149,10 @@ function drawNumber(text) {
   };
 }
 
-/** Bezeichnung eines Elements: Nummer, bei Kombinationen mit a/b. */
-export function labelOf(obstacle, index) {
-  if (obstacle.number === null || obstacle.number === undefined) return null;
-  if (obstacle.elements.length > 1) return `${obstacle.number}${index === 0 ? 'a' : 'b'}`;
-  return String(obstacle.number);
-}
-
 // --- Fallanimation -----------------------------------------------------------------------------
-
-const easeOut = (t) => 1 - (1 - t) * (1 - t);
-const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
-/** Fallkurve mit kleinem Nachhüpfen: 0 → 1. */
-export function fallCurve(t) {
-  if (t <= 0) return 0;
-  if (t < 0.78) return (t / 0.78) ** 2;
-  if (t >= 1) return 1;
-  return 1 - 0.1 * Math.sin(((t - 0.78) / 0.22) * Math.PI);
-}
 
 const X_AXIS = new THREE.Vector3(1, 0, 0);
 const v1 = new THREE.Vector3();
-const v2 = new THREE.Vector3();
 const v3 = new THREE.Vector3();
 const q1 = new THREE.Quaternion();
 const q2 = new THREE.Quaternion();
@@ -247,20 +198,15 @@ function createPole(def, element, index, rng) {
 }
 
 function startFall(pole, side) {
-  const r = pole.rng;
   // aktuelle Enden aus der aktuellen Lage
   v1.set(pole.length / 2, 0, 0).applyQuaternion(pole.quat);
   pole.fromA.copy(pole.pos).sub(v1);
   pole.fromB.copy(pole.pos).add(v1);
-  // Ziel: liegt auf dem Sand, zur Fallseite verschoben und leicht verdreht
-  const travel = 0.55 + r() * 0.6;
-  const yaw = (r() - 0.5) * 0.5;
-  const center = v2.set((r() - 0.5) * 0.35, POLE_RADIUS, pole.pos.z + side * travel);
-  v1.set(Math.cos(yaw), 0, -Math.sin(yaw)).multiplyScalar(pole.length / 2);
-  pole.toA.copy(center).sub(v1);
-  pole.toB.copy(center).add(v1);
-  pole.roll = side * (travel / POLE_RADIUS) * (0.6 + r() * 0.3);
-  pole.lead = r() < 0.5 ? 0 : 1; // welches Ende zuerst fällt
+  const target = fallTarget(pole.pos.toArray(), pole.length, side, pole.rng);
+  pole.toA.fromArray(target.a);
+  pole.toB.fromArray(target.b);
+  pole.roll = target.roll;
+  pole.lead = target.lead;
   pole.state = 'falling';
   pole.t = 0;
 }
@@ -279,15 +225,9 @@ const eb = new THREE.Vector3();
 export function stepPole(pole, dt) {
   if (pole.state === 'falling') {
     pole.t = Math.min(1, pole.t + dt / FALL_DURATION);
-    const delay = 0.16;
-    const tFirst = Math.min(1, pole.t / (1 - delay));
-    const tSecond = Math.max(0, (pole.t - delay) / (1 - delay));
-    const tA = pole.lead === 0 ? tFirst : tSecond;
-    const tB = pole.lead === 0 ? tSecond : tFirst;
-    ea.lerpVectors(pole.fromA, pole.toA, easeOut(tA));
-    ea.y = pole.fromA.y + (pole.toA.y - pole.fromA.y) * fallCurve(tA);
-    eb.lerpVectors(pole.fromB, pole.toB, easeOut(tB));
-    eb.y = pole.fromB.y + (pole.toB.y - pole.fromB.y) * fallCurve(tB);
+    const k = endProgress(pole.t, pole.lead);
+    ea.fromArray(fallPoint(pole.fromA.toArray(), pole.toA.toArray(), k.a));
+    eb.fromArray(fallPoint(pole.fromB.toArray(), pole.toB.toArray(), k.b));
     poseFromEnds(ea, eb, pole.roll * easeOut(pole.t), pole.pos, pole.quat);
     if (pole.t >= 1) pole.state = 'down';
     return true;
@@ -646,11 +586,7 @@ export function createObstacles({ materialFactory }) {
         highlight.hide();
         return;
       }
-      let text = number === null || number === undefined ? info.label : String(number);
-      if (text && info.obstacle.elements.length > 1 && /^\d+$/.test(text)) {
-        text += info.index === 0 ? 'a' : 'b';
-      }
-      highlight.show(info.element, text);
+      highlight.show(info.element, highlightText(info.obstacle, info.index, number));
     },
     update(dt, camera) {
       highlight.update(dt, camera);
@@ -673,4 +609,3 @@ function hashId(id) {
   return h >>> 0;
 }
 
-export { roundRect };

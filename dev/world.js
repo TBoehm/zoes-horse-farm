@@ -222,6 +222,17 @@ window.demo = {
     const r = renderer.info.render;
     return { triangles: r.triangles, calls: r.calls, level, autoLevel, rendererString };
   },
+  breakdown() {
+    const out = [];
+    world.scene.traverse((o) => {
+      if (!o.isMesh || !o.visible) return;
+      const g = o.geometry;
+      const tris = (g.index ? g.index.count : g.attributes.position.count) / 3;
+      const n = o.isInstancedMesh ? o.count : 1;
+      out.push([o.name || o.type, Math.round(tris * n), o.castShadow]);
+    });
+    return out.sort((a, b) => b[1] - a[1]);
+  },
   renderNow() {
     world.syncRails(rails, 0);
     world.update(0.016, camera);

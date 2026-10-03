@@ -3,7 +3,7 @@
 // Takt nach Reitlehre: Schritt ≈ 55/min, Trab ≈ 80/min, Galopp ≈ 100/min; Tempo steigt
 // hauptsächlich über die Schrittlänge. Fußgleiten wird vermieden: Hufweg in der Stützphase
 // L = duty · speed / frequency (Huf ruht relativ zum Boden).
-import { clamp, lerp, smoothstep } from './loft.js';
+import { clamp, lerp, smoothstep } from './math.js';
 
 export const GAIT_KEYS = ['halt', 'walk', 'trot', 'canter'];
 

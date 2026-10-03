@@ -13,6 +13,7 @@ export const QUALITY_PRESETS = Object.freeze({
     envMap: false,
     // Anteil der Umgebungs-Instanzen (Bäume, Büsche, Fernwald)
     envDensity: 0.2,
+    envDetail: 'low',
     grassTufts: 0,
     anisotropy: 1,
     normalMaps: false,
@@ -28,6 +29,7 @@ export const QUALITY_PRESETS = Object.freeze({
     fog: Object.freeze({ near: 120, far: 520 }),
     envMap: true,
     envDensity: 0.55,
+    envDetail: 'high',
     grassTufts: 0,
     anisotropy: 4,
     normalMaps: true,
@@ -42,6 +44,7 @@ export const QUALITY_PRESETS = Object.freeze({
     fog: Object.freeze({ near: 90, far: 480 }),
     envMap: true,
     envDensity: 1,
+    envDetail: 'high',
     grassTufts: 1,
     anisotropy: 8,
     normalMaps: true,

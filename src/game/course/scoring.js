@@ -10,13 +10,26 @@ function mid(line) {
   return [(line.a[0] + line.b[0]) / 2, (line.a[1] + line.b[1]) / 2];
 }
 
-/** Länge der Ideallinie: Start-Mitte → alle Element-Mitten in Reihenfolge → Ziel-Mitte (m). */
-export function idealLineLength(course) {
+/**
+ * Ideallinie als Punktfolge: Start-Mitte → (Wegpunkte der Wendung) → Element-Mitten des
+ * Hindernisses → … → (Wegpunkte) → Ziel-Mitte. course.track[i] sind die optionalen Wegpunkte
+ * der Teilstrecke vor Hindernis i bzw. (i = Anzahl Hindernisse) vor dem Ziel.
+ */
+export function idealLine(course) {
+  const track = course.track || [];
   const points = [mid(course.start)];
-  for (const obstacle of course.obstacles) {
+  course.obstacles.forEach((obstacle, i) => {
+    points.push(...(track[i] || []));
     for (const element of obstacle.elements) points.push([element.x, element.z]);
-  }
+  });
+  points.push(...(track[course.obstacles.length] || []));
   points.push(mid(course.finish));
+  return points;
+}
+
+/** Länge der Ideallinie (m). */
+export function idealLineLength(course) {
+  const points = idealLine(course);
   let length = 0;
   for (let i = 1; i < points.length; i++) {
     length += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);

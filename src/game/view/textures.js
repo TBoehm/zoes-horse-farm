@@ -126,7 +126,7 @@ export function createSandTextures({ size = 512, seed = 7, normal = true } = {})
 
   // Hufabdrücke: ovale Mulden mit Rand, oft paarweise hintereinander
   const px = size / 4; // Pixel je Meter
-  const prints = Math.round(size * 0.09);
+  const prints = Math.round(size * 0.035);
   for (let p = 0; p < prints; p += 1) {
     const cx = rng() * size;
     const cy = rng() * size;
@@ -135,7 +135,7 @@ export function createSandTextures({ size = 512, seed = 7, normal = true } = {})
     for (let s = 0; s < steps; s += 1) {
       const sx = cx + Math.cos(ang) * s * 0.9 * px;
       const sy = cy + Math.sin(ang) * s * 0.9 * px;
-      stampHoof(height, moist, size, sx, sy, ang, (0.06 + rng() * 0.02) * px, 0.35 + rng() * 0.35);
+      stampHoof(height, moist, size, sx, sy, ang, (0.045 + rng() * 0.015) * px, 0.12 + rng() * 0.18);
     }
   }
 
@@ -147,7 +147,7 @@ export function createSandTextures({ size = 512, seed = 7, normal = true } = {})
   for (let i = 0; i < size * size; i += 1) {
     const h = height[i];
     const m = moist[i];
-    let t = THREE.MathUtils.clamp(0.25 + (0.75 - h) * 0.55 + (m - 0.5) * 0.5, 0, 1);
+    let t = THREE.MathUtils.clamp(0.3 + (0.6 - h) * 0.35 + (m - 0.5) * 0.45, 0, 1);
     const speck = rng();
     if (speck > 0.985) t = Math.min(1, t + 0.35); // dunkle Körnchen
     else if (speck < 0.02) t = Math.max(0, t - 0.3); // helle Körnchen
@@ -161,7 +161,7 @@ export function createSandTextures({ size = 512, seed = 7, normal = true } = {})
 
   const map = canvasTexture(canvas);
   const normalMap = normal
-    ? canvasTexture(normalCanvasFromHeight(height, size, 3.2), { srgb: false })
+    ? canvasTexture(normalCanvasFromHeight(height, size, 2.2), { srgb: false })
     : null;
   return { map, normalMap };
 }

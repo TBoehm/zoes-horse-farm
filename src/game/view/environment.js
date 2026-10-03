@@ -1,7 +1,7 @@
 // Umgebung der Reitanlage: Wiese mit Hügeln, Bäume, Büsche, Gras-Büschel (instanziert),
 // Stall, Richterhäuschen und Kleinkram. Alles prozedural.
 import * as THREE from 'three';
-import { ARENA } from '../sim/tuning.js';
+import { SITE, HILL_START, terrainHeight, scatter, instanceCount, isBlocked } from './world-layout.js';
 import {
   createRng,
   createGrassTexture,
@@ -10,56 +10,6 @@ import {
   jitterVertices,
   shadeByHeight,
 } from './textures.js';
-
-/** Lage der Gebäude, Wege und Wegzäune (Weltkoordinaten). */
-export const SITE = Object.freeze({
-  stable: { x: -47, z: 20, depth: 10, length: 30 },
-  hut: { x: 25.6, z: -22 },
-  // Weg vom Tor (x = −20, z = 22) zum Stallhof
-  path: [
-    { x: -28.6, z: 22, w: 3.6, l: 16.4, ry: Math.PI / 2 },
-    { x: -38.8, z: 20, w: 6.4, l: 32 },
-  ],
-  pathFence: [
-    { a: [-21.2, 24.3], b: [-35.4, 24.3] },
-    { a: [-21.2, 19.7], b: [-35.4, 19.7] },
-  ],
-});
-
-const HILL_START = 90;
-
-/** Geländehöhe (flach um die Anlage, Hügel am Horizont). */
-export function terrainHeight(x, z) {
-  const r = Math.hypot(x, z);
-  if (r < HILL_START) return 0;
-  const th = Math.atan2(z, x);
-  const ang =
-    0.55 +
-    0.25 * Math.sin(2 * th + 0.7) +
-    0.15 * Math.sin(5 * th + 2.1) +
-    0.08 * Math.sin(11 * th + 4.0);
-  const rise = THREE.MathUtils.smoothstep(r, HILL_START, 260);
-  const far = THREE.MathUtils.smoothstep(r, 220, 460);
-  const roll = Math.sin(x * 0.031 + 1.3) * Math.cos(z * 0.027) * 3;
-  return rise * (6 + 26 * ang + roll) + far * 30 * ang;
-}
-
-function inside(x, z, rect, margin = 0) {
-  return Math.abs(x - rect.x) < rect.hw + margin && Math.abs(z - rect.z) < rect.hd + margin;
-}
-
-const BLOCKED = [
-  { x: 0, z: 0, hw: ARENA.width / 2 + 2.5, hd: ARENA.length / 2 + 2.5 },
-  { x: SITE.stable.x, z: SITE.stable.z, hw: SITE.stable.depth / 2 + 2, hd: SITE.stable.length / 2 + 2 },
-  { x: -38.8, z: 20, hw: 4, hd: 17 },
-  { x: -28.6, z: 22, hw: 9, hd: 3 },
-  { x: SITE.hut.x, z: SITE.hut.z, hw: 3.5, hd: 4 },
-  { x: 23.5, z: 12, hw: 2, hd: 9 }, // Bänke
-];
-
-function isBlocked(x, z, margin = 0) {
-  return BLOCKED.some((r) => inside(x, z, r, margin));
-}
 
 // --- Gelände -----------------------------------------------------------------------------------
 
@@ -111,24 +61,25 @@ function buildTerrain(rng) {
 
 // --- Pflanzen-Geometrien ------------------------------------------------------------------------
 
-function deciduousGeometry(rng) {
+function deciduousGeometry(rng, detail = 1) {
   const b = createGeometryBuilder();
-  const trunk = new THREE.CylinderGeometry(0.15, 0.26, 3.4, 7);
+  const trunk = new THREE.CylinderGeometry(0.15, 0.26, 3.4, detail ? 7 : 5, 1, true);
   trunk.translate(0, 1.7, 0);
   b.add(trunk, 0x5a4532);
   const branch = new THREE.CylinderGeometry(0.05, 0.1, 1.6, 5);
   branch.translate(0, 0.8, 0);
-  b.add(branch.clone(), 0x5a4532, { y: 2.6, rz: 0.8 });
-  b.add(branch, 0x5a4532, { y: 2.8, rz: -0.7, ry: 1.2 });
+  if (detail) {
+    b.add(branch.clone(), 0x5a4532, { y: 2.6, rz: 0.8 });
+    b.add(branch, 0x5a4532, { y: 2.8, rz: -0.7, ry: 1.2 });
+  }
   const blobs = [
-    [0, 4.6, 0, 2.3, 0x4d7a2f],
-    [1.1, 4.0, 0.5, 1.7, 0x56832f],
-    [-1.0, 4.1, -0.5, 1.8, 0x47722b],
-    [0.2, 5.6, -0.3, 1.6, 0x5c8a34],
-    [-0.4, 4.3, 1.1, 1.5, 0x4a7630],
+    [0, 4.7, 0, 2.4, 0x4d7a2f],
+    [1.2, 3.9, 0.5, 1.8, 0x56832f],
+    [-1.0, 4.0, -0.6, 1.9, 0x47722b],
+    [0.1, 5.7, -0.2, 1.6, 0x5c8a34],
   ];
-  for (const [x, y, z, r, col] of blobs) {
-    const ico = new THREE.IcosahedronGeometry(r, 1);
+  for (const [x, y, z, r, col] of detail ? blobs : blobs.slice(0, 3)) {
+    const ico = new THREE.IcosahedronGeometry(r, detail);
     jitterVertices(ico, r * 0.35, rng);
     const g = b.add(ico, col, { x, y, z }, { jitter: 0.12, rng });
     shadeByHeight(g, 2.4, 7, 0.5, 1.12);
@@ -136,19 +87,25 @@ function deciduousGeometry(rng) {
   return b.build();
 }
 
-function coniferGeometry(rng) {
+function coniferGeometry(rng, detail = 1) {
   const b = createGeometryBuilder();
-  const trunk = new THREE.CylinderGeometry(0.1, 0.2, 1.8, 6);
+  const trunk = new THREE.CylinderGeometry(0.1, 0.2, 1.8, detail ? 6 : 4, 1, true);
   trunk.translate(0, 0.9, 0);
   b.add(trunk, 0x4e3b2a);
-  const tiers = [
-    [2.0, 3.2, 1.0],
-    [1.55, 2.8, 2.7],
-    [1.1, 2.4, 4.3],
-    [0.65, 1.9, 5.8],
-  ];
+  const tiers = detail
+    ? [
+        [2.0, 3.2, 1.0],
+        [1.55, 2.8, 2.7],
+        [1.1, 2.4, 4.3],
+        [0.65, 1.9, 5.8],
+      ]
+    : [
+        [1.9, 3.6, 1.0],
+        [1.3, 3.2, 3.2],
+        [0.75, 2.6, 5.2],
+      ];
   for (const [r, h, y] of tiers) {
-    const cone = new THREE.ConeGeometry(r, h, 8, 1, true);
+    const cone = new THREE.ConeGeometry(r, h, detail ? 8 : 6, 1, true);
     jitterVertices(cone, 0.25, rng);
     cone.translate(0, y + h / 2, 0);
     const g = b.add(cone, 0x2e5230, {}, { jitter: 0.1, rng });
@@ -157,14 +114,13 @@ function coniferGeometry(rng) {
   return b.build();
 }
 
-function bushGeometry(rng) {
+function bushGeometry(rng, detail = 1) {
   const b = createGeometryBuilder();
   for (const [x, y, z, r] of [
     [0, 0.55, 0, 0.85],
-    [0.6, 0.45, 0.2, 0.6],
-    [-0.5, 0.4, -0.2, 0.62],
+    [0.55, 0.42, 0.2, 0.62],
   ]) {
-    const ico = new THREE.IcosahedronGeometry(r, 1);
+    const ico = new THREE.IcosahedronGeometry(r, detail);
     jitterVertices(ico, r * 0.4, rng);
     const g = b.add(ico, 0x4a742d, { x, y, z }, { jitter: 0.15, rng });
     shadeByHeight(g, 0, 1.4, 0.5, 1.1);
@@ -177,7 +133,7 @@ function tuftGeometry(rng) {
   const colors = [];
   const base = new THREE.Color(0x40602a);
   const tip = new THREE.Color(0x9bb760);
-  const blades = 6;
+  const blades = 5;
   for (let i = 0; i < blades; i += 1) {
     const a = (i / blades) * Math.PI * 2 + rng() * 0.6;
     const h = 0.22 + rng() * 0.25;
@@ -383,23 +339,9 @@ function addProps(b, rng) {
   b.add(new THREE.CylinderGeometry(0.2, 0.2, 0.08, 10), 0x222222, { x: -40.2, y: 0.2, z: 4.1, rz: Math.PI / 2 });
 }
 
-// --- Platzierung -------------------------------------------------------------------------------
+const isBlockedTuft = (x, z) => isBlocked(x, z, -1.3);
 
-function scatter(rng, count, minR, maxR, margin, extraTest) {
-  const out = [];
-  let guard = 0;
-  while (out.length < count && guard < count * 60) {
-    guard += 1;
-    const a = rng() * Math.PI * 2;
-    const r = Math.sqrt(minR * minR + rng() * (maxR * maxR - minR * minR));
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
-    if (isBlocked(x, z, margin)) continue;
-    if (extraTest && !extraTest(x, z)) continue;
-    out.push([x, z]);
-  }
-  return out;
-}
+// --- Platzierung -------------------------------------------------------------------------------
 
 function makeInstanced(geometry, material, items, rng, { scale = [0.85, 1.3], tint = 0.12 } = {}) {
   const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, items.length));
@@ -472,6 +414,7 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   const deciduousMesh = makeInstanced(deciduousGeometry(rng), plantMats.standard, deciduous, rng, {
     scale: [0.9, 1.5],
   });
+  deciduousMesh.userData.lods = { high: deciduousMesh.geometry, low: deciduousGeometry(rng, 0) };
   deciduousMesh.name = 'trees-deciduous';
   deciduousMesh.userData.priority = nearDeciduous.length;
 
@@ -491,6 +434,8 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
     { scale: [0.9, 1.5] },
   );
   coniferMesh.name = 'trees-conifer';
+  const coniferLow = coniferGeometry(rng, 0);
+  coniferMesh.userData.lods = { high: coniferMesh.geometry, low: coniferLow };
   coniferMesh.userData.priority = coniferNear.length;
 
   // Waldsaum auf den Hügeln (ohne Schatten)
@@ -504,7 +449,7 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
     if (Math.sin(a * 7 + 1.3) + Math.sin(a * 3) * 0.6 < -0.2) continue;
     forestItems.push([x, z, 1.6 + rng() * 1.4]);
   }
-  const forestMesh = makeInstanced(coniferGeometry(rng), plantMats.standard, forestItems, rng);
+  const forestMesh = makeInstanced(coniferLow, plantMats.standard, forestItems, rng);
   forestMesh.name = 'forest';
   forestMesh.userData.priority = 60;
 
@@ -522,6 +467,7 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
     scale: [0.7, 1.4],
   });
   bushMesh.name = 'bushes';
+  bushMesh.userData.lods = { high: bushMesh.geometry, low: bushGeometry(rng, 0) };
   bushMesh.userData.priority = Math.min(bushPriority, 8);
 
   // Gras-Büschel (nur Hoch), dichter nahe der Bande
@@ -533,11 +479,11 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   patchWind(tuftMats.standard, windTime);
   patchWind(tuftMats.lambert, windTime);
   const tuftItems = [];
-  for (let i = 0; tuftItems.length < 7000 && i < 60000; i += 1) {
+  for (let i = 0; tuftItems.length < 5200 && i < 60000; i += 1) {
     const near = rng() < 0.55;
     const x = near ? (rng() - 0.5) * 2 * 32 : (rng() - 0.5) * 2 * 75;
     const z = near ? (rng() - 0.5) * 2 * 46 : (rng() - 0.5) * 2 * 90;
-    if (isBlocked(x, z, -1.3)) continue;
+    if (isBlockedTuft(x, z)) continue;
     tuftItems.push([x, z, 0.7 + rng() * 0.8]);
   }
   const tuftMesh = makeInstanced(tuftGeometry(rng), tuftMats.standard, tuftItems, rng, { tint: 0.25 });
@@ -555,7 +501,7 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   buildings.castShadow = true;
   buildings.receiveShadow = true;
 
-  for (const m of [deciduousMesh, coniferMesh, bushMesh]) {
+  for (const m of [deciduousMesh, coniferMesh]) {
     m.castShadow = true;
     m.receiveShadow = true;
   }
@@ -573,16 +519,18 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
       { mesh: deciduousMesh, mats: plantMats, shadow: 'all' },
       { mesh: coniferMesh, mats: plantMats, shadow: 'all' },
       { mesh: forestMesh, mats: plantMats, shadow: 'none' },
-      { mesh: bushMesh, mats: plantMats, shadow: 'all' },
+      { mesh: bushMesh, mats: plantMats, shadow: 'none' },
       { mesh: tuftMesh, mats: tuftMats, shadow: 'none' },
       { mesh: buildings, mats: buildingMats, shadow: 'all' },
     ],
-    /** density 0..1 skaliert Bäume/Büsche oberhalb der Pflicht-Instanzen; tufts 0..1. */
-    setDensity(density, tufts) {
+    /**
+     * density 0..1 skaliert Bäume/Büsche oberhalb der Pflicht-Instanzen; tufts 0..1;
+     * detail 'high' | 'low' wählt die Geometrie-Feinheit.
+     */
+    setDensity(density, tufts, detail = 'high') {
       for (const m of scalable) {
-        const total = m.userData.total;
-        const prio = Math.min(total, m.userData.priority || 0);
-        m.count = Math.min(total, prio + Math.round((total - prio) * density));
+        if (m.userData.lods) m.geometry = m.userData.lods[detail] || m.userData.lods.high;
+        m.count = instanceCount(m.userData.total, m.userData.priority, density);
       }
       tuftMesh.count = Math.round(tuftMesh.userData.total * tufts);
       tuftMesh.visible = tuftMesh.count > 0;
@@ -592,3 +540,5 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
     },
   };
 }
+
+export { SITE, terrainHeight };

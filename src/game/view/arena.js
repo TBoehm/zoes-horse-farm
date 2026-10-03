@@ -1,6 +1,7 @@
 // Reitplatz: Sandboden mit Hufschlag, Holz-Umzäunung (instanziert), Tor, Start-/Ziellinie.
 import * as THREE from 'three';
 import { ARENA } from '../sim/tuning.js';
+import { FENCE, GATE, planFence, planLines } from './world-layout.js';
 import {
   createSandTextures,
   createGeometryBuilder,
@@ -9,17 +10,6 @@ import {
   fitText,
   SYSTEM_FONT,
 } from './textures.js';
-
-export const FENCE = Object.freeze({
-  height: 1.2,
-  offset: 0.18, // Abstand Zaunlinie außerhalb der Reitfläche
-  spacing: 2.5,
-  post: 0.12,
-  board: 0.04,
-});
-
-// Tor an der Langseite zum Stall (x = −20)
-export const GATE = Object.freeze({ side: -1, z: 22, width: 3.6 });
 
 /** Sandboden-Shader-Ergänzung: Hufschlag-Spur am Rand und großflächige Variation. */
 function patchSandMaterial(material) {
@@ -97,56 +87,6 @@ export function setWorldUv(geometry, tile) {
   const uv = geometry.attributes.uv;
   for (let i = 0; i < pos.count; i += 1) uv.setXY(i, pos.getX(i) / tile, -pos.getZ(i) / tile);
   uv.needsUpdate = true;
-}
-
-/** Zaun-Segmente entlang einer Strecke a→b mit Pfostenabstand ≤ spacing. */
-function fenceRun(a, b, spacing, out, style) {
-  const dx = b[0] - a[0];
-  const dz = b[1] - a[1];
-  const len = Math.hypot(dx, dz);
-  const n = Math.max(1, Math.ceil(len / spacing - 1e-6));
-  for (let i = 0; i <= n; i += 1) {
-    const t = i / n;
-    out.posts.push({ x: a[0] + dx * t, z: a[1] + dz * t, style });
-  }
-  const ang = Math.atan2(dx, dz);
-  for (let i = 0; i < n; i += 1) {
-    const t = (i + 0.5) / n;
-    out.segments.push({
-      x: a[0] + dx * t,
-      z: a[1] + dz * t,
-      len: len / n,
-      ang,
-      style,
-    });
-  }
-}
-
-/** Plan aller Zaunteile (rein, testbar): Reitplatz-Umzäunung mit Torlücke + Wegzaun. */
-export function planFence({ pathFence = [] } = {}) {
-  const out = { posts: [], segments: [], gate: null };
-  const hx = ARENA.width / 2 + FENCE.offset;
-  const hz = ARENA.length / 2 + FENCE.offset;
-  const g0 = GATE.z - GATE.width / 2;
-  const g1 = GATE.z + GATE.width / 2;
-  const gx = GATE.side * hx;
-  // Ecken im Uhrzeigersinn; Langseite am Tor wird in zwei Stücke geteilt
-  fenceRun([hx, -hz], [hx, hz], FENCE.spacing, out, 'arena');
-  fenceRun([hx, hz], [-hx, hz], FENCE.spacing, out, 'arena');
-  fenceRun([gx, hz], [gx, g1], FENCE.spacing, out, 'arena');
-  fenceRun([gx, g0], [gx, -hz], FENCE.spacing, out, 'arena');
-  fenceRun([-hx, -hz], [hx, -hz], FENCE.spacing, out, 'arena');
-  out.gate = { x: gx, z0: g0, z1: g1 };
-  for (const run of pathFence) fenceRun(run.a, run.b, run.spacing ?? 3, out, 'wood');
-  // doppelte Eckpfosten entfernen
-  const seen = new Set();
-  out.posts = out.posts.filter((p) => {
-    const key = `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  return out;
 }
 
 const FENCE_COLORS = { arena: 0xf4f1ea, wood: 0x8a6a4a, gate: 0xe9e4d8 };
@@ -294,11 +234,6 @@ export function createArena({ materialFactory, path, pathFence }) {
 // ---------------------------------------------------------------------------------------------
 // Start- und Ziellinie
 
-function toXZ(p) {
-  if (Array.isArray(p)) return { x: p[0], z: p[1] };
-  return { x: p.x, z: p.z };
-}
-
 function drawSign(kind, text) {
   return (ctx, w, h) => {
     const start = kind === 'start';
@@ -387,15 +322,8 @@ export function createCourseLines({ materialFactory }) {
     clear();
     glow.visible = false;
     if (!lines) return;
-    const labels = lines.labels || { start: 'Start', finish: 'Ziel' };
-    const entries = [];
-    const s = lines.start && { a: toXZ(lines.start.a), b: toXZ(lines.start.b) };
-    const f = lines.finish && { a: toXZ(lines.finish.a), b: toXZ(lines.finish.b) };
-    const same =
-      s && f && Math.hypot(s.a.x - f.a.x, s.a.z - f.a.z) + Math.hypot(s.b.x - f.b.x, s.b.z - f.b.z) < 0.5;
-    if (s) entries.push({ kind: 'start', line: s, text: same ? `${labels.start} · ${labels.finish}` : labels.start });
-    if (f && !same) entries.push({ kind: 'finish', line: f, text: labels.finish });
-    finishLine = f || null;
+    const entries = planLines(lines);
+    finishLine = entries.find((e) => e.finish)?.seg ?? null;
 
     atlas = createLabelAtlas(
       entries.map((e) => ({ key: e.kind, draw: drawSign(e.kind, e.text) })),
@@ -404,17 +332,13 @@ export function createCourseLines({ materialFactory }) {
     const builder = createGeometryBuilder();
     const signs = createGeometryBuilder();
     for (const e of entries) {
-      const { a, b } = e.line;
-      const dx = b.x - a.x;
-      const dz = b.z - a.z;
-      const len = Math.hypot(dx, dz);
-      const ang = Math.atan2(dx, dz);
+      const { a, b, cx, cz, length, angle: ang } = e.seg;
       // Bodenlinie aus Kalk
-      const line = new THREE.PlaneGeometry(0.14, len);
+      const line = new THREE.PlaneGeometry(0.14, length);
       line.rotateX(-Math.PI / 2);
-      builder.add(line, 0xffffff, { x: (a.x + b.x) / 2, y: 0.012, z: (a.z + b.z) / 2, ry: ang });
+      builder.add(line, 0xffffff, { x: cx, y: 0.012, z: cz, ry: ang });
       const color = e.kind === 'start' ? 0x1f8f46 : 0xc62828;
-      // Pfosten an beiden Enden, rechts rot / links weiß wie Turnier-Fähnchen
+      // Pfosten an beiden Enden mit Fähnchen: rot bei a, weiß bei b (a = rechte Seite in Ritt-Richtung)
       [a, b].forEach((p, i) => {
         builder.add(boxOnGround(0.07, 1.7, 0.07), 0xf2f2f2, { x: p.x, z: p.z });
         builder.add(new THREE.BoxGeometry(0.02, 0.28, 0.38), i === 0 ? 0xd32f2f : 0xffffff, {
@@ -451,10 +375,9 @@ export function createCourseLines({ materialFactory }) {
     meshes[0].mesh = staticMesh;
 
     if (finishLine) {
-      const { a, b } = finishLine;
-      glow.position.set((a.x + b.x) / 2, 0.016, (a.z + b.z) / 2);
-      glow.rotation.set(-Math.PI / 2, 0, Math.atan2(b.x - a.x, b.z - a.z));
-      glow.scale.set(1.4, Math.hypot(b.x - a.x, b.z - a.z) + 0.6, 1);
+      glow.position.set(finishLine.cx, 0.016, finishLine.cz);
+      glow.rotation.set(-Math.PI / 2, 0, finishLine.angle);
+      glow.scale.set(1.4, finishLine.length + 0.6, 1);
       glow.visible = finishMarked;
     }
   }
@@ -499,3 +422,5 @@ export function makeSignQuad(w, h, r, thickness = 0.02) {
   merged.add(back, 0xffffff);
   return merged.build();
 }
+
+export { FENCE, GATE, planFence };
