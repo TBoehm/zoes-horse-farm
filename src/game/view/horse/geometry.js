@@ -256,7 +256,7 @@ function makeHead() {
     section: (u, a) => headSection(headS(u), a),
     weights: (u) => chainWeights(headS(u), [0.0], ['neck3', 'head'], 0.045),
     attrs: (u, a, p, x) => ({
-      aFace: [headS(u), x, a < 0 ? 0 : Math.sin(a)],
+      aFace: [headS(u), x, Math.sin(a)],
     }),
   });
 }
@@ -339,17 +339,7 @@ function makeLeg(front, side) {
       const [w, f, b] = sect(toK(u));
       return oval(a, { w, up: f, down: b, nUp: 2.1, nDown: 2.1 });
     },
-    weights: (u) => {
-      const w = chainWeights(u, ju.slice(1, 5), bones, blends);
-      if (front) {
-        // ganz oben teilt sich der Oberarm das Gewicht mit dem Schulterblatt
-        const t = smoothstep(0, ju[1] + 0.05, u);
-        w[0][1] = w[0][1] * 1 + 0;
-        w[1][1] = w[1][1] * lerp(0.6, 1, t);
-        w[0][1] += (1 - w.reduce((s, x) => s + x[1], 0)) * 1;
-      }
-      return w;
-    },
+    weights: (u) => chainWeights(u, ju.slice(1, 5), bones, blends),
   });
   return { loft, ju };
 }

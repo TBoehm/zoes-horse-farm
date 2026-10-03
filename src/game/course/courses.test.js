@@ -86,7 +86,8 @@ describe('Hindernis-Daten im Parcours', () => {
     for (const c of COURSES) {
       for (const o of c.obstacles) {
         const ids = o.elements.map((e) => e.id);
-        if (isCombination(o)) expect(ids).toEqual([`p${c.id}-${o.number}a`, `p${c.id}-${o.number}b`]);
+        if (isCombination(o))
+          expect(ids).toEqual([`p${c.id}-${o.number}a`, `p${c.id}-${o.number}b`]);
         else expect(ids).toEqual([`p${c.id}-${o.number}`]);
       }
     }

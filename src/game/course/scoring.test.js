@@ -63,9 +63,7 @@ describe('erlaubte Zeit (Regel 33)', () => {
     expect(COURSES[0].pace).toBe('trot');
     expect(COURSES.slice(1).every((c) => c.pace === 'canter')).toBe(true);
     const p1 = COURSES[0];
-    expect(p1.allowedTimeS).toBe(
-      Math.ceil((idealLineLength(p1) / TUNING.speeds.trotMedium) * 1.5),
-    );
+    expect(p1.allowedTimeS).toBe(Math.ceil((idealLineLength(p1) / TUNING.speeds.trotMedium) * 1.5));
   });
 });
 
@@ -129,7 +127,10 @@ describe('Bestleistung (Begriffe)', () => {
   });
 
   it('versteht auch Ritt-Ergebnisse mit aufgeschlüsselten Fehlern', () => {
-    const result = { faults: { knockdowns: 0, refusals: 0, timeFaults: 1, total: 1 }, timeCs: 5000 };
+    const result = {
+      faults: { knockdowns: 0, refusals: 0, timeFaults: 1, total: 1 },
+      timeCs: 5000,
+    };
     expect(isBetterResult(result, { faults: 4, timeCs: 3000 })).toBe(true);
     expect(isBetterResult({ faults: 4, timeCs: 3000 }, result)).toBe(false);
   });

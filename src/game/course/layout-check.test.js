@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { checkLayout, corridorOf, footprint, rectsOverlap, segmentHitsRect } from './layout-check.js';
+import {
+  checkLayout,
+  corridorOf,
+  footprint,
+  rectsOverlap,
+  segmentHitsRect,
+} from './layout-check.js';
 
 const el = (id, x, z, rot = 0, kind = 'vertical', spread = 0) => ({
   id,

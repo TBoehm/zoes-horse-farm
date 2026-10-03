@@ -471,7 +471,8 @@ describe('Ergebnis', () => {
     });
 
     it('falsch ohne Oxer im Parcours', () => {
-      const run = riding(COURSES[0]);
+      const run = createCourseRun(COURSES[0]);
+      crossLine(run, COURSES[0].start, 0);
       for (const o of COURSES[0].obstacles) run.onLanded(o.elements[0].id, 1, false);
       crossLine(run, COURSES[0].finish, 30000);
       expect(run.phase).toBe('finished');
