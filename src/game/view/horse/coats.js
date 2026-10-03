@@ -1,7 +1,8 @@
 // Fellfarben und Kopfabzeichen als reine Daten (sRGB 0..1). Der Shader (material.js) setzt sie um.
 
-export const COATS = ['chestnut', 'bay', 'black', 'grey', 'pinto']; // Fuchs, Brauner, Rappe, Schimmel, Schecke
-export const MARKINGS = ['none', 'star', 'blaze', 'snip']; // keins, Stern, Blesse, Schnippe
+import { COATS, MARKINGS } from '../../../domain/horse/appearance.js';
+
+export { COATS, MARKINGS };
 export const DEFAULT_APPEARANCE = Object.freeze({ coat: 'bay', marking: 'star' });
 
 const WHITE = [0.93, 0.92, 0.9];

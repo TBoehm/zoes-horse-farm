@@ -93,15 +93,19 @@ erzwingt die Grenzen.
 ### Ritt-Sitzung (application/ride-session.js)
 
 ```js
-const session = createRideSession({ mode, store, clock, rng });
+const session = createRideSession({ mode, store, clock, rng });  // mode = createRideMode(params)
 session.restart();                       // Startpose, Stangen auf, Modus zurücksetzen
 const out = session.step(dt, input);     // input = InputState ohne pause/camera
 // out = { events (Sim), commands: [{type:'endGallop'} | {type:'resetTouchGallop'} |
-//         {type:'feedback', key} | {type:'badges', ids} | {type:'finished', summary} |
-//         {type:'sound', name, gait?}] }
+//         {type:'feedback', key} | {type:'badges', ids} | {type:'sound', name} |
+//         {type:'finished', screen, params: {courseId, result, isNewBest, unlockedCourse, awarded}}] }
 session.view  // { horse, rails, aid: null|{elementId, dir, zone}, highlight, finishMarked,
               //   lines, hud: mode-spezifisches Modell (reine Daten) }
 ```
+Weitere Application-Dienste: `progress-service.js` (recordJump, finishRide, resetProgress),
+`horse-service.js` (Name, Aussehen), `course-catalog.js` (Auswahl, Freischaltung),
+`badge-overview.js`, `result-summary.js`, `modes/index.js` (`createRideMode(params)`; Modi bekommen
+keinen Store, Fortschritt schreibt nur die Sitzung über den Fortschritts-Dienst).
 Pause, Kamera-Umschaltung, Auto-Pause und DOM bleiben im UI-Adapter (`adapters/ui/screens/ride`).
 
 ## Schnittstellen

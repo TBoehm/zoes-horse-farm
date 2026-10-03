@@ -1,6 +1,6 @@
-// 2D-Bein-IK in der Sagittalebene (lokale y/z-Ebene des Bein-Elternknochens). Rein, ohne three.js.
-// Winkel-Konvention: angD(dz, dy) = atan2(dz, −dy), 0 = senkrecht nach unten, positiv = nach vorn.
-// Eine Knochen-Rotation rotation.x = r ändert angD eines Segments um −r.
+// 2D leg IK in the sagittal plane (local y/z plane of the leg's parent bone). Pure, no three.js.
+// Angle convention: angD(dz, dy) = atan2(dz, −dy), 0 = straight down, positive = forwards.
+// A bone rotation rotation.x = r changes a segment's angD by −r.
 
 export const angD = (dz, dy) => Math.atan2(dz, -dy);
 export const wrap = (a) => {
@@ -8,7 +8,7 @@ export const wrap = (a) => {
   while (a < -Math.PI) a += 2 * Math.PI;
   return a;
 };
-/** Maximaler Vorwärtswinkel des Oberschenkels (angD, ≈ 77°). */
+/** Maximum forward angle of the femur (angD, ≈ 77°). */
 export const FEMUR_MAX = 1.35;
 const dirZ = (t) => Math.sin(t);
 const dirY = (t) => -Math.cos(t);
@@ -19,7 +19,7 @@ function seg(a, b) {
   return { len: Math.hypot(dz, dy), ang: angD(dz, dy) };
 }
 
-/** Vorderbein: Punkte {y, z} für Schulterblatt-Oberkante, Bug, Ellbogen, Karpus, Fessel, Huf. */
+/** Foreleg: points {y, z} for scapula top, point of shoulder, elbow, carpus, fetlock, hoof. */
 export function makeFrontRig(A, S, E, K, F, H) {
   const sc = seg(A, S);
   const s1 = seg(S, E);
@@ -45,7 +45,7 @@ export function makeFrontRig(A, S, E, K, F, H) {
   };
 }
 
-/** Hinterbein: Hüfte, Knie (Stifle), Sprunggelenk, Fessel, Huf. */
+/** Hind leg: hip, stifle, hock, fetlock, hoof. */
 export function makeHindRig(P, T, K, F, H) {
   const s1 = seg(P, T);
   const s2 = seg(T, K);
@@ -87,9 +87,9 @@ function twoBone(rootZ, rootY, tz, ty, l1, l2, sigma) {
 }
 
 /**
- * Vorderbein lösen. hz/hy: Hufpunkt (lokal), past: absoluter Fesselwinkel (angD, lokal),
- * knee: Beugung des Karpus (rad, 0 = gestreckt), scap: Schulterblatt-Drehung (angD-Delta).
- * Rückgabe: rotation.x für [Schulterblatt, Oberarm, Unterarm, Röhre, Fessel].
+ * Solve a foreleg. hz/hy: hoof point (local), past: absolute pastern angle (angD, local),
+ * knee: carpus flexion (rad, 0 = straight), scap: scapula rotation (angD delta).
+ * Returns rotation.x for [scapula, humerus, forearm, cannon, pastern].
  */
 export function solveFront(rig, hz, hy, past, knee, scap, out = new Array(5)) {
   const tsc = rig.tsc + scap;
@@ -117,8 +117,8 @@ export function solveFront(rig, hz, hy, past, knee, scap, out = new Array(5)) {
 }
 
 /**
- * Hinterbein lösen. cannon: absoluter Winkel der Röhre (angD, lokal).
- * Rückgabe: rotation.x für [Oberschenkel, Unterschenkel, Röhre, Fessel].
+ * Solve a hind leg. cannon: absolute cannon angle (angD, local).
+ * Returns rotation.x for [femur, tibia, cannon, pastern].
  */
 export function solveHind(rig, hz, hy, past, cannon, out = new Array(4)) {
   const fz = hz - rig.l4 * dirZ(past);
@@ -129,7 +129,7 @@ export function solveHind(rig, hz, hy, past, cannon, out = new Array(4)) {
   let t1 = ik.t1;
   let t2 = ik.t2;
   if (t1 > FEMUR_MAX) {
-    // Oberschenkel begrenzen; Unterschenkel zeigt dann nur Richtung Sprunggelenk
+    // limit the femur; the tibia then just points towards the hock
     t1 = FEMUR_MAX;
     t2 = angD(kz - (rig.P.z + rig.l1 * dirZ(t1)), ky - (rig.P.y + rig.l1 * dirY(t1)));
   }
@@ -144,7 +144,7 @@ export function solveHind(rig, hz, hy, past, cannon, out = new Array(4)) {
   return out;
 }
 
-/** Winkel der Linie Hüfte → Fessel für einen Hufpunkt (für die Röhren-Neigung hinten). */
+/** Angle of the hip → fetlock line for a hoof point (drives the hind cannon tilt). */
 export function hindSweep(rig, hz, hy, past) {
   const fz = hz - rig.l4 * dirZ(past);
   const fy = hy - rig.l4 * dirY(past);

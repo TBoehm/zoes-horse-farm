@@ -25,7 +25,9 @@ import { EAR_ANCHOR, REST, SADDLE_SEAT, createSkeletonBones } from './skeleton.j
 import { createReins } from './reins.js';
 
 export { COATS, MARKINGS, DEFAULT_APPEARANCE } from './coats.js';
-export const QUALITY_LEVELS = ['low', 'medium', 'high'];
+import { GRAPHICS_LEVELS } from '../../../application/graphics-levels.js';
+
+export const QUALITY_LEVELS = GRAPHICS_LEVELS;
 
 /** Abstand Körpermitte → Bezugspunkt der Simulation (Boden unter den Vorderbeinen). */
 export const ORIGIN_OFFSET_Z = REST.front.hoof[2];

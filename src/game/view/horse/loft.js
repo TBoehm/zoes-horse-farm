@@ -1,6 +1,6 @@
-// Prozedurale Geometrie-Bausteine für Pferd und Reiter: Lofts (Röhren mit variablem Querschnitt
-// entlang eines Pfads), Schalen (Auflagen auf einer Loft-Oberfläche, z. B. Mähne, Sattel, Trense)
-// und ein Builder, der alle Teile zu EINER skinned BufferGeometry zusammenfasst (ein Draw-Call).
+// Procedural geometry building blocks for horse and rider: lofts (tubes with a variable cross
+// section along a path), shells (layers on a loft surface, e.g. mane, saddle, bridle) and a builder
+// that merges all parts into ONE skinned BufferGeometry (one draw call).
 import * as THREE from 'three';
 
 export { clamp, lerp, smoothstep, table } from './math.js';
@@ -8,8 +8,8 @@ import { clamp, lerp, smoothstep } from './math.js';
 const TAU = Math.PI * 2;
 
 /**
- * Ovaler Querschnitt (Superellipse) mit getrennter oberer/unterer Ausdehnung.
- * a: Winkel, 0 = +b (lateral, links), π/2 = +n (oben/vorn). Rückgabe [x (entlang b), y (entlang n)].
+ * Oval cross section (superellipse) with separate upper/lower extent.
+ * a: angle, 0 = +b (lateral, left), π/2 = +n (up/front). Returns [x (along b), y (along n)].
  */
 export function oval(a, s) {
   const c = Math.cos(a);
@@ -23,7 +23,7 @@ export function oval(a, s) {
   return [s.w * cx * wf, (upper ? s.up : s.down) * sy + (s.yOff || 0)];
 }
 
-/** Frame entlang einer Kurve in einer Sagittalebene: b = +X, n = t × b. */
+/** Frames along a curve in a sagittal plane: b = +X, n = t × b. */
 export function curveFrames(curve, xAxis = new THREE.Vector3(1, 0, 0)) {
   return function (u) {
     const o = curve.getPointAt(clamp(u, 0, 1));
@@ -34,7 +34,7 @@ export function curveFrames(curve, xAxis = new THREE.Vector3(1, 0, 0)) {
   };
 }
 
-/** Frame entlang einer Geraden von p0 nach p1. */
+/** Frames along a straight line from p0 to p1. */
 export function lineFrames(p0, p1, xAxis = new THREE.Vector3(1, 0, 0)) {
   const t = new THREE.Vector3().subVectors(p1, p0).normalize();
   const n = new THREE.Vector3().crossVectors(t, xAxis).normalize();
@@ -45,8 +45,8 @@ export function lineFrames(p0, p1, xAxis = new THREE.Vector3(1, 0, 0)) {
 }
 
 /**
- * Loft: Röhre entlang frame(u), u ∈ [0, 1], Querschnitt section(u, a) → [x, y].
- * weights(u, a, p) → [[boneName, w], ...]; attrs(u, a, p, xy) → zusätzliche Attribute je Vertex.
+ * Loft: tube along frame(u), u ∈ [0, 1], cross section section(u, a) → [x, y].
+ * weights(u, a, p) → [[boneName, w], ...]; attrs(u, a, p, x, y) → extra attributes per vertex.
  */
 export class Loft {
   constructor(def) {
@@ -87,14 +87,14 @@ export class Loft {
       nrm.copy(f.b).multiplyScalar(x).addScaledVector(f.n, y);
     }
     nrm.normalize();
-    // nach außen zeigen lassen
+    // make it point outwards
     const f = this.frame(u);
     const p = this.point(u, a);
     if (nrm.dot(p.sub(f.o)) < 0) nrm.negate();
     return nrm;
   }
 
-  /** Erzeugt die Röhre als Teil (positions, indices, ...) für den MeshBuilder. */
+  /** Emits the tube as one part into the MeshBuilder. */
   build(builder, { uSamples, radial, capStart = null, capEnd = null, aOffset = 0 }) {
     const def = this.def;
     const rings = [];
@@ -183,8 +183,8 @@ export class Loft {
 }
 
 /**
- * Schale auf einer Loft-Oberfläche: Gitter (nu × nv) über map(su, sv) → [u, a], außen um
- * thickness(su, sv) nach außen versetzt, innen um inset; Ränder geschlossen. closedV: Ring.
+ * Shell on a loft surface: grid (nu × nv) via map(su, sv) → [u, a], outer surface offset by
+ * thickness(su, sv), inner surface by inset; edges closed. closedV: ring around the loft.
  */
 export function buildShell(builder, loft, opts) {
   const { nu, nv, map, thickness, inset = 0.002, closedV = false, attrs = null } = opts;
@@ -221,7 +221,7 @@ export function buildShell(builder, loft, opts) {
       quads.push([inner[i][j], inner[i][j1], inner[i + 1][j1], inner[i + 1][j]]);
     }
   }
-  // Ränder (Umlaufsinn passend zu Außen-/Innenfläche)
+  // edges (winding consistent with outer/inner surface)
   for (let j = 0; j < jMax; j++) {
     const j1 = (j + 1) % cols;
     quads.push([outer[0][j], outer[0][j1], inner[0][j1], inner[0][j]]);
@@ -234,7 +234,7 @@ export function buildShell(builder, loft, opts) {
       quads.push([outer[i][c], outer[i + 1][c], inner[i + 1][c], inner[i][c]]);
     }
   }
-  // Außenfläche soll von der Loft-Achse weg zeigen
+  // outer surface must face away from the loft axis
   const mi = Math.floor(nu / 2);
   const mj = Math.floor(jMax / 2);
   const [uc] = map(mi / nu, mj / nv);
@@ -254,8 +254,8 @@ export function buildShell(builder, loft, opts) {
 }
 
 /**
- * Sammelt Vertices aller Teile. Jeder Vertex: Position, Gewichte (Knochen-Namen), Attribute.
- * Normalen werden je Teil aus den Flächen berechnet (glatt innerhalb eines Teils).
+ * Collects the vertices of all parts. Each vertex: position, weights (bone names), attributes.
+ * Normals are computed per part from its faces (smooth within a part).
  */
 export class MeshBuilder {
   constructor(boneIndex, attrSpec = {}) {
@@ -271,7 +271,7 @@ export class MeshBuilder {
     this.current = {};
   }
 
-  /** Setzt Standardwerte für Attribute, die folgende Teile verwenden. */
+  /** Sets default attribute values for the following parts. */
   setDefaults(values) {
     this.current = { ...values };
   }
@@ -289,7 +289,7 @@ export class MeshBuilder {
       const w = list[k];
       if (w) {
         const bi = this.boneIndex[w[0]];
-        if (bi === undefined) throw new Error(`Unbekannter Knochen ${w[0]}`);
+        if (bi === undefined) throw new Error(`Unknown bone ${w[0]}`);
         this.skinIndex.push(bi);
         this.skinWeight.push(w[1] / sum);
       } else {
@@ -316,7 +316,7 @@ export class MeshBuilder {
     this.parts.push([start, this.index.length]);
   }
 
-  /** Vorzeichen: zeigt die Fläche (a, b, c) von center weg? */
+  /** Sign: does face (a, b, c) point away from center? */
   faceFacing(a, b, c, center) {
     const P = this.pos;
     const ax = P[a * 3];
@@ -332,7 +332,7 @@ export class MeshBuilder {
     return n[0] * (ax - center.x) + n[1] * (ay - center.y) + n[2] * (az - center.z);
   }
 
-  /** Einfache Teile aus vorgegebenen Positionen/Indizes (lokal) mit Transformation. */
+  /** Simple part from given local positions/indices with a transform. */
   addIndexed(positions, indices, matrix, weightsFn, attrsFn) {
     const v = new THREE.Vector3();
     const base = [];
@@ -400,8 +400,8 @@ function computeNormals(pos, index) {
 }
 
 /**
- * Gewichte entlang einer Knochenkette: joints = Bogenlängen der Gelenke (aufsteigend),
- * bones = [vorGelenk0, nachGelenk0, nachGelenk1, ...], blend = halbe Übergangsbreite je Gelenk.
+ * Weights along a bone chain: joints = arc positions of the joints (ascending),
+ * bones = [beforeJoint0, afterJoint0, afterJoint1, ...], blend = half transition width per joint.
  */
 export function chainWeights(s, joints, bones, blend) {
   const sm = (k) => {
@@ -417,7 +417,7 @@ export function chainWeights(s, joints, bones, blend) {
   return out;
 }
 
-/** Gewichtslisten mischen: (1 − t)·A + t·B. */
+/** Mix weight lists: (1 − t)·A + t·B. */
 export function mixWeights(a, b, t) {
   const map = new Map();
   for (const [n, w] of a) map.set(n, (map.get(n) || 0) + w * (1 - t));
@@ -425,7 +425,7 @@ export function mixWeights(a, b, t) {
   return [...map.entries()];
 }
 
-/** Kugel-/Ellipsoid-Teil, lokal um den Ursprung (für Augen u. Ä.). */
+/** Ellipsoid part around the local origin (eyes etc.). */
 export function ellipsoidData(rx, ry, rz, ws, hs) {
   const g = new THREE.SphereGeometry(1, ws, hs);
   g.scale(rx, ry, rz);
@@ -435,7 +435,7 @@ export function ellipsoidData(rx, ry, rz, ws, hs) {
   return { p, idx };
 }
 
-/** Torus-Teil (z. B. Gebissring, Steigbügel), Achse lokal +Z. */
+/** Torus part (bit ring, stirrup), local axis +Z. */
 export function torusData(r, tube, rs, ts) {
   const g = new THREE.TorusGeometry(r, tube, rs, ts);
   const p = Array.from(g.attributes.position.array);

@@ -1,4 +1,4 @@
-// Reine Mathe-Helfer (ohne three.js).
+// Pure math helpers (no three.js).
 
 export const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -8,8 +8,8 @@ export function smoothstep(a, b, x) {
 }
 
 /**
- * Glatte Interpolation einer Tabelle [[k, v1, v2, ...], ...] (kubisch, Catmull-Rom-artige
- * Tangenten auf ungleichmäßigen Stützstellen). Gibt eine Funktion k → [v1, v2, ...] zurück.
+ * Smooth interpolation of a table [[k, v1, v2, ...], ...] (cubic Hermite with Catmull-Rom-like
+ * tangents on non-uniform knots). Returns a function k → [v1, v2, ...].
  */
 export function table(rows) {
   const n = rows.length;

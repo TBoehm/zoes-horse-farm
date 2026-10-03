@@ -1,21 +1,20 @@
-// Ruhepose (Bind-Pose) des Pferdes in Modell-Koordinaten: Meter, Y oben, Blick nach +Z,
-// Ursprung am Boden unter der Körpermitte. Warmblut, Widerrist ≈ 1,65 m.
-// Alle Knochen haben in der Ruhepose keine Rotation; Animation = Rotation relativ dazu.
+// Horse bone hierarchy in model coordinates (rest pose from anatomy.js). Bones have no rotation in
+// the rest pose; animation = rotation relative to it.
 import * as THREE from 'three';
 
 import { REST, SIDES } from './anatomy.js';
 
 export { LEG_NAMES, REST, SIDES } from './anatomy.js';
 
-// Kopf: Achse von Genick (Kopfknochen) Richtung Maul, ca. 55° nach unten geneigt.
+// Head: axis from the poll (head bone) towards the muzzle, tilted ~55° downwards.
 const HEAD_ANGLE = (55 * Math.PI) / 180;
 export const HEAD = {
   origin: new THREE.Vector3(...REST.head),
-  dir: new THREE.Vector3(0, -Math.sin(HEAD_ANGLE), Math.cos(HEAD_ANGLE)), // Richtung Maul
-  front: new THREE.Vector3(0, Math.cos(HEAD_ANGLE), Math.sin(HEAD_ANGLE)), // Stirn/Nasenrücken
+  dir: new THREE.Vector3(0, -Math.sin(HEAD_ANGLE), Math.cos(HEAD_ANGLE)), // towards the muzzle
+  front: new THREE.Vector3(0, Math.cos(HEAD_ANGLE), Math.sin(HEAD_ANGLE)), // forehead / nasal bridge
   length: 0.62,
 };
-/** Punkt in Kopf-Koordinaten (s entlang Kopf, f Richtung Stirn, x lateral). */
+/** Point in head coordinates (s along the head, f towards the forehead, x lateral). */
 export function headPoint(s, f, x) {
   return HEAD.origin
     .clone()
@@ -30,14 +29,14 @@ export const EAR = {
   length: 0.16,
 };
 
-export const SADDLE_SEAT = new THREE.Vector3(0, 1.63, 0.08); // Sitzpunkt des Reiters
-export const EAR_ANCHOR = () => headPoint(0.03, 0.14, 0); // zwischen den Ohren
+export const SADDLE_SEAT = new THREE.Vector3(0, 1.63, 0.08); // rider's seat point
+export const EAR_ANCHOR = () => headPoint(0.03, 0.14, 0); // between the ears
 
 const v = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const mirror = (a, side) => [a[0] * side, a[1], a[2]];
 
 /**
- * Erzeugt die Knochen-Hierarchie. Rückgabe: { root, bones: name → Bone, list, index: name → i }.
+ * Creates the bone hierarchy. Returns { root, bones: name → Bone, list, index: name → i }.
  */
 export function createSkeletonBones() {
   const bones = {};
