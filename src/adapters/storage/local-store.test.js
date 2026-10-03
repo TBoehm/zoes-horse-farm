@@ -24,19 +24,19 @@ function failingStorage() {
 
 const env = { defaultLang: 'de' };
 
-describe('Spielstand laden (Regel 47)', () => {
-  it('nutzt Anfangswerte bei leerem Speicher (Startsprache aus env)', () => {
+describe('loading save data (rule 47)', () => {
+  it('uses initial values for empty storage (start language from env)', () => {
     const store = createStore({ backend: memoryStorage(), sessionBackend: memoryStorage(), env });
     expect(store.get('settings').lang).toBe('de');
   });
 
-  it('startet mit kaputtem JSON ohne Absturz', () => {
-    const backend = memoryStorage({ [SAVE_KEY]: '{kaputt' });
+  it('starts with broken JSON without crashing', () => {
+    const backend = memoryStorage({ [SAVE_KEY]: '{broken' });
     const store = createStore({ backend, sessionBackend: memoryStorage(), env });
     expect(store.get('settings').lang).toBe('de');
   });
 
-  it('übernimmt lesbare Werte und setzt ungültige zurück', () => {
+  it('keeps readable values and resets invalid ones', () => {
     const backend = memoryStorage({
       [SAVE_KEY]: JSON.stringify({ version: 1, settings: { lang: 'en', extra: 7 }, horse: 5 }),
     });
@@ -48,14 +48,14 @@ describe('Spielstand laden (Regel 47)', () => {
     expect(createStore({ backend: bad, env }).get('settings').lang).toBe('de');
   });
 
-  it('akzeptiert Nicht-Objekte als Spielstand', () => {
+  it('accepts non-objects as save data', () => {
     for (const text of ['42', '"x"', 'null', '[1,2]']) {
       const store = createStore({ backend: memoryStorage({ [SAVE_KEY]: text }), env });
       expect(store.get('settings').lang).toBe('de');
     }
   });
 
-  it('lädt ältere Stände mit fehlenden Bereichen ohne Verlust', () => {
+  it('loads older saves with missing sections without loss', () => {
     const backend = memoryStorage({ [SAVE_KEY]: JSON.stringify({ settings: { lang: 'en' } }) });
     registerSection('testArea', objectSection({ level: field.number(0, 9, 1) }));
     const store = createStore({ backend, env });
@@ -64,8 +64,8 @@ describe('Spielstand laden (Regel 47)', () => {
   });
 });
 
-describe('Spielstand speichern (Regeln 45, 47)', () => {
-  it('speichert sofort bei Änderung', () => {
+describe('saving save data (rules 45, 47)', () => {
+  it('saves immediately on change', () => {
     const backend = memoryStorage();
     const store = createStore({ backend, env });
     store.update('settings', (s) => ({ ...s, lang: 'en' }));
@@ -73,7 +73,7 @@ describe('Spielstand speichern (Regeln 45, 47)', () => {
     expect(createStore({ backend, env }).get('settings').lang).toBe('en');
   });
 
-  it('erhält unbekannte Bereiche und Felder unverändert', () => {
+  it('preserves unknown sections and fields unchanged', () => {
     const future = { stable: { horses: [{ name: 'Luna' }] }, version: 3 };
     const backend = memoryStorage({
       [SAVE_KEY]: JSON.stringify({ ...future, settings: { lang: 'de', futureFlag: true } }),
@@ -86,7 +86,7 @@ describe('Spielstand speichern (Regeln 45, 47)', () => {
     expect(saved.version).toBe(3);
   });
 
-  it('ein neuer Bereich ergänzt Daten, ohne bestehende zu löschen', () => {
+  it('a new section adds data without deleting existing data', () => {
     const backend = memoryStorage({
       [SAVE_KEY]: JSON.stringify({ settings: { lang: 'en' }, other: { a: 1 } }),
     });
@@ -100,8 +100,8 @@ describe('Spielstand speichern (Regeln 45, 47)', () => {
   });
 });
 
-describe('Später erweiterte Bereiche (Regel 47)', () => {
-  it('liefert neue Felder auch ohne vorheriges update', () => {
+describe('sections extended later (rule 47)', () => {
+  it('returns new fields even without a prior update', () => {
     registerSection('lateArea', objectSection({ a: field.number(0, 9, 1) }));
     const store = createStore({ backend: memoryStorage(), env });
     expect(store.get('lateArea')).toEqual({ a: 1 });
@@ -110,15 +110,15 @@ describe('Später erweiterte Bereiche (Regel 47)', () => {
   });
 });
 
-describe('Speichern nicht möglich (Regel 46)', () => {
-  it('bleibt bedienbar und meldet canSave=false', () => {
+describe('saving not possible (rule 46)', () => {
+  it('stays usable and reports canSave=false', () => {
     const store = createStore({ backend: failingStorage(), sessionBackend: memoryStorage(), env });
     expect(store.canSave).toBe(false);
     expect(() => store.update('settings', (s) => ({ ...s, lang: 'en' }))).not.toThrow();
     expect(store.get('settings').lang).toBe('en');
   });
 
-  it('zeigt den Hinweis einmal je Sitzung, auch nach Neuladen nicht erneut', () => {
+  it('shows the notice once per session, not again after a reload', () => {
     const session = memoryStorage();
     const a = createStore({ backend: failingStorage(), sessionBackend: session, env });
     expect(a.shouldShowSaveNotice()).toBe(true);
@@ -133,12 +133,12 @@ describe('Speichern nicht möglich (Regel 46)', () => {
     expect(newSession.shouldShowSaveNotice()).toBe(true);
   });
 
-  it('zeigt keinen Hinweis, wenn Speichern geht', () => {
+  it('shows no notice when saving works', () => {
     const store = createStore({ backend: memoryStorage(), sessionBackend: memoryStorage(), env });
     expect(store.shouldShowSaveNotice()).toBe(false);
   });
 
-  it('kommt ohne jeden Speicher aus, auch nach Neuladen nur einmal', () => {
+  it('works without any storage, shows only once even after a reload', () => {
     let marked = false;
     const noticeMarker = { get: () => marked, set: () => (marked = true) };
     const store = createStore({ backend: null, sessionBackend: null, env, noticeMarker });
@@ -149,7 +149,7 @@ describe('Speichern nicht möglich (Regel 46)', () => {
     expect(reloaded.shouldShowSaveNotice()).toBe(false);
   });
 
-  it('nutzt den Ersatz-Merker, wenn sessionStorage wirft', () => {
+  it('uses the fallback marker when sessionStorage throws', () => {
     let marked = false;
     const noticeMarker = { get: () => marked, set: () => (marked = true) };
     const session = failingStorage();

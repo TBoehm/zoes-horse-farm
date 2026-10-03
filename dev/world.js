@@ -207,7 +207,7 @@ function frame(now) {
   const info = renderer.info.render;
   stats.textContent =
     `Level ${level} (auto ${autoLevel})\n${fps.toFixed(0)} fps\n` +
-    `Triangles ${info.triangles}\nDraw-Calls ${info.calls}\n${renderer.getPixelRatio()}x`;
+    `Triangles ${info.triangles}\nDraw calls ${info.calls}\n${renderer.getPixelRatio()}x`;
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

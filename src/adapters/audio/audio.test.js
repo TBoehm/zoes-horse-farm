@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAudio } from './index.js';
 
-// Kleiner Fake: jede create*-Methode liefert einen Knoten, unbekannte Eigenschaften sind AudioParams.
+// Small fake: every create* method returns a node, unknown properties are AudioParams.
 function makeParam(initial = 0) {
   return {
     value: initial,
@@ -125,8 +125,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('vor unlock', () => {
-  it('erzeugt keinen AudioContext und ignoriert alle Aufrufe still', () => {
+describe('before unlock', () => {
+  it('creates no AudioContext and silently ignores all calls', () => {
     const audio = make();
     audio.sfx.hoof('walk');
     audio.sfx.takeoff();
@@ -144,7 +144,7 @@ describe('vor unlock', () => {
     expect(audio.getState().unlocked).toBe(false);
   });
 
-  it('merkt den Musikwunsch und startet die Melodie nach unlock', () => {
+  it('remembers the music request and starts the melody after unlock', () => {
     const audio = make();
     audio.setMusicWanted(true);
     audio.unlock();
@@ -154,7 +154,7 @@ describe('vor unlock', () => {
     expect(ctxOf().count('Oscillator')).toBeGreaterThan(0);
   });
 
-  it('unlock ist wiederholbar und erzeugt nur einen Context', () => {
+  it('unlock is repeatable and creates only one context', () => {
     const audio = make();
     audio.unlock();
     audio.unlock();
@@ -162,8 +162,8 @@ describe('vor unlock', () => {
   });
 });
 
-describe('fehlender oder fehlschlagender AudioContext', () => {
-  it('ist ohne AudioContext komplett wirkungslos', () => {
+describe('missing or failing AudioContext', () => {
+  it('has no effect at all without an AudioContext', () => {
     const audio = createAudio({}, { AudioContext: undefined });
     const globalCtx = globalThis.AudioContext;
     delete globalThis.AudioContext;
@@ -179,10 +179,10 @@ describe('fehlender oder fehlschlagender AudioContext', () => {
     }
   });
 
-  it('fängt einen werfenden Konstruktor ab', () => {
+  it('catches a throwing constructor', () => {
     class Broken {
       constructor() {
-        throw new Error('nicht erlaubt');
+        throw new Error('not allowed');
       }
     }
     const audio = createAudio({}, { AudioContext: Broken });
@@ -196,8 +196,8 @@ describe('fehlender oder fehlschlagender AudioContext', () => {
   });
 });
 
-describe('Effekte', () => {
-  it('erzeugen nach unlock Klang und laufen über den Effektkanal', () => {
+describe('effects', () => {
+  it('produce sound after unlock and run through the effects channel', () => {
     const audio = make();
     audio.unlock();
     const before = ctxOf().count('Oscillator');
@@ -205,7 +205,7 @@ describe('Effekte', () => {
     expect(ctxOf().count('Oscillator')).toBeGreaterThan(before);
   });
 
-  it('jeder Effekt und jede Gangart erzeugt Knoten, unbekannte Gangart nicht', () => {
+  it('every effect and every gait creates nodes, an unknown gait does not', () => {
     const audio = make();
     audio.unlock();
     const calls = {
@@ -228,7 +228,7 @@ describe('Effekte', () => {
     expect(ctxOf().nodes.length).toBe(before);
   });
 
-  it('Pause: neue Effekte werden ignoriert, laufende gekappt', () => {
+  it('pause: new effects are ignored, running ones are cut', () => {
     const audio = make();
     audio.unlock();
     audio.sfx.hoof('trot');
@@ -245,7 +245,7 @@ describe('Effekte', () => {
     expect(ctxOf().nodes.length).toBeGreaterThan(nodes);
   });
 
-  it('stummer Effektkanal erzeugt keine Knoten, Musik bleibt unberührt', () => {
+  it('muted effects channel creates no nodes, music is untouched', () => {
     const audio = make({ sfxMuted: true });
     audio.setMusicWanted(true);
     audio.unlock();
@@ -255,7 +255,7 @@ describe('Effekte', () => {
     expect(audio.getState().musicPlaying).toBe(true);
   });
 
-  it('ignoriert Effekte, solange der Context nicht läuft', () => {
+  it('ignores effects while the context is not running', () => {
     const audio = make();
     audio.unlock();
     ctxOf().state = 'suspended';
@@ -265,8 +265,8 @@ describe('Effekte', () => {
   });
 });
 
-describe('Lautstärke und Stumm', () => {
-  it('setVolumes wirkt sofort und Stumm behält die Lautstärke', () => {
+describe('volume and mute', () => {
+  it('setVolumes takes effect immediately and muting keeps the volume', () => {
     const audio = make({ musicVolume: 0.5, sfxVolume: 0.5 });
     audio.unlock();
     const gains = ctxOf().nodes.filter((n) => n.kind === 'Gain');
@@ -282,7 +282,7 @@ describe('Lautstärke und Stumm', () => {
     expect(music.gain.value).toBeCloseTo(0.64);
   });
 
-  it('Musik-Stumm hält die Melodie an, Aufheben startet sie wieder', () => {
+  it('muting the music stops the melody, unmuting starts it again', () => {
     const audio = make();
     audio.setMusicWanted(true);
     audio.unlock();
@@ -294,8 +294,8 @@ describe('Lautstärke und Stumm', () => {
   });
 });
 
-describe('Musik soll laufen', () => {
-  it('folgt setMusicWanted', () => {
+describe('music should run', () => {
+  it('follows setMusicWanted', () => {
     const audio = make();
     audio.unlock();
     expect(audio.getState().musicPlaying).toBe(false);
@@ -305,7 +305,7 @@ describe('Musik soll laufen', () => {
     expect(audio.getState().musicPlaying).toBe(false);
   });
 
-  it('plant fortlaufend Noten über die Zeit (Lookahead-Scheduler)', () => {
+  it('schedules notes continuously over time (lookahead scheduler)', () => {
     const audio = make();
     audio.setMusicWanted(true);
     audio.unlock();
@@ -322,7 +322,7 @@ describe('Musik soll laufen', () => {
     expect(grew).toBeGreaterThan(10);
   });
 
-  it('Hintergrund: Musik stoppt, Context wird suspendiert; zurück läuft sie wieder', () => {
+  it('background: music stops, context is suspended; on return it runs again', () => {
     const audio = make();
     audio.setMusicWanted(true);
     audio.unlock();
@@ -336,7 +336,7 @@ describe('Musik soll laufen', () => {
     expect(audio.getState().musicPlaying).toBe(true);
   });
 
-  it('Hintergrund ohne Musikwunsch: zurück startet keine Musik', () => {
+  it('background without a music request: returning starts no music', () => {
     const audio = make();
     audio.unlock();
     audio.setHidden(true);
@@ -344,7 +344,7 @@ describe('Musik soll laufen', () => {
     expect(audio.getState().musicPlaying).toBe(false);
   });
 
-  it('Wunsch während Hintergrund wird beim Zurückkehren umgesetzt', () => {
+  it('a request made while in the background is applied on return', () => {
     const audio = make();
     audio.unlock();
     audio.setHidden(true);
@@ -354,7 +354,7 @@ describe('Musik soll laufen', () => {
     expect(audio.getState().musicPlaying).toBe(true);
   });
 
-  it('unlock im Hintergrund startet keinen Ton', () => {
+  it('unlock in the background starts no sound', () => {
     const audio = make();
     audio.setMusicWanted(true);
     audio.setHidden(true);
@@ -377,7 +377,7 @@ describe('installUnlock', () => {
     };
   }
 
-  it('registriert pointerdown, keydown, touchend und entfernt sie nach dem Entsperren', async () => {
+  it('registers pointerdown, keydown, touchend and removes them after unlocking', async () => {
     const audio = make();
     const target = fakeTarget();
     audio.installUnlock(target);
@@ -388,7 +388,7 @@ describe('installUnlock', () => {
     expect(target.handlers.size).toBe(0);
   });
 
-  it('Touch-Pointerdown und Escape entsperren nicht, touchend schon', () => {
+  it('touch pointerdown and Escape do not unlock, touchend does', () => {
     const audio = make();
     const target = fakeTarget();
     audio.installUnlock(target);
@@ -399,7 +399,7 @@ describe('installUnlock', () => {
     expect(instances).toHaveLength(1);
   });
 
-  it('gibt eine Abmeldefunktion zurück und ist ohne Ziel harmlos', () => {
+  it('returns an unsubscribe function and is harmless without a target', () => {
     const audio = make();
     const target = fakeTarget();
     const remove = audio.installUnlock(target);
@@ -410,7 +410,7 @@ describe('installUnlock', () => {
 });
 
 describe('dispose', () => {
-  it('stoppt Melodie, schließt den Context und macht alles zum No-op', () => {
+  it('stops the melody, closes the context and turns everything into a no-op', () => {
     const audio = make();
     audio.setMusicWanted(true);
     audio.unlock();

@@ -1,4 +1,4 @@
-// Texte für Reiten, Springen, Pause und die zugehörigen Einstellungen (SRT-002, SRT-003).
+// Texts for riding, jumping, pause and the related settings (SRT-002, SRT-003).
 export default {
   de: {
     'menu.free': 'Freier Modus',

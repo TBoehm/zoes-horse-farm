@@ -1,4 +1,4 @@
-// Führt Tastatur und Touch zu einem InputState zusammen (Vertrag: architecture.md „Eingabe").
+// Merges keyboard and touch into one InputState (contract: architecture.md "Eingabe").
 import { createKeyboard } from './keyboard.js';
 import { createTouchControls } from './touch-controls.js';
 
@@ -9,7 +9,7 @@ export function createInput({ container, inputMode, target = window }) {
   const touch = createTouchControls(container);
   touch.setVisible(inputMode.touch);
 
-  // Regel 9/11: Wechsel des Touch-Modus beendet einen aktiven Galopp
+  // Rules 9/11: switching the touch mode ends an active gallop
   const offMode = inputMode.onChange((on) => {
     touch.setVisible(on);
     touch.setGallop(false);
@@ -31,12 +31,12 @@ export function createInput({ container, inputMode, target = window }) {
         camera: k.camera || tc.camera,
       };
     },
-    /** Das Spiel beendet den Galopp (Verweigerung, Zaun): Touch aus, Shift neu drücken. */
+    /** The game ends the gallop (refusal, fence): touch off, shift must be pressed again. */
     endGallop() {
       touch.setGallop(false);
       keyboard.latchGallop();
     },
-    /** Galopp-Zustand nach „Weiter": Tastatur nur bei gehaltenem Shift, Touch behält Zustand. */
+    /** Gallop state after "Continue": keyboard only while shift is held, touch keeps its state. */
     clearEdges() {
       keyboard.clearEdges();
       touch.clearEdges();

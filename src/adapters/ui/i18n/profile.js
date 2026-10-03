@@ -1,4 +1,4 @@
-// Texte für Namensfrage, Mein Pferd, Auszeichnungen und Fortschritt löschen (SRT-005).
+// Texts for the name prompt, My Horse, badges and deleting progress (SRT-005).
 export default {
   de: {
     'horse.defaultName': 'Blitz',

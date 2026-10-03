@@ -1,4 +1,4 @@
-// Texte der Auszeichnungen (DE + EN), kurz und für eine 3. Klasse lesbar.
+// Badge texts (DE + EN), short and readable for a third grader.
 export default {
   de: {
     'badge.toast': 'Auszeichnung: {name}!',

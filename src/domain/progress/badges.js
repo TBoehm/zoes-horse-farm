@@ -1,11 +1,11 @@
-// Auszeichnungen (Konzept Regel 49): reine Prüf-Logik, unveränderlich, ohne DOM.
-// Die Absprung-Hilfe hat keinen Einfluss auf die Vergabe (Regel 42).
+// Badges (concept rule 49): pure check logic, immutable, no DOM.
+// The takeoff assist has no influence on awarding (rule 42).
 
 export const JUMPS_FOR_JUMP_MOUSE = 100;
 export const RIDES_FOR_BUSY = 10;
 export const COURSE_COUNT = 5;
 
-/** Reihenfolge wie in Regel 49. `award`: 'instant' = nach gezähltem Sprung, 'rideEnd' = bei Rittende. */
+/** Order as in rule 49. `award`: 'instant' = after a counted jump, 'rideEnd' = at ride end. */
 export const BADGES = Object.freeze(
   [
     ['firstJump', 'instant'],
@@ -44,7 +44,7 @@ function anyCourseThreeStars(progress) {
   return Object.values(progress.courses ?? {}).some((c) => c?.stars === 3);
 }
 
-/** Vergibt alle noch fehlenden Auszeichnungen aus `conditions` (id → bool) mit Datum `nowIso`. */
+/** Awards all still-missing badges from `conditions` (id → bool) with date `nowIso`. */
 function award(progress, conditions, nowIso) {
   const awarded = BADGES.filter((b) => conditions[b.id] && !hasBadge(progress, b.id)).map(
     (b) => b.id,
@@ -56,8 +56,8 @@ function award(progress, conditions, nowIso) {
 }
 
 /**
- * Sofort-Auszeichnungen (Erster Sprung, Springmaus). Nach jedem gezählten Sprung aufrufen, also
- * nach `addJump`. Bedingungen gelten als „mindestens", alte Spielstände werden so nachgeholt.
+ * Instant badges (first jump, jump mouse). Call after every counted jump, i.e. after `addJump`.
+ * Conditions are "at least", so older saves catch up.
  * @returns {{ progress: object, awarded: string[] }}
  */
 export function checkInstantBadges(progress, nowIso) {
@@ -70,10 +70,10 @@ export function checkInstantBadges(progress, nowIso) {
 }
 
 /**
- * Auszeichnungen bei Rittende. Nur für BEENDETE Ritte und NACH `applyFinishedRide` aufrufen;
- * abgebrochene Ritte rufen sie nicht auf (das regelt der Aufrufer, Regel 40).
- * Oxer-Profi und Kombi-Könner kommen ausschließlich aus dem Ritt-Ergebnis, nie aus gespeicherten
- * Daten. Fehlerfrei zählt auch ein gespeicherter Parcours mit 3 Sternen.
+ * Badges at ride end. Call only for FINISHED rides and AFTER `applyFinishedRide`; aborted rides
+ * do not call it (the caller ensures this, rule 40).
+ * Oxer pro and combination pro come exclusively from the ride result, never from stored data.
+ * A stored course with 3 stars also counts as clean.
  * @returns {{ progress: object, awarded: string[] }}
  */
 export function checkRideEndBadges(progress, result, nowIso) {

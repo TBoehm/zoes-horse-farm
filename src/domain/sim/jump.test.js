@@ -24,8 +24,8 @@ const core = (el, speed) => {
   return { gait: 'canter', speed, distance: zone.center, angle: 0 };
 };
 
-describe('Absprungzone, Reichweite, letzter Absprungpunkt', () => {
-  it('reach > far > near > lastPoint > 0.25 m für alle Arten und Tempi', () => {
+describe('Takeoff zone, reach, last takeoff point', () => {
+  it('reach > far > near > lastPoint > 0.25 m for all kinds and speeds', () => {
     for (const el of all) {
       for (const v of [0, 2.6, 3.2, 4.5, 5.8, 8]) {
         const z = zoneForElement(el, v, TUNING);
@@ -38,7 +38,7 @@ describe('Absprungzone, Reichweite, letzter Absprungpunkt', () => {
     }
   });
 
-  it('Zonen-Mitte liegt real bei ca. 1,3–1,8 m (40–85 cm, Arbeitstempo)', () => {
+  it('zone center is realistically about 1.3–1.8 m (40–85 cm, working pace)', () => {
     expect(zoneForElement(cross, 3.2, TUNING).center).toBeGreaterThan(1.2);
     for (const el of [vertical60, vertical80, oxer70, oxer85]) {
       const c = zoneForElement(el, 5.8, TUNING).center;
@@ -47,19 +47,19 @@ describe('Absprungzone, Reichweite, letzter Absprungpunkt', () => {
     }
   });
 
-  it('Oxer wird etwas dichter angeritten als ein gleich hoher Steilsprung', () => {
+  it('an oxer is approached slightly closer than a vertical of the same height', () => {
     const v = makeElement('vertical', 0.85);
     expect(zoneForElement(oxer85, 5.8, TUNING).center).toBeLessThan(
       zoneForElement(v, 5.8, TUNING).center,
     );
   });
 
-  it('Reichweite beginnt deutlich vor der Zone', () => {
+  it('reach starts well before the zone', () => {
     const z = zoneForElement(vertical60, 5.8, TUNING);
     expect(z.reach - z.far).toBeGreaterThanOrEqual(0.35 * 5.8 - 1e-9);
   });
 
-  it('Zeitfenster: Kreuz großzügig, höher/breiter enger', () => {
+  it('time window: generous for a cross, narrower when higher/wider', () => {
     expect(zoneWindow(cross, TUNING)).toBeCloseTo(0.22, 9);
     expect(zoneWindow(vertical80, TUNING)).toBeLessThan(zoneWindow(vertical60, TUNING));
     expect(zoneWindow(oxer85, TUNING)).toBeLessThan(zoneWindow(vertical80, TUNING));
@@ -67,7 +67,7 @@ describe('Absprungzone, Reichweite, letzter Absprungpunkt', () => {
     expect(zoneWindow(oxer85, TUNING)).toBeLessThan(0.12);
   });
 
-  it('die Zone passt sich dem Tempo an (weiter weg und tiefer bei mehr Tempo)', () => {
+  it('the zone adapts to speed (farther away and deeper at higher speed)', () => {
     const slow = zoneForElement(vertical80, 4.5, TUNING);
     const fast = zoneForElement(vertical80, 7, TUNING);
     expect(fast.far).toBeGreaterThan(slow.far);
@@ -76,8 +76,8 @@ describe('Absprungzone, Reichweite, letzter Absprungpunkt', () => {
   });
 });
 
-describe('Springbarkeit und Sollbereiche', () => {
-  it('Gangart: Halt/Schritt nie, Trab nur Kreuz, Galopp alles (Regel 16)', () => {
+describe('Jumpability and target ranges', () => {
+  it('gait: halt/walk never, trot only crosses, canter everything (rule 16)', () => {
     for (const el of all) {
       expect(gaitAllows(el, 'halt')).toBe(false);
       expect(gaitAllows(el, 'walk')).toBe(false);
@@ -86,7 +86,7 @@ describe('Springbarkeit und Sollbereiche', () => {
     }
   });
 
-  it('Tempo-Sollbereich steigt mit Höhe und Spread', () => {
+  it('target speed range rises with height and spread', () => {
     expect(speedBand(cross, TUNING).min).toBeLessThanOrEqual(2.6);
     expect(speedBand(cross, TUNING).min).toBeLessThan(TUNING.speeds.trotMedium);
     expect(speedBand(vertical60, TUNING).min).toBeGreaterThanOrEqual(4.6);
@@ -96,18 +96,18 @@ describe('Springbarkeit und Sollbereiche', () => {
       const b = speedBand(el, TUNING);
       expect(b.max).toBeGreaterThan(b.min);
       expect(b.max).toBeLessThanOrEqual(TUNING.speeds.canterMax);
-      // mittleres Galopptempo liegt immer im sicheren Kern
+      // medium canter speed is always within the safe core
       expect(TUNING.speeds.canterMedium).toBeGreaterThanOrEqual(b.min);
       expect(TUNING.speeds.canterMedium).toBeLessThanOrEqual(b.max);
     }
   });
 
-  it('Selbstsprung-Mindesttempo liegt unter dem Sollbereich', () => {
+  it('self-jump minimum speed is below the target range', () => {
     for (const el of all) expect(selfMinSpeed(el, TUNING)).toBeLessThan(speedBand(el, TUNING).min);
     expect(selfMinSpeed(oxer85, TUNING)).toBeGreaterThan(TUNING.speeds.canterMin);
   });
 
-  it('Winkel-Toleranz 10–12°, enger bei schweren Hindernissen', () => {
+  it('angle tolerance 10–12°, narrower for heavy obstacles', () => {
     expect(safeAngle(cross, TUNING) / DEG).toBeLessThanOrEqual(12);
     expect(safeAngle(oxer85, TUNING) / DEG).toBeGreaterThanOrEqual(10);
     expect(safeAngle(oxer85, TUNING)).toBeLessThan(safeAngle(cross, TUNING));
@@ -115,8 +115,8 @@ describe('Springbarkeit und Sollbereiche', () => {
   });
 });
 
-describe('Abwurfrisiko (Regeln 15, 18, 19, 20)', () => {
-  it('sicherer Kern: exakt 0 über die ganze Zone, den Sollbereich und die Winkel-Toleranz', () => {
+describe('Knockdown risk (rules 15, 18, 19, 20)', () => {
+  it('safe core: exactly 0 across the whole zone, target range and angle tolerance', () => {
     for (const el of all) {
       const band = speedBand(el, TUNING);
       for (const v of [band.min, (band.min + band.max) / 2, band.max]) {
@@ -131,7 +131,7 @@ describe('Abwurfrisiko (Regeln 15, 18, 19, 20)', () => {
     }
   });
 
-  it('steigt monoton mit der Tempo-Abweichung', () => {
+  it('rises monotonically with the speed deviation', () => {
     const band = speedBand(vertical60, TUNING);
     let prev = 0;
     for (const dv of [0.2, 0.5, 1.0]) {
@@ -143,7 +143,7 @@ describe('Abwurfrisiko (Regeln 15, 18, 19, 20)', () => {
     }
   });
 
-  it('steigt monoton mit der Distanz-Abweichung (zu früh und zu dicht)', () => {
+  it('rises monotonically with the distance deviation (too early and too close)', () => {
     const z = zoneForElement(vertical60, 5.8, TUNING);
     let prevEarly = 0;
     for (const dd of [0.2, 0.6, 1.2]) {
@@ -159,7 +159,7 @@ describe('Abwurfrisiko (Regeln 15, 18, 19, 20)', () => {
     expect(tooClose).toBeGreaterThan(0);
   });
 
-  it('steigt monoton mit dem Winkel jenseits der Toleranz', () => {
+  it('rises monotonically with the angle beyond the tolerance', () => {
     let prev = 0;
     for (const a of [15, 22, 30]) {
       const r = takeoffRisk(vertical60, { ...core(vertical60, 5.8), angle: a * DEG }, TUNING);
@@ -168,7 +168,7 @@ describe('Abwurfrisiko (Regeln 15, 18, 19, 20)', () => {
     }
   });
 
-  it('85-cm-Oxer ist bei gleicher Abweichung riskanter als ein Kreuz', () => {
+  it('85 cm oxer is riskier than a cross at the same deviation', () => {
     const v = 6.5;
     const cases = [
       (el) => ({ distance: zoneForElement(el, v, TUNING).far + 0.5, angle: 0, speed: v }),
@@ -187,7 +187,7 @@ describe('Abwurfrisiko (Regeln 15, 18, 19, 20)', () => {
     }
   });
 
-  it('Selbstsprung trägt immer deutlich erhöhtes Risiko', () => {
+  it('a self jump always carries clearly increased risk', () => {
     for (const el of all) {
       const s = core(el, speedBand(el, TUNING).min + 0.3);
       const self = takeoffRisk(el, { ...s, self: true }, TUNING);
@@ -195,7 +195,7 @@ describe('Abwurfrisiko (Regeln 15, 18, 19, 20)', () => {
     }
   });
 
-  it('ist gedeckelt', () => {
+  it('is capped', () => {
     const r = takeoffRisk(
       oxer85,
       { gait: 'canter', speed: 4.5, distance: 6, angle: 29 * DEG, self: true },

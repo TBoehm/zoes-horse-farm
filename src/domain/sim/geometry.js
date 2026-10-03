@@ -1,17 +1,17 @@
-// Geometrie-Helfer für Hindernis-Elemente (siehe docs/specs/springreiten-trainer/architecture.md).
+// Geometry helpers for obstacle elements (see docs/specs/springreiten-trainer/architecture.md).
 import { POLE_LENGTH } from './tuning.js';
 
-/** Sprungachse n eines Elements. */
+/** Jump axis n of an element. */
 export function axisOf(element) {
   return { x: Math.sin(element.rot), z: Math.cos(element.rot) };
 }
 
-/** Querachse t (rechts, wenn man in +n springt). */
+/** Cross axis t (to the right when jumping in +n). */
 export function crossAxisOf(element) {
   return { x: -Math.cos(element.rot), z: Math.sin(element.rot) };
 }
 
-/** Lokale Koordinaten eines Punktes im Element-System: along = entlang n, across = entlang t. */
+/** Local coordinates of a point in the element system: along = along n, across = along t. */
 export function toLocal(element, x, z) {
   const n = axisOf(element);
   const t = crossAxisOf(element);
@@ -20,7 +20,7 @@ export function toLocal(element, x, z) {
   return { along: dx * n.x + dz * n.z, across: dx * t.x + dz * t.z };
 }
 
-/** Weltkoordinaten zu lokalen Element-Koordinaten. */
+/** Local element coordinates to world coordinates. */
 export function fromLocal(element, along, across) {
   const n = axisOf(element);
   const t = crossAxisOf(element);
@@ -34,12 +34,12 @@ export function forwardOf(heading) {
   return { x: Math.sin(heading), z: Math.cos(heading) };
 }
 
-/** Blickrichtung zu einem Richtungsvektor (Umkehrung von forwardOf). */
+/** Heading for a direction vector (inverse of forwardOf). */
 export function headingOf(x, z) {
   return Math.atan2(x, z);
 }
 
-/** Winkel auf (−π, π]. */
+/** Angle wrapped to (−π, π]. */
 export function wrapAngle(a) {
   let r = a % (2 * Math.PI);
   if (r <= -Math.PI) r += 2 * Math.PI;
@@ -48,13 +48,13 @@ export function wrapAngle(a) {
 }
 
 /**
- * Anreit-Info eines Pferdes zu einem Element (Konzept §Begriffe „Anreiten").
- * Liefert null, wenn das Pferd sich nicht auf das Element zubewegt.
- * - dir: +1 = Sprung in Richtung +n, −1 = in Richtung −n
- * - distance: Abstand (m) von der Vorderkante (Stange auf der Anreitseite), entlang n gemessen
- * - angle: Abweichung des Kurses von der Senkrechten zum Hindernis (rad, ≥ 0)
- * - crossing: Querversatz (m) am Punkt, an dem der Kurs die Hindernis-Ebene trifft
- * - onLine: Kurs trifft das Hindernis zwischen den Ständern
+ * Approach info of a horse to an element (concept glossary "approach").
+ * Returns null if the horse is not moving toward the element.
+ * - dir: +1 = jump in direction +n, −1 = in direction −n
+ * - distance: distance (m) from the leading edge (pole on the approach side), measured along n
+ * - angle: deviation of the course from the perpendicular to the obstacle (rad, ≥ 0)
+ * - crossing: lateral offset (m) at the point where the course meets the obstacle plane
+ * - onLine: course hits the obstacle between the stands
  * - approaching: onLine && distance < approachDistance
  */
 export function approachInfo(element, horse, approachDistance) {
@@ -66,13 +66,13 @@ export function approachInfo(element, horse, approachDistance) {
   const fAcross = f.x * t.x + f.z * t.z;
   if (Math.abs(fAlong) < 1e-6) return null;
   const dir = local.along < 0 ? 1 : -1;
-  // bewegt sich das Pferd auf die Ebene zu?
+  // is the horse moving toward the plane?
   if (Math.sign(fAlong) !== dir) return null;
   const halfSpread = (element.spread || 0) / 2;
   const distance = Math.abs(local.along) - halfSpread;
   if (distance < -halfSpread) return null;
   const angle = Math.acos(Math.min(1, Math.abs(fAlong)));
-  // Querversatz am Schnittpunkt mit der Mittel-Ebene des Elements
+  // lateral offset at the intersection with the element's center plane
   const travel = Math.abs(local.along) / Math.abs(fAlong);
   const crossing = local.across + fAcross * travel;
   const onLine = Math.abs(crossing) <= POLE_LENGTH / 2;

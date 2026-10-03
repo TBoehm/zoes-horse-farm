@@ -1,24 +1,24 @@
-// Parcours-Layouts (Konzept Regel 25) und feste Übungsaufstellung des freien Modus (Regel 41).
-// Koordinaten laut docs/specs/springreiten-trainer/architecture.md: Meter, Platz x∈[-20,20],
-// z∈[-35,35]; rot so, dass +n = (sin rot, cos rot) die Sprungrichtung ist.
+// Course layouts (concept rule 25) and the fixed practice layout of free mode (rule 41).
+// Coordinates per docs/specs/springreiten-trainer/architecture.md: meters, arena x∈[-20,20],
+// z∈[-35,35]; rot such that +n = (sin rot, cos rot) is the jump direction.
 //
-// Gebaut nach einfachen Parcoursbau-Regeln: Hindernisse auf Linien mit verwandten Distanzen
-// (5 Galoppsprünge), Wendungen mit Radien, die im Galopp reitbar sind (Sim: ca. 8 m bei
-// mittlerem Galopp), Handwechsel ab Parcours 2, erstes Hindernis niedrig und gerade
-// anzureiten. `track` enthält je Teilstrecke Wegpunkte der Wendungen; daraus ergibt sich die
-// Ideallinie für die erlaubte Zeit (scoring.js).
+// Built following simple course-building rules: obstacles on lines with related distances
+// (5 canter strides), turns with radii that are rideable at canter (sim: about 8 m at
+// medium canter), change of rein from course 2, first obstacle low and approached
+// straight. `track` holds the turn waypoints per leg; they yield the ideal line for the
+// allowed time (scoring.js).
 import { COMBI_DISTANCE } from '../sim/tuning.js';
 import { allowedTime } from './scoring.js';
 
-const N = 0; // Sprung nach +z
-const S = Math.PI; // nach −z
+const N = 0; // jump toward +z
+const S = Math.PI; // toward −z
 const LINE_LENGTH = 6;
-const START_BACK = 5; // Halt so weit vor der Startlinie
-const STRIDE = 3.7; // Galoppsprung (m)
-const TAKEOFF_LANDING = 1.8; // Landung bzw. Absprung (m)
-const LANDING_FREE = 8; // gerade Strecke nach der Landung vor einer Wendung
-const DIAG = (15 * Math.PI) / 180; // Winkel der Diagonalen zur Längsachse
-const DIAG_EXIT_Z = -21.9; // hier beginnt die Wendung am Ende der Diagonale
+const START_BACK = 5; // halt this far before the start line
+const STRIDE = 3.7; // canter stride (m)
+const TAKEOFF_LANDING = 1.8; // landing or takeoff (m)
+const LANDING_FREE = 8; // straight stretch after landing before a turn
+const DIAG = (15 * Math.PI) / 180; // angle of the diagonal to the longitudinal axis
+const DIAG_EXIT_Z = -21.9; // the turn at the end of the diagonal starts here
 const DEG = Math.PI / 180;
 
 function heading(dx, dz) {
@@ -40,7 +40,7 @@ function single(number, id, kind, height, x, z, rot, directed = true) {
   return { number, elements: [element(id, kind, height, x, z, rot)], directed };
 }
 
-/** Zweifach-Kombination: a bei (x, z), b im Abstand COMBI_DISTANCE in Richtung +n. */
+/** Double combination: a at (x, z), b at distance COMBI_DISTANCE in direction +n. */
 function combination(number, id, a, b, x, z, rot, directed = true) {
   const bx = x + Math.sin(rot) * COMBI_DISTANCE;
   const bz = z + Math.cos(rot) * COMBI_DISTANCE;
@@ -55,14 +55,14 @@ function combination(number, id, a, b, x, z, rot, directed = true) {
 }
 
 /**
- * Verwandte Distanz auf einer Linie, Mitte zu Mitte: n Galoppsprünge + Landung + Absprung
- * (Kante zu Kante n · 3,7 m + 3,6 m), dazu die halben Oxer-Tiefen.
+ * Related distance on a line, center to center: n canter strides + landing + takeoff
+ * (edge to edge n · 3.7 m + 3.6 m), plus half the oxer depths.
  */
 export function relatedDistance(strides, spreadFrom = 0, spreadTo = 0) {
   return strides * STRIDE + 2 * TAKEOFF_LANDING + spreadFrom / 2 + spreadTo / 2;
 }
 
-/** Linie (ca. 6 m) quer zur Ritt-Richtung rot durch (x, z). */
+/** Line (about 6 m) across the riding direction rot through (x, z). */
 function line(x, z, rot) {
   const dir = [Math.sin(rot), Math.cos(rot)];
   const h = LINE_LENGTH / 2;
@@ -83,7 +83,7 @@ function poseBefore(start) {
   };
 }
 
-// ---- Wegpunkte der Wendungen (Draufsicht, Winkel in Grad wie in der Mathematik: x, z) ----
+// ---- Turn waypoints (top view, angles in degrees as in mathematics: x, z) ----
 
 function arc(cx, cz, r, a0, a1, steps = 3) {
   const out = [];
@@ -95,8 +95,8 @@ function arc(cx, cz, r, a0, a1, steps = 3) {
 }
 
 /**
- * Wendung von einer Längslinie x1 auf die Gegenrichtung in Linie x2, an der oberen (side = +1)
- * oder unteren (side = −1) Querseite: Viertelbogen, Gerade, Viertelbogen mit Radius r.
+ * Turn from a longitudinal line x1 to the opposite direction on line x2, at the upper (side = +1)
+ * or lower (side = −1) short side: quarter arc, straight, quarter arc with radius r.
  */
 function turnAround(x1, x2, zc, side, r) {
   const s = Math.sign(x2 - x1);
@@ -106,14 +106,14 @@ function turnAround(x1, x2, zc, side, r) {
   return [...arc(x1 + s * r, zc, r, a0, mid, 2), ...arc(x2 - s * r, zc, r, mid, a1, 2)];
 }
 
-/** x der Diagonale durch e (nach −z, zur Seite sx) auf Höhe z. */
+/** x of the diagonal through e (toward −z, to side sx) at height z. */
 function diagX(e, sx, z) {
   return e[0] + sx * Math.tan(DIAG) * (e[1] - z);
 }
 
 const diagDown = (sx) => heading(sx * Math.sin(DIAG), -Math.cos(DIAG));
 
-/** Von einer Längslinie (nach +z) über die obere Querseite in die Diagonale durch e. */
+/** From a longitudinal line (toward +z) across the upper short side into the diagonal through e. */
 function intoDiag(fromX, zc, e, sx, r = 8) {
   const endZ = zc - r * Math.sin(DIAG);
   const cx = diagX(e, sx, endZ) + sx * r * Math.cos(DIAG);
@@ -123,7 +123,7 @@ function intoDiag(fromX, zc, e, sx, r = 8) {
   ];
 }
 
-/** Ende der Diagonale durch e: Wendung auf die Längslinie laneX (nach +z). */
+/** End of the diagonal through e: turn onto the longitudinal line laneX (toward +z). */
 function outOfDiag(e, sx, laneX) {
   const px = diagX(e, sx, DIAG_EXIT_Z);
   const r = Math.abs(laneX - px) / (1 + Math.cos(DIAG));
@@ -152,7 +152,7 @@ const P3_DIAG = [4, 3];
 const P4_DIAG = [-4, 3];
 
 export const COURSES = [
-  // P1: 4 Kreuze auf einem großen Oval mit zwei geraden Linien – im Trab reitbar
+  // P1: 4 crosses on a large oval with two straight lines – rideable at trot
   course(1, 'trot', {
     start: line(-1, -28, Math.PI / 2),
     finish: line(-10, -25, S),
@@ -164,7 +164,7 @@ export const COURSES = [
     ],
     track: [arc(4, -22, 6, -90, 0, 2), [], turnAround(10, -10, 25, 1, 5), [], []],
   }),
-  // P2: Kreuze und Steilsprünge; Achterfigur mit Handwechsel über die Diagonale
+  // P2: crosses and verticals; figure eight with a change of rein across the diagonal
   course(2, 'canter', {
     start: line(13, -26, N),
     finish: line(-13, 25, N),
@@ -184,7 +184,7 @@ export const COURSES = [
       [],
     ],
   }),
-  // P3: erster Oxer; gespiegelte Achterfigur, zum Schluss durch die Mitte
+  // P3: first oxer; mirrored figure eight, finishing through the middle
   course(3, 'canter', {
     start: line(-14, -26, N),
     finish: line(-7, -12, S),
@@ -206,7 +206,7 @@ export const COURSES = [
       [],
     ],
   }),
-  // P4: Steilsprünge und Oxer gemischt; Achterfigur und eine Schlusslinie
+  // P4: verticals and oxers mixed; figure eight and a final line
   course(4, 'canter', {
     start: line(14, -26, N),
     finish: line(7, -24, S),
@@ -230,8 +230,8 @@ export const COURSES = [
       [],
     ],
   }),
-  // P5: Handwechsel durch die Mitte (ohne Sprung), Kombination nach weiter Wendung,
-  // Schlusslinie mit verwandter Distanz
+  // P5: change of rein through the middle (without a jump), combination after a wide turn,
+  // final line with a related distance
   course(5, 'canter', {
     start: line(14, -26, N),
     finish: line(-7, 23, N),
@@ -267,8 +267,8 @@ export function courseById(id) {
   return COURSES.find((c) => c.id === Number(id)) ?? COURSES[0];
 }
 
-// Freier Modus: ungerichtet, ohne Nummern; jede Linie aus beiden Richtungen anzureiten,
-// an den Querseiten und zwischen den Linien Platz zum Wenden
+// Free mode: undirected, without numbers; every line can be approached from both directions,
+// room to turn at the short sides and between the lines
 export const FREE_LAYOUT = {
   obstacles: [
     single(null, 'f1', 'cross', 0.4, 13, -12, N, false),

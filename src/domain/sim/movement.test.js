@@ -7,8 +7,8 @@ import { DEG, drive, makeSim, ofType } from './test-utils.js';
 
 const S = TUNING.speeds;
 
-describe('Gangart aus Tempo (Regel 9)', () => {
-  it('ordnet Halt, Schritt und Trab nach Tempo zu, Galopp immer canter', () => {
+describe('Gait from speed (rule 9)', () => {
+  it('maps halt, walk and trot by speed, gallop is always canter', () => {
     expect(gaitForSpeed(0, false, S)).toBe('halt');
     expect(gaitForSpeed(0.1, false, S)).toBe('halt');
     expect(gaitForSpeed(1.0, false, S)).toBe('walk');
@@ -19,8 +19,8 @@ describe('Gangart aus Tempo (Regel 9)', () => {
   });
 });
 
-describe('Tempo (Regeln 8–10)', () => {
-  it('W erhöht stufenlos über Schritt bis Trab und nie über trotMax', () => {
+describe('Speed (rules 8–10)', () => {
+  it('W increases speed continuously through walk up to trot and never beyond trotMax', () => {
     const sim = makeSim([]);
     const gaits = new Set();
     drive(sim, { throttle: 1 }, { maxT: 6, onStep: (s) => gaits.add(s.horse.gait) });
@@ -28,7 +28,7 @@ describe('Tempo (Regeln 8–10)', () => {
     expect(sim.horse.speed).toBeCloseTo(S.trotMax, 6);
   });
 
-  it('S bremst bis zum Halt (Tempo 0)', () => {
+  it('S brakes to a halt (speed 0)', () => {
     const sim = makeSim([]);
     sim.reset({ x: 0, z: 0, heading: 0, speed: 3 });
     drive(sim, { throttle: -1 }, { maxT: 3 });
@@ -36,7 +36,7 @@ describe('Tempo (Regeln 8–10)', () => {
     expect(sim.horse.gait).toBe('halt');
   });
 
-  it('ohne Eingabe bleibt das Tempo erhalten', () => {
+  it('speed is kept without input', () => {
     const sim = makeSim([]);
     sim.reset({ x: 0, z: -20, heading: 0, speed: 2.5 });
     drive(sim, {}, { maxT: 2 });
@@ -44,7 +44,7 @@ describe('Tempo (Regeln 8–10)', () => {
     expect(sim.horse.gait).toBe('trot');
   });
 
-  it('Rate ist proportional zur Auslenkung (Joystick)', () => {
+  it('rate is proportional to the deflection (joystick)', () => {
     const a = makeSim([]);
     const b = makeSim([]);
     drive(a, { throttle: 1 }, { maxT: 0.5 });
@@ -52,7 +52,7 @@ describe('Tempo (Regeln 8–10)', () => {
     expect(b.horse.speed / a.horse.speed).toBeCloseTo(0.5, 2);
   });
 
-  it('Galopp: sofort Gangart canter, sanftes Beschleunigen auf mindestens canterMin', () => {
+  it('gallop: gait is canter immediately, gentle acceleration to at least canterMin', () => {
     const sim = makeSim([]);
     sim.reset({ x: 0, z: -30, heading: 0, speed: 2 });
     sim.step(1 / 60, { gallop: false });
@@ -64,7 +64,7 @@ describe('Tempo (Regeln 8–10)', () => {
     expect(sim.horse.speed).toBeCloseTo(S.canterMin, 6);
   });
 
-  it('W/S regeln das Galopptempo innerhalb [canterMin, canterMax]', () => {
+  it('W/S control the canter speed within [canterMin, canterMax]', () => {
     const sim = makeSim([]);
     sim.reset({ x: 0, z: -34, heading: 0, speed: S.canterMin, gallop: true });
     drive(sim, { gallop: true, throttle: 1 }, { maxT: 2 });
@@ -74,7 +74,7 @@ describe('Tempo (Regeln 8–10)', () => {
     expect(sim.horse.gait).toBe('canter');
   });
 
-  it('Galopp aus: Trab, Tempo sinkt sanft auf Arbeitstrab', () => {
+  it('gallop off: trot, speed drops gently to working trot', () => {
     const sim = makeSim([]);
     sim.reset({ x: 0, z: -34, heading: 0, speed: 7, gallop: true });
     sim.step(1 / 60, { gallop: false });
@@ -86,7 +86,7 @@ describe('Tempo (Regeln 8–10)', () => {
     expect(sim.horse.gait).toBe('trot');
   });
 
-  it('nach reset galoppiert das Pferd erst nach neuem Drücken', () => {
+  it('after reset the horse only gallops after a fresh key press', () => {
     const sim = makeSim([]);
     sim.reset({ x: 0, z: 0, heading: 0 });
     sim.step(1 / 60, { gallop: true });
@@ -97,8 +97,8 @@ describe('Tempo (Regeln 8–10)', () => {
   });
 });
 
-describe('Lenken (Regeln 8, 10, 22)', () => {
-  it('wendet im Halt auf der Stelle; rechts dreht nach rechts', () => {
+describe('Steering (rules 8, 10, 22)', () => {
+  it('turns on the spot at halt; right turns to the right', () => {
     const sim = makeSim([]);
     sim.reset({ x: 1, z: 2, heading: 0 });
     const right = { x: -1, z: 0 };
@@ -111,7 +111,7 @@ describe('Lenken (Regeln 8, 10, 22)', () => {
     expect(sim.horse.gait).toBe('halt');
   });
 
-  it('Lenkstärke ist proportional zu |steer|', () => {
+  it('steering strength is proportional to |steer|', () => {
     const a = makeSim([]);
     const b = makeSim([]);
     drive(a, { steer: -1 }, { maxT: 1 });
@@ -120,13 +120,13 @@ describe('Lenken (Regeln 8, 10, 22)', () => {
     expect(a.horse.turnRate).toBeLessThan(0);
   });
 
-  it('der Kurvenradius wird mit dem Tempo größer', () => {
+  it('the turn radius grows with speed', () => {
     const radii = [1, 3, 5, 8].map((v) => turnRadius(v, TUNING));
     for (let i = 1; i < radii.length; i++) expect(radii[i]).toBeGreaterThan(radii[i - 1]);
     expect(maxTurnRate(0, TUNING)).toBe(TUNING.control.turnInPlace);
   });
 
-  it('gemessene Kurve im Trab ist enger als im Galopp', () => {
+  it('measured turn at trot is tighter than at canter', () => {
     const measure = (speed, gallop) => {
       const sim = makeSim([]);
       sim.reset({ x: 0, z: 0, heading: 0, speed, gallop });
@@ -137,8 +137,8 @@ describe('Lenken (Regeln 8, 10, 22)', () => {
   });
 });
 
-describe('Umzäunung (Regel 24)', () => {
-  it('frontal: Stopp, Halt, Galopp aus mit Events', () => {
+describe('Fencing (rule 24)', () => {
+  it('frontal: stop, halt, gallop off with events', () => {
     const sim = makeSim([]);
     sim.reset({ x: 10, z: 0, heading: 90 * DEG, speed: 6, gallop: true });
     const { events } = drive(sim, { gallop: true }, { maxT: 3 });
@@ -150,12 +150,12 @@ describe('Umzäunung (Regel 24)', () => {
     expect(sim.horse.x).toBeLessThanOrEqual(ARENA.width / 2 - TUNING.horse.radius + 1e-9);
   });
 
-  it('nach dem Zaun-Stopp galoppiert es erst nach neuem Drücken', () => {
+  it('after a fence stop it only gallops after a fresh key press', () => {
     const sim = makeSim([]);
     sim.reset({ x: 15, z: 0, heading: 90 * DEG, speed: 5, gallop: true });
     drive(sim, { gallop: true }, { maxT: 2 });
     expect(sim.horse.gallop).toBe(false);
-    // Shift bleibt gehalten, während auf der Stelle gewendet wird: kein Galopp
+    // Shift stays held while turning on the spot: no gallop
     drive(sim, { gallop: true, steer: 1 }, { maxT: 2 });
     expect(sim.horse.gallop).toBe(false);
     sim.step(1 / 60, { gallop: false });
@@ -163,14 +163,14 @@ describe('Umzäunung (Regel 24)', () => {
     expect(sim.horse.gallop).toBe(true);
   });
 
-  it('frontal mit 30° Abweichung gilt noch als frontal', () => {
+  it('frontal with 30° deviation still counts as frontal', () => {
     const sim = makeSim([]);
     sim.reset({ x: 15, z: 0, heading: 60 * DEG, speed: 3 });
     const { events } = drive(sim, {}, { maxT: 3 });
     expect(ofType(events, 'fenceStop')).toHaveLength(1);
   });
 
-  it('weiter auf den Zaun drücken erzeugt keine Event-Flut', () => {
+  it('continuing to push against the fence creates no event flood', () => {
     const sim = makeSim([]);
     sim.reset({ x: 15, z: 0, heading: 90 * DEG, speed: 3 });
     const { events } = drive(sim, { throttle: 1 }, { maxT: 4 });
@@ -178,7 +178,7 @@ describe('Umzäunung (Regel 24)', () => {
     expect(sim.horse.x).toBeLessThanOrEqual(ARENA.width / 2 - TUNING.horse.radius + 1e-9);
   });
 
-  it('schräg: gleitet mit unverändertem Tempo parallel an der Wand entlang', () => {
+  it('oblique: slides along the wall in parallel with unchanged speed', () => {
     const sim = makeSim([]);
     sim.reset({ x: 15, z: 0, heading: 40 * DEG, speed: 5, gallop: true });
     const { events } = drive(sim, { gallop: true }, { maxT: 2 });
@@ -190,7 +190,7 @@ describe('Umzäunung (Regel 24)', () => {
     expect(sim.horse.x).toBeCloseTo(ARENA.width / 2 - TUNING.horse.radius, 9);
   });
 
-  it('das Pferd verlässt den Platz nie (zufälliges Reiten)', () => {
+  it('the horse never leaves the arena (random riding)', () => {
     const sim = makeSim([]);
     const rng = createRng(3);
     let steer = 0;

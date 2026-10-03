@@ -1,21 +1,21 @@
-// Geometrische Prüfung von Hindernis-Aufstellungen (Parcours und freier Modus).
-// Wird von den Tests genutzt; rein, ohne three.js.
+// Geometric check of obstacle layouts (courses and free mode).
+// Used by the tests; pure, no three.js.
 import { ARENA, POLE_LENGTH, STAND_WIDTH } from '../sim/tuning.js';
 import { axisOf, toLocal } from '../sim/geometry.js';
 
 export const LAYOUT_LIMITS = Object.freeze({
-  approach: 14, // m gerader Anritt vor der Vorderkante
-  landing: 8, // m frei nach der Landung (hintere Stange)
+  approach: 14, // m of straight approach before the leading edge
+  landing: 8, // m clear after landing (rear pole)
   corridorHalfWidth: POLE_LENGTH / 2 + 1,
-  fenceClearance: 4, // m vom Element bis zum Zaun
-  minGap: 3, // m zwischen Elementen verschiedener Hindernisse
-  lineClearance: 2, // m zwischen Start-/Ziellinie und Elementen
+  fenceClearance: 4, // m from the element to the fence
+  minGap: 3, // m between elements of different obstacles
+  lineClearance: 2, // m between start/finish line and elements
 });
 
 const HALF_X = ARENA.width / 2;
 const HALF_Z = ARENA.length / 2;
 
-/** Orientiertes Rechteck: Mitte, Achse u (Einheitsvektor), halbe Ausdehnung entlang u und quer. */
+/** Oriented rectangle: center, axis u (unit vector), half extent along u and across. */
 function rect(cx, cz, u, halfAlong, halfAcross) {
   return { cx, cz, ux: u.x, uz: u.z, halfAlong, halfAcross };
 }
@@ -42,7 +42,7 @@ function grow(r, margin) {
   return { ...r, halfAlong: r.halfAlong + margin, halfAcross: r.halfAcross + margin };
 }
 
-/** Grundfläche eines Elements (Stangen + Ständer, bei Oxern die Tiefe). */
+/** Footprint of an element (poles + stands, for oxers including the depth). */
 export function footprint(element) {
   return rect(
     element.x,
@@ -54,8 +54,8 @@ export function footprint(element) {
 }
 
 /**
- * Anreit-Korridor eines Hindernisses: gerader Anritt vor dem ersten Element bis frei nach der
- * Landung hinter dem letzten. Ungerichtet (freier Modus): Anritt aus beiden Richtungen.
+ * Approach corridor of an obstacle: straight approach before the first element up to clear
+ * space after landing behind the last. Undirected (free mode): approach from both directions.
  */
 export function corridorOf(obstacle, limits = LAYOUT_LIMITS) {
   const first = obstacle.elements[0];
@@ -86,7 +86,7 @@ function project(corners, ax, az) {
   return [min, max];
 }
 
-/** Überlappen sich zwei orientierte Rechtecke (Trennachsen-Test)? */
+/** Do two oriented rectangles overlap (separating axis test)? */
 export function rectsOverlap(a, b) {
   const ca = rectCorners(a);
   const cb = rectCorners(b);
@@ -103,7 +103,7 @@ export function rectsOverlap(a, b) {
   return true;
 }
 
-/** Schneidet die Strecke p→q das Rechteck? (als sehr dünnes Rechteck behandelt) */
+/** Does the segment p→q intersect the rectangle? (treated as a very thin rectangle) */
 export function segmentHitsRect(p, q, r) {
   const dx = q[0] - p[0];
   const dz = q[1] - p[1];
@@ -123,8 +123,8 @@ function insideArena(p, margin) {
 }
 
 /**
- * Prüft eine Aufstellung und liefert eine Liste von Problemen (leer = in Ordnung).
- * lines: optionale Start-/Ziellinien { name, a:[x,z], b:[x,z] }.
+ * Checks a layout and returns a list of problems (empty = fine).
+ * lines: optional start/finish lines { name, a:[x,z], b:[x,z] }.
  */
 export function checkLayout(obstacles, { lines = [], limits = LAYOUT_LIMITS } = {}) {
   const issues = [];
@@ -135,7 +135,7 @@ export function checkLayout(obstacles, { lines = [], limits = LAYOUT_LIMITS } = 
 
   for (const { element, fp } of all) {
     if (!rectCorners(fp).every((c) => insideArena(c, limits.fenceClearance))) {
-      issues.push(`${element.id}: weniger als ${limits.fenceClearance} m zum Zaun`);
+      issues.push(`${element.id}: less than ${limits.fenceClearance} m from the fence`);
     }
   }
 
@@ -143,11 +143,11 @@ export function checkLayout(obstacles, { lines = [], limits = LAYOUT_LIMITS } = 
     const corridor = corridorOf(obstacle, limits);
     const label = obstacle.elements[0].id;
     if (!rectCorners(corridor).every((c) => insideArena(c, 0))) {
-      issues.push(`${label}: Anreit-Korridor ragt aus dem Platz`);
+      issues.push(`${label}: approach corridor extends outside the arena`);
     }
     for (const other of all) {
       if (other.oi !== oi && rectsOverlap(corridor, other.fp)) {
-        issues.push(`${label}: ${other.element.id} steht im Anreit-Korridor`);
+        issues.push(`${label}: ${other.element.id} is in the approach corridor`);
       }
     }
   });
@@ -157,7 +157,7 @@ export function checkLayout(obstacles, { lines = [], limits = LAYOUT_LIMITS } = 
       if (all[i].oi === all[j].oi) continue;
       const half = limits.minGap / 2;
       if (rectsOverlap(grow(all[i].fp, half), grow(all[j].fp, half))) {
-        issues.push(`${all[i].element.id}/${all[j].element.id}: zu dicht beieinander`);
+        issues.push(`${all[i].element.id}/${all[j].element.id}: too close together`);
       }
     }
   }
@@ -165,16 +165,16 @@ export function checkLayout(obstacles, { lines = [], limits = LAYOUT_LIMITS } = 
   for (const line of lines) {
     for (const p of [line.a, line.b]) {
       if (!insideArena({ x: p[0], z: p[1] }, 3))
-        issues.push(`${line.name}: Endpunkt zu nah am Zaun`);
+        issues.push(`${line.name}: end point too close to the fence`);
     }
     for (const { element, fp } of all) {
       if (segmentHitsRect(line.a, line.b, grow(fp, limits.lineClearance))) {
-        issues.push(`${line.name}: zu nah an ${element.id}`);
+        issues.push(`${line.name}: too close to ${element.id}`);
       }
     }
     obstacles.forEach((obstacle) => {
       if (segmentHitsRect(line.a, line.b, corridorOf(obstacle, limits))) {
-        issues.push(`${line.name}: kreuzt den Anreit-Korridor von ${obstacle.elements[0].id}`);
+        issues.push(`${line.name}: crosses the approach corridor of ${obstacle.elements[0].id}`);
       }
     });
   }

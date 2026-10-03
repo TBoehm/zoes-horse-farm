@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Einmalige Einrichtung für die Repo-Inhaberin bzw. den Repo-Inhaber (SRT-001):
-#  1. GitHub Pages mit Quelle „GitHub Actions"
-#  2. Branch-Schutz für main mit den Pflicht-Checks der CI
-# Idempotent. Vorschau ohne Änderungen: ./scripts/github-setup.sh --dry-run
-# Voraussetzung: gh CLI angemeldet (gh auth login) mit Admin-Rechten am Repo.
+# One-time setup for the repo owner (SRT-001):
+#  1. GitHub Pages with source "GitHub Actions"
+#  2. Branch protection for main with the required CI checks
+# Idempotent. Preview without changes: ./scripts/github-setup.sh --dry-run
+# Prerequisite: gh CLI logged in (gh auth login) with admin rights on the repo.
 set -euo pipefail
 
 DRY_RUN=0
@@ -22,14 +22,14 @@ run() {
 
 echo "Repo: $REPO"
 
-echo "1) GitHub Pages: Quelle GitHub Actions"
+echo "1) GitHub Pages: source GitHub Actions"
 if gh api "repos/$REPO/pages" >/dev/null 2>&1; then
   run gh api -X PUT "repos/$REPO/pages" -f build_type=workflow >/dev/null
 else
   run gh api -X POST "repos/$REPO/pages" -f build_type=workflow >/dev/null
 fi
 
-echo "2) Branch-Schutz für main"
+echo "2) Branch protection for main"
 contexts_json=$(printf '%s\n' "${CHECKS[@]}" | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
 payload=$(mktemp)
 trap 'rm -f "$payload"' EXIT
@@ -50,4 +50,4 @@ else
   gh api -X PUT "repos/$REPO/branches/main/protection" --input "$payload" >/dev/null
 fi
 
-echo "Fertig."
+echo "Done."

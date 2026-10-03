@@ -1,4 +1,4 @@
-// Spielstand im Browser (Regeln 44–47): sofort speichern, robust laden, Unbekanntes erhalten.
+// Save data in the browser (rules 44–47): save immediately, load robustly, preserve unknown data.
 import { createEmitter } from '../../shared/events.js';
 import { SAVE_VERSION, getSections, isPlainObject } from '../../application/save-schema.js';
 
@@ -37,7 +37,7 @@ function probe(backend) {
   }
 }
 
-/** Merker „Hinweis gezeigt" ohne Web Storage: history.state übersteht Neuladen, nicht das Schließen. */
+/** "Notice shown" marker without Web Storage: history.state survives a reload, not closing the tab. */
 export function historyNoticeMarker(win = globalThis.window) {
   return {
     get: () => Boolean(win?.history?.state?.zhfSaveNotice),
@@ -45,7 +45,7 @@ export function historyNoticeMarker(win = globalThis.window) {
       try {
         win.history.replaceState({ ...(win.history.state ?? {}), zhfSaveNotice: 1 }, '');
       } catch {
-        // kein history (z. B. Tests)
+        // no history (e.g. tests)
       }
     },
   };
@@ -53,9 +53,9 @@ export function historyNoticeMarker(win = globalThis.window) {
 
 /**
  * @param {object} opts
- * @param {Storage|null} [opts.backend] localStorage-artig
- * @param {Storage|null} [opts.sessionBackend] sessionStorage-artig (Hinweis einmal je Sitzung)
- * @param {object} [opts.env] Umgebungswerte für Anfangswerte (z. B. defaultLang)
+ * @param {Storage|null} [opts.backend] localStorage-like
+ * @param {Storage|null} [opts.sessionBackend] sessionStorage-like (notice once per session)
+ * @param {object} [opts.env] environment values for initial values (e.g. defaultLang)
  */
 export function createStore({
   backend = safeStorage(() => globalThis.localStorage),
@@ -95,8 +95,8 @@ export function createStore({
 
   function sectionOf(name) {
     const section = getSections().get(name);
-    if (!section) throw new Error(`Unbekannter Bereich: ${name}`);
-    // Später angemeldete oder erweiterte Bereiche (z. B. neue Einstellungsfelder) neu bereinigen
+    if (!section) throw new Error(`Unknown section: ${name}`);
+    // Re-sanitize sections registered or extended later (e.g. new settings fields)
     if (!(name in data) || sectionRefs.get(name) !== section) {
       data[name] = section.sanitize(raw[name], env);
       raw[name] = data[name];
@@ -122,7 +122,7 @@ export function createStore({
       emitter.emit(`change:${name}`, structuredClone(next));
       return structuredClone(next);
     },
-    /** Schreibt den aktuellen Stand (z. B. damit Anfangswerte beim ersten Start feststehen). */
+    /** Writes the current state (e.g. so initial values are fixed on first start). */
     flush() {
       return write();
     },
@@ -132,7 +132,7 @@ export function createStore({
     onSaveFailed(fn) {
       return emitter.on('saveFailed', fn);
     },
-    /** true höchstens einmal je Sitzung (Tab), und nur wenn Speichern nicht möglich ist (Regel 46). */
+    /** true at most once per session (tab), and only when saving is not possible (rule 46). */
     shouldShowSaveNotice() {
       if (canSave) return false;
       try {
@@ -140,21 +140,21 @@ export function createStore({
         sessionBackend?.setItem(SESSION_NOTICE_KEY, '1');
         if (sessionBackend) return true;
       } catch {
-        // sessionStorage nicht nutzbar → Merker in history.state (übersteht Neuladen)
+        // sessionStorage unusable → marker in history.state (survives a reload)
       }
       if (noticeShownInMemory || noticeMarker?.get()) return false;
       noticeShownInMemory = true;
       noticeMarker?.set();
       return true;
     },
-    /** Nur für Tests/Debug. */
+    /** Tests/debug only. */
     _raw() {
       return structuredClone(raw);
     },
   };
 }
 
-/** Fordert dauerhaften Speicher an, wo der Browser es anbietet (Regel 44). */
+/** Requests persistent storage where the browser offers it (rule 44). */
 export async function requestPersistentStorage(nav = globalThis.navigator) {
   try {
     if (!nav?.storage?.persist) return false;

@@ -1,4 +1,4 @@
-// Hinweise: „Gerät drehen" (Regel 12), „Kein 3D" (Regel 7), „Speichern nicht möglich" (Regel 46).
+// Notices: "rotate device" (rule 12), "no 3D" (rule 7), "saving not possible" (rule 46).
 import { onLangChange, t } from './i18n.js';
 import { isPortrait } from '../platform/input-mode.js';
 import { h, clear } from './dom.js';
@@ -18,8 +18,8 @@ export function renderNo3dNotice(root) {
 }
 
 /**
- * Blendet im Hochformat bei aktivem Touch-Modus den Dreh-Hinweis über alles.
- * onBlockedChange(true) z. B. zum Pausieren des Spiels.
+ * In portrait orientation with touch mode active, shows the rotate notice above everything.
+ * onBlockedChange(true) can be used e.g. to pause the game.
  */
 export function installRotateNotice({ layer, inputMode, win = window, onBlockedChange }) {
   const title = h('h2', {});

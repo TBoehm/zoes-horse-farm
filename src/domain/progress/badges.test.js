@@ -20,7 +20,7 @@ function result(over = {}) {
   };
 }
 
-/** Wie der Aufrufer: Ritt einwerten, dann Rittende-Auszeichnungen prüfen. */
+/** Like the caller: apply the ride, then check the ride-end badges. */
 function finishRide(progress, res, now = NOW) {
   const applied = applyFinishedRide(progress, res);
   return checkRideEndBadges(applied.progress, res, now);
@@ -35,7 +35,7 @@ function withCourses(stars) {
 }
 
 describe('BADGES', () => {
-  it('enthält die 8 Auszeichnungen in Reihenfolge von Regel 49', () => {
+  it('contains the 8 badges in the order of rule 49', () => {
     expect(BADGES.map((b) => b.id)).toEqual([
       'firstJump',
       'jumpMouse',
@@ -48,7 +48,7 @@ describe('BADGES', () => {
     ]);
   });
 
-  it('Vergabezeitpunkt und i18n-Schlüssel stimmen', () => {
+  it('award timing and i18n keys are correct', () => {
     for (const b of BADGES) {
       expect(b.nameKey).toBe(`badge.${b.id}.name`);
       expect(b.conditionKey).toBe(`badge.${b.id}.condition`);
@@ -61,15 +61,15 @@ describe('BADGES', () => {
   });
 });
 
-describe('Sofort-Auszeichnungen', () => {
-  it('Erster Sprung nach dem ersten gezählten Sprung, nicht davor', () => {
+describe('Instant badges', () => {
+  it('first jump is awarded after the first counted jump, not before', () => {
     expect(checkInstantBadges(fresh(), NOW).awarded).toEqual([]);
     const r = checkInstantBadges(addJump(fresh()), NOW);
     expect(r.awarded).toEqual(['firstJump']);
     expect(r.progress.badges).toEqual({ firstJump: NOW });
   });
 
-  it('Springmaus bei genau 100, nicht bei 99', () => {
+  it('jump mouse at exactly 100, not at 99', () => {
     const p99 = { ...fresh(), jumps: 99, badges: { firstJump: NOW } };
     expect(checkInstantBadges(p99, LATER).awarded).toEqual([]);
     const r = checkInstantBadges(addJump(p99), LATER);
@@ -77,7 +77,7 @@ describe('Sofort-Auszeichnungen', () => {
     expect(r.progress.badges).toEqual({ firstJump: NOW, jumpMouse: LATER });
   });
 
-  it('ist einmalig: zweite Erfüllung vergibt nichts und behält das Datum', () => {
+  it('is awarded only once: second fulfilment awards nothing and keeps the date', () => {
     const first = checkInstantBadges({ ...fresh(), jumps: 1 }, NOW);
     const second = checkInstantBadges(addJump(first.progress), LATER);
     expect(second.awarded).toEqual([]);
@@ -85,58 +85,58 @@ describe('Sofort-Auszeichnungen', () => {
     expect(second.progress.badges).toEqual(first.progress.badges);
   });
 
-  it('holt beide aus altem Spielstand mit 150 Sprüngen beim nächsten Sprung nach', () => {
+  it('catches up both from an old save with 150 jumps on the next jump', () => {
     const old = { ...fresh(), jumps: 150 };
     const r = checkInstantBadges(addJump(old), NOW);
     expect(r.awarded).toEqual(['firstJump', 'jumpMouse']);
   });
 
-  it('vergibt keine Rittende-Auszeichnungen', () => {
+  it('does not award ride-end badges', () => {
     const p = { ...fresh(), jumps: 500, finishedRides: 50, unlocked: 5 };
     expect(checkInstantBadges(p, NOW).awarded).toEqual(['firstJump', 'jumpMouse']);
   });
 
-  it('verändert die Eingabe nicht', () => {
+  it('does not mutate the input', () => {
     const p = { ...fresh(), jumps: 5 };
     const r = checkInstantBadges(p, NOW);
     expect(p.badges).toEqual({});
     expect(r.progress).not.toBe(p);
   });
 
-  it('gibt ohne Vergabe dasselbe Objekt zurück', () => {
+  it('returns the same object when nothing is awarded', () => {
     const p = fresh();
     expect(checkInstantBadges(p, NOW).progress).toBe(p);
   });
 });
 
-describe('Rittende-Auszeichnungen', () => {
-  it('Fehlerfrei: Ritt mit 0 Fehlern', () => {
+describe('Ride-end badges', () => {
+  it('clean: ride with 0 faults', () => {
     const r = finishRide(fresh(), result({ total: 0 }));
     expect(r.awarded).toContain('clean');
     expect(r.progress.badges.clean).toBe(NOW);
   });
 
-  it('Fehlerfrei: nicht bei Fehlern ohne 3-Sterne-Parcours', () => {
+  it('clean: not awarded with faults and no 3-star course', () => {
     expect(finishRide(fresh(), result({ total: 1 })).awarded).not.toContain('clean');
   });
 
-  it('Fehlerfrei: gespeicherter Parcours mit 3 Sternen genügt (Nachholen)', () => {
+  it('clean: a stored 3-star course is enough (catch-up)', () => {
     const old = withCourses([null, 3]);
     const r = finishRide(old, result({ courseId: 3, total: 6, stars: 1 }));
     expect(r.awarded).toEqual(['clean']);
   });
 
-  it('Oxer-Profi nur aus dem Ritt-Ergebnis', () => {
+  it('oxer pro only from the ride result', () => {
     expect(finishRide(fresh(), result({ cleanOxer: true })).awarded).toEqual(['oxerPro']);
     expect(finishRide(fresh(), result({ cleanOxer: false })).awarded).toEqual([]);
   });
 
-  it('Kombi-Könner nur aus dem Ritt-Ergebnis', () => {
+  it('combination pro only from the ride result', () => {
     expect(finishRide(fresh(), result({ cleanCombination: true })).awarded).toEqual(['comboPro']);
     expect(finishRide(fresh(), result({ cleanCombination: false })).awarded).toEqual([]);
   });
 
-  it('Oxer-Profi und Kombi-Könner werden nicht aus gespeicherten Daten abgeleitet', () => {
+  it('oxer pro and combination pro are not derived from stored data', () => {
     const old = {
       ...withCourses([3, 3, 3, 3, 3]),
       unlocked: 5,
@@ -148,39 +148,39 @@ describe('Rittende-Auszeichnungen', () => {
     expect(r.awarded).not.toContain('comboPro');
   });
 
-  it('Alles offen bei unlocked >= 5, nicht bei 4', () => {
+  it('all open at unlocked >= 5, not at 4', () => {
     const p3 = { ...fresh(), unlocked: 3 };
     expect(finishRide(p3, result({ courseId: 3 })).awarded).not.toContain('allOpen');
-    // Ritt auf Parcours 4 schaltet 5 frei und vergibt im selben Aufruf
+    // Riding course 4 unlocks 5 and awards in the same call
     const r = finishRide({ ...fresh(), unlocked: 4 }, result({ courseId: 4 }));
     expect(r.awarded).toContain('allOpen');
   });
 
-  it('Sternenreiter: alle 5 Parcours mit 3 Sternen, nicht bei 4', () => {
+  it('star rider: all 5 courses with 3 stars, not with 4', () => {
     const four = withCourses([3, 3, 3, 3, null]);
     expect(finishRide(four, result({ courseId: 1, total: 3 })).awarded).not.toContain('starRider');
     const r = finishRide(four, result({ courseId: 5, total: 0 }));
     expect(r.awarded).toContain('starRider');
   });
 
-  it('Sternenreiter: ein 2-Sterne-Parcours verhindert die Vergabe', () => {
+  it('star rider: a 2-star course prevents awarding', () => {
     const p = withCourses([3, 3, 2, 3, 3]);
     expect(finishRide(p, result({ courseId: 2, total: 5 })).awarded).not.toContain('starRider');
   });
 
-  it('Fleißig bei 10 beendeten Ritten, nicht bei 9', () => {
+  it('busy at 10 finished rides, not at 9', () => {
     const nine = { ...fresh(), finishedRides: 8 };
     expect(finishRide(nine, result()).awarded).not.toContain('busy');
     const ten = { ...fresh(), finishedRides: 9 };
     expect(finishRide(ten, result()).awarded).toContain('busy');
   });
 
-  it('holt Fleißig aus altem Spielstand mit 10 Ritten beim nächsten Ritt nach', () => {
+  it('catches up busy from an old save with 10 rides on the next ride', () => {
     const old = { ...fresh(), finishedRides: 10 };
     expect(finishRide(old, result()).awarded).toEqual(['busy']);
   });
 
-  it('ist einmalig: zweite Erfüllung vergibt nichts', () => {
+  it('is awarded only once: second fulfilment awards nothing', () => {
     const first = finishRide(
       fresh(),
       result({ total: 0, cleanOxer: true, cleanCombination: true }),
@@ -195,26 +195,26 @@ describe('Rittende-Auszeichnungen', () => {
     expect(second.progress.badges).toEqual(first.progress.badges);
   });
 
-  it('vergibt mehrere gleichzeitig in Regel-49-Reihenfolge', () => {
+  it('awards several at once in rule-49 order', () => {
     const p = { ...withCourses([3, 3, 3, 3, 3]), unlocked: 5, finishedRides: 20 };
     const r = finishRide(p, result({ courseId: 5, total: 0, cleanOxer: true }));
     expect(r.awarded).toEqual(['clean', 'oxerPro', 'allOpen', 'starRider', 'busy']);
   });
 
-  it('wirkt auf das frisch eingewertete Ergebnis (Reihenfolge: erst applyFinishedRide)', () => {
-    // 10. Ritt: finishedRides wird erst durch applyFinishedRide 10
+  it('acts on the freshly applied result (order: applyFinishedRide first)', () => {
+    // 10th ride: finishedRides only becomes 10 through applyFinishedRide
     let p = { ...fresh(), finishedRides: 9 };
     p = applyFinishedRide(p, result()).progress;
     expect(checkRideEndBadges(p, result(), NOW).awarded).toEqual(['busy']);
   });
 
-  it('verändert die Eingabe nicht', () => {
+  it('does not mutate the input', () => {
     const p = { ...fresh(), finishedRides: 10 };
     checkRideEndBadges(p, result(), NOW);
     expect(p.badges).toEqual({});
   });
 
-  it('vergibt Sofort-Auszeichnungen nicht', () => {
+  it('does not award instant badges', () => {
     const p = { ...fresh(), jumps: 500 };
     expect(finishRide(p, result()).awarded).toEqual([]);
   });

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { hasWebGL, openMenu, watchPage, webglOrSkip } from './helpers.js';
 
-test('Seite lädt, Hauptmenü erscheint, keine Fehler, keine verbotenen Dateien', async ({
+test('page loads, main menu appears, no errors, no forbidden files', async ({
   page,
   browserName,
 }) => {
@@ -15,8 +15,8 @@ test('Seite lädt, Hauptmenü erscheint, keine Fehler, keine verbotenen Dateien'
     await expect(page.locator('.game-title')).toHaveText("Zoe's Horse Farm");
     await expect(page.locator('[data-entry="settings"]')).toBeVisible();
   } else {
-    // Browser ohne WebGL (z. B. manche CI-Läufe): dann muss der Hinweis erscheinen (Regel 7)
-    test.info().annotations.push({ type: 'info', description: 'kein WebGL im Testbrowser' });
+    // Browser without WebGL (e.g. some CI runs): the notice must appear then (rule 7)
+    test.info().annotations.push({ type: 'info', description: 'no WebGL in the test browser' });
     await expect(page.locator('[data-notice="no3d"]')).toBeVisible();
   }
   await page.waitForLoadState('networkidle');
@@ -24,7 +24,10 @@ test('Seite lädt, Hauptmenü erscheint, keine Fehler, keine verbotenen Dateien'
   expect(watch.forbidden).toEqual([]);
 });
 
-test('Sprache umschalten wirkt sofort und bleibt nach Neuladen', async ({ page, browserName }) => {
+test('switching the language takes effect immediately and persists after a reload', async ({
+  page,
+  browserName,
+}) => {
   await page.goto('./');
   await webglOrSkip(page, test, browserName);
   await openMenu(page);
@@ -38,7 +41,7 @@ test('Sprache umschalten wirkt sofort und bleibt nach Neuladen', async ({ page, 
   await expect(page.locator('.panel-settings h2')).toHaveText('Einstellungen');
 });
 
-test('ohne WebGL erscheint nur der Hinweis statt der App', async ({ page }) => {
+test('without WebGL only the notice appears instead of the app', async ({ page }) => {
   await page.addInitScript(() => {
     const orig = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
@@ -51,10 +54,10 @@ test('ohne WebGL erscheint nur der Hinweis statt der App', async ({ page }) => {
   await expect(page.locator('[data-screen="menu"]')).toHaveCount(0);
 });
 
-test.describe('Touch-Gerät im Hochformat', () => {
+test.describe('touch device in portrait', () => {
   test.use({ viewport: { width: 400, height: 800 }, hasTouch: true, isMobile: true });
-  test('zeigt den Dreh-Hinweis', async ({ page, browserName }) => {
-    test.skip(browserName === 'firefox', 'isMobile wird von Firefox nicht unterstützt');
+  test('shows the rotate notice', async ({ page, browserName }) => {
+    test.skip(browserName === 'firefox', 'isMobile is not supported by Firefox');
     await page.goto('./');
     await webglOrSkip(page, test, browserName);
     await expect(page.locator('[data-notice="rotate"]')).toBeVisible();
@@ -63,7 +66,7 @@ test.describe('Touch-Gerät im Hochformat', () => {
   });
 });
 
-test('Desktop im Hochformat zeigt keinen Dreh-Hinweis', async ({ page, browserName }) => {
+test('desktop in portrait shows no rotate notice', async ({ page, browserName }) => {
   await page.setViewportSize({ width: 500, height: 900 });
   await page.goto('./');
   await webglOrSkip(page, test, browserName);
@@ -71,8 +74,8 @@ test('Desktop im Hochformat zeigt keinen Dreh-Hinweis', async ({ page, browserNa
   await expect(page.locator('[data-notice="rotate"]')).toBeHidden();
 });
 
-for (const variant of ['localStorage', 'beide Speicher']) {
-  test(`Speichern blockiert (${variant}): Hinweis einmal je Sitzung, App bedienbar`, async ({
+for (const variant of ['localStorage', 'both storages']) {
+  test(`saving blocked (${variant}): notice once per session, app usable`, async ({
     page,
     browserName,
   }) => {
@@ -92,14 +95,14 @@ for (const variant of ['localStorage', 'beide Speicher']) {
     await openMenu(page);
     await page.click('[data-entry="settings"]');
     await expect(page.locator('.panel-settings')).toBeVisible();
-    // Neuladen ist keine neue Sitzung (Regel 46)
+    // A reload is not a new session (rule 46)
     await page.reload();
     await page.locator('[data-screen="menu"], [data-screen="namePrompt"]').first().waitFor();
     await expect(page.locator('[data-notice="save"]')).toHaveCount(0);
   });
 }
 
-test('PWA: Manifest und Service Worker vorhanden', async ({ page }) => {
+test('PWA: manifest and service worker present', async ({ page }) => {
   await page.goto('./');
   const manifestHref = await page.getAttribute('link[rel="manifest"]', 'href');
   expect(manifestHref).toBeTruthy();

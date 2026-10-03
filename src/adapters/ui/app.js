@@ -1,14 +1,14 @@
-// App-Rahmen: Ebenen (3D, Oberfläche, Hinweise) und Bildschirm-Stapel.
+// App shell: layers (3D, UI, notices) and the screen stack.
 import { createEmitter } from '../../shared/events.js';
 import { onLangChange, t } from './i18n.js';
 import { h, clear } from './dom.js';
 
 /**
- * Ein Bildschirm wird per register(name, factory) angemeldet.
+ * A screen is registered via register(name, factory).
  * factory(ctx, params) → { el, music?: bool, rerenderOnLang?: bool, screenClass?: string,
  *   destroy?(), onShow?(), onCover?() }
- * - music: Menü-Melodie soll laufen (Regel 51)
- * - rerenderOnLang (Standard true): bei Sprachwechsel neu aufbauen
+ * - music: the menu melody should play (rule 51)
+ * - rerenderOnLang (default true): rebuild when the language changes
  */
 export function createApp({ root, store, inputMode, clock }) {
   const emitter = createEmitter();
@@ -76,7 +76,7 @@ export function createApp({ root, store, inputMode, clock }) {
     has(name) {
       return factories.has(name);
     },
-    /** Ersetzt den ganzen Stapel durch einen Bildschirm. */
+    /** Replaces the whole stack with one screen. */
     go(name, params) {
       while (stack.length) unmount(stack.pop());
       const entry = { name, params };
@@ -84,7 +84,7 @@ export function createApp({ root, store, inputMode, clock }) {
       mount(entry);
       changed();
     },
-    /** Legt einen Bildschirm über den aktuellen (z. B. Einstellungen aus dem Pausemenü). */
+    /** Puts a screen on top of the current one (e.g. settings from the pause menu). */
     push(name, params) {
       top()?.instance.onCover?.();
       const entry = { name, params };

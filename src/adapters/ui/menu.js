@@ -1,5 +1,5 @@
-// Hauptmenü mit erweiterbarer Eintrags-Liste (Regeln 53, 54).
-// Bereiche melden Einträge mit registerMenuEntry an; die Reihenfolge ergibt sich aus `order`.
+// Main menu with an extensible entry list (rules 53, 54).
+// Feature areas register entries with registerMenuEntry; the order follows `order`.
 import { h } from './dom.js';
 
 const entries = [];
@@ -16,7 +16,7 @@ export function getMenuEntries() {
   return [...entries];
 }
 
-/** Zusätzliche Inhalte über den Einträgen (z. B. Pferdename, SRT-005). */
+/** Extra content above the entries (e.g. horse name, SRT-005). */
 const headerParts = [];
 export function registerMenuHeader(render) {
   headerParts.push(render);

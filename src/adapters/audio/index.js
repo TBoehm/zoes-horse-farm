@@ -1,4 +1,4 @@
-// Klang-Modul: reine WebAudio-Synthese, keine Audiodateien. Siehe createAudio unten.
+// Audio module: pure WebAudio synthesis, no audio files. See createAudio below.
 
 import { createImpulseBuffer, createNoiseBuffer } from './dsp.js';
 import { channelGain, mulberry32, normalizeSettings, planSteps, shouldMusicRun } from './logic.js';
@@ -11,8 +11,8 @@ export { channelGain, normalizeSettings, shouldMusicRun, volumeToGain } from './
 const MASTER_LEVEL = 2;
 const LOOKAHEAD = 0.15;
 const TICK_MS = 30;
-const SMOOTH = 0.02; // Zeitkonstante für Lautstärkewechsel (kein Knacken)
-const MUSIC_LEVEL = 0.8; // Musik etwas leiser als die Effekte abmischen
+const SMOOTH = 0.02; // Time constant for volume changes (no clicks)
+const MUSIC_LEVEL = 0.8; // Mix the music slightly quieter than the effects
 const MUSIC_FADE_IN = 0.25;
 const MUSIC_FADE_OUT = 0.1;
 const REVERB_SEND = 0.3;
@@ -27,7 +27,7 @@ function holdParam(param, now) {
 
 /**
  * @param {{ musicVolume?: number, musicMuted?: boolean, sfxVolume?: number, sfxMuted?: boolean }} settings
- * @param {{ AudioContext?: Function }} [deps] nur für Tests: eigener AudioContext-Konstruktor
+ * @param {{ AudioContext?: Function }} [deps] tests only: custom AudioContext constructor
  */
 export function createAudio(settings = {}, deps = {}) {
   let s = normalizeSettings(settings);
@@ -40,8 +40,8 @@ export function createAudio(settings = {}, deps = {}) {
   let resumePromise = null;
   let suspendTimer = null;
   let graph = null; // { master, musicGain, sfxGain, reverbIn, noise }
-  let run = null; // laufende Melodie: { gain, timer, nextTime, step }
-  let sfxSession = null; // Gain, über den alle Effekte laufen; Pause/Hintergrund kappt ihn
+  let run = null; // running melody: { gain, timer, nextTime, step }
+  let sfxSession = null; // Gain through which all effects run; pause/background cuts it
   const voice = { ctx: null, noise: null, rng: mulberry32(2024), state: {} };
   const loop = buildLoop();
 
@@ -79,7 +79,7 @@ export function createAudio(settings = {}, deps = {}) {
       sfxGain.gain.value = channelGain(s.sfxVolume, s.sfxMuted);
       sfxGain.connect(master);
 
-      // Hall für die Musik: Sendeweg ohne Bass in einen Faltungshall
+      // Reverb for the music: send path without bass into a convolution reverb
       const reverbIn = ctx.createBiquadFilter();
       reverbIn.type = 'highpass';
       reverbIn.frequency.value = 250;
@@ -118,7 +118,7 @@ export function createAudio(settings = {}, deps = {}) {
         const p = old.close();
         if (p && typeof p.catch === 'function') p.catch(noop);
       } catch {
-        // schon geschlossen
+        // already closed
       }
     }
   }
@@ -136,7 +136,7 @@ export function createAudio(settings = {}, deps = {}) {
     graph.sfxGain.gain.setTargetAtTime(channelGain(s.sfxVolume, s.sfxMuted), now, SMOOTH);
   }
 
-  // ---- Musik ----
+  // ---- Music ----
 
   function tick() {
     if (!run || !ctx) return;
@@ -183,7 +183,7 @@ export function createAudio(settings = {}, deps = {}) {
     else if (!want && run) stopRun(hidden);
   }
 
-  // ---- Effekte ----
+  // ---- Effects ----
 
   function dropSfxSession() {
     const old = sfxSession;
@@ -216,7 +216,7 @@ export function createAudio(settings = {}, deps = {}) {
     });
   }
 
-  // ---- öffentliche API ----
+  // ---- Public API ----
 
   function unlock() {
     if (disposed) return;
@@ -236,7 +236,7 @@ export function createAudio(settings = {}, deps = {}) {
       for (const e of events) target.removeEventListener(e, handler, true);
     };
     function handler(e) {
-      // Touch-Pointerdown und Escape zählen im Browser nicht als Nutzeraktivierung
+      // Touch pointerdown and Escape do not count as user activation in the browser
       if (e.type === 'pointerdown' && e.pointerType && e.pointerType !== 'mouse') return;
       if (e.type === 'keydown' && e.key === 'Escape') return;
       unlock();

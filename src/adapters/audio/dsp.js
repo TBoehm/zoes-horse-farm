@@ -1,4 +1,4 @@
-// Kleine Bausteine der Synthese. `v` ist der Stimmen-Kontext { ctx, noise, rng, state }.
+// Small synthesis building blocks. `v` is the voice context { ctx, noise, rng, state }.
 
 import { generateImpulse, mulberry32 } from './logic.js';
 
@@ -19,7 +19,7 @@ export function createImpulseBuffer(ctx, options = {}) {
   return buffer;
 }
 
-// Hüllkurve: Anstieg, optional Halten, exponentielles Ausklingen
+// Envelope: attack, optional hold, exponential decay
 function envelope(ctx, out, t, { attack, hold = 0, decay, peak }) {
   const g = ctx.createGain();
   const end = t + attack + hold + decay;
@@ -63,7 +63,7 @@ export function noiseBurst(v, out, t, o) {
   return src;
 }
 
-// Zufallsabweichung um 1: jitter(0.05) -> 0,95..1,05
+// Random deviation around 1: jitter(0.05) -> 0.95..1.05
 export function jitter(v, amount) {
   return 1 + (v.rng() * 2 - 1) * amount;
 }

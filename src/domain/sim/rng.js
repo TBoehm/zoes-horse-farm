@@ -1,6 +1,6 @@
-// Seedbarer Zufallsgenerator (mulberry32) für deterministische Tests und Wiederholungen.
+// Seedable random number generator (mulberry32) for deterministic tests and replays.
 
-/** Liefert eine Funktion () → [0, 1), die für denselben Seed dieselbe Folge erzeugt. */
+/** Returns a function () → [0, 1) that produces the same sequence for the same seed. */
 export function createRng(seed = 1) {
   let a = seed >>> 0;
   return function rng() {

@@ -1,4 +1,4 @@
-// Öffentliche Schnittstelle der Reit-Simulation.
+// Public interface of the riding simulation.
 export { createRidingSim } from './riding-sim.js';
 export { createRng } from './rng.js';
 export { ARENA, POLE_LENGTH, STAND_WIDTH, COMBI_DISTANCE, TUNING } from './tuning.js';

@@ -1,4 +1,4 @@
-/* Reit-Bildschirm: HUD, Touch-Bedienung, Pause (SRT-002 bis SRT-004) */
+/* Ride screen: HUD, touch controls, pause (SRT-002 to SRT-004) */
 .screen.screen-ride {
   padding: 0;
   pointer-events: none;

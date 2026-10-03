@@ -1,9 +1,9 @@
-// Effekte: reine Synthese. Jede Funktion plant ihre Klänge ab Zeit `t` auf den Ausgang `out`.
+// Effects: pure synthesis. Each function schedules its sounds from time `t` onto the output `out`.
 
 import { jitter, noiseBurst, tone } from './dsp.js';
 import { midiToFreq } from './logic.js';
 
-// Sand-Untergrund: dumpfer Schlag (Sinus mit Tonabfall) + weiches Rauschen, kaum Klick.
+// Sand surface: dull thud (sine with pitch drop) + soft noise, barely any click.
 const GAITS = {
   walk: { vol: 0.62, freq: 105, noiseFreq: 520, noiseDecay: 0.07 },
   trot: { vol: 0.8, freq: 122, noiseFreq: 700, noiseDecay: 0.06 },
@@ -27,7 +27,7 @@ export function hoof(v, out, t, gait) {
   const g = GAITS[gait];
   if (!g) return;
   v.state.hoof = (v.state.hoof ?? 0) + 1;
-  const side = v.state.hoof % 2 === 0 ? 1 : 1.06; // linker/rechter Huf leicht verschieden
+  const side = v.state.hoof % 2 === 0 ? 1 : 1.06; // left/right hoof slightly different
   const vol = g.vol * jitter(v, 0.1);
   const freq = g.freq * side * jitter(v, 0.04);
   tone(v, out, t, { freq, freqEnd: freq * 0.45, glide: 0.06, decay: 0.07, peak: 0.55 * vol });
@@ -51,7 +51,7 @@ export function hoof(v, out, t, gait) {
 export function takeoff(v, out, t) {
   thud(v, out, t, { freq: 150, peak: 0.6, decay: 0.1 });
   thud(v, out, t + 0.085, { freq: 175, peak: 0.85, decay: 0.12 });
-  // Schnauben: Luftstoß, Filter fällt
+  // Snort: burst of air, filter falls
   noiseBurst(v, out, t + 0.05, {
     freq: 1900,
     freqEnd: 700,
@@ -77,7 +77,7 @@ function woodClack(v, out, t, freq, peak) {
 }
 
 export function railDown(v, out, t) {
-  // Holz auf Holz: Anschläge werden dichter und leiser, dann Aufprall und Nachfedern auf Sand
+  // Wood on wood: hits get denser and quieter, then impact and bouncing on sand
   const hits = [
     [0, 780, 0.8],
     [0.085, 640, 0.6],
@@ -93,7 +93,7 @@ export function railDown(v, out, t) {
   woodClack(v, out, t + 0.43, 680, 0.12);
 }
 
-// Glocke mit unharmonischen Teiltönen (Risset), dazu kurzer Schlagklick
+// Bell with inharmonic partials (Risset), plus a short strike click
 const BELL = [
   [0.56, 1.0, 1.0],
   [0.92, 0.67, 0.9],
@@ -127,7 +127,7 @@ function chime(v, out, t, midi, peak, decay) {
 }
 
 export function finishSignal(v, out, t) {
-  // Aufsteigender Lauf in C-Dur, dann ein heller Schlussakkord
+  // Ascending run in C major, then a bright final chord
   const run = [72, 76, 79, 76, 79, 84];
   run.forEach((midi, i) => chime(v, out, t + i * 0.09, midi, 0.32, 0.3));
   const end = t + run.length * 0.09 + 0.04;

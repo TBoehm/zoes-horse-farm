@@ -1,4 +1,4 @@
-// Zweisprachige Texte (Regel 6). Bereiche registrieren ihre Texte mit registerStrings.
+// Bilingual texts (rule 6). Feature areas register their texts with registerStrings.
 const dictionaries = { de: {}, en: {} };
 const listeners = new Set();
 let lang = 'de';
@@ -10,7 +10,7 @@ export function registerStrings({ de = {}, en = {} }) {
   Object.assign(dictionaries.en, en);
 }
 
-/** Deutsch, wenn die bevorzugte Browsersprache Deutsch ist, sonst Englisch. */
+/** German if the preferred browser language is German, otherwise English. */
 export function detectLang(languages) {
   const list = Array.isArray(languages) && languages.length ? languages : [languages];
   const first = list.find(Boolean);
@@ -40,14 +40,14 @@ export function hasString(key, language = lang) {
 export function t(key, params) {
   const text = dictionaries[lang][key] ?? dictionaries.de[key] ?? dictionaries.en[key];
   if (text === undefined) {
-    console.error(`Fehlender Text: ${key}`);
+    console.error(`Missing text: ${key}`);
     return '';
   }
   if (!params) return text;
   return text.replace(/\{(\w+)\}/g, (m, name) => (name in params ? String(params[name]) : m));
 }
 
-/** Nur für Tests: alle registrierten Schlüssel je Sprache. */
+/** Tests only: all registered keys per language. */
 export function _dictionaries() {
   return dictionaries;
 }

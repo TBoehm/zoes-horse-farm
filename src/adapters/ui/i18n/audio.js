@@ -1,4 +1,4 @@
-// Texte der Klang-Einstellungen (SRT-006).
+// Texts for the sound settings (SRT-006).
 export default {
   de: {
     'settings.music': 'Musik',

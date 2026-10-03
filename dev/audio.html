@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Klang-Demo</title>
+    <title>Audio Demo</title>
     <link rel="icon" href="data:," />
     <style>
       body {
@@ -50,60 +50,58 @@
     </style>
   </head>
   <body>
-    <h1>Klang-Demo</h1>
-    <p>
-      Dev-Seite, wird nicht ausgeliefert. Der Ton startet nach dem ersten Klick oder Tastendruck.
-    </p>
-    <pre id="status">Warte auf Interaktion …</pre>
+    <h1>Audio Demo</h1>
+    <p>Dev page, not shipped. Sound starts after the first click or key press.</p>
+    <pre id="status">Waiting for interaction …</pre>
 
     <fieldset>
-      <legend>Effekte</legend>
-      <button data-sfx="takeoff">Absprung</button>
-      <button data-sfx="landing">Landung</button>
-      <button data-sfx="railDown">Fallende Stange</button>
-      <button data-sfx="startSignal">Startsignal</button>
-      <button data-sfx="finishSignal">Zielsignal</button>
+      <legend>Effects</legend>
+      <button data-sfx="takeoff">Take-off</button>
+      <button data-sfx="landing">Landing</button>
+      <button data-sfx="railDown">Falling pole</button>
+      <button data-sfx="startSignal">Start signal</button>
+      <button data-sfx="finishSignal">Finish signal</button>
       <div class="row">
-        <button data-hoof="walk">Huf Schritt</button>
-        <button data-hoof="trot">Huf Trab</button>
-        <button data-hoof="canter">Huf Galopp</button>
+        <button data-hoof="walk">Hoof walk</button>
+        <button data-hoof="trot">Hoof trot</button>
+        <button data-hoof="canter">Hoof canter</button>
       </div>
     </fieldset>
 
     <fieldset>
-      <legend>Gangart-Loop</legend>
+      <legend>Gait loop</legend>
       <label
-        >Gangart
+        >Gait
         <select id="gait">
-          <option value="halt">Halt (still)</option>
-          <option value="walk">Schritt (Viertakt, 1,8 Hz)</option>
-          <option value="trot">Trab (Zweitakt)</option>
-          <option value="canter">Galopp (Dreitakt)</option>
+          <option value="halt">Halt (silent)</option>
+          <option value="walk">Walk (four-beat, 1.8 Hz)</option>
+          <option value="trot">Trot (two-beat)</option>
+          <option value="canter">Canter (three-beat)</option>
         </select>
       </label>
     </fieldset>
 
     <fieldset>
-      <legend>Musik und Lautstärke</legend>
-      <label><input type="checkbox" id="musicWanted" /> Musik soll laufen</label>
+      <legend>Music and volume</legend>
+      <label><input type="checkbox" id="musicWanted" /> Music should play</label>
       <div class="row">
         <label
-          >Musik <input type="range" id="musicVolume" min="0" max="1" step="0.01" value="0.5"
+          >Music <input type="range" id="musicVolume" min="0" max="1" step="0.01" value="0.5"
         /></label>
-        <label><input type="checkbox" id="musicMuted" /> Musik stumm</label>
+        <label><input type="checkbox" id="musicMuted" /> Music muted</label>
       </div>
       <div class="row">
         <label
-          >Effekte <input type="range" id="sfxVolume" min="0" max="1" step="0.01" value="0.5"
+          >Effects <input type="range" id="sfxVolume" min="0" max="1" step="0.01" value="0.5"
         /></label>
-        <label><input type="checkbox" id="sfxMuted" /> Effekte stumm</label>
+        <label><input type="checkbox" id="sfxMuted" /> Effects muted</label>
       </div>
     </fieldset>
 
     <fieldset>
-      <legend>Zustand</legend>
-      <label><input type="checkbox" id="hidden" /> Hintergrund simulieren (setHidden)</label>
-      <label><input type="checkbox" id="paused" /> Spielpause (setPaused)</label>
+      <legend>State</legend>
+      <label><input type="checkbox" id="hidden" /> Simulate background (setHidden)</label>
+      <label><input type="checkbox" id="paused" /> Game pause (setPaused)</label>
     </fieldset>
 
     <script type="module" src="./audio.js"></script>

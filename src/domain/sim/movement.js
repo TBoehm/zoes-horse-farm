@@ -1,4 +1,4 @@
-// Tempo, Gangart, Lenkung und Umzäunung (Konzept Regeln 8, 9, 10, 24).
+// Speed, gait, steering and fencing (concept rules 8, 9, 10, 24).
 import { ARENA } from './tuning.js';
 import { forwardOf, headingOf, wrapAngle } from './geometry.js';
 
@@ -6,7 +6,7 @@ export function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-/** Gangart aus Tempo; mit Galopp immer Galopp (Regel 9). */
+/** Gait from speed; with gallop it is always canter (rule 9). */
 export function gaitForSpeed(speed, gallop, speeds) {
   if (gallop) return 'canter';
   if (speed < speeds.haltBelow) return 'halt';
@@ -15,8 +15,8 @@ export function gaitForSpeed(speed, gallop, speeds) {
 }
 
 /**
- * Tempo stufenlos nach throttle (−1..1, Rate proportional zur Auslenkung).
- * state: { speed, gallop, settling } – wird verändert.
+ * Continuously variable speed by throttle (−1..1, rate proportional to deflection).
+ * state: { speed, gallop, settling } – is mutated.
  */
 export function updateSpeed(state, throttle, dt, tuning) {
   const s = tuning.speeds;
@@ -27,7 +27,7 @@ export function updateSpeed(state, throttle, dt, tuning) {
   if (state.gallop) {
     state.settling = false;
     if (v < s.canterMin) {
-      // Angaloppieren: sanft auf mindestens canterMin
+      // Striking off into canter: smoothly up to at least canterMin
       v = Math.min(s.canterMin, v + c.canterDepart * dt + Math.max(0, delta));
     } else {
       v = clamp(v + delta, s.canterMin, s.canterMax);
@@ -35,7 +35,7 @@ export function updateSpeed(state, throttle, dt, tuning) {
   } else {
     if (v > s.trotMax) state.settling = true;
     if (state.settling) {
-      // nach Galopp-Ende sanft zurück in den Arbeitstrab
+      // after the gallop ends, smoothly back to working trot
       v = Math.max(s.trotMedium, v - c.settleDecel * dt + Math.min(0, delta));
       if (v <= s.trotMedium + 1e-9) state.settling = false;
     } else {
@@ -47,20 +47,20 @@ export function updateSpeed(state, throttle, dt, tuning) {
   return v;
 }
 
-/** Höchste Wendegeschwindigkeit (rad/s) bei diesem Tempo; Radius v/ω wächst mit dem Tempo. */
+/** Maximum turn rate (rad/s) at this speed; radius v/ω grows with speed. */
 export function maxTurnRate(speed, tuning) {
   const c = tuning.control;
   return c.turnInPlace / (1 + Math.max(0, speed) / c.turnSpeedRef);
 }
 
-/** Kurvenradius (m) bei vollem Lenkeinschlag. */
+/** Turn radius (m) at full steering lock. */
 export function turnRadius(speed, tuning) {
   return speed / maxTurnRate(speed, tuning);
 }
 
 /**
- * Lenkung: steer −1..1 (rechts +). horse.turnRate ist rad/s, positiv = Rechtskurve;
- * die Blickrichtung ändert sich um −turnRate · dt (h wächst nach links).
+ * Steering: steer −1..1 (right +). horse.turnRate is rad/s, positive = right turn;
+ * the heading changes by −turnRate · dt (h grows to the left).
  */
 export function updateSteering(horse, steer, dt, tuning) {
   const target = clamp(steer || 0, -1, 1) * maxTurnRate(horse.speed, tuning);
@@ -69,23 +69,23 @@ export function updateSteering(horse, steer, dt, tuning) {
   horse.heading = wrapAngle(horse.heading - horse.turnRate * dt);
 }
 
-/** Bewegt das Pferd entlang der Blickrichtung. */
+/** Moves the horse along its heading. */
 export function advance(horse, speed, dt) {
   const f = forwardOf(horse.heading);
   horse.x += f.x * speed * dt;
   horse.z += f.z * speed * dt;
 }
 
-/** Grenzen des Bezugspunkts auf dem Reitplatz. */
+/** Limits of the reference point in the arena. */
 export function arenaBounds(tuning) {
   const r = tuning.horse.radius;
   return { maxX: ARENA.width / 2 - r, maxZ: ARENA.length / 2 - r };
 }
 
 /**
- * Umzäunung (Regel 24). Liefert { frontal, slid, normal } für die getroffene Wand oder null.
- * Klemmt die Position immer in den Platz. Frontal: nur gemeldet, der Aufrufer stoppt.
- * Schräg: Blickrichtung parallel zur Wand, Tempo unverändert.
+ * Fencing (rule 24). Returns { frontal, slid, normal } for the wall hit, or null.
+ * Always clamps the position into the arena. Frontal: only reported, the caller stops.
+ * Oblique: heading parallel to the wall, speed unchanged.
  */
 export function applyFence(horse, tuning, { allowStop = true } = {}) {
   const { maxX, maxZ } = arenaBounds(tuning);
@@ -108,7 +108,7 @@ export function applyFence(horse, tuning, { allowStop = true } = {}) {
       result = { frontal: true, slid: false, normal: { x: w.nx, z: w.nz } };
       continue;
     }
-    // parallel zur Wand, Richtung möglichst nah an der bisherigen
+    // parallel to the wall, direction as close as possible to the previous one
     const tx = -w.nz;
     const tz = w.nx;
     const sign = f.x * tx + f.z * tz >= 0 ? 1 : -1;

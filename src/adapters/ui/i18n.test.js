@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { detectLang, registerStrings, setLang, t, getLang } from './i18n.js';
 
-describe('detectLang (Regel 6)', () => {
-  it('wählt Deutsch bei deutscher Browsersprache', () => {
+describe('detectLang (rule 6)', () => {
+  it('picks German for a German browser language', () => {
     expect(detectLang(['de-DE', 'en'])).toBe('de');
     expect(detectLang(['de'])).toBe('de');
     expect(detectLang('de-AT')).toBe('de');
   });
-  it('wählt sonst Englisch', () => {
+  it('picks English otherwise', () => {
     expect(detectLang(['en-US', 'de'])).toBe('en');
     expect(detectLang(['fr-FR'])).toBe('en');
     expect(detectLang([])).toBe('en');
@@ -16,7 +16,7 @@ describe('detectLang (Regel 6)', () => {
 });
 
 describe('t', () => {
-  it('liefert Text der aktiven Sprache mit Platzhaltern', () => {
+  it('returns the text of the active language with placeholders', () => {
     registerStrings({ de: { 'x.hi': 'Hallo {name}' }, en: { 'x.hi': 'Hi {name}' } });
     setLang('de');
     expect(t('x.hi', { name: 'Blitz' })).toBe('Hallo Blitz');

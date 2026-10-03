@@ -1,5 +1,5 @@
-// Spielwerte (Konzept §Begriffe „Spielwert"). Alle Zahlen, die das Spielgefühl einstellen,
-// stehen hier. Einheiten: Meter, Sekunden, Radiant.
+// Tuning values (concept glossary "tuning value"). All numbers that set the game feel live
+// here. Units: meters, seconds, radians.
 
 const DEG = Math.PI / 180;
 
@@ -11,79 +11,79 @@ export const COMBI_DISTANCE = 7.3;
 
 export const TUNING = {
   speeds: {
-    // unter diesem Tempo gilt das Pferd als stehend (Gangart Halt)
+    // below this speed the horse counts as standing (gait halt)
     haltBelow: 0.15,
     walkMax: 1.8,
     trotMin: 2.0,
     trotMedium: 3.2,
     trotMax: 4.0,
     canterMin: 4.5,
-    // Springgalopp ≈ 325–350 m/min
+    // jumping canter ≈ 325–350 m/min
     canterMedium: 5.8,
     canterMax: 8.0,
   },
-  // Anreitabstand (Begriffe „Anreiten"): näher als dieser Abstand vor einem Hindernis
+  // Approach distance (glossary "approach"): closer than this distance before an obstacle
   approachDistance: 12,
 
-  // Bezugspunkt des Pferdes ist der Boden unter Brust/Vorderbeinen; alle Absprung-Abstände
-  // werden von diesem Punkt aus gemessen.
+  // The horse's reference point is the ground under chest/forelegs; all takeoff distances
+  // are measured from this point.
   horse: {
-    // Abstand zur Umzäunung
+    // distance to the fence
     radius: 0.8,
-    // halbe Körperbreite (seitlicher Abstand zu Ständern)
+    // half body width (lateral distance to stands)
     halfWidth: 0.45,
-    // Mindestabstand vor einer Stange, solange nicht gesprungen wird
+    // minimum distance before a pole as long as no jump happens
     frontMargin: 0.15,
   },
 
   control: {
-    // Tempoänderung (m/s²) bei voller Auslenkung von W bzw. S
+    // speed change (m/s²) at full deflection of W or S
     speedUp: 2.0,
     slowDown: 3.0,
-    // Beschleunigung beim Angaloppieren bis canterMin
+    // acceleration when striking off into canter up to canterMin
     canterDepart: 3.0,
-    // sanftes Abbremsen nach Galopp-Ende bis trotMedium
+    // gentle deceleration after the gallop ends down to trotMedium
     settleDecel: 2.5,
-    // Wendegeschwindigkeit auf der Stelle (rad/s); sie sinkt mit dem Tempo,
-    // der Kurvenradius v / ω wächst dadurch mit dem Tempo
+    // turn rate on the spot (rad/s); it drops with speed,
+    // so the turn radius v / ω grows with speed
     turnInPlace: 1.6,
     turnSpeedRef: 5.0,
-    // Ansprechen der Lenkung (1/s)
+    // steering responsiveness (1/s)
     turnResponse: 10,
   },
 
   fence: {
-    // Winkel zur Wand-Normale, unter dem ein Aufprall als frontal gilt
+    // angle to the wall normal below which an impact counts as frontal
     frontalAngle: 35 * DEG,
   },
 
   jump: {
     maxAngle: 30 * DEG,
-    // Schwierigkeit 0..1 aus Höhe und Spread
+    // difficulty 0..1 from height and spread
     difficulty: { heightRef: 0.4, spreadWeight: 0.5, range: 0.8 },
-    // Zentrum der Absprungzone (m vor der Vorderkante); real ≈ 1,3–1,8 m bei 40–85 cm
+    // center of the takeoff zone (m before the leading edge); real ≈ 1.3–1.8 m at 40–85 cm
     zone: {
       base: 1.0,
       perHeight: 0.8,
-      // Oxer wird etwas dichter angeritten als ein Steilsprung
+      // an oxer is approached slightly closer than a vertical
       perSpread: -0.2,
       perSpeed: 0.08,
       speedRef: 4.0,
       minCenter: 0.8,
       minNear: 0.5,
-      // Tempo, mit dem die Zone mindestens berechnet wird (Halt/Schritt)
+      // minimum speed used to compute the zone (halt/walk)
       minSpeed: 2.0,
     },
-    // halbes Zeitfenster der Zone (s); Tiefe = 2 · Fenster · Tempo
+    // half time window of the zone (s); depth = 2 · window · speed
     window: { cross: 0.22, base: 0.22, perHeight: 0.14, perSpread: 0.08, min: 0.08 },
-    // Reichweite beginnt so viel Zeit (mindestens reachMin m) vor der Zone
+    // reach starts this much time (at least reachMin m) before the zone
     reachLead: 0.35,
     reachMin: 0.6,
-    // letzter Absprungpunkt: so viel Zeit hinter der Zone, aber nie dichter als min
+    // last takeoff point: this much time behind the zone, but never closer than min
     lastPoint: { lead: 0.12, min: 0.3 },
-    // Winkel-Toleranz des sicheren Kerns
+    // angle tolerance of the safe core
     safeAngle: { base: 12 * DEG, perDifficulty: 2 * DEG },
-    // Tempo-Sollbereich (m/s)
+    // target speed range (m/s)
     speedBand: {
       crossMin: 2.6,
       crossMax: 7.2,
@@ -92,14 +92,14 @@ export const TUNING = {
       perHeight: 2.6,
       perSpread: 0.4,
       width: 2.2,
-      // Selbstsprung-Mindesttempo = Sollbereich-Minimum minus selfMargin
+      // self-jump minimum speed = target range minimum minus selfMargin
       selfMargin: 0.8,
     },
-    // Abwurfrisiko je Abweichung, skaliert mit severity = base + gain · Schwierigkeit
+    // knockdown risk per deviation, scaled with severity = base + gain · difficulty
     risk: {
-      perSpeed: 0.22, // je m/s außerhalb des Sollbereichs
-      perDistance: 0.4, // je m außerhalb der Absprungzone
-      perDegree: 0.02, // je Grad über der Winkel-Toleranz
+      perSpeed: 0.22, // per m/s outside the target range
+      perDistance: 0.4, // per m outside the takeoff zone
+      perDegree: 0.02, // per degree above the angle tolerance
       severityBase: 0.5,
       severityGain: 1.5,
       selfBase: 0.3,
@@ -125,7 +125,7 @@ export const TUNING = {
     stopDuration: 1.2,
     stopMargin: 0.15,
     runoutDuration: 1.2,
-    // Wendegeschwindigkeit beim Ausweichen/Vorbeilaufen (rad/s)
+    // turn rate when evading/running past (rad/s)
     maneuverTurnRate: 5.0,
     clearMargin: 0.1,
     maneuverTimeout: 5.0,

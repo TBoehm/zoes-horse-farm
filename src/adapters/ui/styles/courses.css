@@ -1,4 +1,4 @@
-/* Parcours-Auswahl, Vorstart-Karte, Ritt-HUD, Ergebnis (SRT-004) */
+/* Course selection, pre-start card, ride HUD, results (SRT-004) */
 .course-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

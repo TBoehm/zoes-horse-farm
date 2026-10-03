@@ -1,4 +1,4 @@
-// Demo für src/adapters/audio (nur Entwicklung, nicht ausgeliefert).
+// Demo for src/adapters/audio (development only, not shipped).
 import { createAudio } from '../src/adapters/audio/index.js';
 
 const audio = createAudio({ musicVolume: 0.5, musicMuted: false, sfxVolume: 0.5, sfxMuted: false });
@@ -14,13 +14,13 @@ for (const b of document.querySelectorAll('[data-hoof]')) {
   b.addEventListener('click', () => audio.sfx.hoof(b.dataset.hoof));
 }
 
-// Hufaufsetzen als Zeitpunkte (Sekunden) innerhalb eines Zyklus
+// Hoof strikes as points in time (seconds) within one cycle
 const GAITS = {
-  // Viertakt, 1,8 Hz: vier gleichmäßige Aufsetzer je Zyklus von 4 / 1,8 s
+  // Four-beat, 1.8 Hz: four evenly spaced strikes per cycle of 4 / 1.8 s
   walk: { period: 4 / 1.8, beats: [0, 1, 2, 3].map((i) => (i * 1) / 1.8) },
-  // Zweitakt: Diagonalpaare, gleichmäßig
+  // Two-beat: diagonal pairs, evenly spaced
   trot: { period: 2 / 2.7, beats: [0, 1 / 2.7] },
-  // Dreitakt mit Schwebephase am Zyklusende
+  // Three-beat with a suspension phase at the end of the cycle
   canter: { period: 0.62, beats: [0, 0.17, 0.34] },
 };
 
@@ -69,8 +69,8 @@ for (const id of ['musicVolume', 'musicMuted', 'sfxVolume', 'sfxMuted']) {
 function renderStatus() {
   const s = audio.getState();
   $('status').textContent =
-    `entsperrt: ${s.unlocked}  läuft: ${s.running}  Musik spielt: ${s.musicPlaying}\n` +
-    `Hintergrund: ${s.hidden}  Pause: ${s.paused}  Fehler: ${s.failed}`;
+    `unlocked: ${s.unlocked}  running: ${s.running}  music playing: ${s.musicPlaying}\n` +
+    `background: ${s.hidden}  paused: ${s.paused}  failed: ${s.failed}`;
 }
 setInterval(renderStatus, 250);
 renderStatus();

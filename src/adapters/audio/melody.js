@@ -1,5 +1,5 @@
-// Menü-Melodie als Daten: 16 Takte C-Dur, 100 bpm, Achtel-Raster (8 Schritte je Takt).
-// Melodie, Bass, leichte Arpeggio-Begleitung und ein leiser Besen-Tick auf 2 und 4.
+// Menu melody as data: 16 bars in C major, 100 bpm, eighth-note grid (8 steps per bar).
+// Melody, bass, light arpeggio accompaniment and a quiet brush tick on beats 2 and 4.
 
 export const BPM = 100;
 export const STEPS_PER_BAR = 8;
@@ -7,15 +7,15 @@ export const STEP_SECONDS = 60 / BPM / 2;
 
 const SEMITONES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
-// 'C5' -> 72 (C4 = 60), mit '#' und 'b'
+// 'C5' -> 72 (C4 = 60), with '#' and 'b'
 export function parseNote(name) {
   const m = /^([A-G])([#b]?)(-?\d)$/.exec(name);
-  if (!m) throw new Error(`Ungültige Note: ${name}`);
+  if (!m) throw new Error(`Invalid note: ${name}`);
   const accidental = m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0;
   return (Number(m[3]) + 1) * 12 + SEMITONES[m[1]] + accidental;
 }
 
-// 'E5:2 G5:2 -:4' -> [{ start, steps, midi|null }]; "-" ist eine Pause
+// 'E5:2 G5:2 -:4' -> [{ start, steps, midi|null }]; "-" is a rest
 export function parseBar(text) {
   const notes = [];
   let start = 0;
@@ -28,7 +28,7 @@ export function parseBar(text) {
   return notes;
 }
 
-// bass: Grundton und Quinte (MIDI); arp: zwei Akkordtöne für die Begleitung
+// bass: root and fifth (MIDI); arp: two chord tones for the accompaniment
 const CHORDS = {
   C: { bass: [48, 43], arp: [64, 67] },
   Am: { bass: [45, 52], arp: [60, 64] },
@@ -37,7 +37,7 @@ const CHORDS = {
   Dm: { bass: [50, 45], arp: [57, 62] },
 };
 
-// Je Takt: Melodie und Akkord(e); zwei Akkorde = je eine Takthälfte
+// Per bar: melody and chord(s); two chords = one per half bar
 export const BARS = [
   { melody: 'E5:2 G5:2 E5:1 D5:1 C5:2', chords: 'C' },
   { melody: 'A4:2 C5:2 E5:3 D5:1', chords: 'Am' },
@@ -59,7 +59,7 @@ export const BARS = [
 
 export const LOOP_STEPS = BARS.length * STEPS_PER_BAR;
 
-// Ergebnis: Array je Schritt mit Ereignissen { voice, midi, steps }
+// Result: an array per step with events { voice, midi, steps }
 export function buildLoop() {
   const steps = Array.from({ length: LOOP_STEPS }, () => []);
   BARS.forEach((bar, b) => {

@@ -9,9 +9,9 @@ export default defineConfig({
   },
   plugins: [
     VitePWA({
-      // Kein skipWaiting/clientsClaim: eine neue Version wartet, bis alle Tabs geschlossen sind
-      // (Regel 5). Es gibt bewusst keinen Update-Hinweis. Der vom Plugin erzeugte Listener für die
-      // Nachricht SKIP_WAITING bleibt ungenutzt: diese Nachricht darf die App nie senden.
+      // No skipWaiting/clientsClaim: a new version waits until all tabs are closed
+      // (rule 5). There is deliberately no update notice. The listener the plugin generates for the
+      // SKIP_WAITING message stays unused: the app must never send that message.
       registerType: 'prompt',
       injectRegister: 'script',
       manifest: {

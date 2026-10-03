@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createCourseMode } from './course-mode.js';
 import { COURSES } from '../../domain/course/courses.js';
-import { fakeApi, fakeStore, fixedClock } from './test-ports.js';
+import { fakeHost } from './test-host.js';
 
 const course = COURSES[0];
 
-function setup(settings) {
-  const store = fakeStore(settings);
-  const mode = createCourseMode({ store, clock: fixedClock() }, { courseId: course.id });
-  return { store, mode, api: fakeApi() };
-}
+const setup = () => ({ mode: createCourseMode({ courseId: course.id }), host: fakeHost() });
 
 /** Crosses a line in its direction through the middle; returns prev/next horse positions. */
 function across(line) {
@@ -17,6 +13,11 @@ function across(line) {
   const mz = (line.a[1] + line.b[1]) / 2;
   const [dx, dz] = line.dir;
   return { prev: { x: mx - dx, z: mz - dz }, next: { x: mx + dx, z: mz + dz } };
+}
+
+function startRide(mode) {
+  const { prev, next } = across(course.start);
+  mode.run.onLineCross(prev, next, 0);
 }
 
 describe('course mode', () => {
@@ -46,12 +47,11 @@ describe('course mode', () => {
   });
 
   it('updates the HUD model during the ride and resets it on restart', () => {
-    const { mode, api } = setup();
+    const { mode, host } = setup();
     const start = across(course.start);
-    api.sim.horse = start.next;
-    mode.update(0.5, api, start.prev);
+    mode.update(0.5, { horse: start.next, prev: start.prev }, host);
     expect(mode.hudModel().phase).toBe('riding');
-    mode.update(0.5, api, start.next);
+    mode.update(0.5, { horse: start.next, prev: start.next }, host);
     expect(mode.hudModel().timeMs).toBeGreaterThan(0);
 
     mode.onRestart();
@@ -59,42 +59,76 @@ describe('course mode', () => {
     expect(mode.hudModel().timeMs).toBe(0);
   });
 
-  it('counts a knockdown as a fault and asks for feedback and a rebuild', () => {
-    const { mode, api } = setup();
-    mode.run.onLineCross(...Object.values(across(course.start)), 0);
+  it('highlights the obstacle that is due and marks the finish after the last one', () => {
+    const { mode, host } = setup();
+    expect(mode.highlight).toEqual({
+      elementId: course.obstacles[0].elements[0].id,
+      number: course.obstacles[0].number,
+    });
+    expect(mode.finishMarked).toBe(false);
+    startRide(mode);
+    for (const o of course.obstacles) {
+      for (const el of o.elements) {
+        mode.onEvents([{ type: 'landed', elementId: el.id, dir: 1, knocked: false }], host);
+      }
+    }
+    expect(mode.highlight).toBeNull();
+    expect(mode.finishMarked).toBe(true);
+  });
+
+  it('counts a knockdown as a fault and asks for feedback', () => {
+    const { mode, host } = setup();
+    startRide(mode);
     const id = course.obstacles[0].elements[0].id;
-    mode.onEvents([{ type: 'landed', elementId: id, dir: 1, knocked: true }], api);
-    expect(api.calls.feedback).toContain('feedback.knockdown');
+    mode.onEvents([{ type: 'landed', elementId: id, dir: 1, knocked: true }], host);
+    expect(host.calls.feedback).toContain('feedback.knockdown');
     expect(mode.hudModel().faults).toBeGreaterThan(0);
   });
 
-  it('hands the finished ride to the host with the clock time for badges', () => {
-    const { mode, api, store } = setup();
-    mode.run.onLineCross(...Object.values(across(course.start)), 0);
+  it('asks for a delayed rebuild of knocked rails that are not scored', () => {
+    const { mode, host } = setup();
+    // ride not started yet: the knockdown is not scored, rails come back after a delay
+    const id = course.obstacles[0].elements[0].id;
+    mode.onEvents([{ type: 'landed', elementId: id, dir: 1, knocked: true }], host);
+    expect(host.calls.rebuildIn).toHaveLength(1);
+    expect(host.calls.rebuildIn[0][0]).toBe(id);
+  });
+
+  it('counts a refusal and gives feedback', () => {
+    const { mode, host } = setup();
+    startRide(mode);
+    const id = course.obstacles[0].elements[0].id;
+    mode.onEvents([{ type: 'refusal', elementId: id, dir: 1, reason: 'gait' }], host);
+    expect(host.calls.feedback).toEqual(['feedback.refusal']);
+    expect(mode.run.faults.refusals).toBe(1);
+  });
+
+  it('reports the finished ride with the result and the results screen, without saving', () => {
+    const { mode, host } = setup();
+    startRide(mode);
     for (const o of course.obstacles) {
-      mode.onEvents([{ type: 'landed', elementId: o.elements[0].id, dir: 1, knocked: false }], api);
+      mode.onEvents([{ type: 'landed', elementId: o.elements[0].id, dir: 1, knocked: false }], host);
     }
     const finish = across(course.finish);
-    api.sim.horse = finish.next;
-    mode.update(0.1, api, finish.prev);
+    const out = mode.update(0.1, { horse: finish.next, prev: finish.prev }, host);
+    expect(out.finished.screen).toBe('results');
+    expect(out.finished.result).toBe(mode.run.result);
+    expect(out.finished.params).toEqual({ courseId: course.id });
+  });
 
-    expect(api.calls.finish).toHaveLength(1);
-    const { screen, params } = api.calls.finish[0];
-    expect(screen).toBe('results');
-    expect(params.courseId).toBe(course.id);
-    expect(params.result).toBe(mode.run.result);
-    expect(params.isNewBest).toBe(true);
-    expect(store.data.progress.finishedRides).toBe(1);
-    expect(store.data.progress.courses[String(course.id)]).toBeDefined();
-    for (const id of params.awarded) {
-      expect(store.data.progress.badges[id]).toBe('2026-01-02T03:04:05.000Z');
-    }
+  it('does not report a finish while riding', () => {
+    const { mode, host } = setup();
+    const start = across(course.start);
+    expect(mode.update(0.1, { horse: start.next, prev: start.prev }, host)).toBeNull();
   });
 
   it('shows the jump aid at the current element only when enabled', () => {
-    expect(setup({ aidCourse: false }).mode.aidTarget()).toBeNull();
-    const { mode } = setup({ aidCourse: true });
-    mode.run.onLineCross(...Object.values(across(course.start)), 0);
-    expect(mode.aidTarget()).toEqual({ elementId: mode.run.current.elementId, dir: 1 });
+    const { mode } = setup();
+    expect(mode.aidTarget({ settings: { aidCourse: false } })).toBeNull();
+    startRide(mode);
+    expect(mode.aidTarget({ settings: { aidCourse: true } })).toEqual({
+      elementId: mode.run.current.elementId,
+      dir: 1,
+    });
   });
 });

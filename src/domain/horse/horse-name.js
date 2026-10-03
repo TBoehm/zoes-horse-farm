@@ -1,7 +1,7 @@
-// Pferdename (Regel 43): getrimmt, 1–16 Zeichen; ohne eigenen Namen gilt der Vorgabe-Name der Sprache.
+// Horse name (rule 43): trimmed, 1–16 characters; without a custom name the language default applies.
 export const NAME_MAX = 16;
 
-/** Liefert den bereinigten Namen oder null, wenn er ungültig ist. */
+/** Returns the cleaned name, or null if it is invalid. */
 export function cleanName(input) {
   if (typeof input !== 'string') return null;
   const name = input.trim();

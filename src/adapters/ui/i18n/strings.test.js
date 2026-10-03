@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { _dictionaries } from '../i18n.js';
 import { registerAllStrings } from './index.js';
 
-describe('Texte (Regel 6)', () => {
+describe('texts (rule 6)', () => {
   registerAllStrings();
   const { de, en } = _dictionaries();
-  it('haben in Deutsch und Englisch dieselben Schlüssel', () => {
+  it('have the same keys in German and English', () => {
     expect(Object.keys(de).sort()).toEqual(Object.keys(en).sort());
   });
-  it('sind nicht leer und haben dieselben Platzhalter', () => {
+  it('are not empty and have the same placeholders', () => {
     for (const key of Object.keys(de)) {
       expect(de[key].trim(), key).not.toBe('');
       expect(en[key].trim(), key).not.toBe('');

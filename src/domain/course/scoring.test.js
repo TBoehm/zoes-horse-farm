@@ -15,7 +15,7 @@ import { COURSES } from './courses.js';
 
 const el = (id, x, z) => ({ id, kind: 'cross', height: 0.4, spread: 0, x, z, rot: 0 });
 
-// Start-Mitte (0,0) → (0,30) → (40,30) → Ziel-Mitte (40,0): 30 + 40 + 30 = 100 m
+// Start center (0,0) → (0,30) → (40,30) → finish center (40,0): 30 + 40 + 30 = 100 m
 const square = {
   id: 2,
   pace: 'canter',
@@ -27,12 +27,12 @@ const square = {
   ],
 };
 
-describe('Ideallinie', () => {
-  it('verbindet Start-Mitte, alle Element-Mitten (auch a und b) und Ziel-Mitte', () => {
+describe('Ideal line', () => {
+  it('connects start center, all element centers (including a and b) and finish center', () => {
     expect(idealLineLength(square)).toBeCloseTo(30 + 40 + 10 + 20, 6);
   });
 
-  it('nimmt Wegpunkte der Wendungen (track) je Teilstrecke mit', () => {
+  it('includes the turn waypoints (track) per leg', () => {
     const withTrack = { ...square, track: [[], [[20, 40]], []] };
     const detour = 2 * Math.hypot(20, 10);
     expect(idealLineLength(withTrack)).toBeCloseTo(30 + detour + 10 + 20, 6);
@@ -40,25 +40,25 @@ describe('Ideallinie', () => {
   });
 });
 
-describe('erlaubte Zeit (Regel 33)', () => {
-  it('ist Ideallinie / mittleres Galopptempo × 1,5, aufgerundet', () => {
+describe('allowed time (rule 33)', () => {
+  it('is ideal line / medium canter speed × 1.5, rounded up', () => {
     const len = idealLineLength(square);
     expect(allowedTime(square)).toBe(Math.ceil((len / TUNING.speeds.canterMedium) * 1.5));
   });
 
-  it('nutzt für Parcours mit pace "trot" (Parcours 1) das mittlere Trabtempo', () => {
+  it('uses the medium trot speed for courses with pace "trot" (course 1)', () => {
     const trot = { ...square, pace: 'trot' };
     const len = idealLineLength(trot);
     expect(allowedTime(trot)).toBe(Math.ceil((len / TUNING.speeds.trotMedium) * 1.5));
   });
 
-  it('rundet glatte Werte nicht auf die nächste Sekunde', () => {
-    // 100 m / 6 m/s × 1,5 = 25 s
+  it('does not round round values up to the next second', () => {
+    // 100 m / 6 m/s × 1.5 = 25 s
     expect(allowedTime(square, 6)).toBe(25);
     expect(allowedTime(square, 5.9)).toBe(26);
   });
 
-  it('steht in COURSES berechnet, nicht fest eingetragen; Parcours 1 im Trab', () => {
+  it('is computed in COURSES, not hard-coded; course 1 at trot', () => {
     for (const c of COURSES) expect(c.allowedTimeS).toBe(allowedTime(c));
     expect(COURSES[0].pace).toBe('trot');
     expect(COURSES.slice(1).every((c) => c.pace === 'canter')).toBe(true);
@@ -67,7 +67,7 @@ describe('erlaubte Zeit (Regel 33)', () => {
   });
 });
 
-describe('Zeitfehler (Regel 33)', () => {
+describe('Time faults (rule 33)', () => {
   it.each([
     [-5000, 0],
     [0, 0],
@@ -78,25 +78,25 @@ describe('Zeitfehler (Regel 33)', () => {
     [8000, 2],
     [8010, 3],
     [60000, 15],
-  ])('%i ms über der erlaubten Zeit → %i Punkte', (overMs, faults) => {
+  ])('%i ms over the allowed time → %i points', (overMs, faults) => {
     expect(timeFaults(overMs)).toBe(faults);
   });
 
-  it('rechnet in Hundertsteln (Rundungsrauschen zählt nicht)', () => {
+  it('computes in hundredths (rounding noise does not count)', () => {
     expect(timeFaults(4000.0000001)).toBe(1);
     expect(timeFaults(0.4)).toBe(0);
   });
 });
 
-describe('Hundertstel', () => {
-  it('schneidet wie eine Stoppuhr ab, ohne Rundungsrauschen', () => {
+describe('Hundredths', () => {
+  it('truncates like a stopwatch, without rounding noise', () => {
     expect(toCentiseconds(48279)).toBe(4827);
     expect(toCentiseconds(48269.99999999)).toBe(4827);
     expect(toCentiseconds(0)).toBe(0);
   });
 });
 
-describe('Sterne (Regel 36)', () => {
+describe('Stars (rule 36)', () => {
   it.each([
     [0, 3],
     [1, 2],
@@ -104,29 +104,29 @@ describe('Sterne (Regel 36)', () => {
     [5, 1],
     [8, 1],
     [40, 1],
-  ])('%i Fehler → %i Sterne', (faults, stars) => {
+  ])('%i faults → %i stars', (faults, stars) => {
     expect(starsFor(faults)).toBe(stars);
   });
 });
 
-describe('Bestleistung (Begriffe)', () => {
-  it('erster beendeter Ritt ist immer Bestleistung', () => {
+describe('Best result (glossary)', () => {
+  it('first finished ride is always a best result', () => {
     expect(isBetterResult({ faults: 12, timeCs: 9999 }, null)).toBe(true);
     expect(isBetterResult({ faults: 12, timeCs: 9999 }, undefined)).toBe(true);
   });
 
-  it('weniger Fehler gewinnt, auch bei längerer Zeit', () => {
+  it('fewer faults wins, even with a longer time', () => {
     expect(isBetterResult({ faults: 0, timeCs: 9000 }, { faults: 4, timeCs: 4000 })).toBe(true);
     expect(isBetterResult({ faults: 8, timeCs: 3000 }, { faults: 4, timeCs: 4000 })).toBe(false);
   });
 
-  it('bei gleichen Fehlern entscheidet die Zeit auf Hundertstel', () => {
+  it('with equal faults the time decides, to the hundredth', () => {
     expect(isBetterResult({ faults: 4, timeCs: 4826 }, { faults: 4, timeCs: 4827 })).toBe(true);
     expect(isBetterResult({ faults: 4, timeCs: 4827 }, { faults: 4, timeCs: 4827 })).toBe(false);
     expect(isBetterResult({ faults: 4, timeCs: 4828 }, { faults: 4, timeCs: 4827 })).toBe(false);
   });
 
-  it('versteht auch Ritt-Ergebnisse mit aufgeschlüsselten Fehlern', () => {
+  it('also understands ride results with itemized faults', () => {
     const result = {
       faults: { knockdowns: 0, refusals: 0, timeFaults: 1, total: 1 },
       timeCs: 5000,
@@ -136,7 +136,7 @@ describe('Bestleistung (Begriffe)', () => {
   });
 });
 
-describe('Zeitformat', () => {
+describe('Time format', () => {
   it('m:ss,hh', () => {
     expect(formatTime(4827)).toBe('0:48,27');
     expect(formatTime(6250)).toBe('1:02,50');

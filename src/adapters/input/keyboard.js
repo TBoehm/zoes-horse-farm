@@ -1,5 +1,5 @@
-// Tastatur-Eingabe (Regel 8): A/D lenken, W/S Tempo, Shift (gehalten) Galopp, Space springen,
-// Esc Pause, C Kamera. Galopp, den das Spiel beendet, braucht neues Drücken von Shift (Regel 9).
+// Keyboard input (rule 8): A/D steer, W/S speed, Shift (held) gallop, Space jump,
+// Esc pause, C camera. A gallop that the game ends needs Shift to be pressed again (rule 9).
 const HANDLED = new Set([
   'KeyW',
   'KeyA',
@@ -49,7 +49,7 @@ export function createKeyboard(target = window) {
   window.addEventListener('blur', onBlur);
 
   return {
-    /** Liest den Zustand; Flanken (jump, pause, camera) werden dabei zurückgesetzt. */
+    /** Reads the state; edges (jump, pause, camera) are reset in the process. */
     poll() {
       const right = down.has('KeyD') || down.has('ArrowRight');
       const left = down.has('KeyA') || down.has('ArrowLeft');
@@ -66,7 +66,7 @@ export function createKeyboard(target = window) {
       jump = pause = camera = false;
       return state;
     },
-    /** Galopp vom Spiel beendet: erst nach Loslassen und neuem Drücken wieder aktiv. */
+    /** Gallop ended by the game: active again only after release and a new press. */
     latchGallop() {
       if (isShift()) shiftLatched = true;
     },

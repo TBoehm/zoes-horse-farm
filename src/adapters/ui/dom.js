@@ -1,4 +1,4 @@
-// Kleiner DOM-Helfer: h('button', { class: 'btn', onclick }, 'Text')
+// Small DOM helper: h('button', { class: 'btn', onclick }, 'Text')
 export function h(tag, props = {}, ...children) {
   const el = document.createElement(tag);
   for (const [key, value] of Object.entries(props ?? {})) {
@@ -7,7 +7,7 @@ export function h(tag, props = {}, ...children) {
     else if (key === 'dataset') Object.assign(el.dataset, value);
     else if (key === 'style' && typeof value === 'object') Object.assign(el.style, value);
     else if (key.startsWith('on')) {
-      // nur Funktionen, nie Inline-Handler-Strings
+      // functions only, never inline handler strings
       if (typeof value === 'function') el.addEventListener(key.slice(2), value);
     } else if (value === true) el.setAttribute(key, '');
     else el.setAttribute(key, String(value));

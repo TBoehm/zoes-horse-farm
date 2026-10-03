@@ -1,5 +1,5 @@
-// Touch-Bedienung (Regel 10): Joystick links, „Galopp" (Umschalter) und „Springen" rechts,
-// „Pause" und „Kamera" oben rechts. Alle Elemente mindestens 44×44 px.
+// Touch controls (rule 10): joystick on the left, "Gallop" (toggle) and "Jump" on the right,
+// "Pause" and "Camera" at the top right. All elements at least 44×44 px.
 import nipplejs from 'nipplejs';
 import { onLangChange, t } from '../ui/i18n.js';
 import { h } from '../ui/dom.js';
@@ -55,7 +55,7 @@ export function createTouchControls(container) {
     gallopBtn.classList.toggle('is-on', on);
   };
 
-  // Joystick über nipplejs (statisch in der Zone links unten)
+  // Joystick via nipplejs (static in the bottom-left zone)
   const shape = (v) =>
     Math.abs(v) < DEAD_ZONE ? 0 : Math.sign(v) * ((Math.abs(v) - DEAD_ZONE) / (1 - DEAD_ZONE));
   const releaseStick = () => {
@@ -91,7 +91,7 @@ export function createTouchControls(container) {
   press(jumpBtn, () => (jump = true));
   press(pauseBtn, () => (pause = true));
   press(cameraBtn, () => (camera = true));
-  // Tastatur-/Klick-Bedienung ohne Pointer (z. B. Screenreader)
+  // Keyboard/click operation without a pointer (e.g. screen readers)
   for (const [btn, fn] of [
     [gallopBtn, () => setGallop(!gallop)],
     [jumpBtn, () => (jump = true)],

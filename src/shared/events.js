@@ -1,4 +1,4 @@
-// Minimaler Event-Emitter.
+// Minimal event emitter.
 export function createEmitter() {
   const handlers = new Map();
   return {

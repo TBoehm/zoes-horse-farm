@@ -1,4 +1,4 @@
-// Offline-Start und Update-Verhalten am gebauten Stand (Regel 5).
+// Offline start and update behaviour on the built output (rule 5).
 import { expect, test } from '@playwright/test';
 import { createServer } from 'node:http';
 import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -50,12 +50,9 @@ const versionOf = (page) =>
   page.evaluate(() => document.querySelector('meta[name="app-version"]')?.content ?? 'A');
 
 test.describe('PWA', () => {
-  test.skip(
-    ({ browserName }) => browserName !== 'chromium',
-    'Service-Worker-Steuerung in Chromium',
-  );
+  test.skip(({ browserName }) => browserName !== 'chromium', 'service worker control in Chromium');
 
-  test('startet nach dem ersten Laden offline', async ({ browser }) => {
+  test('starts offline after the first load', async ({ browser }) => {
     const server = await startServer(() => 'dist');
     const url = `http://localhost:${server.address().port}/`;
     const context = await browser.newContext();
@@ -73,7 +70,7 @@ test.describe('PWA', () => {
     server.close();
   });
 
-  test('neue Version erst nach Schließen aller Tabs, Spielstand bleibt', async ({ browser }) => {
+  test('new version only after closing all tabs, save data is kept', async ({ browser }) => {
     let root = 'dist';
     const server = await startServer(() => root);
     const url = `http://localhost:${server.address().port}/`;
@@ -99,14 +96,14 @@ test.describe('PWA', () => {
         check();
       });
     });
-    // Neuladen eines offenen Tabs wechselt die Version nicht
+    // Reloading an open tab does not switch the version
     await page.reload();
     expect(await versionOf(page)).toBe('A');
     await expect(
       page.locator('[data-screen="namePrompt"], [data-screen="menu"]').first(),
     ).toBeVisible();
 
-    // Alle Tabs schließen und neu öffnen → neue Version
+    // Close all tabs and reopen → new version
     await page.close();
     await new Promise((r) => setTimeout(r, 500));
     page = await context.newPage();

@@ -1,4 +1,4 @@
-// Texte für Parcours-Auswahl, Vorstart, Ritt-HUD und Ergebnis (SRT-004).
+// Texts for course selection, pre-start, ride HUD and results (SRT-004).
 export default {
   de: {
     'menu.courses': 'Parcours',

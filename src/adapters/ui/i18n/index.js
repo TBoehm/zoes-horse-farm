@@ -1,4 +1,4 @@
-// Registriert die Texte aller Bereiche.
+// Registers the texts of all feature areas.
 import { registerStrings } from '../i18n.js';
 import core from './core.js';
 import riding from './riding.js';

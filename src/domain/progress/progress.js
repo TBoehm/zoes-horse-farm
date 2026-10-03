@@ -1,5 +1,5 @@
-// Fortschritt (Konzept Regeln 36, 37, 44, 47, 48): rein und unveränderlich, ohne DOM.
-// Alle Funktionen geben neue Objekte zurück; unbekannte Felder bleiben unverändert erhalten.
+// Progress (concept rules 36, 37, 44, 47, 48): pure and immutable, no DOM.
+// All functions return new objects; unknown fields are preserved unchanged.
 import { BADGE_IDS, COURSE_COUNT } from './badges.js';
 
 export const PROGRESS_DEFAULTS = Object.freeze({
@@ -55,7 +55,7 @@ function sanitizeBadges(raw) {
   return badges;
 }
 
-/** Bereinigte Kopie: Ungültiges → Default, Lesbares bleibt, unbekannte Felder bleiben. */
+/** Sanitized copy: invalid → default, readable values are kept, unknown fields are kept. */
 export function sanitizeProgress(raw) {
   const source = isPlainObject(raw) ? raw : {};
   const unlocked = Number.isFinite(source.unlocked) ? Math.floor(source.unlocked) : 1;
@@ -69,7 +69,7 @@ export function sanitizeProgress(raw) {
   };
 }
 
-/** Bestleistung: zuerst weniger Fehler, bei Gleichstand kürzere Zeit (Hundertstel). */
+/** Best result: fewer faults first, on a tie the shorter time (hundredths). */
 export function isBetterResult(candidate, best) {
   if (!best) return true;
   if (candidate.faults !== best.faults) return candidate.faults < best.faults;
@@ -77,7 +77,7 @@ export function isBetterResult(candidate, best) {
 }
 
 /**
- * Wertet einen BEENDETEN Ritt ein (abgebrochene Ritte nie übergeben, Regel 40).
+ * Applies a FINISHED ride (never pass aborted rides, rule 40).
  * @returns {{ progress: object, isNewBest: boolean, unlockedCourse: number|null }}
  */
 export function applyFinishedRide(progress, result) {
@@ -110,12 +110,12 @@ export function applyFinishedRide(progress, result) {
   };
 }
 
-/** Zählt einen gezählten Sprung (Regel 40). */
+/** Counts one counted jump (rule 40). */
 export function addJump(progress) {
   return { ...progress, jumps: progress.jumps + 1 };
 }
 
-/** „Fortschritt löschen" (Regel 48): nur diese Felder, alles andere bleibt. */
+/** "Delete progress" (rule 48): only these fields, everything else is kept. */
 export function resetProgress(progress) {
   return {
     ...progress,

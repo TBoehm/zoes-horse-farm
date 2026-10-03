@@ -279,7 +279,7 @@ input[type='range'] {
   accent-color: var(--c-primary);
 }
 
-/* Hinweise */
+/* Notices */
 .notice {
   position: fixed;
   inset: 0;

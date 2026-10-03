@@ -1,5 +1,5 @@
-// Einstellungen mit erweiterbaren Abschnitten. Bereiche melden Abschnitte mit
-// registerSettingsSection an. params.fromPause: aus dem Pausemenü geöffnet (Regeln 38, 48, 51).
+// Settings with extensible sections. Feature areas register sections with
+// registerSettingsSection. params.fromPause: opened from the pause menu (rules 38, 48, 51).
 import { LANGS, setLang } from './i18n.js';
 import { h } from './dom.js';
 
@@ -13,7 +13,7 @@ export function registerSettingsSection(section) {
   sections.sort((a, b) => a.order - b.order);
 }
 
-/** Auswahl-Gruppe aus großen Buttons (Radio-Verhalten). */
+/** Choice group of large buttons (radio behaviour). */
 export function choiceGroup({ label, options, value, onChange, name }) {
   const group = h('div', { class: 'choice-group', role: 'radiogroup', 'aria-label': label });
   const buttons = options.map((opt) =>
@@ -38,7 +38,7 @@ export function choiceGroup({ label, options, value, onChange, name }) {
   return h('div', { class: 'setting-row' }, h('span', { class: 'setting-label' }, label), group);
 }
 
-/** An/Aus-Schalter als großer Button. */
+/** On/off switch as a large button. */
 export function toggleRow({ label, value, onChange, name }) {
   const btn = h(
     'button',
@@ -102,6 +102,6 @@ export function createSettingsScreen(ctx, params = {}) {
     body,
     h('div', { class: 'panel-actions' }, back),
   );
-  // Musik nur, wenn aus dem Hauptmenü geöffnet (Regel 51)
+  // Music only when opened from the main menu (rule 51)
   return { el, music: !opts.fromPause };
 }

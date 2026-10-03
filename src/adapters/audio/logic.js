@@ -1,5 +1,5 @@
-// Reine Logik des Klang-Moduls (ohne WebAudio): Lautstärke-Mapping, Musik-Zustand,
-// Scheduler-Zeitberechnung, Zufall und Impulsantwort für den Hall.
+// Pure logic of the audio module (no WebAudio): volume mapping, music state,
+// scheduler timing, randomness and impulse response for the reverb.
 
 export const DEFAULT_VOLUME = 0.5;
 
@@ -8,13 +8,13 @@ export function clamp01(value, fallback = DEFAULT_VOLUME) {
   return Math.min(1, Math.max(0, value));
 }
 
-// API-Lautstärke 0..1 linear, intern quadratisch (perzeptiv): 0,5 -> 0,25 (-12 dB).
+// API volume 0..1 linear, internally quadratic (perceptual): 0.5 -> 0.25 (-12 dB).
 export function volumeToGain(volume) {
   const v = clamp01(volume);
   return v * v;
 }
 
-// Stumm behält die Lautstärke im Zustand und setzt nur den Kanal auf 0.
+// Muting keeps the volume in the state and only sets the channel to 0.
 export function channelGain(volume, muted) {
   return muted ? 0 : volumeToGain(volume);
 }
@@ -28,8 +28,8 @@ export function normalizeSettings(input = {}) {
   };
 }
 
-// Soll die Melodie gerade klingen? Bei Lautstärke 0 läuft sie weiter (kein Neustart beim Ziehen
-// des Reglers), bei Stumm oder im Hintergrund nicht.
+// Should the melody be playing right now? At volume 0 it keeps running (no restart while dragging
+// the slider), when muted or in the background it does not.
 export function shouldMusicRun({ wanted, hidden, muted }) {
   return Boolean(wanted) && !hidden && !muted;
 }
@@ -38,9 +38,9 @@ export function midiToFreq(midi) {
   return 440 * 2 ** ((midi - 69) / 12);
 }
 
-// Lookahead-Scheduler: liefert alle Schritte, die im Fenster [now, now + lookahead) beginnen.
-// Ist der nächste Schritt weit in der Vergangenheit (Timer gedrosselt), wird neu aufgesetzt,
-// statt einen Stau nachzuholen.
+// Lookahead scheduler: returns all steps that start in the window [now, now + lookahead).
+// If the next step is far in the past (timer throttled), it restarts
+// instead of catching up on a backlog.
 export function planSteps({
   now,
   nextTime,
@@ -63,7 +63,7 @@ export function planSteps({
   return { events, nextTime: time, step: index };
 }
 
-// Kleiner deterministischer Zufallsgenerator (mulberry32) für Rauschen und Hall.
+// Small deterministic random generator (mulberry32) for noise and reverb.
 export function mulberry32(seed) {
   let a = seed >>> 0;
   return () => {
@@ -75,7 +75,7 @@ export function mulberry32(seed) {
   };
 }
 
-// Synthetische Raum-Impulsantwort: abklingendes Rauschen, leicht abgedunkelt.
+// Synthetic room impulse response: decaying noise, slightly darkened.
 export function generateImpulse({
   sampleRate,
   seconds = 1.8,

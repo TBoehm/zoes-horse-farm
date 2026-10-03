@@ -298,6 +298,8 @@ export function createRider({ quality = 'medium' } = {}) {
   const vA = new THREE.Vector3();
   const vB = new THREE.Vector3();
   const scl = new THREE.Vector3();
+  const vTmp = new THREE.Vector3();
+  const vDir = new THREE.Vector3();
 
   function frameOf(bone, posOut, quatOut) {
     m4.multiplyMatrices(invBase, bone.matrixWorld);
@@ -306,7 +308,7 @@ export function createRider({ quality = 'medium' } = {}) {
 
   function aim(bone, dirBase) {
     // local quaternion so that the bone's rest direction points along dirBase (base frame)
-    frameOf(bone.parent, vA, qParent);
+    frameOf(bone.parent, vTmp, qParent);
     vB.copy(dirBase).normalize().applyQuaternion(qTmp.copy(qParent).invert());
     bone.quaternion.setFromUnitVectors(restDir[bone.name], vB);
     bone.updateMatrixWorld(true);
@@ -324,8 +326,8 @@ export function createRider({ quality = 'medium' } = {}) {
     vB.subVectors(pole, pRoot);
     vB.addScaledVector(d, -vB.dot(d)).normalize();
     pMid.copy(pRoot).addScaledVector(d, x).addScaledVector(vB, h);
-    aim(a, vA.subVectors(pMid, pRoot));
-    aim(bMid, vA.subVectors(target, pMid));
+    aim(a, vDir.subVectors(pMid, pRoot));
+    aim(bMid, vDir.subVectors(target, pMid));
   }
 
   const seat = {};

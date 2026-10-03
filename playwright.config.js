@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Lokal kann ein vorinstalliertes Chromium genutzt werden (PW_CHROMIUM_PATH),
-// in CI installiert Playwright die passenden Browser selbst.
+// Locally a preinstalled Chromium can be used (PW_CHROMIUM_PATH);
+// in CI Playwright installs the matching browsers itself.
 const chromiumPath = process.env.PW_CHROMIUM_PATH;
 const browsers = (process.env.SMOKE_BROWSERS || 'chromium').split(',');
 const GPU_ARGS = [

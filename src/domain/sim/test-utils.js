@@ -1,4 +1,4 @@
-// Hilfen für die Sim-Tests (kein Produktivcode).
+// Helpers for the sim tests (not production code).
 import { createRidingSim } from './riding-sim.js';
 import { createRng } from './rng.js';
 import { TUNING } from './tuning.js';
@@ -36,8 +36,8 @@ export function makeSim(elements, { seed = 1, rng, canRefuse, obstacles } = {}) 
 }
 
 /**
- * Stellt das Pferd `distance` m vor die Vorderkante (Richtung dir), mit Kurswinkel `angle`
- * (positiv = Kurs driftet nach +t) und Querversatz `crossing` an der Hindernis-Ebene.
+ * Places the horse `distance` m before the leading edge (direction dir), with course angle
+ * `angle` (positive = course drifts toward +t) and lateral offset `crossing` at the obstacle plane.
  */
 export function placeBefore(sim, el, distance, opts = {}) {
   const { angle = 0, dir = 1, crossing = 0, speed = 0, gallop = false } = opts;
@@ -55,8 +55,8 @@ export function placeBefore(sim, el, distance, opts = {}) {
 }
 
 /**
- * Lässt die Sim laufen. input: Objekt oder Funktion (sim, t) → Objekt.
- * until(sim, events, t) beendet vorzeitig. Liefert { events, t, steps }.
+ * Runs the sim. input: object or function (sim, t) → object.
+ * until(sim, events, t) ends early. Returns { events, t, steps }.
  */
 export function drive(sim, input, { until, maxT = 15, dt = DT, onStep } = {}) {
   const events = [];
@@ -74,7 +74,7 @@ export function drive(sim, input, { until, maxT = 15, dt = DT, onStep } = {}) {
   return { events, t, steps };
 }
 
-/** Eingabe, die Space drückt, sobald das Pferd `distance` m vor der Vorderkante ist. */
+/** Input that presses Space as soon as the horse is `distance` m before the leading edge. */
 export function pressAt(baseInput, distanceFn) {
   let pressed = false;
   return (sim) => {
@@ -94,7 +94,7 @@ export function ofType(events, type) {
   return events.filter((e) => e.type === type);
 }
 
-/** Wendet im Halt auf der Stelle, bis die Blickrichtung `heading` erreicht ist. */
+/** Turns on the spot at halt until the heading `heading` is reached. */
 export function turnInPlace(sim, heading) {
   return drive(sim, (s) => ({ steer: wrapAngle(s.horse.heading - heading) > 0 ? 1 : -1 }), {
     until: (s) => Math.abs(wrapAngle(s.horse.heading - heading)) < 0.03,
@@ -102,19 +102,19 @@ export function turnInPlace(sim, heading) {
   });
 }
 
-/** Bringt das Pferd per S zum Halt. */
+/** Brings the horse to a halt with S. */
 export function brakeToHalt(sim) {
   return drive(sim, { throttle: -1 }, { until: (s) => s.horse.speed === 0, maxT: 10 });
 }
 
-/** true, wenn der Bezugspunkt im Sperrbereich eines Elements liegt (Pferd im Hindernis). */
+/** true if the reference point is inside an element's blocked area (horse inside the obstacle). */
 export function insideBlock(sim, el) {
   const ext = blockExtents(el, TUNING);
   const p = toLocal(el, sim.horse.x, sim.horse.z);
   return Math.abs(p.along) < ext.along - 1e-6 && Math.abs(p.across) < ext.across - 1e-6;
 }
 
-/** RNG-Hülle, die die Anzahl der Züge zählt. */
+/** RNG wrapper that counts the number of draws. */
 export function countingRng(seed) {
   const base = createRng(seed);
   const f = () => {

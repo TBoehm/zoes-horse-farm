@@ -1,5 +1,5 @@
-// Touch-Modus (Regel 11): reine Touch-Geräte immer, reine Tastatur-Geräte nie,
-// Geräte mit beidem starten ohne und wechseln bei Berührung bzw. Spieltaste.
+// Touch mode (rule 11): touch-only devices always, keyboard-only devices never,
+// devices with both start without it and switch on touch or on a game key.
 import { createEmitter } from '../../shared/events.js';
 
 export const GAME_KEYS = new Set([
@@ -14,7 +14,7 @@ export const GAME_KEYS = new Set([
   'KeyC',
 ]);
 
-/** Ermittelt die Geräteklasse: 'touch' | 'keyboard' | 'hybrid'. */
+/** Determines the device class: 'touch' | 'keyboard' | 'hybrid'. */
 export function classifyDevice({
   maxTouchPoints = 0,
   hasTouchEvents = false,
@@ -36,7 +36,7 @@ export function detectDevice(win = globalThis.window) {
   return classifyDevice({
     maxTouchPoints: win.navigator?.maxTouchPoints ?? 0,
     hasTouchEvents: 'ontouchstart' in win,
-    // Stift-/Hover-Erkennung bewusst nicht: Tablets mit Stift sind reine Touch-Geräte
+    // Deliberately no stylus/hover detection: tablets with a stylus are touch-only devices
     finePointer: mm('(any-pointer: fine)'),
   });
 }
@@ -73,7 +73,7 @@ export function createInputMode({ device, target } = {}) {
     onChange(fn) {
       return emitter.on('change', fn);
     },
-    /** Für Tests: Ereignisse direkt einspeisen. */
+    /** For tests: feed events in directly. */
     handlePointer: onPointer,
     handleKey: onKey,
     dispose() {

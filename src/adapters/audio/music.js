@@ -1,4 +1,4 @@
-// Stimmen der Menü-Melodie. Jede Funktion plant eine Note ab Zeit `t` auf den Ausgang `out`.
+// Voices of the menu melody. Each function schedules a note from time `t` onto the output `out`.
 
 import { jitter, noiseBurst, tone } from './dsp.js';
 import { midiToFreq } from './logic.js';
@@ -6,7 +6,7 @@ import { STEP_SECONDS } from './melody.js';
 
 const SILENT = 0.0001;
 
-// Weiche Note: kurzer Anstieg, langsames Abklingen, Release nach der Notenlänge
+// Soft note: short attack, slow decay, release after the note length
 function softNote(v, out, t, { type, freq, detune = 0, peak, length }) {
   const ctx = v.ctx;
   const g = ctx.createGain();

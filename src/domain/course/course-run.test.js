@@ -12,7 +12,7 @@ const el = (id, kind, x, z) => ({
   rot: 0,
 });
 
-// Testparcours: 1 Steilsprung, 2 Oxer, 3 Kombination (Steil / Oxer), alle Sprungrichtung +z
+// Test course: 1 vertical, 2 oxer, 3 combination (vertical / oxer), all jump direction +z
 function testCourse(overrides = {}) {
   return {
     id: 9,
@@ -43,7 +43,7 @@ function crossStart(run, t = 1000) {
 function crossFinish(run, t) {
   return run.onLineCross(FINISH_PREV, FINISH_NEXT, t);
 }
-/** Überquert eine Linie mittig in ihrer Richtung. */
+/** Crosses a line at its middle in its direction. */
 function crossLine(run, line, t) {
   const mx = (line.a[0] + line.b[0]) / 2;
   const mz = (line.a[1] + line.b[1]) / 2;
@@ -55,7 +55,7 @@ function riding(course = testCourse(), t = 1000) {
   crossStart(run, t);
   return run;
 }
-/** Springt die Hindernisse 1 und 2 sauber. */
+/** Jumps obstacles 1 and 2 cleanly. */
 function toCombination(run) {
   run.onLanded('v1', 1, false);
   run.onLanded('o2', 1, false);
@@ -67,13 +67,13 @@ function cleanRide(run) {
   run.onLanded('k3b', 1, false);
   return run;
 }
-// Pferd-Zustände rund um Teil b (bei z = 22.3)
+// Horse states around part b (at z = 22.3)
 const horseApproachingB = { x: 0, z: 17, heading: 0 };
 const horseNearBTurning = { x: 3, z: 19, heading: Math.PI / 2 };
 const horseAwayFromB = { x: 8, z: 8, heading: Math.PI };
 
-describe('Vorstart (Regel 26)', () => {
-  it('beginnt im Vorstart ohne Zeit und Fehler, Hindernis 1 hervorgehoben', () => {
+describe('Pre-start (rule 26)', () => {
+  it('begins in pre-start without time and faults, obstacle 1 highlighted', () => {
     const run = createCourseRun(testCourse());
     expect(run.phase).toBe('prestart');
     expect(run.timeMs).toBe(0);
@@ -86,26 +86,26 @@ describe('Vorstart (Regel 26)', () => {
     expect(run.result).toBeNull();
   });
 
-  it('hebt bei einer Kombination als erstem Hindernis Teil a hervor', () => {
+  it('highlights part a when a combination is the first obstacle', () => {
     const course = testCourse();
     course.obstacles = [{ ...course.obstacles[2], number: 1 }];
     expect(createCourseRun(course).highlight).toEqual({ elementId: 'k3a', number: 1 });
   });
 
-  it('die Zeit läuft im Vorstart nicht', () => {
+  it('time does not run in pre-start', () => {
     const run = createCourseRun(testCourse());
     run.update({ x: 0, z: -30, heading: 0 }, 50000);
     expect(run.timeMs).toBe(0);
     expect(run.faults.time).toBe(0);
   });
 
-  it('keine Verweigerung im Vorstart, auch nicht an Hindernis 1', () => {
+  it('no refusal in pre-start, not even at obstacle 1', () => {
     const run = createCourseRun(testCourse());
     expect(run.rules.canRefuse('v1', 1)).toBe(false);
     expect(run.rules.canRefuse('o2', 1)).toBe(false);
   });
 
-  it('Sprünge im Vorstart zählen nicht; gefallene Stange nach ca. 3 s wieder aufbauen', () => {
+  it('jumps in pre-start do not count; rebuild a fallen pole after about 3 s', () => {
     const run = createCourseRun(testCourse());
     expect(run.onLanded('v1', 1, true)).toEqual({ scored: false, rebuildAfterS: 3 });
     expect(run.onLanded('v1', 1, false)).toEqual({ scored: false, rebuildAfterS: null });
@@ -113,13 +113,13 @@ describe('Vorstart (Regel 26)', () => {
     expect(run.current.elementId).toBe('v1');
   });
 
-  it('Verweigerungsmeldungen im Vorstart werden ignoriert', () => {
+  it('refusal reports in pre-start are ignored', () => {
     const run = createCourseRun(testCourse());
     run.onRefusal('v1', 1);
     expect(run.faults.refusals).toBe(0);
   });
 
-  it('die Ziellinie bewirkt im Vorstart nichts', () => {
+  it('the finish line does nothing in pre-start', () => {
     const run = createCourseRun(testCourse());
     expect(crossFinish(run, 500)).toBeNull();
     expect(run.phase).toBe('prestart');
@@ -127,8 +127,8 @@ describe('Vorstart (Regel 26)', () => {
   });
 });
 
-describe('Start- und Ziellinie (Regeln 26, 27)', () => {
-  it('Startlinie in Ritt-Richtung startet den Ritt und die Zeit', () => {
+describe('Start and finish line (rules 26, 27)', () => {
+  it('start line in riding direction starts the ride and the time', () => {
     const run = createCourseRun(testCourse());
     expect(crossStart(run, 2000)).toBe('start');
     expect(run.phase).toBe('riding');
@@ -137,38 +137,38 @@ describe('Start- und Ziellinie (Regeln 26, 27)', () => {
     expect(run.timeMs).toBe(1234);
   });
 
-  it('Startlinie gegen die Ritt-Richtung zählt nicht', () => {
+  it('start line against the riding direction does not count', () => {
     const run = createCourseRun(testCourse());
     expect(run.onLineCross(START_NEXT, START_PREV, 1000)).toBeNull();
     expect(run.phase).toBe('prestart');
   });
 
-  it('neben der Linie vorbei zählt nicht', () => {
+  it('passing beside the line does not count', () => {
     const run = createCourseRun(testCourse());
     expect(run.onLineCross({ x: 4, z: -26 }, { x: 4, z: -24 }, 1000)).toBeNull();
     expect(run.phase).toBe('prestart');
   });
 
-  it('Bewegung ohne Überquerung zählt nicht', () => {
+  it('movement without crossing does not count', () => {
     const run = createCourseRun(testCourse());
     expect(run.onLineCross({ x: 0, z: -27 }, { x: 0, z: -25.5 }, 1000)).toBeNull();
     expect(run.phase).toBe('prestart');
   });
 
-  it('Startlinie während des Ritts bewirkt nichts', () => {
+  it('start line during the ride does nothing', () => {
     const run = riding(testCourse(), 1000);
     expect(crossStart(run, 5000)).toBeNull();
     run.update({ x: 0, z: -20, heading: 0 }, 6000);
     expect(run.timeMs).toBe(5000);
   });
 
-  it('Ziellinie gegen die Ritt-Richtung bewirkt nichts', () => {
+  it('finish line against the riding direction does nothing', () => {
     const run = cleanRide(riding());
     expect(run.onLineCross(FINISH_NEXT, FINISH_PREV, 9000)).toBeNull();
     expect(run.phase).toBe('riding');
   });
 
-  it('Ziellinie nach allen Hindernissen beendet den Ritt und stoppt die Zeit', () => {
+  it('finish line after all obstacles ends the ride and stops the time', () => {
     const run = cleanRide(riding(testCourse(), 1000));
     expect(crossFinish(run, 26271)).toBe('finish');
     expect(run.phase).toBe('finished');
@@ -179,15 +179,15 @@ describe('Start- und Ziellinie (Regeln 26, 27)', () => {
   });
 });
 
-describe('Reihenfolge, Hervorhebung, Sprungrichtung (Regeln 27–29)', () => {
-  it('gewerteter Sprung über das Hindernis an der Reihe geht zum nächsten', () => {
+describe('Order, highlighting, jump direction (rules 27–29)', () => {
+  it('a scored jump over the current obstacle advances to the next', () => {
     const run = riding();
     expect(run.onLanded('v1', 1, false)).toEqual({ scored: true, rebuildAfterS: null });
     expect(run.highlight).toEqual({ elementId: 'o2', number: 2 });
     expect(run.nextLabel).toBe(2);
   });
 
-  it('falsches Hindernis: keine Wertung, richtiges bleibt hervorgehoben, Wiederaufbau 3 s', () => {
+  it('wrong obstacle: no scoring, correct one stays highlighted, rebuild after 3 s', () => {
     const run = riding();
     expect(run.onLanded('o2', 1, true)).toEqual({ scored: false, rebuildAfterS: 3 });
     expect(run.onLanded('o2', 1, false)).toEqual({ scored: false, rebuildAfterS: null });
@@ -195,20 +195,20 @@ describe('Reihenfolge, Hervorhebung, Sprungrichtung (Regeln 27–29)', () => {
     expect(run.faults.total).toBe(0);
   });
 
-  it('richtiges Hindernis gegen die Sprungrichtung gilt wie falsches Hindernis', () => {
+  it('correct obstacle against the jump direction counts as a wrong obstacle', () => {
     const run = riding();
     expect(run.onLanded('v1', -1, true)).toEqual({ scored: false, rebuildAfterS: 3 });
     expect(run.current.elementId).toBe('v1');
     expect(run.faults.total).toBe(0);
   });
 
-  it('unbekannte Elemente werden ignoriert', () => {
+  it('unknown elements are ignored', () => {
     const run = riding();
     expect(run.onLanded('zzz', 1, true)).toEqual({ scored: false, rebuildAfterS: 3 });
     expect(run.current.elementId).toBe('v1');
   });
 
-  it('Verweigerung nur am Hindernis an der Reihe, in Sprungrichtung, im Ritt', () => {
+  it('refusal only at the current obstacle, in jump direction, during the ride', () => {
     const run = riding();
     expect(run.rules.canRefuse('v1', 1)).toBe(true);
     expect(run.rules.canRefuse('v1', -1)).toBe(false);
@@ -216,7 +216,7 @@ describe('Reihenfolge, Hervorhebung, Sprungrichtung (Regeln 27–29)', () => {
     expect(run.rules.canRefuse('k3b', 1)).toBe(false);
   });
 
-  it('nach dem letzten Hindernis: keine Hervorhebung, Ziel markiert, Anzeige „Ziel"', () => {
+  it('after the last obstacle: no highlight, finish marked, label "finish"', () => {
     const run = cleanRide(riding());
     expect(run.current).toBeNull();
     expect(run.highlight).toBeNull();
@@ -226,8 +226,8 @@ describe('Reihenfolge, Hervorhebung, Sprungrichtung (Regeln 27–29)', () => {
   });
 });
 
-describe('Fehlerpunkte (Regel 32)', () => {
-  it('Abwurf am Hindernis an der Reihe: 4 Fehler, gilt als gesprungen, Stange bleibt liegen', () => {
+describe('Fault points (rule 32)', () => {
+  it('knockdown at the current obstacle: 4 faults, counts as jumped, pole stays down', () => {
     const run = riding();
     expect(run.onLanded('v1', 1, true)).toEqual({ scored: true, rebuildAfterS: null });
     expect(run.faults).toEqual({ knockdowns: 1, refusals: 0, time: 0, total: 4 });
@@ -235,7 +235,7 @@ describe('Fehlerpunkte (Regel 32)', () => {
     expect(run.drainRebuilds()).toEqual([]);
   });
 
-  it('jede Verweigerung zählt 4, auch die zweite und weitere; kein Ausschluss', () => {
+  it('every refusal counts 4, also the second and further ones; no elimination', () => {
     const run = riding();
     run.onRefusal('v1', 1);
     run.onRefusal('v1', 1);
@@ -243,18 +243,18 @@ describe('Fehlerpunkte (Regel 32)', () => {
     expect(run.faults).toEqual({ knockdowns: 0, refusals: 3, time: 0, total: 12 });
     expect(run.phase).toBe('riding');
     expect(run.current.elementId).toBe('v1');
-    // Sprung kurz nach der Verweigerung wird normal gewertet
+    // a jump shortly after the refusal is scored normally
     expect(run.onLanded('v1', 1, false).scored).toBe(true);
   });
 
-  it('Verweigerungsmeldungen an anderen Hindernissen werden ignoriert', () => {
+  it('refusal reports at other obstacles are ignored', () => {
     const run = riding();
     run.onRefusal('o2', 1);
     run.onRefusal('v1', -1);
     expect(run.faults.total).toBe(0);
   });
 
-  it('liegende Stange eines gewerteten Abwurfs wird nach einem weiteren Sprung nicht aufgebaut', () => {
+  it('a pole down from a scored knockdown is not rebuilt after another jump', () => {
     const run = riding();
     run.onLanded('v1', 1, true);
     expect(run.onLanded('v1', -1, true)).toEqual({ scored: false, rebuildAfterS: null });

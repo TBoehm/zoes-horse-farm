@@ -1,5 +1,5 @@
-// Ritt-Zustandsautomat im Parcours (Konzept Regeln 22, 26–33, 49; Vertrag „Parcours" in
-// docs/specs/springreiten-trainer/architecture.md). Rein: Zeit kommt als timeMs herein.
+// Ride state machine for a course (concept rules 22, 26–33, 49; contract "Parcours" in
+// docs/specs/springreiten-trainer/architecture.md). Pure: time comes in as timeMs.
 import { TUNING } from '../sim/tuning.js';
 import { approachInfo } from '../sim/geometry.js';
 import {
@@ -10,18 +10,18 @@ import {
   toCentiseconds,
 } from './scoring.js';
 
-export const REBUILD_AFTER_S = 3; // Wiederaufbau ungewerteter Abwürfe (Regeln 26, 29)
-export const MISSING_HINT_MS = 5000; // so lange bleibt der Hinweis „fehlendes Hindernis"
+export const REBUILD_AFTER_S = 3; // rebuild of unscored knockdowns (rules 26, 29)
+export const MISSING_HINT_MS = 5000; // how long the "missing obstacle" hint stays
 
 /**
- * Überquert die Strecke prev→next die Linie in Richtung line.dir?
- * Liefert true nur bei Wechsel von der Rückseite (−dir) auf die Vorderseite.
+ * Does the segment prev→next cross the line in direction line.dir?
+ * Returns true only when changing from the back side (−dir) to the front side.
  */
 export function crossesLine(line, prev, next) {
   const [ax, az] = line.a;
   const ex = line.b[0] - ax;
   const ez = line.b[1] - az;
-  // Normale der Linie, so ausgerichtet, dass sie in Ritt-Richtung zeigt
+  // Normal of the line, oriented so that it points in the riding direction
   let nx = -ez;
   let nz = ex;
   if (nx * line.dir[0] + nz * line.dir[1] < 0) {
@@ -43,8 +43,8 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
   const allowedMs = course.allowedTimeS * 1000;
 
   let phase = 'prestart';
-  let index = 0; // Hindernis an der Reihe (= obstacles.length → Ziel)
-  let part = 0; // 0 = a bzw. Einzelsprung, 1 = Teil b einer Kombination
+  let index = 0; // obstacle whose turn it is (= obstacles.length → finish)
+  let part = 0; // 0 = a or single jump, 1 = part b of a combination
   let startMs = 0;
   let nowMs = 0;
   let finalMs = 0;
@@ -54,8 +54,8 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
   let hintSince = 0;
   let result = null;
   const rebuilds = new Set();
-  const lying = new Set(); // Elemente mit gewertetem Abwurf, deren Stangen liegen bleiben
-  // je Element: gewertet gesprungen / gewertet abgeworfen / verweigert
+  const lying = new Set(); // elements with a scored knockdown whose poles stay down
+  // per element: scored jump / scored knockdown / refused
   const scoredJumps = new Set();
   const scoredKnocks = new Set();
   const refused = new Set();
@@ -86,7 +86,7 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
     return phase === 'riding' && current !== null && current.id === elementId && dir === 1;
   }
 
-  /** Kombination neu anreiten: zurück auf a, a und b sofort wieder aufbauen. */
+  /** Re-approach the combination: back to a, rebuild a and b immediately. */
   function restartCombination() {
     part = 0;
     for (const e of obstacles[index].elements) {
@@ -164,7 +164,7 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
       },
     },
 
-    /** Prüft Start- und Ziellinie; liefert 'start' | 'finish' | 'missing' | null. */
+    /** Checks the start and finish lines; returns 'start' | 'finish' | 'missing' | null. */
     onLineCross(prev, next, timeMs) {
       if (phase === 'prestart' && crossesLine(course.start, prev, next)) {
         phase = 'riding';
@@ -196,7 +196,7 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
         advance();
         return { scored: true, rebuildAfterS: null };
       }
-      // ohne Wertung; Stangen eines gewerteten Abwurfs bleiben bis zum Rittende liegen
+      // unscored; poles of a scored knockdown stay down until the ride ends
       const rebuild = knocked && !(phase === 'riding' && lying.has(elementId));
       return { scored: false, rebuildAfterS: rebuild ? REBUILD_AFTER_S : null };
     },
@@ -212,7 +212,7 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
       if (phase !== 'riding') return;
       nowMs = timeMs;
       if (missingHint !== null && timeMs - hintSince >= MISSING_HINT_MS) missingHint = null;
-      // Abwenden zwischen a und b (Regel 31)
+      // Turning away between a and b (rule 31)
       if (part === 1) {
         const b = currentElement();
         const info = approachInfo(b, horse, tuning.approachDistance);
@@ -221,7 +221,7 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
       }
     },
 
-    /** IDs der Elemente, die sofort wieder aufgebaut werden müssen (einmalig). */
+    /** IDs of the elements that must be rebuilt immediately (once). */
     drainRebuilds() {
       const ids = [...rebuilds];
       rebuilds.clear();

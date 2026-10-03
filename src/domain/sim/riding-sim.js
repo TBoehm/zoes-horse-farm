@@ -1,5 +1,5 @@
-// Reit-Simulation (Vertrag: docs/specs/springreiten-trainer/architecture.md, „Reit-Simulation").
-// Rein und deterministisch: alle Zufallszüge laufen über das injizierte rng.
+// Riding simulation (contract: docs/specs/springreiten-trainer/architecture.md, "Reit-Simulation").
+// Pure and deterministic: all random draws go through the injected rng.
 import { TUNING } from './tuning.js';
 import { createRng } from './rng.js';
 import {
@@ -32,14 +32,14 @@ import {
 } from './jump.js';
 
 const ALWAYS_REFUSE = { canRefuse: () => true };
-// ab dieser Querkomponente (≈ sin 10°) bestimmt die Kursrichtung die Ausweichseite
+// from this lateral component (≈ sin 10°) on, the course direction decides the evasion side
 const DRIFT_SIDE = Math.sin((10 * Math.PI) / 180);
 
 function sideOf(value) {
   return value >= 0 ? 1 : -1;
 }
 
-/** Schnitt eines Strahls (Start p, Richtung d) mit einem achsparallelen Rechteck um 0. */
+/** Intersection of a ray (start p, direction d) with an axis-aligned rectangle around 0. */
 function rayHitsBox(a, c, da, dc, halfA, halfC) {
   let tMin = 0;
   let tMax = Infinity;
@@ -136,7 +136,7 @@ export function createRidingSim({
       turnRate: 0,
     });
     settling = false;
-    // nach einem Neustart galoppiert das Pferd erst nach neuem Drücken
+    // after a restart the horse only gallops after a fresh key press
     gallopBlocked = !gallop;
     fenceStopNormal = null;
     jump = null;
@@ -157,7 +157,7 @@ export function createRidingSim({
     for (const r of rails.values()) r.fill(true);
   }
 
-  // ---- Anreiten -----------------------------------------------------------
+  // ---- Approach -----------------------------------------------------------
 
   function approaches() {
     const list = [];
@@ -183,7 +183,7 @@ export function createRidingSim({
     };
   }
 
-  // ---- Galopp ---------------------------------------------------------------
+  // ---- Gallop ---------------------------------------------------------------
 
   function updateGallop(input) {
     if (!input.gallop) gallopBlocked = false;
@@ -198,7 +198,7 @@ export function createRidingSim({
     events.push({ type: 'gallopEnded', reason });
   }
 
-  // ---- Springen ---------------------------------------------------------------
+  // ---- Jumping ---------------------------------------------------------------
 
   function pressJump(events) {
     if (jump || refusal || maneuver) return;
@@ -209,7 +209,7 @@ export function createRidingSim({
       if (!cand || a.info.distance < cand.info.distance) cand = { ...a, zone };
     }
     if (cand) {
-      // Hindernis in Reichweite: Sprung oder nichts (kein Hopser), Regeln 19, 21
+      // Obstacle within reach: jump or nothing (no hop), rules 19, 21
       const ok =
         gaitAllows(cand.el, horse.gait) &&
         cand.info.angle <= T.jump.maxAngle &&
@@ -249,7 +249,7 @@ export function createRidingSim({
       },
       T,
     );
-    // Abwurf wird vor dem Sprung entschieden; im sicheren Kern (risk 0) gibt es keinen Zufallszug
+    // The knockdown is decided before the jump; in the safe core (risk 0) there is no random draw
     const fallRail = risk > 0 && rng() < risk ? chooseRail(el, info, zone) : -1;
     const u0 = toLocal(el, horse.x, horse.z).along * info.dir;
     const uEnd = (el.spread || 0) / 2 + landingDistance(el, info.distance, T);
@@ -322,7 +322,7 @@ export function createRidingSim({
     syncJumpView(s);
   }
 
-  // ---- Letzter Absprungpunkt, Verweigerung, Ausweichen ------------------------
+  // ---- Last takeoff point, refusal, evasion ------------------------
 
   function checkLastPoints(events) {
     let best = null;
@@ -345,7 +345,7 @@ export function createRidingSim({
   function decide(el, info, events) {
     armed.delete(el.id);
     if (locks.has(el.id) || !canRefuse(el.id, info.dir)) {
-      // Sperre bzw. Hindernis ohne Verweigerung: nie selbst springen, ohne Fehler ausweichen
+      // Locked or no-refusal obstacle: never self-jump, evade without a fault
       startManeuver(el, 'front', info.crossing);
       events.push({ type: 'swerve', elementId: el.id });
       return;
@@ -460,7 +460,7 @@ export function createRidingSim({
     }
   }
 
-  // ---- Kollision mit Hindernissen und Zaun ----------------------------------------
+  // ---- Collision with obstacles and fence ----------------------------------------
 
   function constrainObstacles(prevX, prevZ, events) {
     for (const el of elements) {
@@ -489,7 +489,7 @@ export function createRidingSim({
       const w = fromLocal(el, a, c);
       horse.x = w.x;
       horse.z = w.z;
-      // Trifft das Pferd Ständer/Hindernis ohne Sprung: seitlich ausweichen (Regel 22)
+      // Horse hits a stand/obstacle without jumping: evade sideways (rule 22)
       if (!jump && !maneuver && !refusal && horse.speed >= T.speeds.trotMin) {
         startManeuver(el, face, face === 'front' ? p.across : p.along);
         events.push({ type: 'swerve', elementId: el.id });
@@ -528,7 +528,7 @@ export function createRidingSim({
     }
   }
 
-  // ---- Schritt ---------------------------------------------------------------------
+  // ---- Step ---------------------------------------------------------------------
 
   function releaseLocks() {
     for (const id of locks) {

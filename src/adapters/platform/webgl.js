@@ -1,4 +1,4 @@
-// Prüft, ob 3D-Darstellung (WebGL) möglich ist (Regel 7).
+// Checks whether 3D rendering (WebGL) is possible (rule 7).
 export function hasWebGL(doc = globalThis.document) {
   try {
     const canvas = doc.createElement('canvas');

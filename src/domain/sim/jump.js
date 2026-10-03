@@ -1,25 +1,25 @@
-// Sprung-Regeln je Element: Absprungzone, Sollbereiche, Springbarkeit, Abwurfrisiko
-// (Konzept Regeln 15–20). Reine Funktionen ohne Zustand.
+// Jump rules per element: takeoff zone, target ranges, jumpability, knockdown risk
+// (concept rules 15–20). Pure stateless functions.
 import { POLE_LENGTH, STAND_WIDTH } from './tuning.js';
 import { clamp } from './movement.js';
 
 const DEG = Math.PI / 180;
 
-/** Schwierigkeit 0..1 aus Höhe und Spread. */
+/** Difficulty 0..1 from height and spread. */
 export function difficultyOf(element, tuning) {
   const d = tuning.jump.difficulty;
   const raw = (element.height - d.heightRef + d.spreadWeight * (element.spread || 0)) / d.range;
   return clamp(raw, 0, 1);
 }
 
-/** Springbarkeit nach Gangart (Regel 16). */
+/** Jumpability by gait (rule 16). */
 export function gaitAllows(element, gait) {
   if (gait === 'canter') return true;
   if (gait === 'trot') return element.kind === 'cross';
   return false;
 }
 
-/** Tempo-Sollbereich { min, max } des sicheren Kerns. */
+/** Target speed range { min, max } of the safe core. */
 export function speedBand(element, tuning) {
   const b = tuning.jump.speedBand;
   const s = tuning.speeds;
@@ -31,20 +31,20 @@ export function speedBand(element, tuning) {
   return { min, max: Math.min(s.canterMax, min + b.width) };
 }
 
-/** Mindesttempo für einen Selbstsprung am letzten Absprungpunkt (Regel 20). */
+/** Minimum speed for a self jump at the last takeoff point (rule 20). */
 export function selfMinSpeed(element, tuning) {
   const b = tuning.jump.speedBand;
   if (element.kind === 'cross') return b.crossSelfMin;
   return speedBand(element, tuning).min - b.selfMargin;
 }
 
-/** Winkel-Toleranz des sicheren Kerns (rad). */
+/** Angle tolerance of the safe core (rad). */
 export function safeAngle(element, tuning) {
   const a = tuning.jump.safeAngle;
   return a.base - a.perDifficulty * difficultyOf(element, tuning);
 }
 
-/** Halbes Zeitfenster der Absprungzone (s). */
+/** Half time window of the takeoff zone (s). */
 export function zoneWindow(element, tuning) {
   const w = tuning.jump.window;
   if (element.kind === 'cross') return w.cross;
@@ -54,8 +54,8 @@ export function zoneWindow(element, tuning) {
 }
 
 /**
- * Absprungzone und Reichweite in m vor der Vorderkante:
- * reach > far > near > lastPoint > 0. Hängt von Art, Höhe, Spread und Tempo ab.
+ * Takeoff zone and reach in m before the leading edge:
+ * reach > far > near > lastPoint > 0. Depends on kind, height, spread and speed.
  */
 export function zoneForElement(element, speed, tuning) {
   const j = tuning.jump;
@@ -77,10 +77,10 @@ export function zoneForElement(element, speed, tuning) {
 }
 
 /**
- * Abwurfrisiko eines Absprungs (Regeln 15, 18, 19, 20).
- * Im sicheren Kern (Gangart ok, Winkel ≤ Toleranz, Tempo im Sollbereich, Abstand in der Zone)
- * ist es exakt 0. Außerhalb steigt es monoton mit jeder Abweichung, skaliert mit der Schwierigkeit.
- * Ein Selbstsprung (self) trägt immer ein zusätzliches Grundrisiko.
+ * Knockdown risk of a takeoff (rules 15, 18, 19, 20).
+ * In the safe core (gait ok, angle ≤ tolerance, speed in target range, distance in the zone)
+ * it is exactly 0. Outside it rises monotonically with every deviation, scaled by difficulty.
+ * A self jump (self) always carries an additional base risk.
  */
 export function takeoffRisk(element, { gait, speed, distance, angle, self = false }, tuning) {
   const r = tuning.jump.risk;
@@ -101,7 +101,7 @@ export function takeoffRisk(element, { gait, speed, distance, angle, self = fals
   return Math.min(r.max, 1 - clean);
 }
 
-/** Stangen eines Elements mit ihrer lokalen Lage entlang n (rail 0 bei −spread/2). */
+/** Poles of an element with their local position along n (rail 0 at −spread/2). */
 export function railLayout(element) {
   if (element.kind === 'oxer') {
     const hs = (element.spread || 0) / 2;
@@ -113,7 +113,7 @@ export function railLayout(element) {
   return [{ rail: 0, along: 0 }];
 }
 
-/** Halbe Ausdehnung des Sperrbereichs (lokal), in den das Pferd ohne Sprung nicht hinein darf. */
+/** Half extent of the blocked area (local) that the horse may not enter without jumping. */
 export function blockExtents(element, tuning) {
   return {
     along: (element.spread || 0) / 2 + tuning.horse.frontMargin,
@@ -121,7 +121,7 @@ export function blockExtents(element, tuning) {
   };
 }
 
-/** Landeabstand hinter der hinteren Stange. */
+/** Landing distance behind the rear pole. */
 export function landingDistance(element, takeoffDistance, tuning) {
   const f = tuning.jump.flight;
   return clamp(

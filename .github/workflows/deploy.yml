@@ -1,6 +1,6 @@
 name: Deploy
 
-# Veröffentlichung nur nach Merge auf main und nur, wenn alle Gates grün sind.
+# Publish only after a merge to main and only when all gates are green.
 on:
   push:
     branches: [main]

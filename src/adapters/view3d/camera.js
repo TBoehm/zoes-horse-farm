@@ -1,4 +1,4 @@
-// Kamera (Regeln 13, 14): Standard schräg hinter/über Pferd und Reiter, Reiter-Sicht zwischen den Ohren.
+// Camera (rules 13, 14): default is diagonally behind/above horse and rider, rider view between the ears.
 import * as THREE from 'three';
 
 export const CAMERA_MODES = ['follow', 'rider'];
@@ -17,7 +17,7 @@ export function createCameraRig(camera) {
   function followTargets(state) {
     const fx = Math.sin(state.heading);
     const fz = Math.cos(state.heading);
-    // Beim Springen die Kamera nur halb mit anheben, damit der Sprung sichtbar bleibt
+    // When jumping, lift the camera only halfway so the jump stays visible
     const lift = (state.y ?? 0) * 0.5;
     desiredPos.set(state.x - fx * FOLLOW.back, FOLLOW.height + lift, state.z - fz * FOLLOW.back);
     desiredLook.set(
@@ -40,7 +40,7 @@ export function createCameraRig(camera) {
       this.setMode(mode === 'follow' ? 'rider' : 'follow');
       return mode;
     },
-    /** Sofort auf die Zielposition springen (z. B. nach Neustart). */
+    /** Jump straight to the target position (e.g. after a restart). */
     snap() {
       initialized = false;
     },

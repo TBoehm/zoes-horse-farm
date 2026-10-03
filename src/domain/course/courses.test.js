@@ -11,19 +11,19 @@ const cm = (m) => Math.round(m * 100);
 const isCombination = (o) => o.elements.length === 2;
 const mid = (l) => [(l.a[0] + l.b[0]) / 2, (l.a[1] + l.b[1]) / 2];
 
-describe('Regel 25: fünf Parcours', () => {
-  it('gibt es mit den Nummern 1 bis 5', () => {
+describe('Rule 25: five courses', () => {
+  it('exist with the numbers 1 to 5', () => {
     expect(COURSES.map((c) => c.id)).toEqual([1, 2, 3, 4, 5]);
   });
 
-  it('haben die vorgeschriebene Anzahl Hindernisse (Kombination zählt als eins)', () => {
+  it('have the prescribed number of obstacles (a combination counts as one)', () => {
     expect(COURSES.slice(0, 4).map((c) => c.obstacles.length)).toEqual([4, 5, 6, 7]);
     const n5 = COURSES[4].obstacles.length;
     expect(n5).toBeGreaterThanOrEqual(8);
     expect(n5).toBeLessThanOrEqual(10);
   });
 
-  it('P1: nur Kreuze, 40–50 cm', () => {
+  it('P1: crosses only, 40–50 cm', () => {
     const p1 = COURSES[0];
     expect([...kindsOf(p1)]).toEqual(['cross']);
     for (const e of elementsOf(p1)) {
@@ -32,7 +32,7 @@ describe('Regel 25: fünf Parcours', () => {
     }
   });
 
-  it('P2: Kreuze und Steilsprünge, Steilsprünge 60 cm', () => {
+  it('P2: crosses and verticals, verticals 60 cm', () => {
     const p2 = COURSES[1];
     expect([...kindsOf(p2)].sort()).toEqual(['cross', 'vertical']);
     for (const e of elementsOf(p2)) {
@@ -41,30 +41,30 @@ describe('Regel 25: fünf Parcours', () => {
     }
   });
 
-  it('P3: Kreuze, Steilsprünge, erster Oxer, bis 70 cm', () => {
+  it('P3: crosses, verticals, first oxer, up to 70 cm', () => {
     const p3 = COURSES[2];
     expect([...kindsOf(p3)].sort()).toEqual(['cross', 'oxer', 'vertical']);
     expect(cm(maxHeight(p3))).toBeLessThanOrEqual(70);
   });
 
-  it('P4: Steilsprünge und Oxer gemischt, bis 80 cm', () => {
+  it('P4: verticals and oxers mixed, up to 80 cm', () => {
     const p4 = COURSES[3];
     expect([...kindsOf(p4)].sort()).toEqual(['oxer', 'vertical']);
     expect(cm(maxHeight(p4))).toBeLessThanOrEqual(80);
   });
 
-  it('P5: Steilsprünge, Oxer, mindestens eine Zweifach-Kombination, bis 85 cm', () => {
+  it('P5: verticals, oxers, at least one double combination, up to 85 cm', () => {
     const p5 = COURSES[4];
     expect([...kindsOf(p5)].sort()).toEqual(['oxer', 'vertical']);
     expect(p5.obstacles.filter(isCombination).length).toBeGreaterThanOrEqual(1);
     expect(cm(maxHeight(p5))).toBeLessThanOrEqual(85);
   });
 
-  it('Kombination nur in Parcours 5', () => {
+  it('combination only in course 5', () => {
     for (const c of COURSES.slice(0, 4)) expect(c.obstacles.some(isCombination)).toBe(false);
   });
 
-  it('jeder Parcours wird schwerer oder bleibt gleich hoch', () => {
+  it('every course gets harder or stays the same height', () => {
     const heights = COURSES.map(maxHeight);
     for (let i = 1; i < heights.length; i++) {
       expect(heights[i]).toBeGreaterThanOrEqual(heights[i - 1]);
@@ -72,15 +72,15 @@ describe('Regel 25: fünf Parcours', () => {
   });
 });
 
-describe('Hindernis-Daten im Parcours', () => {
-  it('Nummern 1..n in Reihenfolge, alle gerichtet', () => {
+describe('Obstacle data in the course', () => {
+  it('numbers 1..n in order, all directed', () => {
     for (const c of COURSES) {
       expect(c.obstacles.map((o) => o.number)).toEqual(c.obstacles.map((_, i) => i + 1));
       expect(c.obstacles.every((o) => o.directed === true)).toBe(true);
     }
   });
 
-  it('Element-IDs sind eindeutig (auch über Parcours und freien Modus hinweg)', () => {
+  it('element ids are unique (also across courses and free mode)', () => {
     const ids = [...COURSES.flatMap(elementsOf), ...elementsOf(FREE_LAYOUT)].map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const c of COURSES) {
@@ -93,14 +93,14 @@ describe('Hindernis-Daten im Parcours', () => {
     }
   });
 
-  it('Oxer haben eine Tiefe, Kreuze und Steilsprünge nicht', () => {
+  it('oxers have a depth, crosses and verticals do not', () => {
     for (const e of [...COURSES.flatMap(elementsOf), ...elementsOf(FREE_LAYOUT)]) {
       if (e.kind === 'oxer') expect(e.spread).toBeGreaterThan(0.5);
       else expect(e.spread).toBe(0);
     }
   });
 
-  it('Kombination: b liegt COMBI_DISTANCE hinter a in Sprungrichtung', () => {
+  it('combination: b lies COMBI_DISTANCE behind a in jump direction', () => {
     const combos = [...COURSES, FREE_LAYOUT].flatMap((l) => l.obstacles.filter(isCombination));
     expect(combos.length).toBeGreaterThan(0);
     for (const o of combos) {
@@ -112,7 +112,7 @@ describe('Hindernis-Daten im Parcours', () => {
     }
   });
 
-  it('Hindernisse auf einer Linie stehen in verwandter Distanz (5–6 Galoppsprünge)', () => {
+  it('obstacles on a line stand at a related distance (5–6 canter strides)', () => {
     let lines = 0;
     for (const c of COURSES) {
       for (let i = 1; i < c.obstacles.length; i++) {
@@ -130,7 +130,7 @@ describe('Hindernis-Daten im Parcours', () => {
     expect(lines).toBeGreaterThanOrEqual(8);
   });
 
-  it('erstes Hindernis ist das niedrigste (einladend)', () => {
+  it('first obstacle is the lowest (inviting)', () => {
     for (const c of COURSES) {
       const lowest = Math.min(...elementsOf(c).map((e) => e.height));
       expect(c.obstacles[0].elements[0].height).toBe(lowest);
@@ -138,19 +138,19 @@ describe('Hindernis-Daten im Parcours', () => {
   });
 });
 
-describe('Platz, Anreit-Korridore, Linien', () => {
+describe('Arena, approach corridors, lines', () => {
   it.each(COURSES.map((c) => [c.id, c]))(
-    'Parcours %i: Zaunabstand, freie Korridore, keine Überlappung, Linien frei',
+    'Course %i: fence distance, clear corridors, no overlap, lines clear',
     (_id, c) => {
       const lines = [
         { name: 'start', ...c.start },
-        { name: 'ziel', ...c.finish },
+        { name: 'finish', ...c.finish },
       ];
       expect(checkLayout(c.obstacles, { lines })).toEqual([]);
     },
   );
 
-  it('Start- und Ziellinie: ca. 6 m, Richtung senkrecht zur Linie', () => {
+  it('start and finish line: about 6 m, direction perpendicular to the line', () => {
     for (const c of COURSES) {
       for (const l of [c.start, c.finish]) {
         const dx = l.b[0] - l.a[0];
@@ -162,7 +162,7 @@ describe('Platz, Anreit-Korridore, Linien', () => {
     }
   });
 
-  it('Startposition: im Halt einige Meter vor der Startlinie, Blick zur Linie', () => {
+  it('start position: at halt a few meters before the start line, facing the line', () => {
     for (const c of COURSES) {
       const [mx, mz] = mid(c.start);
       const p = c.startPose;
@@ -176,7 +176,7 @@ describe('Platz, Anreit-Korridore, Linien', () => {
     }
   });
 
-  it('Ideallinien-Wegpunkte liegen im Platz (je Teilstrecke ein Eintrag)', () => {
+  it('ideal-line waypoints lie within the arena (one entry per leg)', () => {
     for (const c of COURSES) {
       expect(c.track.length).toBe(c.obstacles.length + 1);
       for (const [x, z] of c.track.flat()) {
@@ -186,7 +186,7 @@ describe('Platz, Anreit-Korridore, Linien', () => {
     }
   });
 
-  it('Ideallinien-Wegpunkte liegen in keinem Hindernis', () => {
+  it('ideal-line waypoints lie in no obstacle', () => {
     for (const c of COURSES) {
       const fps = elementsOf(c).map(footprint);
       for (const [x, z] of c.track.flat()) {
@@ -197,10 +197,10 @@ describe('Platz, Anreit-Korridore, Linien', () => {
   });
 });
 
-describe('Regel 41: freier Modus', () => {
+describe('Rule 41: free mode', () => {
   const free = FREE_LAYOUT;
 
-  it('enthält mindestens je ein Kreuz, einen Steilsprung, einen Oxer und eine Kombination', () => {
+  it('contains at least one cross, one vertical, one oxer and one combination', () => {
     const singles = free.obstacles.filter((o) => !isCombination(o)).flatMap((o) => o.elements);
     const kinds = new Set(singles.map((e) => e.kind));
     expect(kinds.has('cross')).toBe(true);
@@ -209,25 +209,25 @@ describe('Regel 41: freier Modus', () => {
     expect(free.obstacles.some(isCombination)).toBe(true);
   });
 
-  it('Höhen zwischen 40 und 85 cm, verteilt', () => {
+  it('heights between 40 and 85 cm, spread out', () => {
     const heights = elementsOf(free).map((e) => cm(e.height));
     expect(Math.min(...heights)).toBe(40);
     expect(Math.max(...heights)).toBe(85);
     expect(new Set(heights).size).toBeGreaterThanOrEqual(5);
   });
 
-  it('ungerichtet und ohne Nummern', () => {
+  it('undirected and without numbers', () => {
     for (const o of free.obstacles) {
       expect(o.directed).toBe(false);
       expect(o.number).toBeNull();
     }
   });
 
-  it('Platz zum Anreiten aus beiden Richtungen, Zaunabstand, keine Überlappung', () => {
+  it('room to approach from both directions, fence distance, no overlap', () => {
     expect(checkLayout(free.obstacles)).toEqual([]);
   });
 
-  it('Startposition liegt frei, außerhalb aller Korridore', () => {
+  it('start position is clear, outside all corridors', () => {
     const p = free.startPose;
     const dot = { cx: p.x, cz: p.z, ux: 0, uz: 1, halfAlong: 1.5, halfAcross: 1.5 };
     for (const o of free.obstacles) expect(rectsOverlap(dot, corridorOf(o))).toBe(false);

@@ -1,4 +1,4 @@
-// 3D-Engine: ein Renderer, eine Welt, ein Pferd mit Reiter, eine Kamera – über alle Ritte geteilt.
+// 3D engine: one renderer, one world, one horse with rider, one camera – shared across all rides.
 import * as THREE from 'three';
 import { h } from '../ui/dom.js';
 import { createRenderer, resizeRenderer, setMaxPixelRatio } from './renderer.js';
@@ -36,7 +36,7 @@ export function createEngine({ app, store, inputMode }) {
   const camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.1, 900);
   const cameraRig = createCameraRig(camera);
 
-  // Grafikstufe (Regel 4): beim ersten Start bzw. bei „Automatisch" ohne Stufe passend zum Gerät
+  // Graphics level (rule 4): on first start, or on "Automatic" without a level, pick one that fits the device
   let settings = store.get('settings');
   if (!settings.graphicsLevel) {
     const level = pickInitialLevel(deviceInfo(renderer, inputMode));
@@ -105,7 +105,7 @@ export function createEngine({ app, store, inputMode }) {
     get level() {
       return level;
     },
-    /** Startet (fn) bzw. stoppt (null) die Bildschleife; der Canvas ist nur dabei sichtbar. */
+    /** Starts (fn) or stops (null) the frame loop; the canvas is visible only while it runs. */
     run(fn) {
       frameFn = fn;
       last = 0;
@@ -119,7 +119,7 @@ export function createEngine({ app, store, inputMode }) {
   };
 }
 
-/** Engine einmal je App erzeugen (erst, wenn sie gebraucht wird). */
+/** Create the engine once per app (only when it is needed). */
 export function getEngine(ctx) {
   if (!ctx.services.engine) ctx.services.engine = createEngine(ctx);
   return ctx.services.engine;
