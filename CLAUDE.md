@@ -21,6 +21,7 @@ Diese Regeln gelten für jede Änderung (auch für Subagents). Details:
 ## Clean Architecture (Abhängigkeiten zeigen nur nach innen)
 
 ```
+src/shared/       reine Helfer ohne Seiteneffekte (Event-Emitter, Mathe); importiert nur shared.
 src/domain/       reine Fachlogik: Reit-/Sprung-Simulation, Parcours & Wertung, Fortschritt &
                   Auszeichnungen, Pferd (Name, Aussehen). Kein three.js, kein DOM, kein Storage,
                   kein Date.now()/Math.random() direkt (Zeit/Zufall werden injiziert).
@@ -32,7 +33,8 @@ src/adapters/     Technik: ui/ (Bildschirme, App-Rahmen, DOM), view3d/ (three.js
 src/main.js       Composition Root: verdrahtet alles, sonst keine Logik.
 ```
 
-- `domain` importiert nur `domain`. `application` importiert `domain` und `application`.
+- `domain` importiert nur `domain`. `application` importiert `domain` und `application`. Jede
+  Schicht darf zusätzlich `shared` importieren.
   `adapters` dürfen alles Innere importieren, aber nicht `main.js`. ESLint erzwingt das
   (`no-restricted-imports`).
 - UI-Bildschirme enthalten keine Fachregeln (Wertung, Freischaltung, Auszeichnungen,
