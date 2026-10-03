@@ -4,6 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
 // in CI installiert Playwright die passenden Browser selbst.
 const chromiumPath = process.env.PW_CHROMIUM_PATH;
 const browsers = (process.env.SMOKE_BROWSERS || 'chromium').split(',');
+const GPU_ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 
 const projects = [
   {
@@ -12,13 +13,20 @@ const projects = [
       ...devices['Desktop Chrome'],
       launchOptions: {
         executablePath: chromiumPath || undefined,
-        args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+        args: GPU_ARGS,
       },
     },
   },
   { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
   { name: 'webkit', use: { ...devices['Desktop Safari'] } },
-  { name: 'msedge', use: { ...devices['Desktop Edge'], channel: 'msedge' } },
+  {
+    name: 'msedge',
+    use: {
+      ...devices['Desktop Edge'],
+      channel: 'msedge',
+      launchOptions: { args: GPU_ARGS },
+    },
+  },
 ].filter((p) => browsers.includes(p.name));
 
 export default defineConfig({

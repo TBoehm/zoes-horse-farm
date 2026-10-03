@@ -10,14 +10,14 @@ export default defineConfig({
   plugins: [
     VitePWA({
       // Kein skipWaiting/clientsClaim: eine neue Version wartet, bis alle Tabs geschlossen sind
-      // (Regel 5). Es gibt bewusst keinen Update-Hinweis.
+      // (Regel 5). Es gibt bewusst keinen Update-Hinweis. Der vom Plugin erzeugte Listener für die
+      // Nachricht SKIP_WAITING bleibt ungenutzt: diese Nachricht darf die App nie senden.
       registerType: 'prompt',
       injectRegister: 'script',
-      includeAssets: ['icon.svg', 'generated/*.png'],
       manifest: {
         name: "Zoe's Horse Farm",
         short_name: 'Horse Farm',
-        description: 'Springreiten üben im Browser',
+        description: 'Springreiten üben – Show jumping practice',
         lang: 'de',
         start_url: './',
         scope: './',

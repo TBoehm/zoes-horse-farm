@@ -9,7 +9,7 @@
   --c-ink-soft: #6b5442;
   --c-primary: #c8502e;
   --c-primary-dark: #9c3a1f;
-  --c-secondary: #5b8c3a;
+  --c-secondary: #4a7a2e;
   --c-accent: #f2b632;
   --c-focus: #1f6feb;
   --radius: 18px;
@@ -183,11 +183,11 @@ body {
 
 .btn-secondary {
   background: var(--c-secondary);
-  box-shadow: 0 4px 0 #3e6326;
+  box-shadow: 0 4px 0 #34581f;
 }
 
 .btn-secondary:active {
-  box-shadow: 0 1px 0 #3e6326;
+  box-shadow: 0 1px 0 #34581f;
 }
 
 .btn-small {
@@ -360,4 +360,17 @@ input[type='range'] {
 html.rotate-blocked .layer-ui,
 html.rotate-blocked .layer-scene {
   visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-icon {
+    animation: none;
+    transform: rotate(-90deg);
+  }
+}
+
+.volume-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }

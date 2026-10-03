@@ -36,7 +36,8 @@ export function detectDevice(win = globalThis.window) {
   return classifyDevice({
     maxTouchPoints: win.navigator?.maxTouchPoints ?? 0,
     hasTouchEvents: 'ontouchstart' in win,
-    finePointer: mm('(any-pointer: fine)') || mm('(any-hover: hover)'),
+    // Stift-/Hover-Erkennung bewusst nicht: Tablets mit Stift sind reine Touch-Geräte
+    finePointer: mm('(any-pointer: fine)'),
   });
 }
 
@@ -54,7 +55,8 @@ export function createInputMode({ device, target } = {}) {
     if (device === 'hybrid' && (e.pointerType === 'touch' || e.type === 'touchstart')) set(true);
   };
   const onKey = (e) => {
-    if (device === 'hybrid' && GAME_KEYS.has(e.code)) set(false);
+    const editable = e.target?.closest?.('input, textarea, [contenteditable="true"]');
+    if (device === 'hybrid' && GAME_KEYS.has(e.code) && !editable) set(false);
   };
 
   if (target) {

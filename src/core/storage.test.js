@@ -100,6 +100,16 @@ describe('Spielstand speichern (Regeln 45, 47)', () => {
   });
 });
 
+describe('Später erweiterte Bereiche (Regel 47)', () => {
+  it('liefert neue Felder auch ohne vorheriges update', () => {
+    registerSection('lateArea', objectSection({ a: field.number(0, 9, 1) }));
+    const store = createStore({ backend: memoryStorage(), env });
+    expect(store.get('lateArea')).toEqual({ a: 1 });
+    registerSection('lateArea', objectSection({ a: field.number(0, 9, 1), b: field.bool(true) }));
+    expect(store.get('lateArea')).toEqual({ a: 1, b: true });
+  });
+});
+
 describe('Speichern nicht möglich (Regel 46)', () => {
   it('bleibt bedienbar und meldet canSave=false', () => {
     const store = createStore({ backend: failingStorage(), sessionBackend: memoryStorage(), env });
@@ -128,10 +138,24 @@ describe('Speichern nicht möglich (Regel 46)', () => {
     expect(store.shouldShowSaveNotice()).toBe(false);
   });
 
-  it('kommt ohne jeden Speicher aus', () => {
-    const store = createStore({ backend: null, sessionBackend: null, env });
+  it('kommt ohne jeden Speicher aus, auch nach Neuladen nur einmal', () => {
+    let marked = false;
+    const noticeMarker = { get: () => marked, set: () => (marked = true) };
+    const store = createStore({ backend: null, sessionBackend: null, env, noticeMarker });
     expect(store.canSave).toBe(false);
     expect(store.shouldShowSaveNotice()).toBe(true);
     expect(store.shouldShowSaveNotice()).toBe(false);
+    const reloaded = createStore({ backend: null, sessionBackend: null, env, noticeMarker });
+    expect(reloaded.shouldShowSaveNotice()).toBe(false);
+  });
+
+  it('nutzt den Ersatz-Merker, wenn sessionStorage wirft', () => {
+    let marked = false;
+    const noticeMarker = { get: () => marked, set: () => (marked = true) };
+    const session = failingStorage();
+    const a = createStore({ backend: failingStorage(), sessionBackend: session, env, noticeMarker });
+    expect(a.shouldShowSaveNotice()).toBe(true);
+    const b = createStore({ backend: failingStorage(), sessionBackend: session, env, noticeMarker });
+    expect(b.shouldShowSaveNotice()).toBe(false);
   });
 });

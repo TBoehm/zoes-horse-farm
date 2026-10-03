@@ -12,7 +12,8 @@ export function registerStrings({ de = {}, en = {} }) {
 
 /** Deutsch, wenn die bevorzugte Browsersprache Deutsch ist, sonst Englisch. */
 export function detectLang(languages) {
-  const first = (Array.isArray(languages) ? languages : [languages]).find(Boolean);
+  const list = Array.isArray(languages) && languages.length ? languages : [languages];
+  const first = list.find(Boolean);
   return typeof first === 'string' && first.toLowerCase().startsWith('de') ? 'de' : 'en';
 }
 
@@ -39,7 +40,7 @@ export function hasString(key, language = lang) {
 export function t(key, params) {
   const text = dictionaries[lang][key] ?? dictionaries.de[key] ?? dictionaries.en[key];
   if (text === undefined) {
-    console.warn(`Fehlender Text: ${key}`);
+    console.error(`Fehlender Text: ${key}`);
     return '';
   }
   if (!params) return text;

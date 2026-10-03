@@ -37,6 +37,20 @@ function probe(backend) {
   }
 }
 
+/** Merker „Hinweis gezeigt" ohne Web Storage: history.state übersteht Neuladen, nicht das Schließen. */
+export function historyNoticeMarker(win = globalThis.window) {
+  return {
+    get: () => Boolean(win?.history?.state?.zhfSaveNotice),
+    set: () => {
+      try {
+        win.history.replaceState({ ...(win.history.state ?? {}), zhfSaveNotice: 1 }, '');
+      } catch {
+        // kein history (z. B. Tests)
+      }
+    },
+  };
+}
+
 /**
  * @param {object} opts
  * @param {Storage|null} [opts.backend] localStorage-artig
@@ -47,16 +61,19 @@ export function createStore({
   backend = safeStorage(() => globalThis.localStorage),
   sessionBackend = safeStorage(() => globalThis.sessionStorage),
   env = {},
+  noticeMarker = historyNoticeMarker(),
 } = {}) {
   const emitter = createEmitter();
   const raw = readRaw(backend, SAVE_KEY);
   const data = {};
   let canSave = probe(backend);
   let noticeShownInMemory = false;
+  const sectionRefs = new Map();
 
   for (const [name, section] of getSections()) {
     data[name] = section.sanitize(raw[name], env);
     raw[name] = data[name];
+    sectionRefs.set(name, section);
   }
 
   function write() {
@@ -79,9 +96,11 @@ export function createStore({
   function sectionOf(name) {
     const section = getSections().get(name);
     if (!section) throw new Error(`Unbekannter Bereich: ${name}`);
-    if (!(name in data)) {
+    // Später angemeldete oder erweiterte Bereiche (z. B. neue Einstellungsfelder) neu bereinigen
+    if (!(name in data) || sectionRefs.get(name) !== section) {
       data[name] = section.sanitize(raw[name], env);
       raw[name] = data[name];
+      sectionRefs.set(name, section);
     }
     return section;
   }
@@ -121,10 +140,11 @@ export function createStore({
         sessionBackend?.setItem(SESSION_NOTICE_KEY, '1');
         if (sessionBackend) return true;
       } catch {
-        // sessionStorage nicht nutzbar → Merker im Speicher
+        // sessionStorage nicht nutzbar → Merker in history.state (übersteht Neuladen)
       }
-      if (noticeShownInMemory) return false;
+      if (noticeShownInMemory || noticeMarker?.get()) return false;
       noticeShownInMemory = true;
+      noticeMarker?.set();
       return true;
     },
     /** Nur für Tests/Debug. */
