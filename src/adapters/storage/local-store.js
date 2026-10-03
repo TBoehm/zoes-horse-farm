@@ -148,10 +148,6 @@ export function createStore({
       noticeMarker?.set();
       return true;
     },
-    /** Tests/debug only. */
-    _raw() {
-      return structuredClone(raw);
-    },
   };
 }
 

@@ -417,14 +417,6 @@ export function chainWeights(s, joints, bones, blend) {
   return out;
 }
 
-/** Mix weight lists: (1 − t)·A + t·B. */
-export function mixWeights(a, b, t) {
-  const map = new Map();
-  for (const [n, w] of a) map.set(n, (map.get(n) || 0) + w * (1 - t));
-  for (const [n, w] of b) map.set(n, (map.get(n) || 0) + w * t);
-  return [...map.entries()];
-}
-
 /** Ellipsoid part around the local origin (eyes etc.). */
 export function ellipsoidData(rx, ry, rz, ws, hs) {
   const g = new THREE.SphereGeometry(1, ws, hs);

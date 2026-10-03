@@ -54,12 +54,6 @@ export function createTileFbm(basePeriod, octaves, seed = 1) {
   };
 }
 
-/** Smooth 2D noise for terrain (x, z in meters). */
-export function createFieldNoise(seed = 1) {
-  const base = createTileNoise(256, seed);
-  return (x, z, scale = 1) => base((x / scale / 256) % 1, (z / scale / 256) % 1);
-}
-
 export function createCanvas(width, height) {
   if (typeof document !== 'undefined') {
     const c = document.createElement('canvas');

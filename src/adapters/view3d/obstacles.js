@@ -606,14 +606,6 @@ export function createObstacles({ materialFactory }) {
     getElement(id) {
       return elements.get(id)?.element ?? null;
     },
-    getInfo(id) {
-      return elements.get(id) ?? null;
-    },
-    /** Pole state for tests/debugging: 'up' | 'falling' | 'down' | 'rising'. */
-    railState(id, rail) {
-      const list = elements.get(id)?.rails.get(rail);
-      return list ? list[0].state : null;
-    },
     highlight(elementId, number) {
       const key = elementId ? `${elementId}|${number ?? ''}` : null;
       // called every frame: only rebuild the ring and badge when something changed
