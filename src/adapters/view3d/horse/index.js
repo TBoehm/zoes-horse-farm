@@ -134,14 +134,16 @@ export function createHorse(options = {}) {
     body.material = createCoatMaterial(level, uniforms);
     tack.material = createVertexColorMaterial(level, 0.55);
     reins.setMaterial(tack.material);
-    body.bind(skeleton, body.matrixWorld);
-    tack.bind(skeleton, tack.matrixWorld);
+    // Always bind with the rest-pose matrix: the object may have been moved since (quality change)
+    body.bind(skeleton, bindMatrix);
+    tack.bind(skeleton, bindMatrix);
     const shadows = level !== 'low';
     for (const m of [body, tack, reins.mesh]) m.castShadow = shadows;
     rider?.setQuality(level);
   }
   // bind matrices in the rest pose (object not transformed yet)
   object.updateMatrixWorld(true);
+  const bindMatrix = body.matrixWorld.clone();
   applyQuality();
 
   const motion = createMotion();

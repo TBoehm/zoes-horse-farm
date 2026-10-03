@@ -35,7 +35,13 @@ export function choiceGroup({ label, options, value, onChange, name }) {
   );
   const idx = (opt) => options.indexOf(opt);
   group.append(...buttons);
-  return h('div', { class: 'setting-row' }, h('span', { class: 'setting-label' }, label), group);
+  const wide = options.length > 3 ? ' setting-row-wide' : '';
+  return h(
+    'div',
+    { class: `setting-row${wide}` },
+    h('span', { class: 'setting-label' }, label),
+    group,
+  );
 }
 
 /** On/off switch as a large button. */

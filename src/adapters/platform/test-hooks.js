@@ -50,6 +50,7 @@ function snapshotRide(ride, app) {
     aid: view.aid ? { ...view.aid } : null,
     highlight: view.highlight ? { ...view.highlight } : null,
     finishMarked: view.finishMarked,
+    lines: view.lines ? JSON.parse(JSON.stringify(view.lines)) : null,
     hud: view.hud ? JSON.parse(JSON.stringify(view.hud)) : null,
     obstacles: snapshotObstacles(ride.session.obstacles),
     horsePosition: ride.engine.horse.object.position.toArray().map((n) => round(n)),

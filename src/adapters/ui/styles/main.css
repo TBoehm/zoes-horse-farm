@@ -374,3 +374,91 @@ html.rotate-blocked .layer-scene {
   align-items: center;
   gap: 12px;
 }
+
+/* Low landscape screens (phones): compact panels so that menus fit without scrolling */
+@media (max-height: 560px) and (orientation: landscape) {
+  .panel {
+    padding: 12px 20px;
+  }
+  .panel h2 {
+    margin-bottom: 8px;
+    font-size: 1.3rem;
+  }
+  .menu-header {
+    margin-bottom: 8px;
+  }
+  .game-title {
+    font-size: 1.7rem;
+  }
+  .game-subtitle,
+  .menu-greeting {
+    margin-top: 2px;
+    font-size: 1rem;
+  }
+  .panel-menu {
+    width: min(640px, 100%);
+  }
+  .panel-menu .menu-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .panel-menu .menu-list > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .btn-menu {
+    min-height: 48px;
+    font-size: 1.15rem;
+  }
+  .panel-actions {
+    margin-top: 10px;
+  }
+  .panel-settings {
+    width: min(760px, 100%);
+  }
+  .settings-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 28px;
+    row-gap: 6px;
+  }
+  .settings-body .settings-group {
+    display: contents;
+  }
+  .settings-body .setting-row:not(.setting-row-wide) {
+    flex-wrap: nowrap;
+  }
+  .settings-body .setting-label {
+    font-size: 1rem;
+  }
+  .panel-horse .btn-choice {
+    padding: 6px 12px;
+  }
+  .settings-body input[type='range'] {
+    width: 110px;
+  }
+  .settings-body .setting-row-wide,
+  .settings-body .setting-reset {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Settings and "My horse": only the list scrolls, "Back" stays in view */
+.panel-settings,
+.panel-horse {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-settings .settings-body,
+.panel-horse .settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.panel-settings .panel-actions,
+.panel-horse .panel-actions {
+  flex: none;
+}

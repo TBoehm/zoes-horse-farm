@@ -212,3 +212,21 @@
 .confirm-box[hidden] {
   display: none;
 }
+
+/* Badges: only the grid scrolls, "Back" stays in view */
+.panel-badges {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-badges .badge-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.panel-badges .panel-head,
+.panel-badges .panel-actions {
+  flex: none;
+}

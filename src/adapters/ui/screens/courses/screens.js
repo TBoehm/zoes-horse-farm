@@ -137,55 +137,59 @@ export function createResultsScreen(ctx, params) {
   const el = h(
     'section',
     { class: 'panel panel-results' },
-    h('h2', {}, t('results.title')),
-    h(
-      'p',
-      { class: 'results-horse' },
-      t('results.horse', { name: displayName(store.get('horse'), t('horse.defaultName')) }),
-    ),
-    stars(h, summary.stars, t('courses.starsLabel', { count: summary.stars })),
-    summary.isNewBest
-      ? h('p', { class: 'new-best', dataset: { result: 'newBest' } }, t('results.newBest'))
-      : null,
     h(
       'div',
-      { class: 'result-table' },
-      row(t('results.time'), formatCs(summary.timeCs, getLang()), 'time'),
-      row(
-        t('results.knockdowns'),
-        t('results.points', { ...rows.knockdowns, each: KNOCKDOWN_FAULTS }),
-        'knockdowns',
+      { class: 'results-body' },
+      h('h2', {}, t('results.title')),
+      h(
+        'p',
+        { class: 'results-horse' },
+        t('results.horse', { name: displayName(store.get('horse'), t('horse.defaultName')) }),
       ),
-      row(
-        t('results.refusals'),
-        t('results.points', { ...rows.refusals, each: REFUSAL_FAULTS }),
-        'refusals',
+      stars(h, summary.stars, t('courses.starsLabel', { count: summary.stars })),
+      summary.isNewBest
+        ? h('p', { class: 'new-best', dataset: { result: 'newBest' } }, t('results.newBest'))
+        : null,
+      h(
+        'div',
+        { class: 'result-table' },
+        row(t('results.time'), formatCs(summary.timeCs, getLang()), 'time'),
+        row(
+          t('results.knockdowns'),
+          t('results.points', { ...rows.knockdowns, each: KNOCKDOWN_FAULTS }),
+          'knockdowns',
+        ),
+        row(
+          t('results.refusals'),
+          t('results.points', { ...rows.refusals, each: REFUSAL_FAULTS }),
+          'refusals',
+        ),
+        row(t('results.timeFaults'), String(rows.timeFaults), 'timeFaults'),
+        row(t('results.total'), String(rows.total), 'total'),
       ),
-      row(t('results.timeFaults'), String(rows.timeFaults), 'timeFaults'),
-      row(t('results.total'), String(rows.total), 'total'),
-    ),
-    summary.unlockedCourse
-      ? h('p', { class: 'unlocked-note' }, t('results.unlocked', { n: summary.unlockedCourse }))
-      : null,
-    summary.badges.length
-      ? h(
-          'div',
-          { class: 'new-badges', dataset: { result: 'badges' } },
-          h('h3', {}, t('results.newBadges')),
-          h(
-            'ul',
-            { class: 'badge-grid' },
-            summary.badges.map((badge) =>
-              h(
-                'li',
-                { class: 'badge-card is-earned', dataset: { badge: badge.id } },
-                badgeEmblem(h, badge.id, true),
-                h('strong', { class: 'badge-name' }, t(badge.nameKey)),
+      summary.unlockedCourse
+        ? h('p', { class: 'unlocked-note' }, t('results.unlocked', { n: summary.unlockedCourse }))
+        : null,
+      summary.badges.length
+        ? h(
+            'div',
+            { class: 'new-badges', dataset: { result: 'badges' } },
+            h('h3', {}, t('results.newBadges')),
+            h(
+              'ul',
+              { class: 'badge-grid' },
+              summary.badges.map((badge) =>
+                h(
+                  'li',
+                  { class: 'badge-card is-earned', dataset: { badge: badge.id } },
+                  badgeEmblem(h, badge.id, true),
+                  h('strong', { class: 'badge-name' }, t(badge.nameKey)),
+                ),
               ),
             ),
-          ),
-        )
-      : null,
+          )
+        : null,
+    ),
     h(
       'div',
       { class: 'panel-actions' },

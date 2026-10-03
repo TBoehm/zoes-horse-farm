@@ -3,6 +3,7 @@ import * as THREE from 'three';
 
 export const CAMERA_MODES = ['follow', 'rider'];
 
+const RIDER_VIEW = { back: 0.5, up: 0.24, lookDown: 1.0 };
 const FOLLOW = { back: 7.5, height: 3.6, lookAhead: 6, lookHeight: 1.1, stiffness: 5 };
 
 export function createCameraRig(camera) {
@@ -48,11 +49,15 @@ export function createCameraRig(camera) {
       if (mode === 'rider' && earAnchor) {
         earAnchor.updateWorldMatrix(true, false);
         earAnchor.getWorldPosition(tmp);
-        camera.position.copy(tmp);
-        camera.position.y += 0.12;
         const fx = Math.sin(state.heading);
         const fz = Math.cos(state.heading);
-        look.set(tmp.x + fx * 10, tmp.y - 0.9, tmp.z + fz * 10);
+        // Eyes slightly behind and above the poll so that the ears and the mane stay in view
+        camera.position.set(
+          tmp.x - fx * RIDER_VIEW.back,
+          tmp.y + RIDER_VIEW.up,
+          tmp.z - fz * RIDER_VIEW.back,
+        );
+        look.set(tmp.x + fx * 10, tmp.y - RIDER_VIEW.lookDown, tmp.z + fz * 10);
         camera.lookAt(look);
         return;
       }

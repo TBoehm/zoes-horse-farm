@@ -93,12 +93,14 @@ export function createMyHorseScreen(ctx) {
   let angle = 0.9;
   engine.run((dt) => {
     angle += dt * 0.25;
-    const wide = window.innerWidth > window.innerHeight;
+    const w = window.innerWidth;
+    const hgt = window.innerHeight;
+    // In landscape, shift the picture so that the horse stays in the free area right of the panel
+    const shift = w > hgt ? (panel.getBoundingClientRect().width + 16) / 2 : 0;
+    camera.setViewOffset(w, hgt, -shift, 0, w, hgt);
     const r = 5.2;
-    // In landscape, show the horse to the right of the panel
-    const side = wide ? -1.6 : 0;
-    camera.position.set(Math.sin(angle) * r + side, 1.9, Math.cos(angle) * r);
-    camera.lookAt(side * 0.55, 1.15, 0);
+    camera.position.set(Math.sin(angle) * r, 1.9, Math.cos(angle) * r);
+    camera.lookAt(0, 1.15, 0);
     horse.update(dt, IDLE);
     world.setShadowFocus?.(0, 0);
     world.update?.(dt, camera);
@@ -110,6 +112,7 @@ export function createMyHorseScreen(ctx) {
     screenClass: 'screen-horse',
     destroy() {
       engine.run(null);
+      camera.clearViewOffset();
     },
   };
 }

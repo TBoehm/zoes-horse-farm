@@ -186,4 +186,62 @@
   .plan-wrap {
     max-height: 40vh;
   }
+  /* Pre-start card: plan left, details and buttons right, so that the plan stays large */
+  .panel-prestart {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 230px;
+    grid-template-rows: auto 1fr auto;
+    column-gap: 16px;
+  }
+  .panel-prestart h2 {
+    grid-column: 1 / -1;
+  }
+  .panel-prestart .plan-wrap {
+    grid-row: 2 / 4;
+    max-height: none;
+    align-self: center;
+  }
+  .panel-prestart .prestart-info {
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: 0;
+    align-self: start;
+  }
+  .panel-prestart .panel-actions {
+    margin-top: 0;
+    align-self: end;
+  }
+  /* Results: figures in two columns and smaller stars, so that most fits without scrolling */
+  .panel-results {
+    width: min(640px, 100%);
+  }
+  .panel-results .stars {
+    font-size: 1.8rem;
+  }
+  .result-table {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 10px;
+    margin: 6px 0;
+  }
+  .result-row[data-result='total'] {
+    grid-column: 1 / -1;
+  }
+}
+
+/* The buttons stay reachable when the results do not fit on the screen */
+.panel-results {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-results .results-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.panel-results .panel-actions {
+  flex: none;
 }
