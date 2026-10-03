@@ -29,6 +29,9 @@ function spreadFor(kind, height) {
   return byMaxHeight.find((e) => height <= e.maxHeight)?.spread ?? tall;
 }
 
+/** Oxer depth for a given oxer height (tuning). */
+const oxerSpread = (height) => spreadFor('oxer', height);
+
 function element(id, kind, height, x, z, rot) {
   return { id, kind, height, spread: spreadFor(kind, height), x, z, rot };
 }
@@ -191,7 +194,7 @@ export const COURSES = [
       single(2, 'p3-2', 'vertical', 0.6, -14, -11 + relatedDistance(5), N),
       single(3, 'p3-3', 'vertical', 0.65, ...P3_DIAG, diagDown(-1)),
       single(4, 'p3-4', 'oxer', 0.7, 14, -9.5, N),
-      single(5, 'p3-5', 'vertical', 0.65, 14, -9.5 + relatedDistance(5, 0.7), N),
+      single(5, 'p3-5', 'vertical', 0.65, 14, -9.5 + relatedDistance(5, oxerSpread(0.7)), N),
       single(6, 'p3-6', 'vertical', 0.7, -7, 4, S),
     ],
     track: [
@@ -200,7 +203,7 @@ export const COURSES = [
       intoDiag(-14, -11 + relatedDistance(5) + LANDING_FREE, P3_DIAG, -1),
       outOfDiag(P3_DIAG, -1, 14),
       [],
-      turnAround(14, -7, -9.5 + relatedDistance(5, 0.7) + LANDING_FREE, 1, 8),
+      turnAround(14, -7, -9.5 + relatedDistance(5, oxerSpread(0.7)) + LANDING_FREE, 1, 8),
       [],
     ],
   }),
@@ -210,20 +213,25 @@ export const COURSES = [
     finish: line(7, -24, S),
     obstacles: [
       single(1, 'p4-1', 'vertical', 0.7, 14, -11, N),
-      single(2, 'p4-2', 'oxer', 0.75, 14, -11 + relatedDistance(5, 0, 0.8), N),
+      single(2, 'p4-2', 'oxer', 0.75, 14, -11 + relatedDistance(5, 0, oxerSpread(0.75)), N),
       single(3, 'p4-3', 'vertical', 0.75, ...P4_DIAG, diagDown(1)),
       single(4, 'p4-4', 'oxer', 0.8, -14, -9.5, N),
-      single(5, 'p4-5', 'vertical', 0.8, -14, -9.5 + relatedDistance(5, 0.8), N),
+      single(5, 'p4-5', 'vertical', 0.8, -14, -9.5 + relatedDistance(5, oxerSpread(0.8)), N),
       single(6, 'p4-6', 'oxer', 0.8, 7, 10, S),
-      single(7, 'p4-7', 'vertical', 0.8, 7, 10 - relatedDistance(5, 0.8), S),
+      single(7, 'p4-7', 'vertical', 0.8, 7, 10 - relatedDistance(5, oxerSpread(0.8)), S),
     ],
     track: [
       [],
       [],
-      intoDiag(14, -11 + relatedDistance(5, 0, 0.8) + 0.4 + LANDING_FREE, P4_DIAG, 1),
+      intoDiag(
+        14,
+        -11 + relatedDistance(5, 0, oxerSpread(0.75)) + oxerSpread(0.75) / 2 + LANDING_FREE,
+        P4_DIAG,
+        1,
+      ),
       outOfDiag(P4_DIAG, 1, -14),
       [],
-      turnAround(-14, 7, 10 + 0.4 + 14, 1, 8),
+      turnAround(-14, 7, 10 + oxerSpread(0.8) / 2 + 14, 1, 8),
       [],
       [],
     ],
@@ -235,25 +243,45 @@ export const COURSES = [
     finish: line(-7, 23, N),
     obstacles: [
       single(1, 'p5-1', 'vertical', 0.75, 14, -11, N),
-      single(2, 'p5-2', 'oxer', 0.8, 14, -11 + relatedDistance(5, 0, 0.8), N),
+      single(2, 'p5-2', 'oxer', 0.8, 14, -11 + relatedDistance(5, 0, oxerSpread(0.8)), N),
       single(3, 'p5-3', 'oxer', 0.8, -14, -11, N),
-      single(4, 'p5-4', 'vertical', 0.85, -14, -11 + relatedDistance(5, 0.8), N),
+      single(4, 'p5-4', 'vertical', 0.85, -14, -11 + relatedDistance(5, oxerSpread(0.8)), N),
       combination(5, 'p5-5', ['vertical', 0.8], ['oxer', 0.85], 7, 11.5, S),
-      single(6, 'p5-6', 'vertical', 0.85, 7, 11.5 - COMBI_DISTANCE - relatedDistance(5, 0.9), S),
+      single(
+        6,
+        'p5-6',
+        'vertical',
+        0.85,
+        7,
+        11.5 - COMBI_DISTANCE - relatedDistance(5, oxerSpread(0.85)),
+        S,
+      ),
       single(7, 'p5-7', 'oxer', 0.85, -7, -11.5, N),
-      single(8, 'p5-8', 'vertical', 0.85, -7, -11.5 + relatedDistance(5, 0.9), N),
+      single(8, 'p5-8', 'vertical', 0.85, -7, -11.5 + relatedDistance(5, oxerSpread(0.85)), N),
     ],
     track: [
       [],
       [],
       [
-        ...turnAround(14, 0, -11 + relatedDistance(5, 0, 0.8) + 0.4 + LANDING_FREE, 1, 7),
-        ...turnAround(0, -14, -11 - 0.4 - 14, -1, 7),
+        ...turnAround(
+          14,
+          0,
+          -11 + relatedDistance(5, 0, oxerSpread(0.8)) + oxerSpread(0.8) / 2 + LANDING_FREE,
+          1,
+          7,
+        ),
+        ...turnAround(0, -14, -11 - oxerSpread(0.8) / 2 - 14, -1, 7),
       ],
       [],
       turnAround(-14, 7, 11.5 + 14, 1, 8),
       [],
-      turnAround(7, -7, 11.5 - COMBI_DISTANCE - relatedDistance(5, 0.9) - LANDING_FREE, -1, 7),
+      turnAround(
+        7,
+        -7,
+        11.5 - COMBI_DISTANCE - relatedDistance(5, oxerSpread(0.85)) - LANDING_FREE,
+        -1,
+        7,
+      ),
       [],
       [],
     ],

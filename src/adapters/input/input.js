@@ -24,10 +24,13 @@ export function createInput({
   inputMode,
   target = window,
   isActive,
-  deps: { createKeyboard: makeKeyboard = createKeyboard, createTouchControls: makeTouch } = {},
+  deps: {
+    createKeyboard: makeKeyboard = createKeyboard,
+    createTouchControls: makeTouch = createTouchControls,
+  } = {},
 }) {
   const keyboard = makeKeyboard(target, { isActive });
-  const touch = (makeTouch ?? createTouchControls)(container);
+  const touch = makeTouch(container);
   touch.setVisible(inputMode.touch);
 
   // Rules 9/11: switching the touch mode ends an active gallop. The switch is often caused by the

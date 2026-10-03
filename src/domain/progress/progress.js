@@ -1,7 +1,7 @@
 // Progress (concept rules 36, 37, 44, 47, 48): pure and immutable, no DOM.
 // All functions return new objects; unknown fields are preserved unchanged.
 import { isPlainObject } from '../../shared/math.js';
-import { BADGE_IDS, COURSE_COUNT } from './badges.js';
+import { BADGE_IDS, COURSE_COUNT, COURSE_IDS } from './badges.js';
 import { isBetterResult } from '../course/scoring.js';
 
 export const PROGRESS_DEFAULTS = Object.freeze({
@@ -35,16 +35,14 @@ function setOwn(target, key, value) {
   });
 }
 
-const COURSE_KEYS = Array.from({ length: COURSE_COUNT }, (_, i) => String(i + 1));
-
 function sanitizeCourses(raw) {
   const courses = {};
   if (!isPlainObject(raw)) return courses;
   // Unknown keys (later versions) stay untouched (rule 47); courses 1..5 are cleaned
   for (const [key, value] of Object.entries(raw)) {
-    if (!COURSE_KEYS.includes(key)) setOwn(courses, key, value);
+    if (!COURSE_IDS.includes(key)) setOwn(courses, key, value);
   }
-  for (const key of COURSE_KEYS) {
+  for (const key of COURSE_IDS) {
     const entry = sanitizeCourse(raw[key]);
     if (entry) courses[key] = entry;
   }

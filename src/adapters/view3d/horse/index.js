@@ -25,10 +25,8 @@ import { EAR_ANCHOR, REST, SADDLE_SEAT, createSkeletonBones } from './skeleton.j
 import { createReins } from './reins.js';
 import { GRAPHICS_LEVELS } from '../../../application/graphics-levels.js';
 
-export { COATS, MARKINGS, DEFAULT_APPEARANCE } from './coats.js';
-
 /** Distance body centre → simulation reference point (ground below the forelegs). */
-export const ORIGIN_OFFSET_Z = REST.front.hoof[2];
+const ORIGIN_OFFSET_Z = REST.front.hoof[2];
 
 const LEG_PREFIX = ['L', 'R', 'L', 'R'];
 const PI = POSE_KEYS.reduce((o, k, i) => ((o[k] = i), o), {});
@@ -44,11 +42,7 @@ function earFlick(t, k) {
 }
 
 export function createHorse(options = {}) {
-  const {
-    quality: q0 = 'medium',
-    rider: withRider = true,
-    origin = 'front', // 'front' (sim reference point) or 'center' (e.g. menu preview)
-  } = options;
+  const { quality: q0 = 'medium', rider: withRider = true } = options;
   let level = GRAPHICS_LEVELS.includes(q0) ? q0 : 'medium';
   let appearance = normalizeAppearance(options);
 
@@ -56,7 +50,7 @@ export function createHorse(options = {}) {
   object.name = 'horse';
   const rig = new THREE.Group();
   rig.name = 'horse-rig';
-  rig.position.z = origin === 'center' ? 0 : -ORIGIN_OFFSET_Z;
+  rig.position.z = -ORIGIN_OFFSET_Z;
   object.add(rig);
 
   const skel = createSkeletonBones();
@@ -174,12 +168,6 @@ export function createHorse(options = {}) {
     earAnchor,
     onFootfall: null,
     rider,
-    get quality() {
-      return level;
-    },
-    get appearance() {
-      return { ...appearance };
-    },
     update,
     setAppearance(a) {
       appearance = applyAppearance(uniforms, { ...appearance, ...a });

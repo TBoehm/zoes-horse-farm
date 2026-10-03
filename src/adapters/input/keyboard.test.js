@@ -61,7 +61,7 @@ describe('keyboard input (rule 8)', () => {
   });
 });
 
-describe('keyboard input ignores keys it must not consume (SRT-002 M1)', () => {
+describe('keyboard input ignores keys it must not consume', () => {
   it('does nothing while the ride is not active (paused, or another screen on top)', () => {
     let active = false;
     const kb = setup({ isActive: () => active });

@@ -1,8 +1,6 @@
-// Coat colours and head markings as pure data (sRGB 0..1). The shader (material.js) renders them.
+// Coat colors and head markings as pure data (sRGB 0..1). The shader (material.js) renders them.
 
 import { COATS, DEFAULT_APPEARANCE, MARKINGS } from '../../../domain/horse/appearance.js';
-
-export { COATS, DEFAULT_APPEARANCE, MARKINGS };
 
 const WHITE = [0.93, 0.92, 0.9];
 

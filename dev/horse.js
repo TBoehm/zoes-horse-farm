@@ -3,7 +3,8 @@
 // front|back|head|top|threequarter, ui=0, move=0
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { COATS, MARKINGS, createHorse } from '../src/adapters/view3d/horse/index.js';
+import { COATS, MARKINGS } from '../src/domain/horse/appearance.js';
+import { createHorse } from '../src/adapters/view3d/horse/index.js';
 
 const params = new URLSearchParams(location.search);
 const $ = (id) => document.getElementById(id);

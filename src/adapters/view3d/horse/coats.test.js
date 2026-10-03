@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { COATS, MARKINGS, coatParams, markingIndex, normalizeAppearance } from './coats.js';
+import { COATS, MARKINGS } from '../../../domain/horse/appearance.js';
+import { coatParams, markingIndex, normalizeAppearance } from './coats.js';
 
 describe('coat colours and markings', () => {
   it('offers the five coats and four head markings of rule 43', () => {

@@ -1,6 +1,7 @@
 // Horse rest (bind) pose as pure data: meters, Y up, facing +Z, origin on the ground below the
 // body centre (the adapter shifts the model, see index.js).
-// Warmblood: withers ≈ 1.65 m, body point of shoulder–point of buttock ≈ 1.9 m, nose–tail ≈ 2.6 m.
+// Warmblood: withers ≈ 1.65 m, body point of shoulder–point of buttock ≈ 1.9 m,
+// nose–tail ≈ 2.6 m.
 
 export const SIDES = [1, -1]; // left (+X), right (−X) as seen by horse/rider
 export const LEG_NAMES = ['LF', 'RF', 'LH', 'RH']; // leg index 0..3 (onFootfall)

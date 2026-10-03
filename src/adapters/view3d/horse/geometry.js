@@ -118,7 +118,7 @@ function torsoSection(z) {
   return { cy: bottom + m * H, w, up: (1 - m) * H, down: m * H, upW, downW, notch };
 }
 
-export function torsoWeights(p) {
+function torsoWeights(p) {
   const { x, y, z } = p;
   const wf = smoothstep(0.1, 0.42, z);
   const wr = 1 - smoothstep(-0.42, -0.1, z);
@@ -241,8 +241,8 @@ const HEADT = table([
   [0.625, 0.068, 0.046, 0.064],
 ]);
 
-export const headS = (u) => lerp(HEAD_S0, HEAD_S1, u);
-export const headU = (s) => (s - HEAD_S0) / (HEAD_S1 - HEAD_S0);
+const headS = (u) => lerp(HEAD_S0, HEAD_S1, u);
+const headU = (s) => (s - HEAD_S0) / (HEAD_S1 - HEAD_S0);
 
 function headSection(s, a) {
   const [w, f, j] = HEADT(s);

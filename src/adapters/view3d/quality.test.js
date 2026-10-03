@@ -78,7 +78,7 @@ describe('QUALITY_PRESETS', () => {
     expect(QUALITY_PRESETS.low.material).toBe('lambert');
   });
 
-  it('antialiasing is off on low and on above (SRT-002 m4)', () => {
+  it('antialiasing is off on low and on above', () => {
     expect(QUALITY_PRESETS.low.antialias).toBe(false);
     expect(QUALITY_PRESETS.medium.antialias).toBe(true);
     expect(QUALITY_PRESETS.high.antialias).toBe(true);
@@ -165,7 +165,7 @@ describe('createQualityGovernor', () => {
     expect(gov.level).toBe('medium');
   });
 
-  it('very slow frames (0.5 s to 2 s) are averaged, not treated as interruptions (SRT-002 M3)', () => {
+  it('very slow frames (0.5 s to 2 s) are averaged, not treated as interruptions', () => {
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'high', onChange });
     // 0.6 s per frame is under 2 fps: the device is far too slow and must step down

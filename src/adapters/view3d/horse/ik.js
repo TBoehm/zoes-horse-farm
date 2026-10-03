@@ -10,7 +10,7 @@ export const wrap = (a) => {
   return a;
 };
 /** Maximum forward angle of the femur (angD, ≈ 77°). */
-export const FEMUR_MAX = 1.35;
+const FEMUR_MAX = 1.35;
 const dirZ = (t) => Math.sin(t);
 const dirY = (t) => -Math.cos(t);
 

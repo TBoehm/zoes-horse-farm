@@ -133,9 +133,6 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
       renderer.setAnimationLoop(fn ? loop : null);
       if (fn) resize(true);
     },
-    renderOnce() {
-      renderer.render(world.scene, camera);
-    },
   };
 }
 

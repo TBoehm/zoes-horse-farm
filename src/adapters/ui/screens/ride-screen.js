@@ -99,7 +99,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   let paused = false;
 
   // --- Input and world ---
-  // The keyboard only listens while this ride is the top screen and not paused (M1)
+  // The keyboard only listens while this ride is the top screen and not paused
   const input = createInput({
     container: controls,
     inputMode,

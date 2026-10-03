@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { canStart, getCourse, listCourses, nextCourse } from './course-catalog.js';
 import { COURSES } from '../domain/course/courses.js';
+import { COURSE_COUNT, COURSE_IDS } from '../domain/progress/badges.js';
 import { fakeStore } from '../../tests/support/test-ports.js';
+
+describe('course ids', () => {
+  it('the progress domain knows exactly the courses that exist', () => {
+    expect(COURSES.length).toBe(COURSE_COUNT);
+    expect(COURSE_IDS).toEqual(COURSES.map((c) => String(c.id)));
+  });
+});
 
 describe('listCourses', () => {
   it('lists all courses with obstacle count; only course 1 is open at the start', () => {

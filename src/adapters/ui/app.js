@@ -80,9 +80,6 @@ export function createApp({ root, store, settings, inputMode, clock }) {
     register(name, factory) {
       factories.set(name, factory);
     },
-    has(name) {
-      return factories.has(name);
-    },
     /** Replaces the whole stack with one screen. */
     go(name, params) {
       while (stack.length) unmount(stack.pop());

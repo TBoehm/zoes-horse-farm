@@ -91,7 +91,7 @@ export function lowerLevel(level) {
   return GRAPHICS_LEVELS[Math.max(0, i - 1)];
 }
 
-export const GOVERNOR_DEFAULTS = Object.freeze({
+const GOVERNOR_DEFAULTS = Object.freeze({
   windowS: 5, // moving average
   minFps: 50,
   graceS: 3, // grace period after an interruption

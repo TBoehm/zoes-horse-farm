@@ -220,8 +220,6 @@ deren Ziel ein solches Element ist. Touch: Galopp-Umschalter; Joystick-Totzone a
 ```js
 const sim = createRidingSim({ obstacles, rules, rng = createRng(1), tuning = TUNING });
 sim.reset({ x, z, heading });           // Halt, kein Galopp
-sim.setObstacles(obstacles);            // Hindernisse austauschen (z. B. anderer Parcours)
-sim.elements                            // flache Liste aller Elemente der aktuellen Hindernisse
 const events = sim.step(dt, input);     // input = InputState
 sim.horse  // { x, z, heading, speed, gait: 'halt'|'walk'|'trot'|'canter', gallop,
            //   y, jump: null|{ phase: 'takeoff'|'flight'|'landing', progress 0..1, elementId },

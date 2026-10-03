@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { classifyDevice, createInputMode, GAME_KEYS } from './input-mode.js';
+import { classifyDevice, createInputMode } from './input-mode.js';
+import { GAME_KEYS } from './game-keys.js';
 
 /** Minimal event target: keeps the listeners and lets the tests dispatch events. */
 function fakeTarget() {

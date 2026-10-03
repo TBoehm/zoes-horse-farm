@@ -653,12 +653,8 @@ export function createRidingSim({
     rebuild,
     rebuildAll,
     zoneFor,
-    setObstacles,
     get approach() {
       return approach;
-    },
-    get elements() {
-      return elements;
     },
   };
 }

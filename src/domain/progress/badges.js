@@ -4,6 +4,10 @@
 const JUMPS_FOR_JUMP_MOUSE = 100;
 const RIDES_FOR_BUSY = 10;
 export const COURSE_COUNT = 5;
+/** Course ids as save-file keys: '1'..'5'. */
+export const COURSE_IDS = Object.freeze(
+  Array.from({ length: COURSE_COUNT }, (_, i) => String(i + 1)),
+);
 
 /** Order as in rule 49. `award`: 'instant' = after a counted jump, 'rideEnd' = at ride end. */
 export const BADGES = Object.freeze(
@@ -31,8 +35,6 @@ export const BADGE_IDS = Object.freeze(BADGES.map((b) => b.id));
 function hasBadge(progress, id) {
   return Object.hasOwn(progress.badges ?? {}, id);
 }
-
-const COURSE_IDS = Object.freeze(Array.from({ length: COURSE_COUNT }, (_, i) => String(i + 1)));
 
 function allCoursesThreeStars(progress) {
   const courses = progress.courses ?? {};

@@ -3,8 +3,6 @@
 import { createEmitter } from '../../shared/events.js';
 import { GAME_KEYS } from './game-keys.js';
 
-export { GAME_KEYS };
-
 /** Determines the device class: 'touch' | 'keyboard' | 'hybrid'. */
 export function classifyDevice({
   maxTouchPoints = 0,

@@ -82,7 +82,7 @@ function buildSandGeometry(path) {
 }
 
 /** UV = world coordinates / tile size (textures repeat evenly). */
-export function setWorldUv(geometry, tile) {
+function setWorldUv(geometry, tile) {
   const pos = geometry.attributes.position;
   const uv = geometry.attributes.uv;
   for (let i = 0; i < pos.count; i += 1) uv.setXY(i, pos.getX(i) / tile, -pos.getZ(i) / tile);

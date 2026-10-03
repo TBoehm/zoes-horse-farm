@@ -15,7 +15,7 @@ export function createRng(seed = 1) {
 }
 
 /** Tileable value noise: grid with `period` cells, returns f(u, v) for u, v ∈ [0, 1). */
-export function createTileNoise(period, seed = 1) {
+function createTileNoise(period, seed = 1) {
   const rng = createRng(seed);
   const grid = new Float32Array(period * period);
   for (let i = 0; i < grid.length; i += 1) grid[i] = rng();
@@ -37,7 +37,7 @@ export function createTileNoise(period, seed = 1) {
 }
 
 /** Tileable fbm from several octaves, result roughly 0..1. */
-export function createTileFbm(basePeriod, octaves, seed = 1) {
+function createTileFbm(basePeriod, octaves, seed = 1) {
   const layers = [];
   for (let o = 0; o < octaves; o += 1)
     layers.push(createTileNoise(basePeriod << o, seed + o * 101));
@@ -356,7 +356,7 @@ export function fitText(ctx, text, maxWidth, weight, sizePx) {
 const tmpColor = new THREE.Color();
 
 /** Colors a geometry uniformly (hex/Color, sRGB) and makes it non-indexed. */
-export function paint(geometry, color, { jitter = 0, rng = Math.random } = {}) {
+function paint(geometry, color, { jitter = 0, rng = Math.random } = {}) {
   const g = geometry.index ? geometry.toNonIndexed() : geometry;
   if (g !== geometry) geometry.dispose();
   if (!g.attributes.uv) {

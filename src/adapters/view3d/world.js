@@ -101,7 +101,6 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     );
   }
 
-  let level = null;
   let preset = QUALITY_PRESETS.medium;
 
   function applyMeshes() {
@@ -119,7 +118,6 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
   function setQuality(next) {
     const p = QUALITY_PRESETS[next];
     if (!p) return;
-    level = next;
     preset = p;
     setMaxPixelRatio(renderer, p.pixelRatio);
 
@@ -196,14 +194,6 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
 
   return {
     scene,
-    sun,
-    get level() {
-      return level;
-    },
-    /** Active preset (e.g. so horse/rider can set their shadows accordingly). */
-    get preset() {
-      return preset;
-    },
     setObstacles(list, { flags = false } = {}) {
       obstacles.setObstacles(list, { flags });
       approachDirs.clear();

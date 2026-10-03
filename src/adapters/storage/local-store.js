@@ -4,7 +4,7 @@ import { isPlainObject } from '../../shared/math.js';
 import { SAVE_VERSION, getSections } from '../../application/save-schema.js';
 
 export const SAVE_KEY = 'zoes-horse-farm.save';
-export const SESSION_NOTICE_KEY = 'zoes-horse-farm.saveNoticeShown';
+const SESSION_NOTICE_KEY = 'zoes-horse-farm.saveNoticeShown';
 
 function safeStorage(getter) {
   try {
@@ -41,7 +41,7 @@ function probe(backend) {
 /**
  * "Notice shown" marker without Web Storage: history.state survives a reload, not closing the tab.
  */
-export function historyNoticeMarker(win = globalThis.window) {
+function historyNoticeMarker(win = globalThis.window) {
   return {
     get: () => Boolean(win?.history?.state?.zhfSaveNotice),
     set: () => {

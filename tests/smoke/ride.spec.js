@@ -342,7 +342,7 @@ test.describe('touch controls (SRT-002)', () => {
     await page.waitForFunction(() => window.__zhfTest.ride().cameraMode === 'rider');
   });
 
-  test('dragging the joystick rides: speed rises, the horse turns, no page errors (SRT-002 B1)', async ({
+  test('dragging the joystick rides: speed rises, the horse turns, no page errors', async ({
     page,
     browserName,
   }) => {

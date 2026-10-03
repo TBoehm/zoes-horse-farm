@@ -2,7 +2,7 @@
 // scheduler timing, randomness and impulse response for the reverb.
 import { clamp } from '../../shared/math.js';
 
-export const DEFAULT_VOLUME = 0.5;
+const DEFAULT_VOLUME = 0.5;
 
 export function clamp01(value, fallback = DEFAULT_VOLUME) {
   if (typeof value !== 'number' || Number.isNaN(value)) return fallback;

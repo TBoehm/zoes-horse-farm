@@ -88,7 +88,7 @@ export function highlightText(obstacle, index, number) {
 
 export const FALL_DURATION = 0.7;
 export const RISE_DURATION = 0.45;
-export const FALL_LAG = 0.16; // the second end falls a little later
+const FALL_LAG = 0.16; // the second end falls a little later
 
 export const easeOut = (t) => 1 - (1 - t) * (1 - t);
 export const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
