@@ -65,17 +65,21 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 2. Alle Grafik (Pferd, Reiter, Reitplatz, Hindernisse, Umgebung, Oberflächen) und alle Klänge MÜSSEN
    zur Laufzeit im Spiel erzeugt werden; es werden keine Bild-, Audio-, Modell- oder Schriftdateien
    geladen. Schrift ist Systemschrift. Einzige Ausnahme: App-Icon und Browser-Tab-Icon dürfen als im
-   Projekt selbst erstellte Vektorgrafik-Datei vorliegen (kein Foto, kein fremdes Asset).
+   Projekt selbst erstellte Vektorgrafik-Datei vorliegen (kein Foto, kein fremdes Asset); daraus
+   beim Build erzeugte Rastergrafiken (z. B. für Startbildschirm-Icons auf iPhone/iPad) sind erlaubt.
 3. Der Look SOLL möglichst realistisch sein, solange die Ziel-Bildrate gehalten wird. Ziel-Bildrate
    ist **60 fps** auf der automatisch gewählten Grafikstufe; Stufe „Niedrig" SOLL 60 fps auch auf
-   schwachen Geräten halten (keine feste Geräte-Untergrenze). Zielgeräte sind PC, Tablet und Handy mit aktuellen Versionen von
-   Chrome, Safari (inklusive iPad/iPhone), Firefox und Edge.
+   schwachen Geräten halten (keine feste Geräte-Untergrenze). Abnahmegrenze: Auf der automatisch
+   gewählten Stufe MÜSSEN im Mittel mindestens 50 fps erreicht werden. Zielgeräte sind PC, Tablet und
+   Handy mit aktuellen Versionen von Chrome, Safari (inklusive iPad/iPhone), Firefox und Edge.
 4. Das Spiel MUSS drei Grafikstufen (Niedrig, Mittel, Hoch) und die Einstellung „Automatisch" haben.
    - WENN das Spiel zum ersten Mal startet, MUSS „Automatisch" aktiv sein und eine Stufe passend zum
      Gerät gewählt werden.
    - SOLANGE „Automatisch" aktiv ist: WENN die durchschnittliche Bildrate über 5 Sekunden unter
      50 fps liegt, MUSS das Spiel eine Stufe heruntergehen (nicht unter Niedrig); nach einer
-     Anpassung MUSS es mindestens 10 Sekunden bis zur nächsten Anpassung warten.
+     Anpassung MUSS es mindestens 10 Sekunden bis zur nächsten Anpassung warten. Gemessen wird nur,
+     während geritten wird (Vorstart, Ritt, freier Modus), nicht in Pause, Menüs oder bei
+     verstecktem/minimiertem Fenster und nicht in den ersten 3 Sekunden danach.
    - Die automatisch gewählte Stufe MUSS gespeichert werden und beim nächsten Start gelten; die
      Automatik stuft nie hoch.
    - WENN das Kind eine Stufe manuell wählt, MUSS diese gelten und die Automatik aus sein, bis
@@ -83,11 +87,13 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 5. Das Spiel MUSS nach dem ersten vollständigen Laden ohne Internetverbindung startbar und spielbar
    sein und auf Tablet/Handy zum Startbildschirm hinzugefügt werden können. Eine neue Spielversion
    MUSS im Hintergrund geladen werden und ab dem nächsten Start gelten, ohne Hinweis und ohne
-   laufendes Spiel zu unterbrechen.
+   laufendes Spiel zu unterbrechen. „Nächster Start" heißt: alle Tabs bzw. die Startbildschirm-App
+   wurden geschlossen und neu geöffnet; Neuladen eines offenen Tabs zählt nicht.
 6. Alle Texte MÜSSEN auf Deutsch und Englisch vorliegen. Beim ersten Start gilt die Browsersprache
    (Deutsch, wenn sie Deutsch ist, sonst Englisch); die Sprache ist in den Einstellungen umschaltbar.
    Texte SOLLEN kurz und für eine 3. Klasse lesbar sein.
-7. FALLS Gerät oder Browser keine 3D-Darstellung unterstützt, DANN MUSS statt des Spiels ein
+7. FALLS Gerät oder Browser keine 3D-Darstellung unterstützt, DANN MUSS beim App-Start statt der
+   ganzen App (auch statt der Menüs) ein
    kindgerechter Hinweis in der passenden Sprache erscheinen („Dein Gerät oder Browser kann das
    Spiel leider nicht anzeigen"), keine leere Seite.
 
@@ -99,7 +105,9 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
    die Gangart ergibt sich aus dem Tempo. SOLANGE Galopp aktiv ist, MUSS das Pferd galoppieren und
    W/S (bzw. Joystick) regeln das Galopptempo stufenlos. WENN Galopp beendet wird, MUSS das Pferd
    in den Trab zurückfallen. Tastatur: Galopp ist aktiv, solange Shift gehalten wird; wird Galopp
-   vom Spiel beendet (Verweigerung, Regel 22), MUSS Shift erst losgelassen und neu gedrückt werden.
+   vom Spiel beendet (Verweigerung, Regel 22; frontaler Stopp am Zaun, Regel 24), MUSS Shift erst
+   losgelassen und neu gedrückt werden. WENN der Touch-Modus an- oder ausgeht (Regel 11), MUSS ein
+   aktiver Galopp enden (Trab) und der Touch-Umschalter auf aus stehen.
 10. Touch (Tablet/Handy): links ein virtueller Joystick, rechts große Buttons „Galopp" und
     „Springen" (wie Space), dazu Buttons für Pause und Kamera.
     - Joystick hoch/runter ändert das Tempo, solange ausgelenkt, wie W/S; je weiter ausgelenkt,
@@ -122,6 +130,7 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     Hindernis und die Distanz dazu einschätzbar sind.
 14. Per C bzw. Kamera-Button MUSS zwischen Standard-Kamera und Reiter-Sicht (zwischen den
     Pferdeohren) umgeschaltet werden können. Die zuletzt gewählte Kamera wird gespeichert (Regel 44).
+    Eine Kamera-Auswahl in den Einstellungen gibt es nicht.
 
 ### Reiten und Springen
 
@@ -160,18 +169,22 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     an einem Hindernis vorbei, ohne es anzureiten (z. B. eine Volte daneben), ist keine Verweigerung.
     Nach einer Verweigerung MUSS das Pferd stehen bleiben bzw. vorbeilaufen; das Kind kann im Halt
     wenden. Eine weitere Verweigerung am selben Hindernis kann erst entstehen, nachdem sich das Pferd
-    weiter als den Anreitabstand entfernt hat und neu anreitet. Die Zeit läuft weiter.
+    weiter als den Anreitabstand entfernt hat und neu anreitet; reitet das Kind vorher erneut auf das
+    Hindernis zu oder trifft das Pferd einen Ständer, MUSS es ohne Fehler seitlich ausweichen. Die
+    Zeit läuft weiter.
     - Zeitpunkt: Ob verweigert wird, entscheidet sich erst am letzten möglichen Absprungpunkt. Bis
       dahin darf das Kind die Gangart ändern (z. B. noch angaloppieren) oder abwenden, ohne Fehler.
     - Verhalten: Verweigerung wegen Gangart (Regel 16) oder zu geringem Tempo (Regel 20) = das Pferd
       bleibt vor dem Hindernis stehen und ist danach im Halt. Verweigerung wegen Winkel (Regel 17) =
       das Pferd läuft vorbei und fällt danach in den Trab. In beiden Fällen ist Galopp danach aus
-      (auch der Touch-Umschalter; Tastatur siehe Regel 9).
+      (auch der Touch-Umschalter; Tastatur siehe Regel 9). Treffen Gangart bzw. Tempo und Winkel
+      zusammen, gilt das Verhalten für Gangart/Tempo (stehen bleiben, Halt).
 23. Bei einem Abwurf MUSS die Stange sichtbar fallen. Wann sie wieder aufgebaut wird, regeln die
     Regeln 26, 27, 29, 31 und 41.
 24. Das Pferd MUSS je Gangart und beim Sprung (Absprung, Flug, Landung) erkennbar animiert sein.
-    Das Pferd MUSS an der Platzumzäunung stoppen bzw. entlanggleiten und kann den Platz nicht
-    verlassen.
+    Das Pferd kann den Platz nicht verlassen. Trifft es frontal auf die Umzäunung, MUSS es stoppen
+    und ist danach im Halt (Galopp aus, wie Regel 22); trifft es schräg auf, MUSS es mit
+    unverändertem Tempo daran entlanggleiten. Ab wann „frontal" gilt, ist ein Spielwert.
 
 ### Gewerteter Parcours
 
@@ -192,13 +205,18 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     ertönen und das Kind frei zur Startlinie reiten können. Im Vorstart läuft keine Zeit; Hindernisse
     des Parcours zählen für die Wertung erst nach Überqueren der Startlinie (Sprungzähler: Regel 40).
     Fällt im Vorstart eine Stange, MUSS sie nach etwa 3 Sekunden ohne Wertung wieder aufgebaut werden.
+    Im Vorstart ist Hindernis 1 hervorgehoben (bei eingeschalteter Absprung-Hilfe auch mit Zone),
+    dort entsteht aber keine Verweigerung (Regel 22). Das Startsignal ertönt nur bei „Los".
+    Start- und Ziellinie zählen nur beim Überqueren in Ritt-Richtung; die Ziellinie im Vorstart und
+    die Startlinie während des Ritts bewirken nichts.
 27. Die Zeit MUSS mit dem Überqueren der Startlinie beginnen und mit dem Überqueren der Ziellinie
     enden, nachdem alle Hindernisse in Reihenfolge gesprungen wurden. Ein Hindernis mit Abwurf gilt
     als gesprungen; es geht mit dem nächsten weiter. Abgeworfene Stangen des Parcours bleiben bis zum
     Ende des Ritts liegen.
 28. Das Hindernis, das an der Reihe ist, MUSS hervorgehoben sein und seine Nummer zeigen. Alle
     Parcours-Hindernisse zeigen ihre Sprungrichtung (Fahnen); der Parcours-Plan auf der
-    Vorstart-Karte zeigt Reihenfolge und Richtung.
+    Vorstart-Karte zeigt Reihenfolge und Richtung. Nach dem letzten Hindernis ist kein Hindernis mehr
+    hervorgehoben; die Ziellinie ist markiert und die Anzeige „nächstes Hindernis" zeigt „Ziel".
 29. Falsches Hindernis: WENN ein Hindernis gesprungen wird, das nicht an der Reihe ist, MUSS das ohne
     Fehlerpunkte und ohne Wertung bleiben; das richtige Hindernis bleibt hervorgehoben. Fällt dabei
     eine Stange, MUSS sie nach etwa 3 Sekunden wieder aufgebaut werden, und das Hindernis muss später
@@ -206,12 +224,15 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     wie ein falsches Hindernis. Verweigerungen und Selbst-Springen: Regel 22.
 30. WENN die Ziellinie überquert wird, bevor alle Hindernisse gesprungen sind, MUSS der Ritt
     weiterlaufen (Ziel zählt noch nicht) und ein Hinweis auf das fehlende Hindernis erscheinen.
-31. Zweifach-Kombination: Teil a und b MÜSSEN direkt nacheinander gesprungen werden.
+31. Zweifach-Kombination: Teil a und b MÜSSEN direkt nacheinander gesprungen werden. Teil b ist erst
+    nach einem Sprung über a an der Reihe; ein Sprung über b allein gilt wie ein falsches Hindernis
+    (Regel 29).
     - WENN an Teil a oder b verweigert wird, MUSS die ganze Kombination (a und b) neu angeritten
       werden; die Hervorhebung springt auf Teil a zurück.
     - WENN nach Teil a abgewendet wird, ohne b zu springen (und ohne Verweigerung nach Regel 22),
       MUSS die Hervorhebung ohne Fehler auf Teil a zurückspringen; die Kombination wird neu
-      angeritten.
+      angeritten. Als abgewendet gilt: Das Pferd reitet b nicht an und ist weiter als den
+      Anreitabstand von b entfernt.
     - Vor jedem neuen Anlauf MÜSSEN gefallene Stangen von a und b wieder aufgebaut werden. Abwürfe
       an a und b zählen je einzeln, aus allen Anläufen (jeder Abwurf = 4 Fehler).
 32. Fehlerpunkte: Abwurf = 4, jede Verweigerung = 4 (auch die zweite und weitere am selben
@@ -224,8 +245,9 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     Hindernis sichtbar sein.
 35. Nach dem Ziel MUSS eine Ergebnisanzeige erscheinen: Pferdename, Zeit, Fehler aufgeschlüsselt
     (Abwürfe, Verweigerungen, Zeitfehler), Sterne, ob es eine neue Bestleistung ist, neu erhaltene
-    Auszeichnungen und die Optionen „Nochmal", „Nächster Parcours" (falls freigeschaltet) und
-    „Zur Auswahl".
+    Auszeichnungen (nur die bei Rittende vergebenen, Regel 49) und die Optionen „Nochmal" (führt zur
+    Vorstart-Karte desselben Parcours), „Nächster Parcours" (falls freigeschaltet) und „Zur Auswahl".
+    Der erste beendete Ritt eines Parcours ist immer eine neue Bestleistung.
 36. Sterne: 3 Sterne = 0 Fehler (inklusive Zeitfehler), 2 Sterne = 1 bis 4 Fehler, 1 Stern =
     beendet mit mehr als 4 Fehlern. Je Parcours zählt die beste je erreichte Sternzahl.
 37. Parcours 1 ist von Anfang an offen. WENN ein Parcours mit mindestens 1 Stern beendet wird, MUSS
@@ -242,12 +264,13 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     Shift noch gehalten wird, der Touch-Umschalter behält seinen Zustand.
     Der Touch-Galopp-Umschalter MUSS bei „Los", „Neu starten" und Rittende auf aus stehen.
 39. Im Parcours führt „Neu starten" zurück in den Vorstart desselben Parcours. Im freien Modus setzt
-    „Neu starten" das Pferd an den Startpunkt und baut alle Stangen auf.
+    „Neu starten" das Pferd an den Startpunkt und baut alle Stangen auf. Beim Betreten des freien
+    Modus und nach „Neu starten" steht das Pferd am Startpunkt im Halt, der Touch-Umschalter auf aus.
 40. Ein abgebrochener Ritt („Neu starten" oder „Zur Auswahl" vor dem Ziel) MUSS ohne Wertung bleiben:
     keine Sterne, keine Bestleistung, keine Freischaltung, kein Zählen als gerittener Parcours, keine
     ritt-gebundenen Auszeichnungen (Regel 49). Der Sprungzähler zählt dagegen jeden Sprung über ein
-    Hindernis (auch mit Abwurf), in jedem Modus, im Vorstart und in abgebrochenen Ritten;
-    Verweigerungen und Hopser zählen nicht.
+    Hindernis (auch mit Abwurf), in jedem Modus, im Vorstart und in abgebrochenen Ritten; bei einer
+    Zweifach-Kombination zählt jeder Teil einzeln. Verweigerungen und Hopser zählen nicht.
 
 ### Freier Modus
 
@@ -255,7 +278,7 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     einem Hindernis jeder Art in verschiedenen Höhen zeigen. Es gibt keine Reihenfolge, keine Zeit,
     keine Fehlerpunkte und keine Sterne. Abwürfe und Verweigerungen werden kurz als Rückmeldung
     angezeigt. Abgeworfene Stangen MÜSSEN etwa 3 Sekunden nach dem Abwurf automatisch wieder
-    aufgebaut werden.
+    aufgebaut werden. Die Hindernisse im freien Modus haben keine Richtungsfahnen.
 
 ### Absprung-Hilfe
 
@@ -271,27 +294,34 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 43. Das Kind MUSS dem Pferd einen Namen geben (1–16 Zeichen) sowie Fellfarbe (Fuchs, Brauner,
     Rappe, Schimmel, Schecke) und Kopfabzeichen (keins, Stern, Blesse, Schnippe) wählen können. Die
     Wahl ist rein optisch und gilt in allen Modi. WENN das Spiel zum ersten Mal startet, MUSS es
-    nach dem Pferdenamen fragen; die Frage ist überspringbar, dann heißt das Pferd „Blitz"
-    (Englisch: „Flash"). Vorgabe-Aussehen: Brauner mit Stern. Der Pferdename erscheint im Hauptmenü
-    und in der Ergebnisanzeige.
+    nach dem Pferdenamen fragen; die Frage erscheint bei jedem Start, bis sie beantwortet oder
+    übersprungen wurde (auch bei Spielständen ohne Namen). Wird sie übersprungen, heißt das Pferd
+    „Blitz" (Englisch: „Flash"); dieser Vorgabe-Name folgt der eingestellten Sprache, solange kein
+    eigener Name vergeben ist. Leerzeichen am Anfang und Ende werden entfernt; eine danach leere oder
+    zu lange Eingabe wird nicht übernommen, es gilt der letzte gültige Name. Vorgabe-Aussehen:
+    Brauner mit Stern. Der Pferdename erscheint im Hauptmenü und in der Ergebnisanzeige.
 
 ### Fortschritt und Speicherung
 
 44. Im Browser gespeichert werden MÜSSEN: freigeschaltete Parcours, Bestleistung (Fehler und Zeit)
     und beste Sternzahl je Parcours, erhaltene Auszeichnungen mit Datum, Zähler (beendete
     Parcours-Ritte, Sprünge), Pferd (Name, Fellfarbe, Kopfabzeichen) und Einstellungen (Sprache,
-    Lautstärke Musik, Lautstärke Effekte, Grafikstufe und ob „Automatisch", Absprung-Hilfe je Modus,
-    Kamera).
+    Lautstärke und Stumm je Kanal (Musik, Effekte), Grafikstufe und ob „Automatisch", Absprung-Hilfe je Modus,
+    Kamera). Wo der Browser es anbietet, MUSS dauerhafter Speicher angefordert werden. Bekannte
+    Grenze: Safari kann Daten einer Website nach längerer Nichtnutzung löschen (nicht bei Nutzung
+    über den Startbildschirm).
 45. Gespeichert wird sofort bei jeder Änderung: beim Ende eines Ritts, bei jedem gezählten Sprung,
     bei jeder neuen Auszeichnung, bei jeder Änderung von Einstellungen oder Pferd.
 46. FALLS der Browser nicht speichern kann (z. B. privater Modus, Speicher voll), DANN MUSS das Spiel
-    normal spielbar bleiben und einmal je Sitzung einen Hinweis zeigen, dass der Fortschritt nicht
-    gespeichert wird.
+    normal spielbar bleiben und einmal je Sitzung (bis Tab bzw. App geschlossen werden; Neuladen zählt
+    nicht als neue Sitzung) einen Hinweis zeigen, dass der Fortschritt nicht gespeichert wird.
 47. FALLS gespeicherte Daten fehlerhaft oder von einer älteren Spielversion sind, DANN MUSS das Spiel
     starten, lesbare Teile übernehmen und den Rest auf Anfangswerte setzen, statt abzustürzen. Der
     Spielstand MUSS so angelegt sein, dass spätere Spielbereiche eigene Daten ergänzen können, ohne
-    bestehenden Fortschritt zu verlieren.
-48. In den Einstellungen MUSS „Fortschritt löschen" mit Sicherheitsabfrage möglich sein. Danach
+    bestehenden Fortschritt zu verlieren. Daten, die die laufende Version nicht kennt, MÜSSEN beim
+    Speichern unverändert erhalten bleiben.
+48. In den Einstellungen MUSS „Fortschritt löschen" mit Sicherheitsabfrage möglich sein, nur wenn die
+    Einstellungen aus dem Hauptmenü geöffnet wurden (nicht aus dem Pausemenü). Danach
     sind Parcours-Freischaltung, Bestleistungen, Sterne, Auszeichnungen und Zähler wie beim ersten
     Start; Einstellungen und Pferd bleiben erhalten.
 
@@ -310,7 +340,12 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     | Sternenreiter | alle 5 Parcours mit 3 Sternen | bei Rittende |
     | Fleißig | 10 beendete Parcours-Ritte | bei Rittende |
 
-    „Ohne Verweigerung" heißt: an diesem Hindernis im ganzen Ritt keine Verweigerung.
+    „Ohne Verweigerung" und „ohne Abwurf" heißen: an diesem Hindernis im ganzen Ritt keine
+    Verweigerung bzw. kein Abwurf. Es zählen nur gewertete Sprünge (Hindernis an der Reihe, in
+    Sprungrichtung); ein Oxer als Teil einer Kombination zählt für „Oxer-Profi" mit.
+    Bedingungen gelten als „mindestens" erreicht: Ist eine Bedingung schon erfüllt (z. B. aus einem
+    älteren Spielstand), wird die Auszeichnung beim nächsten passenden Anlass nachgeholt (sofortige
+    beim nächsten gezählten Sprung, die übrigen beim nächsten beendeten Ritt).
     „Sofort" vergebene Auszeichnungen MÜSSEN direkt kurz eingeblendet werden, ohne das Spiel zu
     unterbrechen. „Bei Rittende" vergebene erscheinen in der Ergebnisanzeige.
 50. Eine Übersicht MUSS alle Auszeichnungen zeigen, erhaltene hervorgehoben mit Datum, noch fehlende
@@ -321,9 +356,13 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 51. Es MUSS synthetisierte Soundeffekte geben: Hufschlag passend zur Gangart, Absprung, Landung,
     fallende Stange, Startsignal (bei „Los") und Zielsignal. Eine einfache synthetisierte Melodie
     läuft in Hauptmenü und Untermenüs, auf der Vorstart-Karte und in der Ergebnisanzeige. Keine Musik
-    im Vorstart, während eines Ritts, im freien Modus und im Pausemenü.
+    im Vorstart, während eines Ritts, im freien Modus und im Pausemenü (auch nicht in den
+    Einstellungen, wenn sie aus dem Pausemenü geöffnet wurden). Ist die App im Hintergrund (Tab
+    gewechselt, minimiert), MUSS jeder Ton verstummen.
 52. Musik und Effekte MÜSSEN getrennt in der Lautstärke regelbar und stumm schaltbar sein. Ton
-    startet erst nach der ersten Interaktion des Kindes (Browser-Vorgabe).
+    startet erst nach der ersten Interaktion des Kindes (Browser-Vorgabe). Beim ersten Start sind
+    beide an, mit mittlerer Lautstärke. „Stumm" ist je Kanal ein eigener Schalter; die eingestellte
+    Lautstärke bleibt dabei erhalten und gilt nach dem Einschalten wieder.
 
 ### Menüs
 
@@ -339,6 +378,8 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
   Browsersprache, Grafikstufe automatisch.
 - **Speichern nicht möglich:** Regel 46.
 - **Defekte oder alte Speicherdaten:** Regel 47.
+- **Safari löscht Daten nach längerer Nichtnutzung:** bekannte Grenze (Regel 44).
+- **Pferd trifft die Umzäunung:** frontal Stopp, schräg Gleiten (Regel 24).
 - **Kein 3D möglich:** Regel 7.
 - **Zwei Tabs gleichzeitig offen:** kein Abgleich zur Laufzeit; der zuletzt gespeicherte Stand gewinnt.
 - **Fokusverlust / Tab-Wechsel / Hochformat:** Auto-Pause (Regel 38).
