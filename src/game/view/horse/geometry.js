@@ -127,7 +127,8 @@ export function torsoWeights(p) {
   const side = x >= 0 ? 'L' : 'R';
   const sideMask = smoothstep(0.03, 0.12, sx);
   // Atmen (Bauch)
-  const bel = (1 - smoothstep(0.98, 1.25, y)) * (1 - smoothstep(0.2, 0.42, Math.abs(z + 0.05))) * 0.7;
+  const bel =
+    (1 - smoothstep(0.98, 1.25, y)) * (1 - smoothstep(0.2, 0.42, Math.abs(z + 0.05))) * 0.7;
   // Schulter: Schulterblatt oben, Oberarm unten
   const es = ((y - 1.15) / 0.32) ** 2 + ((z - 0.66) / 0.27) ** 2;
   const fs = (1 - smoothstep(0.45, 1, es)) * sideMask;
@@ -136,7 +137,7 @@ export function torsoWeights(p) {
   // Hinterhand: Oberschenkel
   const eh = ((y - 1.12) / 0.3) ** 2 + ((z + 0.68) / 0.32) ** 2;
   const fh = (1 - smoothstep(0.4, 1, eh)) * sideMask;
-  const fem = fh * lerp(0.5, 0.15, smoothstep(1.0, 1.4, y));
+  const fem = fh * lerp(0.5, 0, smoothstep(0.95, 1.28, y));
   const infl = bel + scap + hum + fem;
   const k = Math.max(0, 1 - infl);
   out.push(['root', (1 - wf - wr) * k], ['spineFront', wf * k], ['spineRear', wr * k]);
@@ -420,7 +421,9 @@ function makeTail() {
     frame: curveFrames(curve),
     section: (u, a) => {
       const [r] = TAILT(u);
-      const strands = 1 + smoothstep(0.15, 0.4, u) * (0.08 * Math.sin(9 * a + 2 * u) + 0.05 * Math.sin(17 * a + 5));
+      const strands =
+        1 +
+        smoothstep(0.15, 0.4, u) * (0.08 * Math.sin(9 * a + 2 * u) + 0.05 * Math.sin(17 * a + 5));
       return [Math.cos(a) * r * 0.86 * strands, Math.sin(a) * r * strands];
     },
     weights: (u) =>
@@ -497,7 +500,9 @@ export function buildBodyGeometry(boneIndex, level = 'medium') {
         return oval(a, { w: 0.043 * prof, up: back, down: front, nUp: 2.2, nDown: 1.6 });
       },
       weights: (u) => chainWeights(u, [0.18], ['head', bone], 0.08),
-      attrs: (u, a) => ({ aMat: [0, 0, 0, a >= 0 ? 0 : smoothstep(0.2, 0.8, -Math.sin(a)) * smoothstep(0.1, 0.3, u)] }),
+      attrs: (u, a) => ({
+        aMat: [0, 0, 0, a >= 0 ? 0 : smoothstep(0.2, 0.8, -Math.sin(a)) * smoothstep(0.1, 0.3, u)],
+      }),
     });
     ear.build(b, {
       uSamples: samples(D.ear[0], 0, 0.97),
@@ -513,7 +518,13 @@ export function buildBodyGeometry(boneIndex, level = 'medium') {
     const m = new THREE.Matrix4()
       .makeRotationY(0.35 * side)
       .setPosition(headPoint(0.168, 0.03, 0.104 * side));
-    b.addIndexed(eye.p, eye.idx, m, () => [['head', 1]], () => ({ aMat: [0, 0, 1, 0] }));
+    b.addIndexed(
+      eye.p,
+      eye.idx,
+      m,
+      () => [['head', 1]],
+      () => ({ aMat: [0, 0, 1, 0] }),
+    );
   }
 
   // Mähne (liegt nach rechts) und Schopf
@@ -693,7 +704,13 @@ export function buildTackGeometry(boneIndex, level = 'medium') {
   for (const side of SIDES) {
     const p = bitRingPoint(side);
     const m = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(p);
-    b.addIndexed(ring.p, ring.idx, m, () => [['head', 1]], () => ({ color: C.steel }));
+    b.addIndexed(
+      ring.p,
+      ring.idx,
+      m,
+      () => [['head', 1]],
+      () => ({ color: C.steel }),
+    );
   }
   return b.build();
 }

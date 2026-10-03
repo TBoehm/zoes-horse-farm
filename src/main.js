@@ -1,4 +1,4 @@
-// Einstieg: Prüfungen, Spielstand, Sprache, App-Rahmen.
+// Entry point and composition root: checks, save game, language, app frame, wiring of all parts.
 import './adapters/ui/styles/main.css';
 import './adapters/ui/styles/ride.css';
 import './adapters/ui/styles/profile.css';
@@ -7,6 +7,7 @@ import { detectLang, getLang, setLang } from './adapters/ui/i18n.js';
 import { createStore, requestPersistentStorage } from './adapters/storage/local-store.js';
 import { hasWebGL } from './adapters/platform/webgl.js';
 import { createInputMode, detectDevice } from './adapters/platform/input-mode.js';
+import { systemClock } from './adapters/platform/clock.js';
 import { registerAllStrings } from './adapters/ui/i18n/index.js';
 import { createApp } from './adapters/ui/app.js';
 import { createMainMenuScreen, registerMenuEntry } from './adapters/ui/menu.js';
@@ -40,7 +41,7 @@ function boot() {
   document.documentElement.classList.toggle('touch-mode', inputMode.touch);
   inputMode.onChange((touch) => document.documentElement.classList.toggle('touch-mode', touch));
 
-  const app = createApp({ root, store, inputMode });
+  const app = createApp({ root, store, inputMode, clock: systemClock });
   app.register('menu', createMainMenuScreen);
   app.register('settings', createSettingsScreen);
   app.register('ride', createRideScreen);

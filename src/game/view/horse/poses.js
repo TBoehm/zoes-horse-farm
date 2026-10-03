@@ -59,8 +59,8 @@ export const JUMP_KEYS = [
   pose({ pitch: 0.24, bend: 0.05, neck: 0.02, head: 0.02, tail: 0.5, pivot: 0.65 }, [
     [0.2, 0.12, 0.15, 0.15],
     [0.1, 0.02, 0.0, 0.0],
-    [0.34, 0.42, 1.0, 0.9],
-    [0.3, 0.4, 1.0, 0.9],
+    [0.3, 0.3, 0.7, 0.8],
+    [0.26, 0.28, 0.7, 0.8],
   ]),
   // 2.5: Vorhand gelandet, Hinterbeine kommen nach vorn unter den Körper
   pose({ pitch: 0.1, bend: -0.02, neck: -0.18, head: -0.08, tail: 0.3, pivot: 0.65 }, [

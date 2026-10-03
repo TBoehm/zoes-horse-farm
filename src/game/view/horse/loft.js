@@ -109,7 +109,9 @@ export class Loft {
           .addScaledVector(f.b, x * scale)
           .addScaledVector(f.n, y * scale)
           .addScaledVector(f.t, shift * dirSign);
-        ring.push(builder.vertex(p, def.weights(u, a, p), def.attrs ? def.attrs(u, a, p, x, y) : null));
+        ring.push(
+          builder.vertex(p, def.weights(u, a, p), def.attrs ? def.attrs(u, a, p, x, y) : null),
+        );
       }
       rings.push(ring);
     };
@@ -152,7 +154,11 @@ export class Loft {
         .addScaledVector(f.n, (y0 + y1) / 2)
         .addScaledVector(f.b, (x0 + x1) / 2)
         .addScaledVector(f.t, capEnd.len);
-      endPole = builder.vertex(p, def.weights(uE, 0, p), def.attrs ? def.attrs(uE, -1, p, 0, 0) : null);
+      endPole = builder.vertex(
+        p,
+        def.weights(uE, 0, p),
+        def.attrs ? def.attrs(uE, -1, p, 0, 0) : null,
+      );
     }
     const start = builder.beginPart();
     for (let i = 0; i < rings.length - 1; i++) {

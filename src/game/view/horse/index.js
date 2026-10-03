@@ -12,7 +12,12 @@ import { createRider } from '../rider.js';
 import { normalizeAppearance } from './coats.js';
 import { bitRingPoint, buildBodyGeometry, buildTackGeometry, reinRestPoint } from './geometry.js';
 import { angD, hindSweep, makeFrontRig, makeHindRig, solveFront, solveHind } from './ik.js';
-import { applyAppearance, createCoatMaterial, createCoatUniforms, createVertexColorMaterial } from './material.js';
+import {
+  applyAppearance,
+  createCoatMaterial,
+  createCoatUniforms,
+  createVertexColorMaterial,
+} from './material.js';
 import { clamp, lerp } from './math.js';
 import { createMotion, neckCarriage, stepMotion } from './motion.js';
 import { JUMP_KEYS, LEG_OFFSET, POSE_KEYS, POSE_SIZE, STOP_POSE, samplePoses } from './poses.js';
@@ -115,9 +120,7 @@ export function createHorse(options = {}) {
   const reins = createReins();
   rig.add(reins.mesh);
   const bitLocal = [1, -1].map((s) => bitRingPoint(s).sub(new THREE.Vector3(...REST.head)));
-  const restLocal = [1, -1].map((s) =>
-    reinRestPoint(s).sub(new THREE.Vector3(...REST.spineFront)),
-  );
+  const restLocal = [1, -1].map((s) => reinRestPoint(s).sub(new THREE.Vector3(...REST.spineFront)));
 
   function applyQuality() {
     body.geometry.dispose();
@@ -265,8 +268,16 @@ export function createHorse(options = {}) {
       return s > 0.96 ? (s - 0.96) * 12 : 0;
     };
     const earBack = m.stopWeight * 0.6;
-    B.Lear.rotation.set(-0.1 - earBack - flick(1) * 0.5 * m.weights.halt, 0.15 * Math.sin(t * 0.3), 0);
-    B.Rear.rotation.set(-0.1 - earBack - flick(2) * 0.5 * m.weights.halt, -0.15 * Math.sin(t * 0.27 + 1), 0);
+    B.Lear.rotation.set(
+      -0.1 - earBack - flick(1) * 0.5 * m.weights.halt,
+      0.15 * Math.sin(t * 0.3),
+      0,
+    );
+    B.Rear.rotation.set(
+      -0.1 - earBack - flick(2) * 0.5 * m.weights.halt,
+      -0.15 * Math.sin(t * 0.27 + 1),
+      0,
+    );
     const motionLift = m.weights.trot * 0.15 + m.weights.canter * 0.35;
     const swishAmp =
       0.05 + 0.25 * m.weights.halt * Math.max(0, Math.sin(t * 0.43) - 0.7) * 3 + 0.04 * motionLift;
@@ -274,7 +285,8 @@ export function createHorse(options = {}) {
     for (let k = 0; k < 5; k++) {
       const tb = B[`tail${k + 1}`];
       tb.rotation.set(
-        (k === 0 ? 0.15 + tailLift * 0.7 : tailLift * (0.25 - k * 0.04)) + 0.03 * Math.sin(2 * Math.PI * m.phi * 2 - k),
+        (k === 0 ? 0.15 + tailLift * 0.7 : tailLift * (0.25 - k * 0.04)) +
+          0.03 * Math.sin(2 * Math.PI * m.phi * 2 - k),
         0,
         swishAmp * Math.sin(t * 2.2 - k * 0.7) + turnBend * 0.2,
       );

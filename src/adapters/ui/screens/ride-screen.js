@@ -10,17 +10,25 @@ import { checkInstantBadges } from '../../../domain/progress/badges.js';
 import { showBadgeToast } from './profile/badge-toast.js';
 
 const MODES = { free: createFreeMode };
+const HUDS = {};
 
-/** Weitere Modi (z. B. Parcours, SRT-004) melden sich hier an. */
+/** Further modes (e.g. course, SRT-004) register here. factory(ctx, params) → mode. */
 export function registerRideMode(id, factory) {
   MODES[id] = factory;
 }
 
+/** A mode with a HUD registers a view per mode id: factory() → { el, renderTexts(), render(model) }. */
+export function registerRideHud(id, factory) {
+  HUDS[id] = factory;
+}
+
 export function createRideScreen(ctx, params = {}) {
-  const { app, store, inputMode, services } = ctx;
+  const { app, store, inputMode, services, clock } = ctx;
   const engine = getEngine(ctx);
   const { world, horse, cameraRig, governor } = engine;
-  const mode = MODES[params.mode ?? 'free'](ctx, params);
+  // Modes get only the ports they need (store, clock); no DOM, no app
+  const mode = MODES[params.mode ?? 'free']({ store, clock }, params);
+  const hudView = mode.hudModel ? HUDS[mode.id]?.() : null;
 
   // --- DOM ---
   const hud = h('div', { class: 'ride-hud' });
@@ -45,7 +53,8 @@ export function createRideScreen(ctx, params = {}) {
     ),
   );
   const el = h('section', { class: 'ride-screen' }, hud, feedbackEl, hint, controls, pauseMenu);
-  if (mode.hud) hud.append(mode.hud);
+  if (hudView) hud.append(hudView.el);
+  const renderHud = () => hudView?.render(mode.hudModel());
 
   const renderTexts = () => {
     pauseTitle.textContent = t('pause.title');
@@ -54,7 +63,8 @@ export function createRideScreen(ctx, params = {}) {
     quitBtn.textContent = t(mode.quitLabelKey);
     settingsBtn.textContent = t('pause.settings');
     hint.textContent = t('ride.pauseHint');
-    mode.renderTexts?.();
+    hudView?.renderTexts();
+    renderHud();
   };
   renderTexts();
   const offLang = onLangChange(renderTexts);
@@ -65,9 +75,21 @@ export function createRideScreen(ctx, params = {}) {
   updateHint();
   const offMode = inputMode.onChange(updateHint);
 
-  const sim = createRidingSim({ obstacles: mode.obstacles, rules: mode.rules });
+  const sim = createRidingSim({ obstacles: mode.obstacles, rules: mode.rules, rng: Math.random });
   world.setObstacles(mode.obstacles, { flags: mode.flags });
-  world.setLines?.(mode.lines ?? null);
+  // Mode lines carry label keys; translate them here (language may have changed since last restart)
+  const applyLines = () => {
+    const lines = mode.lines;
+    world.setLines?.(
+      lines
+        ? {
+            ...lines,
+            labels: { start: t(lines.labelKeys.start), finish: t(lines.labelKeys.finish) },
+          }
+        : null,
+    );
+  };
+  applyLines();
   world.highlight(null);
   world.setAid(null);
   world.setFinishMarked?.(false);
@@ -79,10 +101,6 @@ export function createRideScreen(ctx, params = {}) {
   const api = {
     sim,
     world,
-    store,
-    input,
-    app,
-    services,
     rebuildIn(elementId, seconds) {
       rebuilds = rebuilds.filter((r) => r.elementId !== elementId);
       rebuilds.push({ elementId, left: seconds });
@@ -95,6 +113,12 @@ export function createRideScreen(ctx, params = {}) {
       feedbackEl.textContent = t(key, params);
       feedbackEl.classList.add('is-visible');
       feedbackTimer = 2;
+    },
+    /** End of ride: reset the touch gallop, finish signal, then open the next screen. */
+    finish({ screen, params: screenParams }) {
+      input.resetTouchGallop();
+      services.audio?.sfx.finishSignal();
+      app.go(screen, screenParams);
     },
     pause: () => setPaused(true),
     restart: () => restart(),
@@ -113,6 +137,8 @@ export function createRideScreen(ctx, params = {}) {
     input.resetTouchGallop();
     input.clearEdges();
     mode.onRestart?.(api);
+    if (mode.lines) applyLines();
+    renderHud();
     horse.setAppearance?.(store.get('horse'));
     placeHorse();
     cameraRig.snap();
@@ -135,7 +161,7 @@ export function createRideScreen(ctx, params = {}) {
     restart();
     setPaused(false);
   });
-  quitBtn.addEventListener('click', () => mode.quit(app));
+  quitBtn.addEventListener('click', () => app.go(mode.quitScreen));
   settingsBtn.addEventListener('click', () => app.push('settings', { fromPause: true }));
 
   // Auto-Pause bei Fokusverlust und Hochformat (Regeln 12, 38)
@@ -158,7 +184,7 @@ export function createRideScreen(ctx, params = {}) {
         // Sofort-Auszeichnungen (Regel 49) werden kurz eingeblendet
         let awarded = [];
         store.update('progress', (p) => {
-          const result = checkInstantBadges(addJump(p), new Date().toISOString());
+          const result = checkInstantBadges(addJump(p), clock.nowIso());
           awarded = result.awarded;
           return result.progress;
         });
@@ -189,6 +215,7 @@ export function createRideScreen(ctx, params = {}) {
     const events = sim.step(dt, inp);
     handleEvents(events);
     mode.update(dt, api, prev);
+    renderHud();
 
     for (const r of rebuilds) r.left -= dt;
     for (const r of rebuilds.filter((x) => x.left <= 0)) sim.rebuild(r.elementId);
@@ -205,7 +232,9 @@ export function createRideScreen(ctx, params = {}) {
     world.setShadowFocus?.(sim.horse.x, sim.horse.z);
     const aim = mode.aidTarget(api);
     world.setAid(
-      aim ? { ...aim, zone: sim.zoneFor(aim.elementId, aim.dir, Math.max(sim.horse.speed, 1)) } : null,
+      aim
+        ? { ...aim, zone: sim.zoneFor(aim.elementId, aim.dir, Math.max(sim.horse.speed, 1)) }
+        : null,
     );
     cameraRig.update(dt, sim.horse, horse.earAnchor);
     world.update?.(dt, engine.camera);

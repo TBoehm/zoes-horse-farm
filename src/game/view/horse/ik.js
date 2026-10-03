@@ -8,6 +8,8 @@ export const wrap = (a) => {
   while (a < -Math.PI) a += 2 * Math.PI;
   return a;
 };
+/** Maximaler Vorwärtswinkel des Oberschenkels (angD, ≈ 77°). */
+export const FEMUR_MAX = 1.35;
 const dirZ = (t) => Math.sin(t);
 const dirY = (t) => -Math.cos(t);
 
@@ -96,9 +98,7 @@ export function solveFront(rig, hz, hy, past, knee, scap, out = new Array(5)) {
   const fz = hz - rig.l4 * dirZ(past);
   const fy = hy - rig.l4 * dirY(past);
   const delta = rig.d0 - knee;
-  const L = Math.sqrt(
-    rig.l2 * rig.l2 + rig.l3 * rig.l3 + 2 * rig.l2 * rig.l3 * Math.cos(delta),
-  );
+  const L = Math.sqrt(rig.l2 * rig.l2 + rig.l3 * rig.l3 + 2 * rig.l2 * rig.l3 * Math.cos(delta));
   const psi = Math.atan2(rig.l3 * Math.sin(delta), rig.l2 + rig.l3 * Math.cos(delta));
   const ik = twoBone(sz, sy, fz, fy, rig.l1, L, rig.sigma);
   const t1 = ik.t1;
@@ -126,8 +126,15 @@ export function solveHind(rig, hz, hy, past, cannon, out = new Array(4)) {
   const kz = fz - rig.l3 * dirZ(cannon);
   const ky = fy - rig.l3 * dirY(cannon);
   const ik = twoBone(rig.P.z, rig.P.y, kz, ky, rig.l1, rig.l2, rig.sigma);
-  const d1 = wrap(ik.t1 - rig.t1);
-  const d2 = wrap(ik.t2 - rig.t2);
+  let t1 = ik.t1;
+  let t2 = ik.t2;
+  if (t1 > FEMUR_MAX) {
+    // Oberschenkel begrenzen; Unterschenkel zeigt dann nur Richtung Sprunggelenk
+    t1 = FEMUR_MAX;
+    t2 = angD(kz - (rig.P.z + rig.l1 * dirZ(t1)), ky - (rig.P.y + rig.l1 * dirY(t1)));
+  }
+  const d1 = wrap(t1 - rig.t1);
+  const d2 = wrap(t2 - rig.t2);
   const d3 = wrap(cannon - rig.t3);
   const d4 = wrap(past - rig.t4);
   out[0] = -d1;

@@ -153,9 +153,19 @@ describe('Speichern nicht möglich (Regel 46)', () => {
     let marked = false;
     const noticeMarker = { get: () => marked, set: () => (marked = true) };
     const session = failingStorage();
-    const a = createStore({ backend: failingStorage(), sessionBackend: session, env, noticeMarker });
+    const a = createStore({
+      backend: failingStorage(),
+      sessionBackend: session,
+      env,
+      noticeMarker,
+    });
     expect(a.shouldShowSaveNotice()).toBe(true);
-    const b = createStore({ backend: failingStorage(), sessionBackend: session, env, noticeMarker });
+    const b = createStore({
+      backend: failingStorage(),
+      sessionBackend: session,
+      env,
+      noticeMarker,
+    });
     expect(b.shouldShowSaveNotice()).toBe(false);
   });
 });

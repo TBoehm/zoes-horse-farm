@@ -54,7 +54,13 @@ const front = makeFrontRig(
 );
 const H = REST.hind;
 const sr = REST.spineRear;
-const hind = makeHindRig(P(H.hip, sr), P(H.stifle, sr), P(H.hock, sr), P(H.fetlock, sr), P(H.hoof, sr));
+const hind = makeHindRig(
+  P(H.hip, sr),
+  P(H.stifle, sr),
+  P(H.hock, sr),
+  P(H.fetlock, sr),
+  P(H.hoof, sr),
+);
 
 describe('Bein-IK', () => {
   it('Ruhelage ergibt keine Rotation', () => {
@@ -84,7 +90,7 @@ describe('Bein-IK', () => {
     for (const [dz, dy, tilt] of [
       [0.3, 0, 0.2],
       [-0.3, 0, -0.2],
-      [0.1, 0.4, -0.8],
+      [0.1, 0.12, -0.15],
     ]) {
       const tz = hind.H.z + dz;
       const ty = hind.H.y + dy;
@@ -93,6 +99,12 @@ describe('Bein-IK', () => {
       expect(p.z).toBeCloseTo(tz, 4);
       expect(p.y).toBeCloseTo(ty, 4);
     }
+  });
+
+  it('Oberschenkel kippt nie über die Waagerechte nach oben (Hufziel nahe der Hüfte)', () => {
+    const rot = solveHind(hind, hind.H.z + 0.4, hind.H.y + 0.7, hind.t4, hind.t3 - 1.2);
+    const femurAngle = hind.t1 - rot[0];
+    expect(femurAngle).toBeLessThanOrEqual(1.35 + 1e-9);
   });
 
   it('Unerreichbare Ziele: Bein gestreckt, keine NaN', () => {

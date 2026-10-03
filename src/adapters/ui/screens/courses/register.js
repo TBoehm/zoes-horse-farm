@@ -1,11 +1,13 @@
 // Anmeldung des Parcours-Teils (SRT-004).
 import { registerMenuEntry } from '../../menu.js';
-import { registerRideMode } from '../ride-screen.js';
+import { registerRideHud, registerRideMode } from '../ride-screen.js';
 import { createCourseMode } from '../../../../application/modes/course-mode.js';
+import { createCourseHud } from './course-hud.js';
 import { createCourseSelectScreen, createPrestartScreen, createResultsScreen } from './screens.js';
 
 export function registerCourses(app) {
   registerRideMode('course', createCourseMode);
+  registerRideHud('course', createCourseHud);
   app.register('courseSelect', createCourseSelectScreen);
   app.register('prestart', createPrestartScreen);
   app.register('results', createResultsScreen);

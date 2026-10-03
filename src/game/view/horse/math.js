@@ -46,4 +46,3 @@ export function table(rows) {
     return out;
   };
 }
-

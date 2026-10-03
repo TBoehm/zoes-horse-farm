@@ -4,7 +4,11 @@ import { defineConfig, devices } from '@playwright/test';
 // in CI installiert Playwright die passenden Browser selbst.
 const chromiumPath = process.env.PW_CHROMIUM_PATH;
 const browsers = (process.env.SMOKE_BROWSERS || 'chromium').split(',');
-const GPU_ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
+const GPU_ARGS = [
+  '--use-angle=swiftshader',
+  '--enable-unsafe-swiftshader',
+  '--ignore-gpu-blocklist',
+];
 
 const projects = [
   {

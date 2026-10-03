@@ -70,6 +70,7 @@ erzwingt die Grenzen.
 | `src/domain/progress/` | Fortschritt, Bestleistung, Freischaltung, Auszeichnungen | `domain`, `shared` |
 | `src/domain/horse/` | Pferdename, Fellfarben, Abzeichen (Werte und Regeln) | `domain`, `shared` |
 | `src/application/save-schema.js` | Spielstand-Bereiche mit Bereinigung (Regel 47), Einstellungsfelder | `domain`, `shared` |
+| `src/application/settings-schema.js` | Registriert Einstellungsfelder (Grafik, Kamera, Hilfe, Klang) und die Bereiche `horse`/`progress` im Spielstand-Schema | `domain`, `application`, `shared` |
 | `src/application/ride-session.js` | Anwendungsfall „Ritt": Sim-Schritt, Ereignisse, Stangen-Wiederaufbau, Sprungzähler + Sofort-Auszeichnungen, Absprung-Hilfe, Rückmeldungen | `domain`, `application`, `shared` |
 | `src/application/modes/` | Modus-Strategien `free-mode.js`, `course-mode.js` (Uhr, HUD-Modell, Rittende → Fortschritt + Auszeichnungen) | `domain`, `application`, `shared` |
 | `src/application/progress-service.js` | Sprung zählen, Ritt abschließen, Fortschritt löschen (über Port `store`) | `domain`, `shared` |
@@ -78,7 +79,7 @@ erzwingt die Grenzen.
 | `src/adapters/input/` | Tastatur, Touch-Bedienung (nipplejs) → `InputState` | innen |
 | `src/adapters/view3d/` | Renderer, Grafikstufen, Welt, Hindernisse, Pferd/Reiter, Kamera, Engine | innen |
 | `src/adapters/audio/` | WebAudio-Synthese | innen |
-| `src/adapters/ui/` | App-Rahmen, Bildschirme, Einstellungs-Abschnitte, i18n + Texte, Styles | innen |
+| `src/adapters/ui/` | App-Rahmen, Bildschirme (`screens/`), Einstellungs-Abschnitte (`settings-sections.js`, `audio-wiring.js`), i18n + Texte, Styles | innen |
 | `src/main.js` | Composition Root | alles |
 
 ### Ports (als Parameter injiziert)
@@ -158,7 +159,7 @@ losgelassen wird. Touch: Galopp-Umschalter; `latchGallop()` schaltet ihn aus.
 ### Reit-Simulation (`src/domain/sim/`, rein, deterministisch mit injiziertem RNG)
 
 ```js
-const sim = createRidingSim({ obstacles, rules, rng = Math.random, tuning = TUNING });
+const sim = createRidingSim({ obstacles, rules, rng = createRng(1), tuning = TUNING });
 sim.reset({ x, z, heading });           // Halt, kein Galopp
 const events = sim.step(dt, input);     // input = InputState
 sim.horse  // { x, z, heading, speed, gait: 'halt'|'walk'|'trot'|'canter', gallop,

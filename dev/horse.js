@@ -169,15 +169,81 @@ function placeCamera(mode) {
   const r = new THREE.Vector3(-f.z, 0, f.x);
   const c = h.position.clone().addScaledVector(f, -0.7); // Körpermitte
   const presets = {
-    side: [r.clone().multiplyScalar(-6).add(new THREE.Vector3(0, 1.3, 0)), new THREE.Vector3(0, 1.05, 0)],
-    sideR: [r.clone().multiplyScalar(6).add(new THREE.Vector3(0, 1.3, 0)), new THREE.Vector3(0, 1.05, 0)],
-    front: [f.clone().multiplyScalar(5.5).addScaledVector(r, -1.5).add(new THREE.Vector3(0, 1.6, 0)), new THREE.Vector3(0, 1.2, 0)],
-    back: [f.clone().multiplyScalar(-5.5).addScaledVector(r, 1.2).add(new THREE.Vector3(0, 2.2, 0)), new THREE.Vector3(0, 1.3, 0)],
-    threequarter: [f.clone().multiplyScalar(3.5).addScaledVector(r, -4).add(new THREE.Vector3(0, 1.9, 0)), new THREE.Vector3(0, 1.1, 0)],
-    head: [f.clone().multiplyScalar(2.15).addScaledVector(r, -0.35).add(new THREE.Vector3(0, 1.95, 0)), f.clone().multiplyScalar(1.05).add(new THREE.Vector3(0, 1.8, 0))],
-    headSide: [f.clone().multiplyScalar(1.1).addScaledVector(r, -1.6).add(new THREE.Vector3(0, 1.9, 0)), f.clone().multiplyScalar(1.05).add(new THREE.Vector3(0, 1.8, 0))],
-    top: [f.clone().multiplyScalar(-0.5).add(new THREE.Vector3(0, 7, 0)), new THREE.Vector3(0, 1, 0)],
-    rider: [f.clone().multiplyScalar(-4).addScaledVector(r, -1.5).add(new THREE.Vector3(0, 2.6, 0)), new THREE.Vector3(0, 1.6, 0)],
+    side: [
+      r
+        .clone()
+        .multiplyScalar(-6)
+        .add(new THREE.Vector3(0, 1.3, 0)),
+      new THREE.Vector3(0, 1.05, 0),
+    ],
+    sideR: [
+      r
+        .clone()
+        .multiplyScalar(6)
+        .add(new THREE.Vector3(0, 1.3, 0)),
+      new THREE.Vector3(0, 1.05, 0),
+    ],
+    front: [
+      f
+        .clone()
+        .multiplyScalar(5.5)
+        .addScaledVector(r, -1.5)
+        .add(new THREE.Vector3(0, 1.6, 0)),
+      new THREE.Vector3(0, 1.2, 0),
+    ],
+    back: [
+      f
+        .clone()
+        .multiplyScalar(-5.5)
+        .addScaledVector(r, 1.2)
+        .add(new THREE.Vector3(0, 2.2, 0)),
+      new THREE.Vector3(0, 1.3, 0),
+    ],
+    threequarter: [
+      f
+        .clone()
+        .multiplyScalar(3.5)
+        .addScaledVector(r, -4)
+        .add(new THREE.Vector3(0, 1.9, 0)),
+      new THREE.Vector3(0, 1.1, 0),
+    ],
+    head: [
+      f
+        .clone()
+        .multiplyScalar(2.15)
+        .addScaledVector(r, -0.35)
+        .add(new THREE.Vector3(0, 1.95, 0)),
+      f
+        .clone()
+        .multiplyScalar(1.05)
+        .add(new THREE.Vector3(0, 1.8, 0)),
+    ],
+    headSide: [
+      f
+        .clone()
+        .multiplyScalar(1.1)
+        .addScaledVector(r, -1.6)
+        .add(new THREE.Vector3(0, 1.9, 0)),
+      f
+        .clone()
+        .multiplyScalar(1.05)
+        .add(new THREE.Vector3(0, 1.8, 0)),
+    ],
+    top: [
+      f
+        .clone()
+        .multiplyScalar(-0.5)
+        .add(new THREE.Vector3(0, 7, 0)),
+      new THREE.Vector3(0, 1, 0),
+    ],
+    rider: [
+      f
+        .clone()
+        .multiplyScalar(-4)
+        .addScaledVector(r, -1.5)
+        .add(new THREE.Vector3(0, 2.6, 0)),
+      new THREE.Vector3(0, 1.6, 0),
+    ],
   };
   const p = presets[mode] || presets.threequarter;
   camera.position.copy(c).add(p[0]);

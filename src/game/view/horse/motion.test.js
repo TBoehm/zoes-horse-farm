@@ -69,10 +69,7 @@ describe('Footfall (Hufaufsetzen)', () => {
     const pairs = [...byTime.values()].filter((p) => p.length === 2);
     expect(pairs.length).toBeGreaterThan(3);
     for (const p of pairs) {
-      expect([
-        [LF, RH].sort().join(),
-        [RF, LH].sort().join(),
-      ]).toContain(p.join());
+      expect([[LF, RH].sort().join(), [RF, LH].sort().join()]).toContain(p.join());
     }
   });
 

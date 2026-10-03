@@ -39,7 +39,8 @@ export function createCourseHud() {
       time.value.textContent = `${formatSeconds(Math.floor(model.timeMs / 10), lang)} s`;
       allowed.value.textContent = `${model.allowedS} s`;
       faults.value.textContent = String(model.faults);
-      next.value.textContent = model.nextLabel === 'finish' ? t('hud.finish') : String(model.nextLabel);
+      next.value.textContent =
+        model.nextLabel === 'finish' ? t('hud.finish') : String(model.nextLabel);
       time.el.hidden = !riding;
       faults.el.hidden = !riding;
       time.el.classList.toggle('is-warning', model.timeMs > model.allowedS * 1000);

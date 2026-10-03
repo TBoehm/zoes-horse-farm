@@ -10,7 +10,7 @@ import { h, clear } from './dom.js';
  * - music: Menü-Melodie soll laufen (Regel 51)
  * - rerenderOnLang (Standard true): bei Sprachwechsel neu aufbauen
  */
-export function createApp({ root, store, inputMode }) {
+export function createApp({ root, store, inputMode, clock }) {
   const emitter = createEmitter();
   const factories = new Map();
   const stack = [];
@@ -28,6 +28,7 @@ export function createApp({ root, store, inputMode }) {
     },
     store,
     inputMode,
+    clock,
     services,
     t,
     h,
