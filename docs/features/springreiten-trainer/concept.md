@@ -169,9 +169,11 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     an einem Hindernis vorbei, ohne es anzureiten (z. B. eine Volte daneben), ist keine Verweigerung.
     Nach einer Verweigerung MUSS das Pferd stehen bleiben bzw. vorbeilaufen; das Kind kann im Halt
     wenden. Eine weitere Verweigerung am selben Hindernis kann erst entstehen, nachdem sich das Pferd
-    weiter als den Anreitabstand entfernt hat und neu anreitet; reitet das Kind vorher erneut auf das
-    Hindernis zu oder trifft das Pferd einen Ständer, MUSS es ohne Fehler seitlich ausweichen. Die
-    Zeit läuft weiter.
+    weiter als den Anreitabstand entfernt hat und neu anreitet. Reitet das Kind vorher erneut auf das
+    Hindernis zu, gilt wie an Hindernissen ohne Wertung: Das Pferd springt nur auf Space (Regel 19,
+    ein solcher Sprung gilt normal, im Parcours gewertet) und nie selbst; kommt kein Sprung zustande,
+    MUSS es ohne Fehler seitlich ausweichen und behält Gangart, Tempo und Galopp. Trifft das Pferd
+    einen Ständer, MUSS es ebenso ausweichen. Die Zeit läuft weiter.
     - Zeitpunkt: Ob verweigert wird, entscheidet sich erst am letzten möglichen Absprungpunkt. Bis
       dahin darf das Kind die Gangart ändern (z. B. noch angaloppieren) oder abwenden, ohne Fehler.
     - Verhalten: Verweigerung wegen Gangart (Regel 16) oder zu geringem Tempo (Regel 20) = das Pferd
@@ -345,7 +347,9 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     Sprungrichtung); ein Oxer als Teil einer Kombination zählt für „Oxer-Profi" mit.
     Bedingungen gelten als „mindestens" erreicht: Ist eine Bedingung schon erfüllt (z. B. aus einem
     älteren Spielstand), wird die Auszeichnung beim nächsten passenden Anlass nachgeholt (sofortige
-    beim nächsten gezählten Sprung, die übrigen beim nächsten beendeten Ritt).
+    beim nächsten gezählten Sprung, die übrigen beim nächsten beendeten Ritt). Für „Fehlerfrei" gilt
+    ein gespeicherter Parcours mit 3 Sternen als erfüllte Bedingung; „Oxer-Profi" und „Kombi-Könner"
+    lassen sich nicht aus gespeicherten Daten ableiten und brauchen einen passenden Ritt.
     „Sofort" vergebene Auszeichnungen MÜSSEN direkt kurz eingeblendet werden, ohne das Spiel zu
     unterbrechen. „Bei Rittende" vergebene erscheinen in der Ergebnisanzeige.
 50. Eine Übersicht MUSS alle Auszeichnungen zeigen, erhaltene hervorgehoben mit Datum, noch fehlende
