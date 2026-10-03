@@ -260,7 +260,7 @@ describe('Fault points (rule 32)', () => {
     expect(run.onLanded('v1', -1, true)).toEqual({ scored: false, rebuildAfterS: null });
   });
 
-  it('Zeitfehler laufen während des Ritts mit und gehen in die Summe ein', () => {
+  it('time faults run along during the ride and go into the total', () => {
     const run = riding(testCourse(), 0);
     run.onLanded('v1', 1, true);
     run.update({ x: 0, z: 0, heading: 0 }, 30000);
@@ -270,8 +270,8 @@ describe('Fault points (rule 32)', () => {
   });
 });
 
-describe('Ziel vor allen Hindernissen (Regel 30)', () => {
-  it('Ritt läuft weiter, Hinweis nennt das fehlende Hindernis', () => {
+describe('Finish before all obstacles (rule 30)', () => {
+  it('ride continues, hint names the missing obstacle', () => {
     const run = riding();
     run.onLanded('v1', 1, false);
     expect(crossFinish(run, 8000)).toBe('missing');
@@ -279,7 +279,7 @@ describe('Ziel vor allen Hindernissen (Regel 30)', () => {
     expect(run.missingHint).toBe(2);
   });
 
-  it('Hinweis verschwindet nach einigen Sekunden', () => {
+  it('hint disappears after a few seconds', () => {
     const run = riding();
     crossFinish(run, 8000);
     run.update({ x: 10, z: -22, heading: Math.PI }, 8000 + MISSING_HINT_MS - 1);
@@ -288,14 +288,14 @@ describe('Ziel vor allen Hindernissen (Regel 30)', () => {
     expect(run.missingHint).toBeNull();
   });
 
-  it('Hinweis verschwindet nach dem nächsten gewerteten Sprung', () => {
+  it('hint disappears after the next scored jump', () => {
     const run = riding();
     crossFinish(run, 8000);
     run.onLanded('v1', 1, false);
     expect(run.missingHint).toBeNull();
   });
 
-  it('nennt bei der Kombination deren Nummer', () => {
+  it('names the number of the combination', () => {
     const run = toCombination(riding());
     run.onLanded('k3a', 1, false);
     crossFinish(run, 9000);
@@ -303,8 +303,8 @@ describe('Ziel vor allen Hindernissen (Regel 30)', () => {
   });
 });
 
-describe('Zweifach-Kombination (Regel 31)', () => {
-  it('b ist erst nach a an der Reihe; b allein gilt wie falsches Hindernis', () => {
+describe('Double combination (rule 31)', () => {
+  it('b only comes after a; b alone counts as a wrong obstacle', () => {
     const run = toCombination(riding());
     expect(run.highlight).toEqual({ elementId: 'k3a', number: 3 });
     expect(run.rules.canRefuse('k3b', 1)).toBe(false);
@@ -313,7 +313,7 @@ describe('Zweifach-Kombination (Regel 31)', () => {
     expect(run.current).toEqual({ obstacleIndex: 2, part: 0, elementId: 'k3a' });
   });
 
-  it('nach a ist b an der Reihe (gleiche Nummer)', () => {
+  it('after a it is the turn of b (same number)', () => {
     const run = toCombination(riding());
     expect(run.onLanded('k3a', 1, false).scored).toBe(true);
     expect(run.current).toEqual({ obstacleIndex: 2, part: 1, elementId: 'k3b' });
@@ -323,14 +323,14 @@ describe('Zweifach-Kombination (Regel 31)', () => {
     expect(run.rules.canRefuse('k3a', 1)).toBe(false);
   });
 
-  it('Abwurf an a: 4 Fehler, weiter mit b', () => {
+  it('knockdown at a: 4 faults, continue with b', () => {
     const run = toCombination(riding());
     expect(run.onLanded('k3a', 1, true)).toEqual({ scored: true, rebuildAfterS: null });
     expect(run.current.elementId).toBe('k3b');
     expect(run.faults.knockdowns).toBe(1);
   });
 
-  it('Verweigerung an b: 4 Fehler, zurück auf a, a und b sofort wieder aufbauen', () => {
+  it('refusal at b: 4 faults, back to a, rebuild a and b immediately', () => {
     const run = toCombination(riding());
     run.onLanded('k3a', 1, true);
     run.onRefusal('k3b', 1);
@@ -340,7 +340,7 @@ describe('Zweifach-Kombination (Regel 31)', () => {
     expect(run.drainRebuilds()).toEqual([]);
   });
 
-  it('Verweigerung an a: 4 Fehler, bleibt auf a, beide aufbauen', () => {
+  it('refusal at a: 4 faults, stays on a, rebuild both', () => {
     const run = toCombination(riding());
     run.onRefusal('k3a', 1);
     expect(run.faults.refusals).toBe(1);
@@ -348,7 +348,7 @@ describe('Zweifach-Kombination (Regel 31)', () => {
     expect(run.drainRebuilds().sort()).toEqual(['k3a', 'k3b']);
   });
 
-  it('Abwürfe an a und b zählen je einzeln aus allen Anläufen', () => {
+  it('knockdowns at a and b count individually across all attempts', () => {
     const run = toCombination(riding());
     run.onLanded('k3a', 1, true);
     run.onRefusal('k3b', 1);
@@ -359,7 +359,7 @@ describe('Zweifach-Kombination (Regel 31)', () => {
     expect(run.current).toBeNull();
   });
 
-  it('Abwenden nach a: zurück auf a ohne Fehler, a und b aufbauen', () => {
+  it('turning away after a: back to a without faults, rebuild a and b', () => {
     const run = toCombination(riding());
     run.onLanded('k3a', 1, true);
     run.update(horseAwayFromB, 9000);
@@ -368,19 +368,19 @@ describe('Zweifach-Kombination (Regel 31)', () => {
     expect(run.drainRebuilds().sort()).toEqual(['k3a', 'k3b']);
   });
 
-  it('kein Abwenden, solange das Pferd b anreitet oder näher als der Anreitabstand ist', () => {
+  it('no turning away while the horse approaches b or is closer than the approach distance', () => {
     const run = toCombination(riding());
     run.onLanded('k3a', 1, false);
     run.update(horseApproachingB, 9000);
     expect(run.current.elementId).toBe('k3b');
     run.update(horseNearBTurning, 9100);
     expect(run.current.elementId).toBe('k3b');
-    // weit weg, aber auf b zu: nicht im Anreitabstand → gilt als abgewendet
+    // far away, but heading toward b: not within the approach distance → counts as turned away
     run.update({ x: 0, z: 5, heading: 0 }, 9200);
     expect(run.current.elementId).toBe('k3a');
   });
 
-  it('nach dem Abwenden wird a erneut gewertet', () => {
+  it('after turning away a is scored again', () => {
     const run = toCombination(riding());
     run.onLanded('k3a', 1, false);
     run.update(horseAwayFromB, 9000);
@@ -389,8 +389,8 @@ describe('Zweifach-Kombination (Regel 31)', () => {
   });
 });
 
-describe('Ergebnis', () => {
-  it('liefert Zeit, aufgeschlüsselte Fehler und Sterne', () => {
+describe('Result', () => {
+  it('returns time, itemized faults and stars', () => {
     const run = riding(testCourse(), 0);
     run.onLanded('v1', 1, true);
     run.onLanded('o2', 1, false);
@@ -408,14 +408,14 @@ describe('Ergebnis', () => {
     expect(run.faults).toEqual({ knockdowns: 1, refusals: 0, time: 2, total: 6 });
   });
 
-  it('fehlerfreier Ritt: 3 Sterne', () => {
+  it('clean ride: 3 stars', () => {
     const run = cleanRide(riding(testCourse(), 0));
     crossFinish(run, 20000);
     expect(run.result.stars).toBe(3);
     expect(run.result.faults.total).toBe(0);
   });
 
-  it('nach dem Ziel wird nichts mehr gewertet', () => {
+  it('nothing is scored after the finish', () => {
     const run = cleanRide(riding(testCourse(), 0));
     crossFinish(run, 20000);
     expect(run.onLanded('v1', 1, true)).toEqual({ scored: false, rebuildAfterS: 3 });
@@ -424,13 +424,13 @@ describe('Ergebnis', () => {
     expect(crossFinish(run, 25000)).toBeNull();
   });
 
-  describe('cleanOxer (Regel 49)', () => {
+  describe('cleanOxer (rule 49)', () => {
     const finish = (run) => {
       crossFinish(run, 20000);
       return run.result.cleanOxer;
     };
 
-    it('wahr bei einem gewerteten Oxer ohne Verweigerung und ohne Abwurf', () => {
+    it('true for a scored oxer without refusal and without knockdown', () => {
       const run = riding();
       run.onLanded('v1', 1, true);
       run.onLanded('o2', 1, false);
@@ -439,7 +439,7 @@ describe('Ergebnis', () => {
       expect(finish(run)).toBe(true);
     });
 
-    it('falsch, wenn am Oxer verweigert wurde (auch wenn danach sauber)', () => {
+    it('false if the oxer was refused (even if clean afterwards)', () => {
       const run = riding();
       run.onLanded('v1', 1, false);
       run.onRefusal('o2', 1);
@@ -449,7 +449,7 @@ describe('Ergebnis', () => {
       expect(finish(run)).toBe(false);
     });
 
-    it('ein Oxer als Teil der Kombination zählt mit', () => {
+    it('an oxer as part of the combination counts', () => {
       const run = riding();
       run.onLanded('v1', 1, false);
       run.onLanded('o2', 1, true);
@@ -458,7 +458,7 @@ describe('Ergebnis', () => {
       expect(finish(run)).toBe(true);
     });
 
-    it('ungewertete Sprünge über einen Oxer zählen nicht', () => {
+    it('unscored jumps over an oxer do not count', () => {
       const run = riding();
       run.onLanded('o2', 1, false);
       run.onLanded('v1', 1, false);
@@ -470,7 +470,7 @@ describe('Ergebnis', () => {
       expect(finish(run)).toBe(false);
     });
 
-    it('falsch ohne Oxer im Parcours', () => {
+    it('false without an oxer in the course', () => {
       const run = createCourseRun(COURSES[0]);
       crossLine(run, COURSES[0].start, 0);
       for (const o of COURSES[0].obstacles) run.onLanded(o.elements[0].id, 1, false);
@@ -481,17 +481,17 @@ describe('Ergebnis', () => {
     });
   });
 
-  describe('cleanCombination (Regel 49)', () => {
+  describe('cleanCombination (rule 49)', () => {
     const finish = (run) => {
       crossFinish(run, 20000);
       return run.result.cleanCombination;
     };
 
-    it('wahr bei a und b ohne Verweigerung und Abwurf', () => {
+    it('true for a and b without refusal and knockdown', () => {
       expect(finish(cleanRide(riding()))).toBe(true);
     });
 
-    it('wahr nach fehlerfreiem Abwenden und sauberem neuen Anlauf', () => {
+    it('true after a fault-free turn away and a clean new attempt', () => {
       const run = toCombination(riding());
       run.onLanded('k3a', 1, false);
       run.update(horseAwayFromB, 9000);
@@ -500,7 +500,7 @@ describe('Ergebnis', () => {
       expect(finish(run)).toBe(true);
     });
 
-    it('falsch nach einer Verweigerung an der Kombination', () => {
+    it('false after a refusal at the combination', () => {
       const run = toCombination(riding());
       run.onLanded('k3a', 1, false);
       run.onRefusal('k3b', 1);
@@ -509,7 +509,7 @@ describe('Ergebnis', () => {
       expect(finish(run)).toBe(false);
     });
 
-    it('falsch nach einem Abwurf an a', () => {
+    it('false after a knockdown at a', () => {
       const run = toCombination(riding());
       run.onLanded('k3a', 1, true);
       run.onLanded('k3b', 1, false);
@@ -518,8 +518,8 @@ describe('Ergebnis', () => {
   });
 });
 
-describe('Parcours aus COURSES', () => {
-  it.each(COURSES.map((c) => [c.id, c]))('Parcours %i lässt sich fehlerfrei beenden', (_id, c) => {
+describe('Courses from COURSES', () => {
+  it.each(COURSES.map((c) => [c.id, c]))('Course %i can be finished without faults', (_id, c) => {
     const run = createCourseRun(c);
     expect(crossLine(run, c.start, 0)).toBe('start');
     for (const o of c.obstacles) {

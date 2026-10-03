@@ -3,44 +3,16 @@
 // adapter (adapters/ui/screens/courses/course-hud.js); texts are passed as keys.
 import { courseById } from '../../domain/course/courses.js';
 import { createCourseRun } from '../../domain/course/course-run.js';
-import { applyFinishedRide } from '../../domain/progress/progress.js';
-import { checkRideEndBadges } from '../../domain/progress/badges.js';
-
-export const WRONG_REBUILD_S = 3;
 
 /**
- * @param {{ store: object, clock: { nowIso(): string } }} ctx ports: save store and clock
+ * Pure strategy: knows the course run, but neither the store nor the progress. The ride session
+ * saves the finished ride (progress-service) and the settings it passes decide the jump aid.
  * @param {{ courseId?: number|string }} params
  */
-export function createCourseMode(ctx, params) {
-  const { store, clock } = ctx;
+export function createCourseMode(params = {}) {
   const course = courseById(params.courseId);
   let run = createCourseRun(course);
   let clockMs = 0;
-  let missingTimer = 0;
-
-  function finish(api) {
-    const result = run.result;
-    const nowIso = clock.nowIso();
-    let summary = null;
-    store.update('progress', (p) => {
-      const applied = applyFinishedRide(p, result);
-      const badges = checkRideEndBadges(applied.progress, result, nowIso);
-      summary = { ...applied, awarded: badges.awarded };
-      return badges.progress;
-    });
-    // The host resets the touch gallop, plays the finish signal and opens the results screen.
-    api.finish({
-      screen: 'results',
-      params: {
-        courseId: course.id,
-        result,
-        isNewBest: summary.isNewBest,
-        unlockedCourse: summary.unlockedCourse,
-        awarded: summary.awarded,
-      },
-    });
-  }
 
   return {
     id: 'course',
@@ -60,6 +32,13 @@ export function createCourseMode(ctx, params) {
     // Delegation, because "restart" creates a new run
     rules: { canRefuse: (id, dir) => run.rules.canRefuse(id, dir) },
     startPose: () => course.startPose,
+    /** Obstacle that is due next (with its number), shown highlighted in the arena. */
+    get highlight() {
+      return run.highlight ?? null;
+    },
+    get finishMarked() {
+      return Boolean(run.finishMarked);
+    },
     /** Plain-data HUD model for the UI adapter. */
     hudModel() {
       return {
@@ -74,37 +53,36 @@ export function createCourseMode(ctx, params) {
     onRestart() {
       run = createCourseRun(course);
       clockMs = 0;
-      missingTimer = 0;
     },
-    onEvents(events, api) {
+    onEvents(events, host) {
       for (const e of events) {
         if (e.type === 'landed') {
           const res = run.onLanded(e.elementId, e.dir, e.knocked);
-          if (e.knocked) api.feedback('feedback.knockdown');
-          if (res?.rebuildAfterS) api.rebuildIn(e.elementId, res.rebuildAfterS);
+          if (e.knocked) host.feedback('feedback.knockdown');
+          if (res?.rebuildAfterS) host.rebuildIn(e.elementId, res.rebuildAfterS);
         }
         if (e.type === 'refusal') {
           run.onRefusal(e.elementId, e.dir);
-          api.feedback('feedback.refusal');
+          host.feedback('feedback.refusal');
         }
       }
     },
-    update(dt, api, prev) {
-      const s = api.sim.horse;
+    /**
+     * @param {number} dt seconds
+     * @param {{ horse: {x:number,z:number}, prev: {x:number,z:number} }} state horse position now
+     *   and before the step
+     * @returns {{ finished: { screen: string, result: object, params: object } }|null}
+     */
+    update(dt, { horse, prev }, host) {
       if (run.phase === 'riding') clockMs += dt * 1000;
-      const before = run.missingHint;
-      run.onLineCross(prev, { x: s.x, z: s.z }, clockMs);
-      run.update(s, clockMs);
-      for (const id of run.drainRebuilds()) api.rebuildNow(id);
-      if (run.missingHint !== before && run.missingHint !== null) missingTimer = 4;
-      if (missingTimer > 0) missingTimer -= dt;
-      const hl = run.highlight;
-      api.world.highlight(hl?.elementId ?? null, hl?.number);
-      api.world.setFinishMarked?.(Boolean(run.finishMarked));
-      if (run.phase === 'finished') finish(api);
+      run.onLineCross(prev, { x: horse.x, z: horse.z }, clockMs);
+      run.update(horse, clockMs);
+      for (const id of run.drainRebuilds()) host.rebuildNow(id);
+      if (run.phase !== 'finished') return null;
+      return { finished: { screen: 'results', result: run.result, params: { courseId: course.id } } };
     },
-    aidTarget() {
-      if (!store.get('settings').aidCourse) return null;
+    aidTarget({ settings }) {
+      if (!settings.aidCourse) return null;
       const cur = run.current;
       return cur ? { elementId: cur.elementId, dir: 1 } : null;
     },

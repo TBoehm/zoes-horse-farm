@@ -32,9 +32,9 @@ const J = {
   elbow: [0.19, 0.36, 0.07],
   wrist: [0.09, 0.22, 0.33],
   hip: [0.1, 0.08, -0.02],
-  knee: [0.27, -0.17, 0.28],
-  ankle: [0.315, -0.57, 0.15],
-  toe: [0.32, -0.6, 0.31],
+  knee: [0.29, -0.17, 0.28],
+  ankle: [0.36, -0.56, 0.15],
+  toe: [0.365, -0.59, 0.31],
 };
 const mir = (a, s) => [a[0] * s, a[1], a[2]];
 const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
@@ -321,7 +321,7 @@ export function createRider({ quality = 'medium' } = {}) {
     const d = vA.subVectors(target, pRoot);
     const dist = clamp(d.length(), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-4);
     d.normalize();
-    const x = (l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist);
+    const x = (l1 * l1 + dist * dist - l2 * l2) / (2 * dist);
     const h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
     vB.subVectors(pole, pRoot);
     vB.addScaledVector(d, -vB.dot(d)).normalize();
