@@ -135,6 +135,8 @@ die **Reihenfolge** bestimmt:
 - **Design-first:** Design-Pages und Plattform-Guidelines vor dem Bauen einer Komponente; Code
   folgt dem Design. Wer eine Design-Page schreibt: unmittelbar vorher frisch laden, fremde
   Änderungen erhalten, danach verifizieren.
+- **Code immer auf Englisch:** Bezeichner, Kommentare, Testbeschreibungen, Log-/Fehlermeldungen –
+  unabhängig von der Sprache der UI oder der Planungs-Dokumente. Jedes Agent-Briefing nennt das.
 - **Erst recherchieren, dann bauen:** Bevor etwas selbst erfunden wird (Algorithmus, Kennwerte,
   UI-Muster, Hilfsbibliothek), nach bewährten Lösungen suchen (Web-Recherche, etablierte
   Bibliotheken, Fachquellen) und das Ergebnis mit Quelle in Spec bzw. Agent-Briefing geben.
@@ -319,7 +321,7 @@ werden nicht delegiert.
   erfinden.
 - Gates sind Pflicht, nach jedem Implementierungsschritt und vor jedem Commit; Ausnahmen nur nach
   Projekt-Regel und mit genannter Begründung.
-- TDD und Clean Architecture für Domain/Application; Recherche vor Eigenbau.
+- TDD und Clean Architecture für Domain/Application; Recherche vor Eigenbau; Code auf Englisch.
 - Ein roter Gate blockiert, auch wenn er von `<BASE>` kommt.
 - Spec/Konzept zuerst ändern, nie still abweichen.
 - Migrationen unveränderlich nach Merge/Rollout.
