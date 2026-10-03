@@ -143,8 +143,11 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
     get finishMarked() {
       return currentElement() === null;
     },
+    /** Number of the obstacle that is due, "3b" for part b of a combination, else 'finish'. */
     get nextLabel() {
-      return currentElement() ? obstacles[index].number : 'finish';
+      if (!currentElement()) return 'finish';
+      const { number } = obstacles[index];
+      return part === 1 ? `${number}b` : number;
     },
     get faults() {
       return faults();

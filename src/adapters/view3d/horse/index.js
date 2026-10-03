@@ -23,11 +23,9 @@ import { createMotion, neckCarriage, stepMotion } from './motion.js';
 import { JUMP_KEYS, LEG_OFFSET, POSE_KEYS, POSE_SIZE, STOP_POSE, samplePoses } from './poses.js';
 import { EAR_ANCHOR, REST, SADDLE_SEAT, createSkeletonBones } from './skeleton.js';
 import { createReins } from './reins.js';
-
-export { COATS, MARKINGS, DEFAULT_APPEARANCE } from './coats.js';
 import { GRAPHICS_LEVELS } from '../../../application/graphics-levels.js';
 
-export const QUALITY_LEVELS = GRAPHICS_LEVELS;
+export { COATS, MARKINGS, DEFAULT_APPEARANCE } from './coats.js';
 
 /** Distance body centre → simulation reference point (ground below the forelegs). */
 export const ORIGIN_OFFSET_Z = REST.front.hoof[2];
@@ -51,7 +49,7 @@ export function createHorse(options = {}) {
     rider: withRider = true,
     origin = 'front', // 'front' (sim reference point) or 'center' (e.g. menu preview)
   } = options;
-  let level = QUALITY_LEVELS.includes(q0) ? q0 : 'medium';
+  let level = GRAPHICS_LEVELS.includes(q0) ? q0 : 'medium';
   let appearance = normalizeAppearance(options);
 
   const object = new THREE.Group();
@@ -187,7 +185,7 @@ export function createHorse(options = {}) {
       appearance = applyAppearance(uniforms, { ...appearance, ...a });
     },
     setQuality(l) {
-      if (!QUALITY_LEVELS.includes(l) || l === level) return;
+      if (!GRAPHICS_LEVELS.includes(l) || l === level) return;
       level = l;
       applyQuality();
     },

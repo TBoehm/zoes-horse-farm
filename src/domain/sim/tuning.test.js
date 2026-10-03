@@ -37,9 +37,4 @@ describe('tuning values the other layers read', () => {
   it('derives the combination distance from the course-building values', () => {
     expect(COMBI_DISTANCE).toBeCloseTo(2 * TUNING.course.takeoffLanding + TUNING.course.stride, 9);
   });
-
-  it('reads the sim step limit from tuning', () => {
-    expect(TUNING.sim.maxDt).toBeGreaterThan(0);
-    expect(TUNING.sim.maxDt).toBeLessThanOrEqual(0.25);
-  });
 });

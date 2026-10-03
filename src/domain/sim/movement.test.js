@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { TUNING, ARENA } from './tuning.js';
 import { forwardOf, wrapAngle } from './geometry.js';
-import { gaitForSpeed, maxTurnRate, turnRadius } from './movement.js';
+import { gaitForSpeed, maxTurnRate } from './movement.js';
 import { createRng } from './rng.js';
 import { DEG, DT, drive, makeSim, ofType } from '../../../tests/support/sim-utils.js';
 
 const S = TUNING.speeds;
+
+/** Turn radius (m) at full steering lock. */
+const turnRadius = (speed, tuning) => speed / maxTurnRate(speed, tuning);
 
 describe('Gait from speed (rule 9)', () => {
   it('maps halt, walk and trot by speed, gallop is always canter', () => {

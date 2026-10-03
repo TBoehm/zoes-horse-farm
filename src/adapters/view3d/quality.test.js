@@ -1,11 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  createQualityGovernor,
-  pickInitialLevel,
-  lowerLevel,
-  QUALITY_PRESETS,
-  QUALITY_LEVELS,
-} from './quality.js';
+import { createQualityGovernor, pickInitialLevel, lowerLevel, QUALITY_PRESETS } from './quality.js';
+import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
 
 /** Runs the governor for `seconds` at a constant frame rate. */
 function run(gov, seconds, fps, measuring = true) {
@@ -73,7 +68,7 @@ describe('lowerLevel', () => {
 
 describe('QUALITY_PRESETS', () => {
   it('has all levels with pixel ratio and shadow values', () => {
-    expect(Object.keys(QUALITY_PRESETS)).toEqual(QUALITY_LEVELS);
+    expect(Object.keys(QUALITY_PRESETS)).toEqual(GRAPHICS_LEVELS);
     expect(QUALITY_PRESETS.low.pixelRatio).toBe(1);
     expect(QUALITY_PRESETS.medium.pixelRatio).toBe(1.5);
     expect(QUALITY_PRESETS.high.pixelRatio).toBe(2);

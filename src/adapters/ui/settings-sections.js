@@ -1,6 +1,7 @@
 // Settings sections for graphics level and jump aid (SRT-002, SRT-003).
 import { choiceGroup, registerSettingsSection, toggleRow } from './settings-screen.js';
-import { pickInitialLevel, QUALITY_LEVELS } from '../view3d/quality.js';
+import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
+import { pickInitialLevel } from '../view3d/quality.js';
 import { deviceInfo } from '../view3d/engine.js';
 
 registerSettingsSection({
@@ -13,7 +14,7 @@ registerSettingsSection({
       name: 'graphics',
       label: t('settings.graphics'),
       value: s.graphicsAuto ? 'auto' : s.graphicsLevel,
-      options: ['auto', ...QUALITY_LEVELS].map((v) => ({ value: v, label: t(`graphics.${v}`) })),
+      options: ['auto', ...GRAPHICS_LEVELS].map((v) => ({ value: v, label: t(`graphics.${v}`) })),
       onChange: (value) => {
         if (value === 'auto') {
           // New pick that fits the device (rule 4)

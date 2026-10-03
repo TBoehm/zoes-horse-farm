@@ -4,7 +4,15 @@ import { h } from './dom.js';
 
 const entries = [];
 
-/** @param {{ id: string, order: number, labelKey: string, onSelect: (ctx) => void, visible?: (ctx) => boolean }} entry */
+/**
+ * @param {{
+ *   id: string,
+ *   order: number,
+ *   labelKey: string,
+ *   onSelect: (ctx) => void,
+ *   visible?: (ctx) => boolean,
+ * }} entry
+ */
 export function registerMenuEntry(entry) {
   const i = entries.findIndex((e) => e.id === entry.id);
   if (i >= 0) entries.splice(i, 1);
@@ -12,7 +20,7 @@ export function registerMenuEntry(entry) {
   entries.sort((a, b) => a.order - b.order);
 }
 
-export function getMenuEntries() {
+function getMenuEntries() {
   return [...entries];
 }
 

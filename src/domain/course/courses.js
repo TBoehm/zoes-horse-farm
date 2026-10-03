@@ -7,16 +7,14 @@
 // medium canter), change of rein from course 2, first obstacle low and approached
 // straight. `track` holds the turn waypoints per leg; they yield the ideal line for the
 // allowed time (scoring.js).
-import { COMBI_DISTANCE } from '../sim/tuning.js';
+import { COMBI_DISTANCE, TUNING } from '../sim/tuning.js';
 import { allowedTime } from './scoring.js';
 
 const N = 0; // jump toward +z
 const S = Math.PI; // toward −z
 const LINE_LENGTH = 6;
 const START_BACK = 5; // halt this far before the start line
-const STRIDE = 3.7; // canter stride (m)
-const TAKEOFF_LANDING = 1.8; // landing or takeoff (m)
-const LANDING_FREE = 8; // straight stretch after landing before a turn
+const LANDING_FREE = TUNING.course.landingFree; // straight stretch after landing before a turn
 const DIAG = (15 * Math.PI) / 180; // angle of the diagonal to the longitudinal axis
 const DIAG_EXIT_Z = -21.9; // the turn at the end of the diagonal starts here
 const DEG = Math.PI / 180;
@@ -27,9 +25,8 @@ function heading(dx, dz) {
 
 function spreadFor(kind, height) {
   if (kind !== 'oxer') return 0;
-  if (height <= 0.7) return 0.7;
-  if (height <= 0.8) return 0.8;
-  return 0.9;
+  const { byMaxHeight, tall } = TUNING.course.oxerSpread;
+  return byMaxHeight.find((e) => height <= e.maxHeight)?.spread ?? tall;
 }
 
 function element(id, kind, height, x, z, rot) {
@@ -59,7 +56,8 @@ function combination(number, id, a, b, x, z, rot, directed = true) {
  * (edge to edge n · 3.7 m + 3.6 m), plus half the oxer depths.
  */
 export function relatedDistance(strides, spreadFrom = 0, spreadTo = 0) {
-  return strides * STRIDE + 2 * TAKEOFF_LANDING + spreadFrom / 2 + spreadTo / 2;
+  const { stride, takeoffLanding } = TUNING.course;
+  return strides * stride + 2 * takeoffLanding + spreadFrom / 2 + spreadTo / 2;
 }
 
 /** Line (about 6 m) across the riding direction rot through (x, z). */

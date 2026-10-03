@@ -14,7 +14,10 @@ import { showBadgeToast } from './profile/badge-toast.js';
 const HUDS = {};
 const FEEDBACK_VISIBLE_S = 2;
 
-/** A mode with a HUD registers a view per mode id: factory() → { el, renderTexts(), render(model) }. */
+/**
+ * A mode with a HUD registers a view per mode id:
+ * factory() → { el, renderTexts(), render(model) }.
+ */
 export function registerRideHud(id, factory) {
   HUDS[id] = factory;
 }
@@ -221,7 +224,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     renderHud(view.hud);
     horse.update(dt, view.horse);
     placeHorse(view.horse);
-    world.syncRails(view.rails, dt, view.fallDirs ?? undefined);
+    world.syncRails(view.rails, dt, view.fallDirs);
     world.setShadowFocus(view.horse.x, view.horse.z);
     world.highlight(view.highlight?.elementId ?? null, view.highlight?.number);
     world.setFinishMarked(view.finishMarked);

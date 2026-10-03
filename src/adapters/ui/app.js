@@ -8,7 +8,8 @@ import { h, clear } from './dom.js';
  * factory(ctx, params) → { el, music?: bool, rerenderOnLang?: bool, screenClass?: string,
  *   destroy?(), onShow?(), onCover?() }
  * - music: the menu melody should play (rule 51)
- * - musicDelayMs: start the melody this long after the screen opened (results: after the finish signal)
+ * - musicDelayMs: start the melody this long after the screen opened (results: after the finish
+ *   signal)
  * - redirect: { name, params } instead of showing this screen (guards, e.g. a locked course);
  *   `el` is not used then
  * - rerenderOnLang (default true): rebuild when the language changes

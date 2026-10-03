@@ -11,6 +11,8 @@ export function createNamePromptScreen(ctx, params = {}) {
   const input = h('input', {
     class: 'text-input',
     type: 'text',
+    // maxlength counts UTF-16 units, the name limit counts characters: headroom for surrogate
+    // pairs (emoji); cleanName enforces the real limit
     maxlength: String(NAME_MAX_LENGTH * 2),
     autocomplete: 'off',
     autocapitalize: 'words',

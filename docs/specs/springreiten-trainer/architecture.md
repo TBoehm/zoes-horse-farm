@@ -8,7 +8,7 @@ das „Wie": Module, Schnittstellen, Koordinaten, Datei-Ownership. Abweichungen 
 
 - Vite 8 (statisch, `base: './'`), Vanilla-JS ES-Module (kein TypeScript, keine Typprüfung als Gate),
   three.js 0.186 (`import * as THREE from 'three'`).
-- Tests: Vitest (`src/**/*.test.js`, Umgebung `node`; DOM-Tests per `// @vitest-environment jsdom`).
+- Tests: Vitest (`src/**/*.test.js` und `tests/**/*.test.js`, Umgebung `node`; DOM-Tests per `// @vitest-environment jsdom`).
 - Lint: ESLint 10 flat config, Format: Prettier (singleQuote, printWidth 100).
 - Smoke: Playwright gegen `vite preview` (Port 4173).
 - PWA: vite-plugin-pwa (generateSW, kein skipWaiting/clientsClaim → neue Version erst nach
@@ -51,7 +51,8 @@ Obstacle = {
   (zeigt nach rechts, wenn man in +n springt). Fahnen im Parcours: **rot rechts** (+t-Seite),
   **weiß links** (−t-Seite).
 - Vorderkante relativ zur Anreitrichtung `dir ∈ {+1, −1}`: Stangen bei `n·(p−c) = ±spread/2`.
-- Kombinations-Abstand a→b (Mitte zu Mitte): `COMBI_DISTANCE` (Spielwert, ca. 7,3 m).
+- Kombinations-Abstand a→b (Mitte zu Mitte): `COMBI_DISTANCE` (abgeleitet in `tuning.js`:
+  `2 · TUNING.course.takeoffLanding + TUNING.course.stride`, ca. 7,3 m).
 - Rails: Kreuz = 2 gekreuzte Stangen (zählt als eine fallende „Stange" = rail 0, beide fallen),
   Steilsprung = obere Stange rail 0 (+ untere feste Füllstange, fällt nie),
   Oxer = vordere obere rail 0, hintere obere rail 1.
@@ -66,11 +67,12 @@ erzwingt die Grenzen.
 | --- | --- | --- |
 | `src/shared/` | reine Helfer ohne Seiteneffekte (Event-Emitter, `math.js`: `clamp`, `isPlainObject`) | nichts außer `shared` |
 | `src/domain/sim/` | Reit-/Sprung-Simulation, Spielwerte (`tuning.js`), Geometrie, seedbarer Zufall | `domain`, `shared` |
-| `src/domain/course/` | Parcours-Layouts, freie Aufstellung, Ritt-Zustandsautomat, Wertung | `domain`, `shared` |
+| `src/domain/course/` | Parcours-Layouts, freie Aufstellung, Ritt-Zustandsautomat, Wertung (der geometrische Layout-Prüfer `layout-check.js` ist reines Test-Orakel und liegt in `tests/support/`) | `domain`, `shared` |
 | `src/domain/progress/` | Fortschritt, Bestleistung, Freischaltung, Auszeichnungen | `domain`, `shared` |
 | `src/domain/horse/` | Pferdename, Fellfarben, Abzeichen (Werte und Regeln) | `domain`, `shared` |
-| `src/application/save-schema.js` | Spielstand-Bereiche mit Bereinigung (Regel 47), Einstellungsfelder | `domain`, `shared` |
+| `src/application/save-schema.js` | Spielstand-Bereiche mit Bereinigung (Regel 47), Einstellungsfelder | `domain`, `shared`, `application/languages.js` |
 | `src/application/languages.js` | `LANGS` – die angebotenen Sprachen (einzige Quelle für Schema und UI) | – |
+| `src/application/graphics-levels.js` | `GRAPHICS_LEVELS` – die wählbaren Grafikstufen (einzige Quelle für Schema, Einstellungs-Dienst, Grafik-Presets und Pferd) | – |
 | `src/application/settings-service.js` | Anwendungsfälle für Einstellungen: der **einzige Schreiber** des Bereichs `settings` (siehe „Einstellungs-Dienst“) | `domain`, `application`, `shared` |
 | `src/application/settings-schema.js` | Registriert Einstellungsfelder (Grafik, Kamera, Hilfe, Klang) und die Bereiche `horse`/`progress` im Spielstand-Schema | `domain`, `application`, `shared` |
 | `src/application/ride-session.js` | Anwendungsfall „Ritt": Sim-Schritt, Ereignisse, Stangen-Wiederaufbau, Sprungzähler + Sofort-Auszeichnungen, Absprung-Hilfe, Rückmeldungen | `domain`, `application`, `shared` |
@@ -83,7 +85,7 @@ erzwingt die Grenzen.
 | `src/adapters/audio/` | WebAudio-Synthese | innen |
 | `src/adapters/ui/` | App-Rahmen, Bildschirme (`screens/`, z. B. `screens/ride-screen.js`), Einstellungs-Abschnitte (`settings-sections.js`, `audio-wiring.js`), i18n + Texte, Styles | innen |
 | `src/main.js` | Composition Root (verdrahtet Store, Einstellungs-Dienst, App, Bildschirme; Startfehler → allgemeine Fehlermeldung) | alles |
-| `tests/support/` | Test-Hilfen, die nie in den Produktions-Build gelangen: `sim-utils.js`, `test-ports.js` (Fake-Store/-Uhr), `test-host.js`, `autopilot.js` (+ Fahrbarkeits-Test). Vitest-Include und ESLint-Override sind dafür eingerichtet | alles |
+| `tests/support/` | Test-Hilfen, die nie in den Produktions-Build gelangen: `sim-utils.js`, `test-ports.js` (Fake-Store/-Uhr), `test-host.js`, `autopilot.js` (+ Fahrbarkeits-Test), `layout-check.js` (+ Test; Layout-Orakel für `courses.test.js`). Vitest-Include und ESLint-Override sind dafür eingerichtet | alles |
 
 ### Ports (als Parameter injiziert)
 
@@ -91,7 +93,7 @@ erzwingt die Grenzen.
   `update` gibt den **bereinigten** neuen Bereich zurück (nicht, was die Funktion geliefert hat).
 - `clock`: `{ nowIso() }` für Auszeichnungs-Datum; Zeit im Spiel kommt als `dt`.
 - `rng`: `() => number` in [0, 1) – Domain nutzt nie `Math.random()` direkt.
-- Die Ritt-Sitzung liefert Ereignisse/Kommandos (`endGallop`, `badgesAwarded`, `feedback`,
+- Die Ritt-Sitzung liefert Ereignisse/Kommandos (`endGallop`, `badges`, `feedback`,
   `finished`, Klang-Ereignisse); der UI-Adapter setzt sie um (Eingabe, Toasts, Klang, Bildschirmwechsel).
 
 ### Ritt-Sitzung (application/ride-session.js)
@@ -119,7 +121,7 @@ Objekte** (kein Allokieren pro Frame): Felder lesen, die Objekte nicht über Fra
 `commands`/`events`-Arrays sind eingefroren (nie `push`). Der Modus bekommt einen `host`
 (`feedback`, `rebuildIn`, `rebuildNow`, `cancelRebuild`); ein gezählter Abwurf bricht einen noch
 ausstehenden unbewerteten 3-s-Wiederaufbau desselben Elements ab. Das HUD-Modell des Parcours ist
-`{ phase, timeMs, timeCs, allowedS, faults, overTime, nextLabel, missingHint }`; die Ergebnis-Zeilen
+`{ phase, timeCs, allowedS, faults, overTime, nextLabel, missingHint }` (`nextLabel`: Nummer des fälligen Hindernisses, `"3b"` für Teil b einer Kombination, sonst `'finish'`); die Ergebnis-Zeilen
 (`result-summary.js`) liefern je Fehlerart `{ count, each, points }`. Das UI rechnet nichts davon nach.
 
 `services.ride` (`{ session, engine, screen }`, gesetzt vom Ritt-Bildschirm, beim Verlassen entfernt)
@@ -201,6 +203,7 @@ input.poll()            // InputState (Tastatur + Touch zusammengeführt)
 input.endGallop()       // Spiel beendet den Galopp (Verweigerung, Zaun): Touch aus, Shift neu drücken
 input.resetTouchGallop()// nur der Touch-Galopp-Schalter aus (z. B. beim Verlassen des Rittes)
 input.clearEdges()      // Flanken (Sprung/Pause/Kamera) verwerfen, z. B. nach „Weiter“
+input.dispose()         // Listener von Eingabemodus, Tastatur und Touch entfernen
 input.keyboard.latchGallop({ onNextShiftPress })  // Galopp sperren, bis Shift losgelassen ist;
                         // mit onNextShiftPress zählt auch der nächste Shift-Druck nicht
                         // (Moduswechsel durch Shift selbst, Regeln 9/11)
@@ -245,7 +248,7 @@ Der Aufprall auf Ständer/Hindernis ohne Sprung lässt das Pferd seitlich auswei
 **jeder** Geschwindigkeit ab der Halt-Schwelle (`speeds.haltBelow`), also auch im Schritt. Endet der
 Galopp unter `trotMin` (Absprung-Anlauf), beschleunigt das Pferd mit `control.gallopEndTrotUp`
 bis in den Arbeitstrab statt in den Schritt zu fallen; Zaun/Verweigerung halten an.
-Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven, Wiederaufbau-Verzögerung `rebuildDelayS`,
+Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven, Parcours-Bau `TUNING.course`: Galoppsprung, Landung/Absprung, freie Strecke, Oxer-Tiefen, Wiederaufbau-Verzögerung `rebuildDelayS`,
 Hinweis-Dauer `missingHintS`, `control.stickDeadZone`) nur in `src/domain/sim/tuning.js`;
 Regel-Konstanten (Fehlerpunkte, Zeitfehler-Schritt, Sterne, Auszeichnungs-Schwellen) bleiben in
 ihren Domain-Modulen. Die Governor-Defaults (`GOVERNOR_DEFAULTS` in `view3d/quality.js`) sind

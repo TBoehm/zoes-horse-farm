@@ -2,7 +2,7 @@
 import { getLang } from '../../i18n.js';
 import { badgeSummary, listBadges } from '../../../../application/badge-overview.js';
 
-export function formatDate(iso, lang = getLang()) {
+function formatDate(iso, lang = getLang()) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString(lang === 'de' ? 'de-DE' : 'en-GB', {

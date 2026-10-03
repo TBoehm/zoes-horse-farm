@@ -5,7 +5,6 @@ import { crossAxisOf } from '../../domain/sim/geometry.js';
 import {
   axesOf,
   flagSides,
-  localToWorld,
   polesOf,
   standRows,
   standHeight,
@@ -31,6 +30,14 @@ import {
   POLE_RADIUS,
   STAND_X,
 } from './world-layout.js';
+
+/** World position of an element-local point (lx, lz). */
+const localToWorld = (element, lx, lz) => {
+  const rot = element.rot || 0;
+  const c = Math.cos(rot);
+  const s = Math.sin(rot);
+  return { x: element.x + lx * c + lz * s, z: element.z - lx * s + lz * c };
+};
 
 const seq = (...values) => {
   let i = 0;

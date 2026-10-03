@@ -4,6 +4,7 @@ import { h } from '../ui/dom.js';
 import { createRenderer, resizeRenderer, setMaxPixelRatio } from './renderer.js';
 import { createQualityGovernor, pickInitialLevel, QUALITY_PRESETS } from './quality.js';
 import { createWorld } from './world.js';
+import { TUNING } from '../../domain/sim/tuning.js';
 import { DEFAULT_APPEARANCE } from '../../domain/horse/appearance.js';
 import { createHorse } from './horse/index.js';
 import { createCameraRig } from './camera.js';
@@ -50,7 +51,8 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   canvas.hidden = true;
   app.layers.scene.append(canvas);
 
-  // Graphics level (rule 4): on first start, or on "Automatic" without a level, pick one that fits the device
+  // Graphics level (rule 4): on first start, or on "Automatic" without a level, pick one that
+  // fits the device
   if (!settingsService.get().graphicsLevel) {
     settingsService.setGraphicsAuto(pickInitialLevel(deviceInfo(probeRendererString(), inputMode)));
   }
@@ -105,7 +107,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   let frameFn = null;
   let last = 0;
   function loop(time) {
-    const dt = last ? Math.min(0.1, (time - last) / 1000) : 1 / 60;
+    const dt = last ? Math.min(TUNING.sim.maxDt, (time - last) / 1000) : 1 / 60;
     const rawDt = last ? (time - last) / 1000 : 1 / 60;
     last = time;
     resize();

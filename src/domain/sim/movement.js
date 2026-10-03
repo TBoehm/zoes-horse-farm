@@ -62,11 +62,6 @@ export function maxTurnRate(speed, tuning) {
   return c.turnInPlace / (1 + Math.max(0, speed) / c.turnSpeedRef);
 }
 
-/** Turn radius (m) at full steering lock. */
-export function turnRadius(speed, tuning) {
-  return speed / maxTurnRate(speed, tuning);
-}
-
 /**
  * Steering: steer −1..1 (right +). horse.turnRate is rad/s, positive = right turn;
  * the heading changes by −turnRate · dt (h grows to the left).

@@ -21,7 +21,8 @@ export function watchPage(page) {
   return { errors, forbidden };
 }
 
-// Browsers in which WebGL MUST be available in the test (otherwise the test fails instead of skipping)
+// Browsers in which WebGL MUST be available in the test (otherwise the test fails instead of
+// skipping)
 const REQUIRE_WEBGL = (process.env.SMOKE_REQUIRE_WEBGL ?? 'chromium,msedge').split(',');
 
 /** true = WebGL available; false = not available and allowed for this browser (test is skipped). */
@@ -57,7 +58,9 @@ export async function openMenu(page) {
 
 export const SAVE_KEY = 'zoes-horse-farm.save';
 
-/** Opens the app with the test hook; an optional save game is written once before the first load. */
+/**
+ * Opens the app with the test hook; an optional save game is written once before the first load.
+ */
 export async function openGame(page, { save, lang } = {}) {
   if (save || lang) {
     await page.addInitScript(

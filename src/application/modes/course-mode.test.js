@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createCourseMode } from './course-mode.js';
 import { COURSES } from '../../domain/course/courses.js';
-import { toCentiseconds } from '../../domain/course/scoring.js';
+import { REFUSAL_FAULTS, toCentiseconds } from '../../domain/course/scoring.js';
 import { fakeHost } from '../../../tests/support/test-host.js';
 
 const course = COURSES[0];
@@ -16,9 +16,10 @@ function across(line) {
   return { prev: { x: mx - dx, z: mz - dz }, next: { x: mx + dx, z: mz + dz } };
 }
 
-function startRide(mode) {
-  const { prev, next } = across(course.start);
-  mode.run.onLineCross(prev, next, 0);
+/** Crosses the start line through the mode, like the ride session does; the ride is on after it. */
+function startRide(mode, host = fakeHost(), ridden = course) {
+  const { prev, next } = across(ridden.start);
+  mode.update(0, { horse: next, prev }, host);
 }
 
 describe('course mode', () => {
@@ -39,12 +40,11 @@ describe('course mode', () => {
     const { mode } = setup();
     expect(mode.hudModel()).toEqual({
       phase: 'prestart',
-      timeMs: 0,
       timeCs: 0,
       allowedS: course.allowedTimeS,
       faults: 0,
       overTime: false,
-      nextLabel: mode.run.nextLabel,
+      nextLabel: 1,
       missingHint: null,
     });
   });
@@ -64,7 +64,7 @@ describe('course mode', () => {
     const start = across(course.start);
     mode.update(0.1, { horse: start.next, prev: start.prev }, host);
     mode.update(1.239, { horse: start.next, prev: start.next }, host);
-    expect(mode.hudModel().timeCs).toBe(toCentiseconds(mode.run.timeMs));
+    expect(mode.hudModel().timeCs).toBe(toCentiseconds(1239));
     expect(mode.hudModel().timeCs).toBe(123);
     // exactly the allowed time is not over; one hundredth later is
     mode.update(course.allowedTimeS - 1.239, { horse: start.next, prev: start.next }, host);
@@ -79,11 +79,11 @@ describe('course mode', () => {
     mode.update(0.5, { horse: start.next, prev: start.prev }, host);
     expect(mode.hudModel().phase).toBe('riding');
     mode.update(0.5, { horse: start.next, prev: start.next }, host);
-    expect(mode.hudModel().timeMs).toBeGreaterThan(0);
+    expect(mode.hudModel().timeCs).toBe(50);
 
     mode.onRestart();
     expect(mode.hudModel().phase).toBe('prestart');
-    expect(mode.hudModel().timeMs).toBe(0);
+    expect(mode.hudModel().timeCs).toBe(0);
   });
 
   it('highlights the obstacle that is due and marks the finish after the last one', () => {
@@ -101,6 +101,26 @@ describe('course mode', () => {
     }
     expect(mode.highlight).toBeNull();
     expect(mode.finishMarked).toBe(true);
+  });
+
+  it('shows the next obstacle number, with "b" for the second part of a combination', () => {
+    const withCombination = COURSES.find((c) => c.obstacles.some((o) => o.elements.length > 1));
+    const mode = createCourseMode({ courseId: withCombination.id });
+    const host = fakeHost();
+    const combo = withCombination.obstacles.find((o) => o.elements.length > 1);
+    startRide(mode, host, withCombination);
+    for (const o of withCombination.obstacles) {
+      if (o === combo) break;
+      for (const el of o.elements) {
+        mode.onEvents([{ type: 'landed', elementId: el.id, dir: 1, knocked: false }], host);
+      }
+    }
+    expect(mode.hudModel().nextLabel).toBe(combo.number);
+    mode.onEvents(
+      [{ type: 'landed', elementId: combo.elements[0].id, dir: 1, knocked: false }],
+      host,
+    );
+    expect(mode.hudModel().nextLabel).toBe(`${combo.number}b`);
   });
 
   it('counts a knockdown as a fault and asks for feedback', () => {
@@ -188,7 +208,7 @@ describe('course mode', () => {
     const id = course.obstacles[0].elements[0].id;
     mode.onEvents([{ type: 'refusal', elementId: id, dir: 1, reason: 'gait' }], host);
     expect(host.calls.feedback).toEqual(['feedback.refusal']);
-    expect(mode.run.faults.refusals).toBe(1);
+    expect(mode.hudModel().faults).toBe(REFUSAL_FAULTS);
   });
 
   it('reports the finished ride with the result and the results screen, without saving', () => {
@@ -203,7 +223,10 @@ describe('course mode', () => {
     const finish = across(course.finish);
     const out = mode.update(0.1, { horse: finish.next, prev: finish.prev }, host);
     expect(out.finished.screen).toBe('results');
-    expect(out.finished.result).toBe(mode.run.result);
+    expect(out.finished.result).toMatchObject({
+      courseId: course.id,
+      faults: { knockdowns: 0, refusals: 0, timeFaults: 0, total: 0 },
+    });
     expect(out.finished.params).toEqual({ courseId: course.id });
   });
 
@@ -218,7 +241,7 @@ describe('course mode', () => {
     expect(mode.aidTarget({ settings: { aidCourse: false } })).toBeNull();
     startRide(mode);
     expect(mode.aidTarget({ settings: { aidCourse: true } })).toEqual({
-      elementId: mode.run.current.elementId,
+      elementId: course.obstacles[0].elements[0].id,
       dir: 1,
     });
   });

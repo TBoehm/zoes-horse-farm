@@ -1,13 +1,13 @@
 // Bilingual texts (rule 6). Feature areas register their texts with registerStrings.
 import { LANGS } from '../../application/languages.js';
 
-const dictionaries = { de: {}, en: {} };
+const dictionaries = Object.fromEntries(LANGS.map((code) => [code, {}]));
 const listeners = new Set();
 let lang = 'de';
 
-export function registerStrings({ de = {}, en = {} }) {
-  Object.assign(dictionaries.de, de);
-  Object.assign(dictionaries.en, en);
+/** @param {Record<string, Record<string, string>>} strings texts per language (see LANGS) */
+export function registerStrings(strings) {
+  for (const code of LANGS) Object.assign(dictionaries[code], strings[code]);
 }
 
 /** German if the preferred browser language is German, otherwise English. */

@@ -7,8 +7,6 @@ export const ARENA = Object.freeze({ width: 40, length: 70 });
 
 export const POLE_LENGTH = 3.5;
 export const STAND_WIDTH = 0.15;
-export const COMBI_DISTANCE = 7.3;
-
 export const TUNING = {
   speeds: {
     // below this speed the horse counts as standing (gait halt)
@@ -171,4 +169,25 @@ export const TUNING = {
   missingHintS: 5,
 
   sim: { maxDt: 0.1, substep: 1 / 120 },
+
+  // course building (concept rule 25): related distances and oxer depths
+  course: {
+    // canter stride (m)
+    stride: 3.7,
+    // landing or takeoff distance next to an obstacle edge (m)
+    takeoffLanding: 1.8,
+    // straight stretch after landing before a turn (m)
+    landingFree: 8,
+    // oxer depth by the height of the top pole: first entry with height <= maxHeight, else tall
+    oxerSpread: {
+      byMaxHeight: [
+        { maxHeight: 0.7, spread: 0.7 },
+        { maxHeight: 0.8, spread: 0.8 },
+      ],
+      tall: 0.9,
+    },
+  },
 };
+
+// Combination distance a→b (center to center): landing + one stride + takeoff (≈ 7.3 m).
+export const COMBI_DISTANCE = 2 * TUNING.course.takeoffLanding + TUNING.course.stride;

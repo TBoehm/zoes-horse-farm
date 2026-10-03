@@ -1,7 +1,7 @@
 // Coat material: MeshStandardMaterial (low: MeshLambertMaterial) with injected shader code.
 // The colour is computed per pixel from the rest-pose position (aRest: 3D noise for dapples and
-// pinto patches, dark lower legs), material weights (aMat: long hair, hoof, eye, inner ear) and head
-// coordinates (aFace: s along the head, u lateral, front-ness) for markings and nostrils.
+// pinto patches, dark lower legs), material weights (aMat: long hair, hoof, eye, inner ear) and
+// head coordinates (aFace: s along the head, u lateral, front-ness) for markings and nostrils.
 // setAppearance only changes uniforms – no rebuild, no shader recompilation.
 import * as THREE from 'three';
 import { MARKING_REGIONS, coatParams, markingIndex, normalizeAppearance } from './coats.js';
@@ -187,7 +187,9 @@ export function applyAppearance(uniforms, appearance) {
   return a;
 }
 
-/** Coat material for a quality level; uniforms are shared (changing appearance = setting values). */
+/**
+ * Coat material for a quality level; uniforms are shared (changing appearance = setting values).
+ */
 export function createCoatMaterial(level, uniforms) {
   const low = level === 'low';
   const mat = low

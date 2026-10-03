@@ -6,7 +6,7 @@ import { clamp } from '../../shared/math.js';
 export const POLE_RADIUS = 0.05;
 export const POLE_GEOM_LENGTH = POLE_LENGTH - 0.02;
 export const STAND_X = POLE_LENGTH / 2 + STAND_WIDTH / 2;
-export const CROSS_LOW_Y = 0.17; // lower ends of the cross poles in low cups
+const CROSS_LOW_Y = 0.17; // lower ends of the cross poles in low cups
 
 // --- Obstacles -------------------------------------------------------------------------------
 
@@ -24,14 +24,6 @@ export function axesOf(rot = 0) {
  */
 export function flagSides() {
   return { red: -1, white: 1 };
-}
-
-/** World position of an element-local point (lx, lz). */
-export function localToWorld(element, lx, lz) {
-  const rot = element.rot || 0;
-  const c = Math.cos(rot);
-  const s = Math.sin(rot);
-  return { x: element.x + lx * c + lz * s, z: element.z - lx * s + lz * c };
 }
 
 /** Stand height for an element. */
@@ -191,7 +183,7 @@ export function aidPlacement(element, dir, zone) {
 
 // --- Start/finish lines --------------------------------------------------------------------------
 
-export function toXZ(p) {
+function toXZ(p) {
   return Array.isArray(p) ? { x: p[0], z: p[1] } : { x: p.x, z: p.z };
 }
 
@@ -298,7 +290,7 @@ export function planFence({ pathFence = [] } = {}) {
   return out;
 }
 
-// --- Environment ----------------------------------------------------------------------------------
+// --- Environment ----------------------------------------------------------------------------
 
 /** Placement of buildings, paths and path fences (world coordinates). */
 export const SITE = Object.freeze({
@@ -339,7 +331,7 @@ export function terrainHeight(x, z) {
 }
 
 /** Areas where no plants may stand. */
-export const BLOCKED = Object.freeze([
+const BLOCKED = Object.freeze([
   { x: 0, z: 0, hw: ARENA.width / 2 + 2.5, hd: ARENA.length / 2 + 2.5 },
   {
     x: SITE.stable.x,

@@ -18,7 +18,8 @@ function volumeRow(ctx, channel) {
     dataset: { name: volKey },
   });
   slider.addEventListener('input', () => settings.setVolume(channel, Number(slider.value) / 100));
-  // Only the switch (no label of its own): it shows "sound on"; muted = off (volume is kept, rule 52)
+  // Only the switch (no label of its own): it shows "sound on"; muted = off (volume is kept,
+  // rule 52)
   const toggle = toggleRow({
     name: muteKey,
     value: !s[muteKey],

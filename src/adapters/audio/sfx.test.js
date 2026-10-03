@@ -55,7 +55,8 @@ function makeRecorder() {
   return { voice, out, nodes };
 }
 
-// Filtered noise bursts: { type, freq, peak, length } with the envelope of the gain behind the filter
+// Filtered noise bursts: { type, freq, peak, length } with the envelope of the gain behind the
+// filter
 function noiseBursts(nodes) {
   return nodes
     .filter((n) => n.kind === 'filter')

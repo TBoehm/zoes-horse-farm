@@ -21,7 +21,7 @@
     "qa": "npm run lint && npm run format:check && npm run test && npm run build && npm run smoke"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^22.22.2 || ^24.15.0 || >=26"
   },
   "dependencies": {
     "nipplejs": "^1.0.4",

@@ -1,4 +1,5 @@
-// Camera (rules 13, 14): default is diagonally behind/above horse and rider, rider view between the ears.
+// Camera (rules 13, 14): default is diagonally behind/above horse and rider, rider view between
+// the ears.
 import * as THREE from 'three';
 
 export const CAMERA_MODES = ['follow', 'rider'];

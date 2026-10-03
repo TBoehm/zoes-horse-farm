@@ -15,19 +15,19 @@ export function createCourseMode(params = {}) {
   let run = createCourseRun(course);
   let clockMs = 0;
   const next = { x: 0, z: 0 }; // reused every frame
+  const lines = {
+    start: course.start,
+    finish: course.finish,
+    labelKeys: { start: 'prestart.legendStart', finish: 'prestart.legendFinish' },
+  };
 
   return {
     id: 'course',
-    course,
     obstacles: course.obstacles,
     flags: true,
     /** Start/finish lines; the host translates the label keys. */
     get lines() {
-      return {
-        start: course.start,
-        finish: course.finish,
-        labelKeys: { start: 'prestart.legendStart', finish: 'prestart.legendFinish' },
-      };
+      return lines;
     },
     quitLabelKey: 'pause.toSelect',
     quitScreen: 'courseSelect',
@@ -45,7 +45,6 @@ export function createCourseMode(params = {}) {
     hudModel() {
       return {
         phase: run.phase,
-        timeMs: run.timeMs,
         timeCs: toCentiseconds(run.timeMs),
         allowedS: course.allowedTimeS,
         faults: run.faults.total,
@@ -103,9 +102,6 @@ export function createCourseMode(params = {}) {
       if (!settings.aidCourse) return null;
       const cur = run.current;
       return cur ? { elementId: cur.elementId, dir: 1 } : null;
-    },
-    get run() {
-      return run;
     },
   };
 }

@@ -35,7 +35,7 @@ const STRIPES = 11; // odd: white ends
 const MAX_POLES = 128;
 
 // obstacle colors (pole stripes, stand sections, plank)
-export const OBSTACLE_COLORS = [0xc62828, 0x1e56b8, 0x2e7d32, 0xef8f00, 0x6a3fa0, 0x00838f];
+const OBSTACLE_COLORS = [0xc62828, 0x1e56b8, 0x2e7d32, 0xef8f00, 0x6a3fa0, 0x00838f];
 
 /** Pole geometries (along X, centered): white and colored stripes separately. */
 function buildPoleGeometries(radialSegments = 10) {
@@ -222,7 +222,7 @@ const ea = new THREE.Vector3();
 const eb = new THREE.Vector3();
 
 /** Advances the animation; returns true if the pose changed. */
-export function stepPole(pole, dt) {
+function stepPole(pole, dt) {
   if (pole.state === 'falling') {
     pole.t = Math.min(1, pole.t + dt / FALL_DURATION);
     fallPointInto(ea, pole.fromA, pole.toA, endProgressOf(pole.t, pole.lead, true));

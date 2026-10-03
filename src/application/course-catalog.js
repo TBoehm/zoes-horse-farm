@@ -4,7 +4,15 @@ import { COURSES, courseById } from '../domain/course/courses.js';
 
 const isOpen = (progress, id) => id <= progress.unlocked;
 
-/** @returns {{ id: number, obstacleCount: number, open: boolean, stars: number, best: { faults: number, timeCs: number }|null }[]} */
+/**
+ * @returns {{
+ *   id: number,
+ *   obstacleCount: number,
+ *   open: boolean,
+ *   stars: number,
+ *   best: { faults: number, timeCs: number }|null,
+ * }[]}
+ */
 export function listCourses(store) {
   const progress = store.get('progress');
   return COURSES.map((course) => {

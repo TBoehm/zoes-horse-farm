@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { ARENA, COMBI_DISTANCE } from '../sim/tuning.js';
 import { axisOf, toLocal } from '../sim/geometry.js';
 import { COURSES, FREE_LAYOUT, courseById, relatedDistance } from './courses.js';
-import { checkLayout, corridorOf, footprint, rectsOverlap } from './layout-check.js';
+import {
+  checkLayout,
+  corridorOf,
+  footprint,
+  rectsOverlap,
+} from '../../../tests/support/layout-check.js';
 
 const elementsOf = (layout) => layout.obstacles.flatMap((o) => o.elements);
 const kindsOf = (course) => new Set(elementsOf(course).map((e) => e.kind));

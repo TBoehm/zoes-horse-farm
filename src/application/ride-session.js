@@ -151,8 +151,10 @@ export function createRideSession({ mode, store, clock, rng }) {
     quitScreen: mode.quitScreen,
     /** Stops listening to the store; call when the ride screen is left. */
     dispose: stopListening,
-    /** Plain data for the UI to display. The same object (and the same `aid` object) is reused on
-     * every read: read it, do not keep it. `horse`, `rails` and `fallDirs` are live (not copied). */
+    /**
+     * Plain data for the UI to display. The same object (and the same `aid` object) is reused on
+     * every read: read it, do not keep it. `horse`, `rails` and `fallDirs` are live (not copied).
+     */
     get view() {
       const target = mode.aidTarget({ approach: sim.approach, settings });
       if (target) {

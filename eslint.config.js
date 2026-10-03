@@ -2,7 +2,8 @@ import js from '@eslint/js';
 import globals from 'globals';
 import prettier from 'eslint-config-prettier';
 
-// Clean-Architecture boundaries (see CLAUDE.md and docs/specs/springreiten-trainer/architecture.md):
+// Clean-Architecture boundaries (see CLAUDE.md and
+// docs/specs/springreiten-trainer/architecture.md):
 // adapters -> application -> domain; shared is usable from every layer and imports nothing else.
 const THREE_AND_NIPPLE = ['three', 'three/*', 'nipplejs'];
 const DOM_GLOBALS = ['window', 'document', 'localStorage', 'sessionStorage', 'navigator'];

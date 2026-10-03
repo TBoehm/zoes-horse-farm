@@ -2,8 +2,6 @@
 // Pure, no three.js.
 import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
 
-export const QUALITY_LEVELS = GRAPHICS_LEVELS;
-
 export const QUALITY_PRESETS = Object.freeze({
   low: Object.freeze({
     pixelRatio: 1,
@@ -89,8 +87,8 @@ export function pickInitialLevel(info = {}) {
 
 /** Next lower level (never below low). */
 export function lowerLevel(level) {
-  const i = QUALITY_LEVELS.indexOf(level);
-  return QUALITY_LEVELS[Math.max(0, i - 1)];
+  const i = GRAPHICS_LEVELS.indexOf(level);
+  return GRAPHICS_LEVELS[Math.max(0, i - 1)];
 }
 
 export const GOVERNOR_DEFAULTS = Object.freeze({
@@ -117,7 +115,7 @@ export function createQualityGovernor({
   options = {},
 } = {}) {
   const cfg = { ...GOVERNOR_DEFAULTS, ...options };
-  let current = QUALITY_LEVELS.includes(level) ? level : 'medium';
+  let current = GRAPHICS_LEVELS.includes(level) ? level : 'medium';
   let isAuto = Boolean(auto);
   let grace = cfg.graceS;
   let cooldown = 0;
@@ -201,7 +199,7 @@ export function createQualityGovernor({
     interrupt,
     /** Set a level manually (no onChange). */
     setLevel(next) {
-      if (QUALITY_LEVELS.includes(next)) current = next;
+      if (GRAPHICS_LEVELS.includes(next)) current = next;
       interrupt();
     },
     setAuto(value) {

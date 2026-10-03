@@ -175,7 +175,8 @@ function count(events, type) {
  * Autopilot that rides a course step by step through the real ride session (for tests that
  * stop half way, e.g. an aborted ride).
  * @param {number} courseId
- * @param {{ store?: object, speed?: number, canter?: boolean, jitterS?: number, seed?: number }} [opts]
+ * @param {{ store?: object, speed?: number, canter?: boolean, jitterS?: number,
+ *   seed?: number }} [opts]
  *   defaults: the pace of the course (trot → medium trot, canter → medium canter with gallop)
  * @returns {{ session: object, store: object, course: object,
  *   step: () => { events: object[], commands: object[] } }}
@@ -219,7 +220,8 @@ export function createCourseRider(courseId, opts = {}) {
 /**
  * Rides a whole course with the autopilot through the real ride session.
  * @param {number} courseId
- * @param {{ speed?: number, canter?: boolean, jitterS?: number, seed?: number, maxT?: number }} [opts]
+ * @param {{ speed?: number, canter?: boolean, jitterS?: number, seed?: number,
+ *   maxT?: number }} [opts]
  *   defaults: the pace of the course (trot → medium trot, canter → medium canter with gallop)
  * @returns {{ finished: boolean, result: object|null, timeS: number, allowedS: number,
  *   events: object[], refusals: number, knockdowns: number, jumps: number }}

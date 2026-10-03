@@ -3,9 +3,6 @@ import * as THREE from 'three';
 import { aidPlacement } from './world-layout.js';
 import { createSoftRectTexture } from './textures.js';
 
-/** Band placement, see aidPlacement (world-layout.js). */
-export const aidTransform = aidPlacement;
-
 export function createAidMarker({ color = 0x2fe6a6 } = {}) {
   const geometry = new THREE.PlaneGeometry(1, 1);
   geometry.rotateX(-Math.PI / 2);
@@ -31,7 +28,7 @@ export function createAidMarker({ color = 0x2fe6a6 } = {}) {
     mesh,
     /** Only changes the transform, no new geometry. */
     set(element, dir, zone) {
-      const t = aidTransform(element, dir, zone);
+      const t = aidPlacement(element, dir, zone);
       if (!t) {
         mesh.visible = false;
         return;

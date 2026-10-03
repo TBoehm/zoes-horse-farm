@@ -1,6 +1,6 @@
 // Free mode (rule 41): fixed layout, no scoring, feedback on knockdown/refusal, fallen rails are
-// rebuilt after TUNING.rebuildDelayS, both jump directions count. No store access: the ride session passes
-// the settings it needs.
+// rebuilt after TUNING.rebuildDelayS, both jump directions count. No store access: the ride
+// session passes the settings it needs.
 import { FREE_LAYOUT } from '../../domain/course/courses.js';
 import { TUNING } from '../../domain/sim/tuning.js';
 

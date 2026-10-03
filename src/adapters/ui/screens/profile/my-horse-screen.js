@@ -21,6 +21,8 @@ export function createMyHorseScreen(ctx) {
   const nameInput = h('input', {
     class: 'text-input',
     type: 'text',
+    // maxlength counts UTF-16 units, the name limit counts characters: headroom for surrogate
+    // pairs (emoji); cleanName enforces the real limit
     maxlength: String(NAME_MAX_LENGTH * 2),
     value: displayName(horseData, t('horse.defaultName')),
     autocomplete: 'off',

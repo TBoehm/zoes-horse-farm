@@ -38,7 +38,9 @@ function probe(backend) {
   }
 }
 
-/** "Notice shown" marker without Web Storage: history.state survives a reload, not closing the tab. */
+/**
+ * "Notice shown" marker without Web Storage: history.state survives a reload, not closing the tab.
+ */
 export function historyNoticeMarker(win = globalThis.window) {
   return {
     get: () => Boolean(win?.history?.state?.zhfSaveNotice),

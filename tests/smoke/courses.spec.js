@@ -278,7 +278,7 @@ test.describe('a complete ride of course 1', () => {
     await waitForRide(page, 'course');
     // the clock only runs after the start line
     const before = await rideState(page);
-    expect(before.hud.timeMs).toBe(0);
+    expect(before.hud.timeCs).toBe(0);
     await rideCourseOne(page);
 
     await expect(page.locator('.panel-results')).toBeVisible();

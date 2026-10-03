@@ -1,8 +1,8 @@
 // Geometric check of obstacle layouts (courses and free mode).
-// Used as a test oracle (courses.test.js, layout-check.test.js), not by the game itself; pure,
+// Test oracle (courses.test.js, layout-check.test.js), never part of the game build; pure,
 // no three.js.
-import { ARENA, POLE_LENGTH, STAND_WIDTH } from '../sim/tuning.js';
-import { axisOf, toLocal } from '../sim/geometry.js';
+import { ARENA, POLE_LENGTH, STAND_WIDTH } from '../../src/domain/sim/tuning.js';
+import { axisOf, toLocal } from '../../src/domain/sim/geometry.js';
 
 const LAYOUT_LIMITS = Object.freeze({
   approach: 14, // m of straight approach before the leading edge

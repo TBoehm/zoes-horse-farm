@@ -64,9 +64,6 @@ export function createInputMode({ device, target } = {}) {
     onChange(fn) {
       return emitter.on('change', fn);
     },
-    /** For tests: feed events in directly. */
-    handlePointer: onPointer,
-    handleKey: onKey,
     dispose() {
       if (!target) return;
       target.removeEventListener('pointerdown', onPointer, { capture: true });

@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { createRideSession } from './ride-session.js';
 import { createFreeMode } from './modes/free-mode.js';
 import { createCourseMode } from './modes/course-mode.js';
-import { FREE_LAYOUT } from '../domain/course/courses.js';
+import { FREE_LAYOUT, courseById } from '../domain/course/courses.js';
 import { COMBI_DISTANCE, TUNING, approachInfo, zoneForElement } from '../domain/sim/index.js';
 import { PROGRESS_DEFAULTS } from '../domain/progress/progress.js';
 import { createCourseRider } from '../../tests/support/autopilot.js';
+import { fakeHost } from '../../tests/support/test-host.js';
 import { fakeStore, fixedClock, seededRng } from '../../tests/support/test-ports.js';
 
 const DT = 1 / 60;
@@ -402,7 +403,7 @@ describe('restart', () => {
     const { session } = setup({ mode: createCourseMode({ courseId: 1 }) });
     run(session, { throttle: 1 }, { maxT: 3 });
     session.restart();
-    expect(session.view.hud).toMatchObject({ phase: 'prestart', timeMs: 0 });
+    expect(session.view.hud).toMatchObject({ phase: 'prestart', timeCs: 0 });
   });
 });
 
@@ -707,7 +708,7 @@ describe('finish signal sound', () => {
 
   it('is not commanded when the finish line is crossed too early (obstacles missing)', () => {
     const mode = createCourseMode({ courseId: 1 });
-    const { finish } = mode.course;
+    const { finish, start } = courseById(1);
     const [dx, dz] = finish.dir;
     const mid = [(finish.a[0] + finish.b[0]) / 2, (finish.a[1] + finish.b[1]) / 2];
     mode.startPose = () => ({
@@ -718,12 +719,14 @@ describe('finish signal sound', () => {
     });
     const { session } = setup({ mode });
     // the ride is on, but no obstacle was jumped yet
-    const { start } = mode.course;
     const sm = [(start.a[0] + start.b[0]) / 2, (start.a[1] + start.b[1]) / 2];
-    mode.run.onLineCross(
-      { x: sm[0] - start.dir[0], z: sm[1] - start.dir[1] },
-      { x: sm[0] + start.dir[0], z: sm[1] + start.dir[1] },
+    mode.update(
       0,
+      {
+        prev: { x: sm[0] - start.dir[0], z: sm[1] - start.dir[1] },
+        horse: { x: sm[0] + start.dir[0], z: sm[1] + start.dir[1] },
+      },
+      fakeHost(),
     );
     expect(session.view.hud.phase).toBe('riding');
     const out = run(session, { throttle: 0 }, { maxT: 2 });

@@ -10,8 +10,10 @@ export { LEG_NAMES, REST, SIDES } from './anatomy.js';
 const HEAD_ANGLE = (55 * Math.PI) / 180;
 export const HEAD = {
   origin: new THREE.Vector3(...REST.head),
-  dir: new THREE.Vector3(0, -Math.sin(HEAD_ANGLE), Math.cos(HEAD_ANGLE)), // towards the muzzle
-  front: new THREE.Vector3(0, Math.cos(HEAD_ANGLE), Math.sin(HEAD_ANGLE)), // forehead / nasal bridge
+  // towards the muzzle
+  dir: new THREE.Vector3(0, -Math.sin(HEAD_ANGLE), Math.cos(HEAD_ANGLE)),
+  // forehead / nasal bridge
+  front: new THREE.Vector3(0, Math.cos(HEAD_ANGLE), Math.sin(HEAD_ANGLE)),
   length: 0.62,
 };
 /** Point in head coordinates (s along the head, f towards the forehead, x lateral). */

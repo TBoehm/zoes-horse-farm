@@ -23,7 +23,9 @@ export function createSettingsService(store) {
       if (LANGS.includes(lang)) patch({ lang });
     },
 
-    /** Automatic graphics: `deviceLevel` ('low'|'medium'|'high'|null) is the level for this device. */
+    /**
+     * Automatic graphics: `deviceLevel` ('low'|'medium'|'high'|null) is the level for this device.
+     */
     setGraphicsAuto(deviceLevel) {
       if (deviceLevel !== null && !GRAPHICS_LEVELS.includes(deviceLevel)) return;
       patch({ graphicsAuto: true, graphicsLevel: deviceLevel });

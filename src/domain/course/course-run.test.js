@@ -353,7 +353,7 @@ describe('Double combination (rule 31)', () => {
     expect(run.onLanded('k3a', 1, false).scored).toBe(true);
     expect(run.current).toEqual({ obstacleIndex: 2, part: 1, elementId: 'k3b' });
     expect(run.highlight).toEqual({ elementId: 'k3b', number: 3 });
-    expect(run.nextLabel).toBe(3);
+    expect(run.nextLabel).toBe('3b');
     expect(run.rules.canRefuse('k3b', 1)).toBe(true);
     expect(run.rules.canRefuse('k3a', 1)).toBe(false);
   });

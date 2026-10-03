@@ -387,7 +387,9 @@ export function createGeometryBuilder() {
   const s = new THREE.Vector3();
   const p = new THREE.Vector3();
   return {
-    /** Adds a part: geometry (taken over), color, transform {x,y,z, rx,ry,rz, sx,sy,sz} or Matrix4. */
+    /**
+     * Adds a part: geometry (taken over), color, transform {x,y,z, rx,ry,rz, sx,sy,sz} or Matrix4.
+     */
     add(geometry, color, transform = {}, opts) {
       const g = paint(geometry, color, opts);
       if (transform.isMatrix4) {

@@ -28,7 +28,12 @@ function holdParam(param, now) {
 }
 
 /**
- * @param {{ musicVolume?: number, musicMuted?: boolean, sfxVolume?: number, sfxMuted?: boolean }} settings
+ * @param {{
+ *   musicVolume?: number,
+ *   musicMuted?: boolean,
+ *   sfxVolume?: number,
+ *   sfxMuted?: boolean,
+ * }} settings
  * @param {{ AudioContext?: Function }} [deps] tests only: custom AudioContext constructor
  */
 export function createAudio(settings = {}, deps = {}) {

@@ -1,4 +1,5 @@
-// Horse name (rule 43): trimmed, 1–16 characters; without a custom name the language default applies.
+// Horse name (rule 43): trimmed, 1–16 characters; without a custom name the language default
+// applies.
 export const NAME_MAX_LENGTH = 16;
 
 /** Returns the cleaned name, or null if it is invalid. */
