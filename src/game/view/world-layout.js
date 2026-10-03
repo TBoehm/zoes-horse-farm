@@ -1,15 +1,15 @@
-// Reine Berechnungen der 3D-Welt (ohne three.js): Hindernis-Aufbau, Fahnen, Stangenfall,
-// Absprung-Hilfe, Linien, Zaun- und Umgebungsplanung. Die three.js-Module nutzen nur diese.
+// Pure calculations for the 3D world (no three.js): obstacle layout, flags, falling poles,
+// take-off aid, lines, fence and environment planning. The three.js modules only use these.
 import { ARENA, POLE_LENGTH, STAND_WIDTH } from '../sim/tuning.js';
 
 export const POLE_RADIUS = 0.05;
 export const POLE_GEOM_LENGTH = POLE_LENGTH - 0.02;
 export const STAND_X = POLE_LENGTH / 2 + STAND_WIDTH / 2;
-export const CROSS_LOW_Y = 0.17; // untere Enden der Kreuzstangen in tiefen Auflagen
+export const CROSS_LOW_Y = 0.17; // lower ends of the cross poles in low cups
 
-// --- Hindernisse -------------------------------------------------------------------------------
+// --- Obstacles -------------------------------------------------------------------------------
 
-/** Sprungachse n und Querachse t (rechts, wenn man in +n springt). */
+/** Jump axis n and cross axis t (right-hand side when jumping in +n). */
 export function axesOf(rot = 0) {
   return {
     n: { x: Math.sin(rot), z: Math.cos(rot) },
@@ -18,14 +18,14 @@ export function axesOf(rot = 0) {
 }
 
 /**
- * Fahnenseiten: rot auf +t, weiß auf −t. Im lokalen Element-System (+Z = n) zeigt +X nach −t,
- * daher steht Rot bei lokal x < 0. Liefert das Vorzeichen der lokalen x-Koordinate je Farbe.
+ * Flag sides: red on +t, white on −t. In the element-local frame (+Z = n), +X points to −t, so
+ * red stands at local x < 0. Returns the sign of the local x coordinate per color.
  */
 export function flagSides() {
   return { red: -1, white: 1 };
 }
 
-/** Welt-Position eines lokalen Punktes (lx, lz) eines Elements. */
+/** World position of an element-local point (lx, lz). */
 export function localToWorld(element, lx, lz) {
   const rot = element.rot || 0;
   const c = Math.cos(rot);
@@ -33,12 +33,12 @@ export function localToWorld(element, lx, lz) {
   return { x: element.x + lx * c + lz * s, z: element.z - lx * s + lz * c };
 }
 
-/** Höhe der Ständer für ein Element. */
+/** Stand height for an element. */
 export function standHeight(element) {
   return Math.max(1.45, element.height + 0.55);
 }
 
-/** Lage der Ständerreihen entlang n (Oxer: vorne und hinten). */
+/** Positions of the stand rows along n (oxer: front and back). */
 export function standRows(element) {
   if (element.kind !== 'oxer') return [0];
   const s = element.spread || 0;
@@ -46,9 +46,9 @@ export function standRows(element) {
 }
 
 /**
- * Ruhelagen aller Stangen eines Elements im lokalen System (+Z = n, +X = −t).
- * [{ rail, a:[x,y,z], b:[x,y,z] }], rail = Index der fallenden Stange, −1 = fest (fällt nie).
- * Höhe = Oberkante der obersten Stange (Kreuz: am Kreuzungspunkt).
+ * Rest poses of all poles of an element in the local frame (+Z = n, +X = −t).
+ * [{ rail, a:[x,y,z], b:[x,y,z] }], rail = index of the falling rail, −1 = fixed (never falls).
+ * Height = top of the highest pole (cross: at the crossing point).
  */
 export function polesOf(element) {
   const h = element.height;
@@ -76,14 +76,14 @@ export function polesOf(element) {
   return out;
 }
 
-/** Bezeichnung eines Elements: Nummer, bei Kombinationen mit a/b; null ohne Nummer. */
+/** Element label: number, with a/b for combinations; null without a number. */
 export function labelOf(obstacle, index) {
   if (obstacle.number === null || obstacle.number === undefined) return null;
   if (obstacle.elements.length > 1) return `${obstacle.number}${index === 0 ? 'a' : 'b'}`;
   return String(obstacle.number);
 }
 
-/** Text für die Hervorhebung: übergebene Nummer, bei Kombinationen mit a/b ergänzt. */
+/** Highlight text: the given number, with a/b appended for combinations. */
 export function highlightText(obstacle, index, number) {
   if (number === null || number === undefined) return labelOf(obstacle, index);
   const text = String(number);
@@ -91,16 +91,16 @@ export function highlightText(obstacle, index, number) {
   return text;
 }
 
-// --- Stangenfall -------------------------------------------------------------------------------
+// --- Falling poles -------------------------------------------------------------------------------
 
 export const FALL_DURATION = 0.7;
 export const RISE_DURATION = 0.45;
-export const FALL_LAG = 0.16; // das zweite Ende fällt etwas später
+export const FALL_LAG = 0.16; // the second end falls a little later
 
 export const easeOut = (t) => 1 - (1 - t) * (1 - t);
 export const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
 
-/** Fallkurve der Höhe (Schwerkraft, dann kleines Nachhüpfen): 0 → 1. */
+/** Height curve of a fall (gravity, then a small bounce): 0 → 1. */
 export function fallCurve(t) {
   if (t <= 0) return 0;
   if (t >= 1) return 1;
@@ -108,14 +108,14 @@ export function fallCurve(t) {
   return 1 - 0.1 * Math.sin(((t - 0.78) / 0.22) * Math.PI);
 }
 
-/** Fortschritt beider Enden; lead = 0: Ende a fällt zuerst. */
+/** Progress of both ends; lead = 0: end a falls first. */
 export function endProgress(t, lead = 0) {
   const first = Math.min(1, Math.max(0, t / (1 - FALL_LAG)));
   const second = Math.min(1, Math.max(0, (t - FALL_LAG) / (1 - FALL_LAG)));
   return lead === 0 ? { a: first, b: second } : { a: second, b: first };
 }
 
-/** Punkt eines fallenden Endes: waagrecht ausgerollt, senkrecht mit Fallkurve. */
+/** Point of a falling end: eased horizontally, fall curve vertically. */
 export function fallPoint(from, to, t) {
   const k = easeOut(t);
   const f = fallCurve(t);
@@ -127,8 +127,8 @@ export function fallPoint(from, to, t) {
 }
 
 /**
- * Ziel-Lage einer gefallenen Stange (lokal): liegt auf dem Sand, zur Fallseite `side` (±1
- * entlang n) verschoben und leicht verdreht. rnd: () → [0, 1).
+ * Target pose of a fallen pole (local): lies on the sand, shifted towards `side` (±1 along n)
+ * and slightly rotated. rnd: () → [0, 1).
  */
 export function fallTarget(center, length, side, rnd) {
   const travel = 0.55 + rnd() * 0.6;
@@ -145,12 +145,12 @@ export function fallTarget(center, length, side, rnd) {
   };
 }
 
-// --- Absprung-Hilfe ----------------------------------------------------------------------------
+// --- Take-off aid ----------------------------------------------------------------------------
 
 /**
- * Lage des Absprung-Bandes: Vorderkante = Mitte − dir·n·spread/2; das Band reicht von zone.near
- * bis zone.far vor der Vorderkante, entgegen der Anreitrichtung, so breit wie die Stange.
- * Liefert { x, z, rotY, width, depth } oder null.
+ * Take-off band placement: front edge = center − dir·n·spread/2; the band spans zone.near to
+ * zone.far in front of the front edge (against the approach direction), as wide as the pole.
+ * Returns { x, z, rotY, width, depth } or null.
  */
 export function aidPlacement(element, dir, zone) {
   if (!element || !zone) return null;
@@ -171,13 +171,13 @@ export function aidPlacement(element, dir, zone) {
   };
 }
 
-// --- Start-/Ziellinie --------------------------------------------------------------------------
+// --- Start/finish lines --------------------------------------------------------------------------
 
 export function toXZ(p) {
   return Array.isArray(p) ? { x: p[0], z: p[1] } : { x: p.x, z: p.z };
 }
 
-/** Mitte, Länge und Drehung (um Y, Richtung a→b) einer Linie. */
+/** Center, length and rotation (about Y, direction a→b) of a line. */
 export function lineSegment(a, b) {
   const p = toXZ(a);
   const q = toXZ(b);
@@ -193,10 +193,10 @@ export function lineSegment(a, b) {
   };
 }
 
-/** Schilder für Start/Ziel; fallen beide Linien zusammen, gibt es ein gemeinsames Schild. */
+/** Signs for start/finish; if both lines coincide there is one shared sign. */
 export function planLines(lines) {
   if (!lines) return [];
-  const labels = { start: 'Start', finish: 'Ziel', ...(lines.labels || {}) };
+  const labels = { start: 'Start', finish: 'Finish', ...(lines.labels || {}) };
   const s = lines.start && lineSegment(lines.start.a, lines.start.b);
   const f = lines.finish && lineSegment(lines.finish.a, lines.finish.b);
   const same =
@@ -215,17 +215,17 @@ export function planLines(lines) {
   return out;
 }
 
-// --- Zaun --------------------------------------------------------------------------------------
+// --- Fence --------------------------------------------------------------------------------------
 
 export const FENCE = Object.freeze({
   height: 1.2,
-  offset: 0.18, // Zaunlinie außerhalb der Reitfläche
+  offset: 0.18, // fence line outside the riding area
   spacing: 2.5,
   post: 0.12,
   board: 0.04,
 });
 
-// Tor an der Langseite zum Stall (x = −20)
+// gate on the long side facing the stable (x = −20)
 export const GATE = Object.freeze({ side: -1, z: 22, width: 3.6 });
 
 function fenceRun(a, b, spacing, out, style) {
@@ -242,7 +242,7 @@ function fenceRun(a, b, spacing, out, style) {
   }
 }
 
-/** Plan aller Zaunteile: Reitplatz-Umzäunung mit Torlücke + Wegzäune. */
+/** Plan of all fence parts: arena fence with gate gap + path fences. */
 export function planFence({ pathFence = [] } = {}) {
   const out = { posts: [], segments: [], gate: null };
   const hx = ARENA.width / 2 + FENCE.offset;
@@ -267,13 +267,13 @@ export function planFence({ pathFence = [] } = {}) {
   return out;
 }
 
-// --- Umgebung ----------------------------------------------------------------------------------
+// --- Environment ----------------------------------------------------------------------------------
 
-/** Lage der Gebäude, Wege und Wegzäune (Weltkoordinaten). */
+/** Placement of buildings, paths and path fences (world coordinates). */
 export const SITE = Object.freeze({
   stable: { x: -47, z: 20, depth: 10, length: 30 },
   hut: { x: 25.6, z: -22 },
-  // Weg vom Tor (x = −20, z = 22) zum Stallhof
+  // path from the gate (x = −20, z = 22) to the stable yard
   path: [
     { x: -28.6, z: 22, w: 3.6, l: 16.4, ry: Math.PI / 2 },
     { x: -38.8, z: 20, w: 6.4, l: 32 },
@@ -291,7 +291,7 @@ const smooth = (x, a, b) => {
   return t * t * (3 - 2 * t);
 };
 
-/** Geländehöhe: flach um die Anlage, Hügel zum Horizont. */
+/** Terrain height: flat around the facility, hills towards the horizon. */
 export function terrainHeight(x, z) {
   const r = Math.hypot(x, z);
   if (r < HILL_START) return 0;
@@ -307,7 +307,7 @@ export function terrainHeight(x, z) {
   return rise * (6 + 26 * ang + roll) + far * 30 * ang;
 }
 
-/** Flächen, auf denen keine Pflanzen stehen dürfen. */
+/** Areas where no plants may stand. */
 export const BLOCKED = Object.freeze([
   { x: 0, z: 0, hw: ARENA.width / 2 + 2.5, hd: ARENA.length / 2 + 2.5 },
   {
@@ -319,7 +319,7 @@ export const BLOCKED = Object.freeze([
   { x: -38.8, z: 20, hw: 4, hd: 17 },
   { x: -28.6, z: 22, hw: 9, hd: 3 },
   { x: SITE.hut.x, z: SITE.hut.z, hw: 3.5, hd: 4 },
-  { x: 23.5, z: 12, hw: 2, hd: 9 }, // Bänke
+  { x: 23.5, z: 12, hw: 2, hd: 9 }, // benches
 ]);
 
 export function isBlocked(x, z, margin = 0) {
@@ -328,7 +328,7 @@ export function isBlocked(x, z, margin = 0) {
   );
 }
 
-/** Zufällige Punkte in einem Kreisring außerhalb gesperrter Flächen. rng: () → [0, 1). */
+/** Random points in an annulus outside blocked areas. rng: () → [0, 1). */
 export function scatter(rng, count, minR, maxR, margin = 0, accept = null) {
   const out = [];
   let guard = 0;
@@ -345,7 +345,7 @@ export function scatter(rng, count, minR, maxR, margin = 0, accept = null) {
   return out;
 }
 
-/** Sichtbare Instanzen je Grafikstufe: Pflicht-Instanzen + Anteil der übrigen. */
+/** Visible instances per quality level: mandatory instances + share of the rest. */
 export function instanceCount(total, priority, density) {
   const prio = Math.min(total, Math.max(0, priority || 0));
   const d = Math.min(1, Math.max(0, density));

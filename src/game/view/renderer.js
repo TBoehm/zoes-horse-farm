@@ -1,9 +1,9 @@
-// WebGL-Renderer mit einheitlicher Farb-/Tonwert-Konfiguration.
+// WebGL renderer with a consistent color / tone-mapping setup.
 import * as THREE from 'three';
 
 /**
- * Erzeugt den Renderer. Kantenglättung lässt sich später nicht mehr umschalten
- * (Kontext-Attribut), daher beim Erzeugen passend zur Startstufe wählen.
+ * Creates the renderer. Antialiasing cannot be toggled later (context attribute), so pick it
+ * to match the initial quality level.
  */
 export function createRenderer(canvas, { antialias = true, alpha = false } = {}) {
   const renderer = new THREE.WebGLRenderer({
@@ -23,7 +23,7 @@ export function createRenderer(canvas, { antialias = true, alpha = false } = {})
   return renderer;
 }
 
-/** Obergrenze der Pixeldichte setzen (Grafikstufe) und sofort anwenden. */
+/** Sets the pixel-ratio cap (quality level) and applies it right away. */
 export function setMaxPixelRatio(renderer, maxPixelRatio, devicePixelRatio = defaultDpr()) {
   renderer.userData = { ...renderer.userData, maxPixelRatio };
   const ratio = Math.min(devicePixelRatio, maxPixelRatio);
@@ -32,8 +32,8 @@ export function setMaxPixelRatio(renderer, maxPixelRatio, devicePixelRatio = def
 }
 
 /**
- * Passt Zeichenfläche und Kamera an die Größe an. Ohne width/height wird die CSS-Größe des
- * Canvas genommen. Liefert true, wenn sich etwas geändert hat.
+ * Fits drawing buffer and camera to the size. Without width/height the canvas CSS size is used.
+ * Returns true if anything changed.
  */
 export function resizeRenderer(renderer, camera, width, height, maxPixelRatio) {
   const canvas = renderer.domElement;

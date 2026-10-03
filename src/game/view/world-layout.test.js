@@ -33,8 +33,8 @@ const seq = (...values) => {
   return () => values[i++ % values.length];
 };
 
-describe('Achsen und Fahnen', () => {
-  it('t entspricht crossAxisOf der Simulation', () => {
+describe('axes and flags', () => {
+  it('t matches crossAxisOf of the simulation', () => {
     for (const rot of [0, 0.7, Math.PI, -2]) {
       const { t } = axesOf(rot);
       const ref = crossAxisOf({ rot });
@@ -43,7 +43,7 @@ describe('Achsen und Fahnen', () => {
     }
   });
 
-  it('rote Fahne steht auf der +t-Seite', () => {
+  it('red flag stands on the +t side', () => {
     for (const rot of [0, 1.2, Math.PI, 4]) {
       const el = { x: 3, z: -2, rot };
       const p = localToWorld(el, flagSides().red * STAND_X, 0);
@@ -54,7 +54,7 @@ describe('Achsen und Fahnen', () => {
     }
   });
 
-  it('lokales +Z zeigt in Sprungrichtung n', () => {
+  it('local +Z points in jump direction n', () => {
     const el = { x: 1, z: 1, rot: 0.9 };
     const p = localToWorld(el, 0, 2);
     const { n } = axesOf(0.9);
@@ -64,19 +64,19 @@ describe('Achsen und Fahnen', () => {
 });
 
 describe('polesOf', () => {
-  it('Steilsprung: obere Stange rail 0 mit Oberkante auf height', () => {
+  it('vertical: top pole is rail 0 with its top at height', () => {
     const poles = polesOf({ kind: 'vertical', height: 0.6 });
     expect(poles.filter((p) => p.rail === 0)).toHaveLength(1);
     expect(poles[0].a[1] + POLE_RADIUS).toBeCloseTo(0.6);
     expect(poles.every((p) => p.rail <= 0)).toBe(true);
   });
 
-  it('hoher Steilsprung hat zusätzlich eine feste Füllstange', () => {
+  it('a high vertical also has a fixed filler pole', () => {
     const poles = polesOf({ kind: 'vertical', height: 0.85 });
     expect(poles.filter((p) => p.rail === -1)).toHaveLength(1);
   });
 
-  it('Oxer: vordere rail 0 bei −spread/2, hintere rail 1 bei +spread/2, beide auf height', () => {
+  it('oxer: front rail 0 at −spread/2, back rail 1 at +spread/2, both at height', () => {
     const poles = polesOf({ kind: 'oxer', height: 0.8, spread: 1 });
     const r0 = poles.find((p) => p.rail === 0);
     const r1 = poles.find((p) => p.rail === 1);
@@ -86,7 +86,7 @@ describe('polesOf', () => {
     expect(r0.a[1] + POLE_RADIUS).toBeCloseTo(0.8);
   });
 
-  it('Kreuz: zwei gekreuzte Stangen als rail 0, Kreuzungspunkt auf height, plus Bodenstange', () => {
+  it('cross: two crossed poles as rail 0, crossing at height, plus a ground pole', () => {
     const poles = polesOf({ kind: 'cross', height: 0.5 });
     const crossed = poles.filter((p) => p.rail === 0);
     expect(crossed).toHaveLength(2);
@@ -97,13 +97,13 @@ describe('polesOf', () => {
     expect(poles.filter((p) => p.rail === -1)).toHaveLength(1);
   });
 
-  it('Stangen liegen zwischen den Ständern (Länge < POLE_LENGTH)', () => {
+  it('poles lie between the stands (length < POLE_LENGTH)', () => {
     const [p] = polesOf({ kind: 'vertical', height: 0.6 });
     expect(p.b[0] - p.a[0]).toBeLessThanOrEqual(POLE_LENGTH);
     expect(p.b[0] - p.a[0]).toBeGreaterThan(POLE_LENGTH - 0.05);
   });
 
-  it('Ständerreihen und -höhe', () => {
+  it('stand rows and height', () => {
     expect(standRows({ kind: 'oxer', spread: 1.2 })).toEqual([-0.6, 0.6]);
     expect(standRows({ kind: 'cross' })).toEqual([0]);
     expect(standHeight({ height: 0.4 })).toBeGreaterThan(0.4 + 0.5);
@@ -111,8 +111,8 @@ describe('polesOf', () => {
   });
 });
 
-describe('Bezeichnungen', () => {
-  it('Nummer, Kombination mit a/b, freier Modus ohne', () => {
+describe('labels', () => {
+  it('number, combination with a/b, none in free mode', () => {
     expect(labelOf({ number: 3, elements: [{}] }, 0)).toBe('3');
     expect(labelOf({ number: 5, elements: [{}, {}] }, 1)).toBe('5b');
     expect(labelOf({ number: null, elements: [{}] }, 0)).toBeNull();
@@ -122,8 +122,8 @@ describe('Bezeichnungen', () => {
   });
 });
 
-describe('Stangenfall', () => {
-  it('Fallkurve startet bei 0, endet bei 1, mit kleinem Nachhüpfen', () => {
+describe('falling poles', () => {
+  it('fall curve starts at 0, ends at 1, with a small bounce', () => {
     expect(fallCurve(0)).toBe(0);
     expect(fallCurve(1)).toBe(1);
     expect(fallCurve(0.78)).toBeCloseTo(1);
@@ -133,7 +133,7 @@ describe('Stangenfall', () => {
       expect(fallCurve(t + 0.05)).toBeGreaterThanOrEqual(fallCurve(t));
   });
 
-  it('ein Ende fällt zuerst, beide kommen bei t = 1 an', () => {
+  it('one end falls first, both arrive at t = 1', () => {
     const mid = endProgress(0.5, 0);
     expect(mid.a).toBeGreaterThan(mid.b);
     const other = endProgress(0.5, 1);
@@ -142,7 +142,7 @@ describe('Stangenfall', () => {
     expect(endProgress(0, 1)).toEqual({ a: 0, b: 0 });
   });
 
-  it('fallPoint interpoliert von Auflage zu Boden', () => {
+  it('fallPoint interpolates from cup to ground', () => {
     expect(fallPoint([0, 0.8, 0], [0.2, 0.05, 1], 0)).toEqual([0, 0.8, 0]);
     const end = fallPoint([0, 0.8, 0], [0.2, 0.05, 1], 1);
     expect(end[0]).toBeCloseTo(0.2);
@@ -150,7 +150,7 @@ describe('Stangenfall', () => {
     expect(end[2]).toBeCloseTo(1);
   });
 
-  it('gefallene Stange liegt auf dem Sand auf der Fallseite, Länge bleibt', () => {
+  it('a fallen pole lies on the sand on the fall side, length is kept', () => {
     for (const side of [1, -1]) {
       const t = fallTarget([0, 0.6, 0.4], 3.48, side, seq(0.5, 0.9, 0.1, 0.3, 0.7));
       expect(t.a[1]).toBe(POLE_RADIUS);
@@ -165,7 +165,7 @@ describe('Stangenfall', () => {
 describe('aidPlacement', () => {
   const zone = { far: 3, near: 1 };
 
-  it('Steilsprung rot 0, Anreiten in +n: Band vor dem Hindernis (z < 0)', () => {
+  it('vertical rot 0, approach in +n: band in front of the obstacle (z < 0)', () => {
     const p = aidPlacement({ kind: 'vertical', x: 0, z: 0, rot: 0 }, 1, zone);
     expect(p.x).toBeCloseTo(0);
     expect(p.z).toBeCloseTo(-2);
@@ -173,10 +173,10 @@ describe('aidPlacement', () => {
     expect(p.width).toBe(POLE_LENGTH);
   });
 
-  it('Oxer: gemessen ab der Vorderkante (spread/2), beide Richtungen', () => {
+  it('oxer: measured from the front edge (spread/2), both directions', () => {
     const el = { kind: 'oxer', spread: 1.2, x: 5, z: 5, rot: Math.PI / 2 };
     const p = aidPlacement(el, 1, zone);
-    // n = (1, 0): Vorderkante bei x = 4,4, Bandmitte 2 m davor
+    // n = (1, 0): front edge at x = 4.4, band center 2 m before it
     expect(p.x).toBeCloseTo(2.4);
     expect(p.z).toBeCloseTo(5);
     const q = aidPlacement(el, -1, zone);
@@ -184,7 +184,7 @@ describe('aidPlacement', () => {
     expect(q.rotY).toBeCloseTo(Math.PI / 2);
   });
 
-  it('vertauschte oder leere Zonen', () => {
+  it('swapped or empty zones', () => {
     const el = { kind: 'vertical', x: 0, z: 0, rot: 0 };
     expect(aidPlacement(el, 1, { far: 1, near: 3 }).z).toBeCloseTo(-2);
     expect(aidPlacement(el, 1, { far: 2, near: 2 })).toBeNull();
@@ -193,15 +193,15 @@ describe('aidPlacement', () => {
   });
 });
 
-describe('Linien', () => {
-  it('lineSegment akzeptiert Arrays und Objekte', () => {
+describe('lines', () => {
+  it('lineSegment accepts arrays and objects', () => {
     const s = lineSegment([0, 0], { x: 0, z: 4 });
     expect(s.length).toBeCloseTo(4);
     expect(s.cz).toBeCloseTo(2);
     expect(s.angle).toBeCloseTo(0);
   });
 
-  it('planLines: getrennte Schilder mit übergebenen Texten', () => {
+  it('planLines: separate signs with the given texts', () => {
     const plan = planLines({
       start: { a: [0, 0], b: [4, 0] },
       finish: { a: [0, 10], b: [4, 10] },
@@ -211,7 +211,7 @@ describe('Linien', () => {
     expect(plan[1].finish).toBe(true);
   });
 
-  it('planLines: gleiche Linie ergibt ein gemeinsames Schild', () => {
+  it('planLines: identical lines give one shared sign', () => {
     const line = { a: [0, 0], b: [4, 0] };
     const plan = planLines({ start: line, finish: line, labels: { start: 'S', finish: 'Z' } });
     expect(plan).toHaveLength(1);
@@ -224,7 +224,7 @@ describe('Linien', () => {
 describe('planFence', () => {
   const plan = planFence({ pathFence: [{ a: [-21, 24], b: [-35, 24] }] });
 
-  it('Pfostenabstand höchstens 2,5 m, Zaun außerhalb der Reitfläche', () => {
+  it('post spacing at most 2.5 m, fence outside the riding area', () => {
     const arena = plan.segments.filter((s) => s.style === 'arena');
     expect(arena.every((s) => s.len <= FENCE.spacing + 1e-9)).toBe(true);
     const posts = plan.posts.filter((p) => p.style === 'arena');
@@ -233,7 +233,7 @@ describe('planFence', () => {
     ).toBe(true);
   });
 
-  it('Torlücke ohne Zaunteile', () => {
+  it('gate gap without fence parts', () => {
     const inGap = plan.segments.filter(
       (s) =>
         s.style === 'arena' &&
@@ -245,26 +245,26 @@ describe('planFence', () => {
     expect(plan.gate.z1 - plan.gate.z0).toBeCloseTo(GATE.width);
   });
 
-  it('keine doppelten Pfosten, Wegzaun aus Holz', () => {
+  it('no duplicate posts, wooden path fence', () => {
     const keys = plan.posts.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`);
     expect(new Set(keys).size).toBe(keys.length);
     expect(plan.posts.some((p) => p.style === 'wood')).toBe(true);
   });
 });
 
-describe('Umgebung', () => {
-  it('Gelände ist um die Anlage flach und steigt zum Horizont', () => {
+describe('environment', () => {
+  it('terrain is flat around the facility and rises towards the horizon', () => {
     expect(terrainHeight(0, 0)).toBe(0);
     expect(terrainHeight(60, 40)).toBe(0);
     expect(terrainHeight(300, 0)).toBeGreaterThan(5);
   });
 
-  it('Reitplatz ist für Pflanzen gesperrt', () => {
+  it('the arena is blocked for plants', () => {
     expect(isBlocked(0, 0)).toBe(true);
     expect(isBlocked(60, 60)).toBe(false);
   });
 
-  it('scatter liefert Punkte im Ring außerhalb gesperrter Flächen', () => {
+  it('scatter returns points in the annulus outside blocked areas', () => {
     let s = 1;
     const rng = () => (s = (s * 16807) % 2147483647) / 2147483647;
     const pts = scatter(rng, 50, 30, 80, 1);
@@ -277,7 +277,7 @@ describe('Umgebung', () => {
     }
   });
 
-  it('instanceCount: Pflicht-Instanzen immer, Rest nach Dichte', () => {
+  it('instanceCount: mandatory instances always, the rest by density', () => {
     expect(instanceCount(100, 10, 0)).toBe(10);
     expect(instanceCount(100, 10, 1)).toBe(100);
     expect(instanceCount(100, 10, 0.5)).toBe(55);

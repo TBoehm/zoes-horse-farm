@@ -1,9 +1,9 @@
-// Absprung-Hilfe (Regel 42): halbtransparentes Band auf dem Sand vor der Vorderkante.
+// Take-off aid (rule 42): translucent band on the sand in front of the front rail.
 import * as THREE from 'three';
 import { aidPlacement } from './world-layout.js';
 import { createSoftRectTexture } from './textures.js';
 
-/** Lage des Bandes, siehe aidPlacement (world-layout.js). */
+/** Band placement, see aidPlacement (world-layout.js). */
 export const aidTransform = aidPlacement;
 
 export function createAidMarker({ color = 0x2fe6a6 } = {}) {
@@ -29,7 +29,7 @@ export function createAidMarker({ color = 0x2fe6a6 } = {}) {
 
   return {
     mesh,
-    /** Nur Transform ändern, keine neue Geometrie. */
+    /** Only changes the transform, no new geometry. */
     set(element, dir, zone) {
       const t = aidTransform(element, dir, zone);
       if (!t) {

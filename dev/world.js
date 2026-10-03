@@ -1,4 +1,4 @@
-// Demo der 3D-Welt (nicht ausgeliefert): npx vite → /dev/world.html
+// 3D world demo (not shipped): npx vite → /dev/world.html
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createRenderer, resizeRenderer } from '../src/game/view/renderer.js';
@@ -27,7 +27,7 @@ const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.495;
 
-// Beispiel-Parcours: alle Arten, mit Nummern und Richtung
+// sample course: all kinds, with numbers and direction
 const comboRot = Math.PI / 2;
 const obstacles = [
   {
@@ -77,12 +77,12 @@ let flags = params.get('flags') !== '0';
 let aidOn = params.get('aid') !== '0';
 let linesOn = true;
 let finishMarked = false;
-let hlIndex = 0; // Index in elementIds
+let hlIndex = 0; // index into elementIds
 world.setObstacles(obstacles, { flags });
 const lines = {
   start: { a: [16, -30], b: [10, -30] },
   finish: { a: [16, 30], b: [10, 30] },
-  labels: { start: 'Start', finish: 'Ziel' },
+  labels: { start: 'Start', finish: 'Finish' },
 };
 world.setLines(lines);
 
@@ -99,7 +99,7 @@ applyHighlight();
 
 const views = {
   rider: () => {
-    // hinter Hindernis 2 in Anreitrichtung (rot = π → n = (0,0,−1)), 2,5 m hoch
+    // behind obstacle 2 in approach direction (rot = π → n = (0,0,−1)), 2.5 m high
     camera.position.set(8.6, 2.5, 4);
     controls.target.set(8, 1.0, -6);
   },
@@ -148,36 +148,36 @@ function setQuality(l) {
 const elSelect = document.createElement('select');
 for (const id of elementIds) elSelect.append(new Option(id, id));
 ui.append(elSelect);
-button('Stange abwerfen', () => {
+button('Knock down pole', () => {
   const r = rails.get(elSelect.value);
   const i = r.findIndex((v) => v);
   if (i >= 0) r[i] = false;
 });
-button('Aufbauen', () => {
+button('Rebuild', () => {
   for (const [id, r] of rails)
     rails.set(
       id,
       r.map(() => true),
     );
 });
-button('Nächstes', () => {
+button('Next', () => {
   hlIndex = (hlIndex + 1) % (elementIds.length + 1);
   applyHighlight();
 });
-button('Fahnen', () => {
+button('Flags', () => {
   flags = !flags;
   world.setObstacles(obstacles, { flags });
   applyHighlight();
 });
-button('Hilfe', () => {
+button('Aid', () => {
   aidOn = !aidOn;
   applyHighlight();
 });
-button('Linien', () => {
+button('Lines', () => {
   linesOn = !linesOn;
   world.setLines(linesOn ? lines : null);
 });
-button('Ziel markieren', () => {
+button('Mark finish', () => {
   finishMarked = !finishMarked;
   applyHighlight();
 });
@@ -206,13 +206,13 @@ function frame(now) {
   }
   const info = renderer.info.render;
   stats.textContent =
-    `Stufe ${level} (auto ${autoLevel})\n${fps.toFixed(0)} fps\n` +
-    `Dreiecke ${info.triangles}\nDraw-Calls ${info.calls}\n${renderer.getPixelRatio()}x`;
+    `Level ${level} (auto ${autoLevel})\n${fps.toFixed(0)} fps\n` +
+    `Triangles ${info.triangles}\nDraw-Calls ${info.calls}\n${renderer.getPixelRatio()}x`;
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-// für Screenshot-Skripte
+// for screenshot scripts
 window.demo = {
   world,
   camera,

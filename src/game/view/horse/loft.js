@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 
 export { clamp, lerp, smoothstep, table } from './math.js';
-import { clamp, lerp } from './math.js';
+import { clamp, lerp, smoothstep } from './math.js';
 const TAU = Math.PI * 2;
 
 /**

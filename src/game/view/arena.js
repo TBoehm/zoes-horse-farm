@@ -1,4 +1,4 @@
-// Reitplatz: Sandboden mit Hufschlag, Holz-Umzäunung (instanziert), Tor, Start-/Ziellinie.
+// Arena: sand footing with track, wooden fence (instanced), gate, start/finish lines.
 import * as THREE from 'three';
 import { ARENA } from '../sim/tuning.js';
 import { FENCE, GATE, planFence, planLines } from './world-layout.js';
@@ -11,7 +11,7 @@ import {
   SYSTEM_FONT,
 } from './textures.js';
 
-/** Sandboden-Shader-Ergänzung: Hufschlag-Spur am Rand und großflächige Variation. */
+/** Sand shader patch: worn track along the fence and large-scale variation. */
 function patchSandMaterial(material) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.arenaHalf = { value: new THREE.Vector2(ARENA.width / 2, ARENA.length / 2) };
@@ -41,7 +41,7 @@ function patchSandMaterial(material) {
           vec2 gp = vGroundPos;
           float n = gNoise(gp * 0.13) * 0.6 + gNoise(gp * 0.55) * 0.4;
           diffuseColor.rgb *= 0.9 + 0.2 * n;
-          // Hufschlag: Spur entlang eines abgerundeten Rechtecks ca. 1,7 m innerhalb der Bande
+          // track: band along a rounded rectangle about 1.7 m inside the fence
           vec2 b = arenaHalf - vec2(1.7);
           float R = 5.0;
           vec2 q = abs(gp) - (b - vec2(R));
@@ -49,7 +49,7 @@ function patchSandMaterial(material) {
           float wob = gNoise(gp * 0.8) * 0.5;
           float band = 1.0 - smoothstep(0.35, 1.25, abs(d) + wob * 0.4);
           diffuseColor.rgb *= mix(vec3(1.0), vec3(0.78, 0.72, 0.66), band);
-          // an der Bande aufgeschobener, hellerer Sand
+          // lighter sand pushed up against the fence
           float edge = smoothstep(1.0, 0.0, min(arenaHalf.x - abs(gp.x), arenaHalf.y - abs(gp.y)));
           diffuseColor.rgb *= 1.0 + edge * 0.08;
         }`,
@@ -59,7 +59,7 @@ function patchSandMaterial(material) {
   return material;
 }
 
-/** Bodenfläche: Reitplatz + Weg zum Stall in einer Geometrie (gleiches Material). */
+/** Ground: arena + path to the stable in one geometry (same material). */
 function buildSandGeometry(path) {
   const builder = createGeometryBuilder();
   const w = ARENA.width + 2 * (FENCE.offset + 0.5);
@@ -81,7 +81,7 @@ function buildSandGeometry(path) {
   return builder.build();
 }
 
-/** UV = Weltkoordinaten / Kachelgröße (Texturen wiederholen sich gleichmäßig). */
+/** UV = world coordinates / tile size (textures repeat evenly). */
 export function setWorldUv(geometry, tile) {
   const pos = geometry.attributes.position;
   const uv = geometry.attributes.uv;
@@ -91,7 +91,7 @@ export function setWorldUv(geometry, tile) {
 
 const FENCE_COLORS = { arena: 0xf4f1ea, wood: 0x8a6a4a, gate: 0xe9e4d8 };
 
-/** Erzeugt Pfosten- und Latten-InstancedMeshes für alle Zäune. */
+/** Builds post and board InstancedMeshes for all fences. */
 function buildFence(plan, materials) {
   const unit = new THREE.BoxGeometry(1, 1, 1);
   unit.translate(0, 0.5, 0);
@@ -105,7 +105,7 @@ function buildFence(plan, materials) {
     const rails =
       s.style === 'arena'
         ? [
-            { y: 0.06, h: 0.28 }, // Bande unten
+            { y: 0.06, h: 0.28 }, // kick board
             { y: 0.62, h: 0.13 },
             { y: 1.05, h: 0.13 },
           ]
@@ -126,7 +126,7 @@ function buildFence(plan, materials) {
       });
     }
   }
-  // Tor: zwei kräftige Pfosten, zwei Flügel mit Latten und Strebe
+  // gate: two strong posts, two leaves with boards and a brace
   const g = plan.gate;
   if (g) {
     for (const z of [g.z0, g.z1]) {
@@ -140,7 +140,7 @@ function buildFence(plan, materials) {
       for (const y of [0.15, 0.55, 0.95]) {
         boards.push({ x: g.x, y, z: zc, ry: 0, sx: 0.05, sy: 0.12, sz: leaf, color: 'gate' });
       }
-      // Strebe diagonal im Flügel
+      // diagonal brace in the leaf
       boards.push({
         x: g.x,
         y: 0.52,
@@ -189,8 +189,8 @@ function buildFence(plan, materials) {
 }
 
 /**
- * Reitplatz. materialFactory(kind, params) liefert ein Material-Paar { standard, lambert }
- * (World verwaltet Stufenwechsel).
+ * Arena. materialFactory(kind, params) returns a material pair { standard, lambert }
+ * (the world handles quality switches).
  */
 export function createArena({ materialFactory, path, pathFence }) {
   const group = new THREE.Group();
@@ -232,7 +232,7 @@ export function createArena({ materialFactory, path, pathFence }) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Start- und Ziellinie
+// Start and finish lines
 
 function drawSign(kind, text) {
   return (ctx, w, h) => {
@@ -243,7 +243,7 @@ function drawSign(kind, text) {
     roundRect(ctx, 8, 8, w - 16, h - 16, 18);
     ctx.fill();
     if (!start) {
-      // Zielflagge: Karomuster-Streifen oben
+      // finish flag: checkered stripe on top
       const sq = (h - 16) / 6;
       for (let i = 0; i * sq < w - 16; i += 1) {
         ctx.fillStyle = i % 2 ? '#111' : '#fff';
@@ -272,7 +272,7 @@ export function roundRect(ctx, x, y, w, h, r) {
 }
 
 /**
- * Start-/Ziellinie: Bodenlinie, Pfosten mit Schild. set(null | { start:{a,b}, finish:{a,b},
+ * Start/finish lines: ground line, posts with sign. set(null | { start:{a,b}, finish:{a,b},
  * labels:{start, finish} }), setFinishMarked(bool), update(dt).
  */
 export function createCourseLines({ materialFactory }) {
@@ -333,12 +333,12 @@ export function createCourseLines({ materialFactory }) {
     const signs = createGeometryBuilder();
     for (const e of entries) {
       const { a, b, cx, cz, length, angle: ang } = e.seg;
-      // Bodenlinie aus Kalk
+      // chalk line on the ground
       const line = new THREE.PlaneGeometry(0.14, length);
       line.rotateX(-Math.PI / 2);
       builder.add(line, 0xffffff, { x: cx, y: 0.012, z: cz, ry: ang });
       const color = e.kind === 'start' ? 0x1f8f46 : 0xc62828;
-      // Pfosten an beiden Enden mit Fähnchen: rot bei a, weiß bei b (a = rechte Seite in Ritt-Richtung)
+      // posts at both ends with flags: red at a, white at b (a = right side in riding direction)
       [a, b].forEach((p, i) => {
         builder.add(boxOnGround(0.07, 1.7, 0.07), 0xf2f2f2, { x: p.x, z: p.z });
         builder.add(new THREE.BoxGeometry(0.02, 0.28, 0.38), i === 0 ? 0xd32f2f : 0xffffff, {
@@ -348,7 +348,7 @@ export function createCourseLines({ materialFactory }) {
           ry: ang + Math.PI / 2,
         });
       });
-      // Schild auf dem ersten Pfosten, beidseitig lesbar
+      // sign on the first post, readable from both sides
       const r = atlas.rects.get(e.kind);
       const mid = a;
       const sign = makeSignQuad(1.1, 0.55, r);
@@ -404,7 +404,7 @@ export function createCourseLines({ materialFactory }) {
   };
 }
 
-/** Doppelseitiges Schild-Quad (Vorder- und Rückseite je richtig lesbar), Atlas-Rechteck r. */
+/** Two-sided sign quad (front and back both read correctly), atlas rect r. */
 export function makeSignQuad(w, h, r, thickness = 0.02) {
   const front = new THREE.PlaneGeometry(w, h);
   const back = new THREE.PlaneGeometry(w, h);

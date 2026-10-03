@@ -1,5 +1,5 @@
-// Die 3D-Welt: Licht, Himmel, Reitplatz, Umgebung, Hindernisse und Markierungen.
-// Grafikstufen lassen sich zur Laufzeit wechseln (Automatik stuft herunter).
+// The 3D world: lights, sky, arena, environment, obstacles and markings.
+// Quality levels can be switched at runtime (the governor downgrades).
 import * as THREE from 'three';
 import { QUALITY_PRESETS } from './quality.js';
 import { setMaxPixelRatio } from './renderer.js';
@@ -9,10 +9,10 @@ import { createEnvironment, SITE } from './environment.js';
 import { createObstacles } from './obstacles.js';
 import { createAidMarker } from './aid-marker.js';
 
-const SHADOW_HALF = 24; // halbe Kantenlänge der Schatten-Kamera (m)
+const SHADOW_HALF = 24; // half extent of the shadow camera (m)
 const SUN_DISTANCE = 90;
 
-/** Material-Paar: Standard (Mittel/Hoch) und Lambert (Niedrig) mit gleichen Grundwerten. */
+/** Material pair: standard (medium/high) and Lambert (low) with the same base values. */
 function createMaterialPair(params) {
   const { roughness, metalness, normalMap, normalScale, ...common } = params;
   const standard = new THREE.MeshStandardMaterial({
@@ -27,7 +27,7 @@ function createMaterialPair(params) {
 }
 
 /**
- * createWorld(renderer, { quality }) → Welt-API (siehe architecture.md, Abschnitt View).
+ * createWorld(renderer, { quality }) → world API (see architecture.md, section View).
  */
 export function createWorld(renderer, { quality = 'medium' } = {}) {
   const scene = new THREE.Scene();
@@ -39,7 +39,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     return pair;
   };
 
-  // Licht
+  // lights
   const sunDirection = new THREE.Vector3(-0.52, 0.74, -0.42).normalize();
   const hemi = new THREE.HemisphereLight(0xdde9f7, 0x7a6c50, 1.0);
   scene.add(hemi);
@@ -55,11 +55,11 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
   scene.add(sun, sun.target);
   const shadowFocus = new THREE.Vector3(0, 0, 0);
 
-  // Himmel
+  // sky
   const sky = createSky({ sunDirection });
   scene.add(sky.group);
 
-  // Reitplatz, Umgebung, Hindernisse, Markierungen
+  // arena, environment, obstacles, markings
   const arena = createArena({ materialFactory, path: SITE.path, pathFence: SITE.pathFence });
   scene.add(arena.group);
   const environment = createEnvironment({ materialFactory });
@@ -71,7 +71,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
   const aid = createAidMarker();
   scene.add(aid.mesh);
 
-  // Umgebungslicht aus dem Himmel (PMREM, einmalig)
+  // image-based light from the sky (PMREM, once)
   let envTexture = null;
   function buildEnvironmentMap() {
     if (envTexture) return envTexture;
@@ -79,7 +79,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     const envScene = new THREE.Scene();
     const envSky = createSky({ sunDirection, cloudCount: 0 });
     envScene.add(envSky.group);
-    // grüner Boden für die untere Hälfte
+    // green ground for the lower hemisphere
     const floor = new THREE.Mesh(
       new THREE.CircleGeometry(300, 16).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ color: 0x5d6e3e }),
@@ -94,7 +94,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     return envTexture;
   }
 
-  /** Alle Meshes mit Material-Paar und Schatten-Rolle. */
+  /** All meshes with material pair and shadow role. */
   function managed() {
     return [...arena.meshes, ...environment.meshes, ...obstacles.meshes, ...lines.meshes].filter(
       (e) => e.mesh,
@@ -123,7 +123,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     preset = p;
     setMaxPixelRatio(renderer, p.pixelRatio);
 
-    // Schatten
+    // shadows
     renderer.shadowMap.enabled = p.shadows;
     sun.castShadow = p.shadows;
     if (p.shadows && sun.shadow.mapSize.x !== p.shadowMapSize) {
@@ -134,7 +134,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       }
     }
 
-    // Materialien
+    // materials
     for (const pair of pairs) {
       pair.standard.normalMap = p.normalMaps ? pair.normalMap : null;
       pair.standard.needsUpdate = true;
@@ -148,7 +148,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     }
     applyMeshes();
 
-    // Licht: ohne Umgebungs-Map mehr Himmelslicht
+    // lights: more sky light without an environment map
     if (p.envMap) {
       scene.environment = buildEnvironmentMap();
       scene.environmentIntensity = 0.8;
@@ -158,14 +158,14 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       hemi.intensity = 1.5;
     }
 
-    // Nebel
+    // fog
     scene.fog = p.fog ? new THREE.Fog(SKY_COLORS.horizon, p.fog.near, p.fog.far) : null;
 
     environment.setDensity(p.envDensity, p.grassTufts, p.envDetail);
   }
 
   function updateShadowCamera() {
-    // auf Texel-Raster der Schattenkarte einrasten (kein Flimmern beim Mitlaufen)
+    // snap to the shadow map texel grid (no shimmering while following)
     const size = sun.shadow.mapSize.x || 1024;
     const texel = (SHADOW_HALF * 2) / size;
     const fwd = sunDirection.clone().negate();
@@ -182,7 +182,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     sun.target.updateMatrixWorld();
   }
 
-  // Anreitrichtung je Element (aus setAid), damit Stangen in Sprungrichtung fallen
+  // approach direction per element (from setAid) so poles fall in jump direction
   const approachDirs = new Map();
   const fallDirOf = (id) => approachDirs.get(id) ?? null;
 
@@ -195,7 +195,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     get level() {
       return level;
     },
-    /** Aktive Voreinstellung (z. B. damit Pferd/Reiter Schatten passend setzen). */
+    /** Active preset (e.g. so horse/rider can set their shadows accordingly). */
     get preset() {
       return preset;
     },

@@ -1,8 +1,8 @@
-// Prozedurale Oberflächen (Regel 2: nichts wird geladen) und kleine Geometrie-Werkzeuge.
+// Procedural surfaces (rule 2: nothing is loaded) and small geometry helpers.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-/** Deterministischer Zufall (mulberry32). */
+/** Deterministic random numbers (mulberry32). */
 export function createRng(seed = 1) {
   let a = seed >>> 0;
   return function rng() {
@@ -14,7 +14,7 @@ export function createRng(seed = 1) {
   };
 }
 
-/** Kachelbares Wertrauschen: Gitter mit `period` Zellen, liefert f(u, v) für u, v ∈ [0, 1). */
+/** Tileable value noise: grid with `period` cells, returns f(u, v) for u, v ∈ [0, 1). */
 export function createTileNoise(period, seed = 1) {
   const rng = createRng(seed);
   const grid = new Float32Array(period * period);
@@ -36,7 +36,7 @@ export function createTileNoise(period, seed = 1) {
   };
 }
 
-/** Kachelbares fbm aus mehreren Oktaven, Ergebnis ca. 0..1. */
+/** Tileable fbm from several octaves, result roughly 0..1. */
 export function createTileFbm(basePeriod, octaves, seed = 1) {
   const layers = [];
   for (let o = 0; o < octaves; o += 1)
@@ -54,7 +54,7 @@ export function createTileFbm(basePeriod, octaves, seed = 1) {
   };
 }
 
-/** Nicht kachelbares, glattes 2D-Rauschen für Gelände (x, z in Metern). */
+/** Smooth 2D noise for terrain (x, z in meters). */
 export function createFieldNoise(seed = 1) {
   const base = createTileNoise(256, seed);
   return (x, z, scale = 1) => base((x / scale / 256) % 1, (z / scale / 256) % 1);
@@ -81,7 +81,7 @@ function canvasTexture(canvas, { repeat = true, srgb = true, anisotropy = 1 } = 
   return tex;
 }
 
-/** Normal-Map aus einem kachelbaren Höhenfeld. */
+/** Normal map from a tileable height field. */
 function normalCanvasFromHeight(height, size, strength) {
   const canvas = createCanvas(size, size);
   const ctx = canvas.getContext('2d');
@@ -104,8 +104,8 @@ function normalCanvasFromHeight(height, size, strength) {
 }
 
 /**
- * Reitplatz-Sand: körnig, leicht gewellt, mit Hufabdrücken und angedeuteten Schleppspuren.
- * Liefert { map, normalMap } (kachelbar, eine Kachel ≈ 4 m).
+ * Arena sand: grainy, slightly wavy, with hoof prints and hints of harrow lines.
+ * Returns { map, normalMap } (tileable, one tile ≈ 4 m).
  */
 export function createSandTextures({ size = 512, seed = 7, normal = true } = {}) {
   const rng = createRng(seed);
@@ -119,15 +119,15 @@ export function createSandTextures({ size = 512, seed = 7, normal = true } = {})
       const u = x / size;
       const v = y / size;
       const i = y * size + x;
-      // Schleppspuren: feine parallele Rillen, leicht wellig
+      // harrow lines: fine parallel grooves, slightly wavy
       const drag = Math.sin((v + fbmLow(u, v) * 0.04) * Math.PI * 2 * 48) * 0.5 + 0.5;
       height[i] = fbmLow(u, v) * 0.6 + fbmMid(u, v) * 0.35 + drag * 0.08 + rng() * 0.12;
       moist[i] = fbmLow(u + 0.37, v + 0.11);
     }
   }
 
-  // Hufabdrücke: ovale Mulden mit Rand, oft paarweise hintereinander
-  const px = size / 4; // Pixel je Meter
+  // hoof prints: oval dents with a rim, often in short trails
+  const px = size / 4; // pixels per meter
   const prints = Math.round(size * 0.035);
   for (let p = 0; p < prints; p += 1) {
     const cx = rng() * size;
@@ -161,8 +161,8 @@ export function createSandTextures({ size = 512, seed = 7, normal = true } = {})
     let t = THREE.MathUtils.clamp(0.3 + (0.6 - h) * 0.35 + (m - 0.5) * 0.45, 0, 1);
     const speck = rng();
     if (speck > 0.985)
-      t = Math.min(1, t + 0.35); // dunkle Körnchen
-    else if (speck < 0.02) t = Math.max(0, t - 0.3); // helle Körnchen
+      t = Math.min(1, t + 0.35); // dark grains
+    else if (speck < 0.02) t = Math.max(0, t - 0.3); // light grains
     const o = i * 4;
     img.data[o] = light[0] + (dark[0] - light[0]) * t;
     img.data[o + 1] = light[1] + (dark[1] - light[1]) * t;
@@ -184,7 +184,7 @@ function stampHoof(height, moist, size, cx, cy, ang, r, depth) {
   const ext = Math.ceil(r * 1.8);
   for (let dy = -ext; dy <= ext; dy += 1) {
     for (let dx = -ext; dx <= ext; dx += 1) {
-      // lokale Koordinaten: a entlang Laufrichtung, b quer
+      // local coordinates: a along the stride, b across
       const a = (dx * c + dy * s) / (r * 1.1);
       const b = (-dx * s + dy * c) / r;
       const d = Math.hypot(a, b);
@@ -192,7 +192,7 @@ function stampHoof(height, moist, size, cx, cy, ang, r, depth) {
       const x = (((Math.round(cx + dx) % size) + size) % size) | 0;
       const y = (((Math.round(cy + dy) % size) + size) % size) | 0;
       const i = y * size + x;
-      // Mulde mit aufgeworfenem Rand, vorne tiefer (Zehe)
+      // dent with raised rim, deeper at the toe
       const bowl = d < 1 ? -(1 - d * d) * (0.8 + 0.4 * Math.max(0, a)) : 0;
       const rim = d >= 0.9 && d < 1.6 ? Math.sin(((d - 0.9) / 0.7) * Math.PI) * 0.35 : 0;
       height[i] += (bowl + rim) * depth;
@@ -201,7 +201,7 @@ function stampHoof(height, moist, size, cx, cy, ang, r, depth) {
   }
 }
 
-/** Wiese: Grün mit Halmen, Klee und trockenen Stellen (kachelbar, eine Kachel ≈ 6 m). */
+/** Meadow: green with blades and dry patches (tileable, one tile ≈ 6 m). */
 export function createGrassTexture({ size = 512, seed = 21 } = {}) {
   const rng = createRng(seed);
   const fbm = createTileFbm(4, 4, seed);
@@ -228,7 +228,7 @@ export function createGrassTexture({ size = 512, seed = 21 } = {}) {
     }
   }
   ctx.putImageData(img, 0, 0);
-  // Halme als kurze Striche, an den Rändern gespiegelt gezeichnet (kachelbar)
+  // blades as short strokes, wrapped at the edges (tileable)
   ctx.lineCap = 'round';
   const blades = size * 14;
   for (let i = 0; i < blades; i += 1) {
@@ -252,7 +252,7 @@ export function createGrassTexture({ size = 512, seed = 21 } = {}) {
   return canvasTexture(canvas);
 }
 
-/** Weiche Wolken: Atlas mit 4 Varianten (2×2), Alpha im Bild. */
+/** Soft clouds: atlas with 4 variants (2×2), alpha in the image. */
 export function createCloudAtlas({ size = 512, seed = 5 } = {}) {
   const rng = createRng(seed);
   const canvas = createCanvas(size, size);
@@ -276,7 +276,7 @@ export function createCloudAtlas({ size = 512, seed = 5 } = {}) {
       ctx.fillStyle = g;
       ctx.fillRect(x - r, y - r, r * 2, r * 2);
     }
-    // Unterseite leicht grau
+    // slightly grey underside
     const shadow = ctx.createLinearGradient(0, oy + cell * 0.5, 0, oy + cell * 0.75);
     shadow.addColorStop(0, 'rgba(150,160,175,0)');
     shadow.addColorStop(1, 'rgba(150,160,175,0.18)');
@@ -288,7 +288,7 @@ export function createCloudAtlas({ size = 512, seed = 5 } = {}) {
   return canvasTexture(canvas, { repeat: false });
 }
 
-/** Weiche Rechteck-Maske (Alpha) für Bodenmarkierungen. */
+/** Soft rectangle mask (alpha) for ground markings. */
 export function createSoftRectTexture({ size = 128, edge = 0.18 } = {}) {
   const canvas = createCanvas(size, size);
   const ctx = canvas.getContext('2d');
@@ -298,7 +298,7 @@ export function createSoftRectTexture({ size = 128, edge = 0.18 } = {}) {
       const u = Math.min(x, size - 1 - x) / size;
       const v = Math.min(y, size - 1 - y) / size;
       const a = THREE.MathUtils.smoothstep(Math.min(u, v), 0, edge);
-      // leichte Streifen quer, damit die Zone als Fläche lesbar ist
+      // faint cross stripes so the zone reads as an area
       const stripe = 0.85 + 0.15 * Math.sin((y / size) * Math.PI * 10);
       const o = (y * size + x) * 4;
       img.data[o] = img.data[o + 1] = img.data[o + 2] = 255;
@@ -310,7 +310,7 @@ export function createSoftRectTexture({ size = 128, edge = 0.18 } = {}) {
 }
 
 /**
- * Text-Atlas (Systemschrift) für Nummernschilder und Schilder.
+ * Text atlas (system font) for number boards and signs.
  * items: [{ key, draw(ctx, w, h) }] → { texture, rects: Map key → {u0, v0, u1, v1} }
  */
 export function createLabelAtlas(items, { cellW = 128, cellH = 128 } = {}) {
@@ -345,7 +345,7 @@ export function createLabelAtlas(items, { cellW = 128, cellH = 128 } = {}) {
 export const SYSTEM_FONT =
   'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
-/** Text so verkleinern, dass er in maxWidth passt. */
+/** Shrinks the font until the text fits maxWidth. */
 export function fitText(ctx, text, maxWidth, weight, sizePx) {
   let size = sizePx;
   ctx.font = `${weight} ${size}px ${SYSTEM_FONT}`;
@@ -357,11 +357,11 @@ export function fitText(ctx, text, maxWidth, weight, sizePx) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Geometrie-Werkzeuge: Teile mit Vertex-Farben einfärben, transformieren und zusammenfassen.
+// Geometry helpers: color parts with vertex colors, transform and merge them.
 
 const tmpColor = new THREE.Color();
 
-/** Färbt eine Geometrie einheitlich (Farbe als Hex/Color, sRGB) und macht sie nicht-indiziert. */
+/** Colors a geometry uniformly (hex/Color, sRGB) and makes it non-indexed. */
 export function paint(geometry, color, { jitter = 0, rng = Math.random } = {}) {
   const g = geometry.index ? geometry.toNonIndexed() : geometry;
   if (g !== geometry) geometry.dispose();
@@ -384,7 +384,7 @@ export function paint(geometry, color, { jitter = 0, rng = Math.random } = {}) {
   return g;
 }
 
-/** Sammelt eingefärbte Teile und fasst sie zu einer Geometrie zusammen. */
+/** Collects colored parts and merges them into one geometry. */
 export function createGeometryBuilder() {
   const parts = [];
   const m = new THREE.Matrix4();
@@ -393,7 +393,7 @@ export function createGeometryBuilder() {
   const s = new THREE.Vector3();
   const p = new THREE.Vector3();
   return {
-    /** Teil hinzufügen: Geometrie (wird übernommen), Farbe, Transform {x,y,z, rx,ry,rz, sx,sy,sz} oder Matrix4. */
+    /** Adds a part: geometry (taken over), color, transform {x,y,z, rx,ry,rz, sx,sy,sz} or Matrix4. */
     add(geometry, color, transform = {}, opts) {
       const g = paint(geometry, color, opts);
       if (transform.isMatrix4) {
@@ -410,7 +410,7 @@ export function createGeometryBuilder() {
       parts.push(g);
       return g;
     },
-    /** Bereits eingefärbte Geometrie mit Matrix hinzufügen. */
+    /** Adds an already colored geometry with a matrix. */
     addPainted(geometry, matrix) {
       const g = geometry.clone();
       if (matrix) g.applyMatrix4(matrix);
@@ -431,17 +431,17 @@ export function createGeometryBuilder() {
   };
 }
 
-/** Kasten mit Unterkante auf y = 0 (praktisch für Pfosten, Wände). */
+/** Box with its bottom at y = 0 (handy for posts, walls). */
 export function boxOnGround(w, h, d) {
   const g = new THREE.BoxGeometry(w, h, d);
   g.translate(0, h / 2, 0);
   return g;
 }
 
-/** Verschiebt Eckpunkte zufällig (organische Formen für Baumkronen, Büsche). */
+/** Randomly displaces vertices (organic shapes for tree crowns, bushes). */
 export function jitterVertices(geometry, amount, rng = Math.random) {
   const pos = geometry.attributes.position;
-  // gleiche Positionen gleich verschieben, damit keine Löcher entstehen
+  // move equal positions equally so no holes appear
   const cache = new Map();
   for (let i = 0; i < pos.count; i += 1) {
     const key = `${pos.getX(i).toFixed(3)},${pos.getY(i).toFixed(3)},${pos.getZ(i).toFixed(3)}`;
@@ -456,7 +456,7 @@ export function jitterVertices(geometry, amount, rng = Math.random) {
   return geometry;
 }
 
-/** Multipliziert die Vertex-Farben abhängig von der Höhe (unten dunkler, wie Umgebungsverdeckung). */
+/** Scales vertex colors by height (darker at the bottom, like ambient occlusion). */
 export function shadeByHeight(geometry, minY, maxY, bottom = 0.55, top = 1.1) {
   const pos = geometry.attributes.position;
   const col = geometry.attributes.color;

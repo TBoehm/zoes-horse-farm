@@ -1,5 +1,5 @@
-// Umgebung der Reitanlage: Wiese mit Hügeln, Bäume, Büsche, Gras-Büschel (instanziert),
-// Stall, Richterhäuschen und Kleinkram. Alles prozedural.
+// Surroundings of the riding facility: meadow with hills, trees, bushes, grass tufts
+// (instanced), stable, judges' hut and props. All procedural.
 import * as THREE from 'three';
 import {
   SITE,
@@ -18,7 +18,7 @@ import {
   shadeByHeight,
 } from './textures.js';
 
-// --- Gelände -----------------------------------------------------------------------------------
+// --- Terrain -----------------------------------------------------------------------------------
 
 function buildTerrain(rng) {
   const radii = [0, 24, 42, 60, 78, 96, 116, 140, 170, 205, 250, 300, 360, 430, 520];
@@ -66,7 +66,7 @@ function buildTerrain(rng) {
   return g;
 }
 
-// --- Pflanzen-Geometrien ------------------------------------------------------------------------
+// --- Plant geometries ------------------------------------------------------------------------
 
 function deciduousGeometry(rng, detail = 1) {
   const b = createGeometryBuilder();
@@ -157,7 +157,7 @@ function tuftGeometry(rng) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  // Normalen nach oben: Büschel wirken wie der Boden beleuchtet
+  // normals point up: tufts are lit like the ground
   const normals = new Float32Array(positions.length);
   for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
   g.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
@@ -168,7 +168,7 @@ function tuftGeometry(rng) {
   return g;
 }
 
-/** Wind für Gras-Büschel: Spitzen schwingen, abhängig von der Instanzposition. */
+/** Wind for grass tufts: tips sway depending on the instance position. */
 function patchWind(material, timeUniform) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.windTime = timeUniform;
@@ -189,7 +189,7 @@ function patchWind(material, timeUniform) {
   material.customProgramCacheKey = () => 'wind-v1';
 }
 
-// --- Gebäude -----------------------------------------------------------------------------------
+// --- Buildings -----------------------------------------------------------------------------------
 
 function addStable(b) {
   const { x: cx, z: cz, depth, length } = SITE.stable;
@@ -197,15 +197,15 @@ function addStable(b) {
   const plinth = 0.5;
   const top = plinth + wallH;
   const rise = 2.9;
-  const front = cx + depth / 2; // Seite zum Reitplatz (+x)
+  const front = cx + depth / 2; // side facing the arena (+x)
   b.add(boxOnGround(depth + 0.2, plinth, length + 0.2), 0x8f8b84, { x: cx, z: cz });
   const wall = b.add(boxOnGround(depth, wallH, length), 0x8d5b37, { x: cx, y: plinth, z: cz });
   shadeByHeight(wall, plinth, top, 0.8, 1.05);
-  // Bretter-Leisten an der Vorderseite
+  // board battens on the front
   for (let z = cz - length / 2 + 0.3; z < cz + length / 2; z += 0.75) {
     b.add(boxOnGround(0.05, wallH, 0.07), 0x7a4c2c, { x: front + 0.02, y: plinth, z });
   }
-  // Giebel
+  // gables
   const tri = new THREE.Shape([
     new THREE.Vector2(-depth / 2, 0),
     new THREE.Vector2(depth / 2, 0),
@@ -216,7 +216,7 @@ function addStable(b) {
     gable.translate(0, 0, -0.1);
     b.add(gable, 0x86542f, { x: cx, y: top, z: cz + s * (length / 2 - 0.1), ry: Math.PI / 2 });
   }
-  // Dach
+  // roof
   const half = depth / 2 + 0.7;
   const slab = Math.hypot(half, rise + 0.35);
   const ang = Math.atan2(rise + 0.35, half);
@@ -233,7 +233,7 @@ function addStable(b) {
     y: top + rise + 0.1,
     z: cz,
   });
-  // Dachreiter
+  // cupola
   b.add(boxOnGround(1.4, 1.1, 1.4), 0xf0ebe0, { x: cx, y: top + rise - 0.1, z: cz });
   const cap = new THREE.ConeGeometry(1.15, 0.9, 4);
   cap.rotateY(Math.PI / 4);
@@ -244,7 +244,7 @@ function addStable(b) {
     z: cz,
   });
   b.add(new THREE.BoxGeometry(0.03, 0.12, 0.45), 0x333333, { x: cx, y: top + rise + 2.55, z: cz });
-  // Boxentüren: untere Hälfte geschlossen (grün), oben offen (dunkel), weiße Rahmen
+  // stall doors: lower half closed (green), upper half open (dark), white frames
   const doors = 8;
   for (let i = 0; i < doors; i += 1) {
     const z = cz - length / 2 + (i + 0.5) * (length / doors);
@@ -264,7 +264,7 @@ function addStable(b) {
       });
     }
   }
-  // Scheunentor an der Giebelseite zum Weg
+  // barn door on the gable end facing the path
   const gz = cz + length / 2 + 0.06;
   b.add(boxOnGround(3.2, 3.1, 0.1), 0x7e2f22, { x: cx, y: plinth, z: gz });
   for (const s of [-1, 1]) {
@@ -294,11 +294,11 @@ function addHut(b) {
   const wallY = floor + 0.18;
   const h = 2.2;
   const white = 0xf1ece2;
-  // Rück- und Seitenwände
+  // back and side walls
   b.add(boxOnGround(0.12, h, s), white, { x: cx + s / 2, y: wallY, z: cz });
   b.add(boxOnGround(s, h, 0.12), white, { x: cx, y: wallY, z: cz - s / 2 });
   b.add(boxOnGround(s, h, 0.12), white, { x: cx, y: wallY, z: cz + s / 2 });
-  // Front zum Platz: Brüstung, großes Fenster, Sturz
+  // front facing the arena: parapet, large window, lintel
   b.add(boxOnGround(0.12, 0.95, s), white, { x: cx - s / 2, y: wallY, z: cz });
   b.add(boxOnGround(0.06, 0.95, s - 0.3), 0x2f3d48, { x: cx - s / 2, y: wallY + 0.95, z: cz });
   b.add(boxOnGround(0.14, 0.3, s), white, { x: cx - s / 2, y: wallY + 1.9, z: cz });
@@ -309,14 +309,14 @@ function addHut(b) {
       z: cz + dz * (s / 2 - 0.05),
     });
   }
-  // Pultdach
+  // shed roof
   b.add(new THREE.BoxGeometry(s + 0.9, 0.14, s + 0.9), 0x2d4a3a, {
     x: cx,
     y: wallY + h + 0.2,
     z: cz,
     rz: -0.14,
   });
-  // Treppe
+  // stairs
   for (let i = 0; i < 5; i += 1) {
     b.add(boxOnGround(0.9, 0.06, 0.3), 0x7a5c44, {
       x: cx + 0.6,
@@ -325,7 +325,7 @@ function addHut(b) {
     });
   }
   b.add(boxOnGround(0.06, 1.8, 0.06), 0x6e5440, { x: cx + 1.05, z: cz + s / 2 + 1.6 });
-  // Blumenkästen
+  // flower boxes
   for (const dz of [-0.9, 0.9]) {
     b.add(boxOnGround(0.25, 0.2, 0.9), 0x7a5c44, {
       x: cx - s / 2 - 0.2,
@@ -338,14 +338,14 @@ function addHut(b) {
 }
 
 function addProps(b, rng) {
-  // Zuschauerbänke an der Langseite
+  // spectator benches along the long side
   for (const z of [5, 12, 19]) {
     const x = 23.6;
     b.add(boxOnGround(0.42, 0.06, 2.1), 0x8b6a4c, { x, y: 0.44, z });
     b.add(boxOnGround(0.06, 0.38, 2.1), 0x8b6a4c, { x: x + 0.22, y: 0.62, z, rz: 0.15 });
     for (const dz of [-0.85, 0.85]) b.add(boxOnGround(0.4, 0.44, 0.08), 0x555555, { x, z: z + dz });
   }
-  // Rundballen am Stall
+  // round bales at the stable
   const bale = (x, y, z, ry) => {
     const g = new THREE.CylinderGeometry(0.72, 0.72, 1.2, 14);
     g.rotateZ(Math.PI / 2);
@@ -355,12 +355,12 @@ function addProps(b, rng) {
   bale(-35.6, 0, 36.9, -0.1);
   bale(-36.4, 1.3, 36.7, 0.05);
   bale(-34.2, 0, 35.2, 1.4);
-  // Tränke am Weg
+  // water trough by the path
   b.add(boxOnGround(1.8, 0.6, 0.6), 0x8a9099, { x: -33, z: 26.4 });
   const water = new THREE.PlaneGeometry(1.65, 0.45);
   water.rotateX(-Math.PI / 2);
   b.add(water, 0x3d6f8a, { x: -33, y: 0.55, z: 26.4 });
-  // Schubkarre
+  // wheelbarrow
   b.add(new THREE.BoxGeometry(0.7, 0.35, 1.0), 0x2e6b9c, { x: -40.2, y: 0.55, z: 3.5, rx: 0.15 });
   b.add(new THREE.CylinderGeometry(0.2, 0.2, 0.08, 10), 0x222222, {
     x: -40.2,
@@ -372,7 +372,7 @@ function addProps(b, rng) {
 
 const isBlockedTuft = (x, z) => isBlocked(x, z, -1.3);
 
-// --- Platzierung -------------------------------------------------------------------------------
+// --- Placement -------------------------------------------------------------------------------
 
 function makeInstanced(geometry, material, items, rng, { scale = [0.85, 1.3], tint = 0.12 } = {}) {
   const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, items.length));
@@ -405,8 +405,8 @@ function makeInstanced(geometry, material, items, rng, { scale = [0.85, 1.3], ti
 }
 
 /**
- * Umgebung. materialFactory(kind, params) → { standard, lambert }.
- * setDensity(envDensity, grassTufts) stellt die Instanzzahlen je Stufe ein.
+ * Environment. materialFactory(kind, params) → { standard, lambert }.
+ * setDensity(envDensity, grassTufts, detail) sets the instance counts per quality level.
  */
 export function createEnvironment({ materialFactory, seed = 11 }) {
   const rng = createRng(seed);
@@ -414,7 +414,7 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   group.name = 'environment';
   const windTime = { value: 0 };
 
-  // Gelände
+  // terrain
   const grassMap = createGrassTexture({ size: 512 });
   const groundMats = materialFactory('grass', {
     map: grassMap,
@@ -427,7 +427,7 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   terrain.receiveShadow = true;
   group.add(terrain);
 
-  // Bäume
+  // trees
   const plantMats = materialFactory('plants', { vertexColors: true, roughness: 0.92 });
   const nearDeciduous = [
     [-30, -30, 1.25],
@@ -473,14 +473,14 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   coniferMesh.userData.lods = { high: coniferMesh.geometry, low: coniferLow };
   coniferMesh.userData.priority = coniferNear.length;
 
-  // Waldsaum auf den Hügeln (ohne Schatten)
+  // forest edge on the hills (no shadows)
   const forestItems = [];
   for (let i = 0; forestItems.length < 520 && i < 6000; i += 1) {
     const a = rng() * Math.PI * 2;
     const r = 135 + rng() * 130;
     const x = Math.cos(a) * r;
     const z = Math.sin(a) * r;
-    // in Bändern gruppiert, damit Waldstücke entstehen
+    // grouped in bands so that woods appear
     if (Math.sin(a * 7 + 1.3) + Math.sin(a * 3) * 0.6 < -0.2) continue;
     forestItems.push([x, z, 1.6 + rng() * 1.4]);
   }
@@ -488,7 +488,7 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   forestMesh.name = 'forest';
   forestMesh.userData.priority = 60;
 
-  // Büsche
+  // bushes
   const bushItems = [];
   for (let z = SITE.stable.z - 14; z <= SITE.stable.z + 14; z += 4.5) {
     bushItems.push([SITE.stable.x - 7, z, 0.9 + rng() * 0.4]);
@@ -510,7 +510,7 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   bushMesh.userData.lods = { high: bushMesh.geometry, low: bushGeometry(rng, 0) };
   bushMesh.userData.priority = Math.min(bushPriority, 8);
 
-  // Gras-Büschel (nur Hoch), dichter nahe der Bande
+  // grass tufts (high only), denser near the fence
   const tuftMats = materialFactory('tufts', {
     vertexColors: true,
     roughness: 1,
@@ -532,7 +532,7 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   tuftMesh.name = 'grass-tufts';
   tuftMesh.userData.priority = 0;
 
-  // Gebäude
+  // buildings
   const buildingMats = materialFactory('buildings', { vertexColors: true, roughness: 0.85 });
   const b = createGeometryBuilder();
   addStable(b);
@@ -566,8 +566,8 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
       { mesh: buildings, mats: buildingMats, shadow: 'all' },
     ],
     /**
-     * density 0..1 skaliert Bäume/Büsche oberhalb der Pflicht-Instanzen; tufts 0..1;
-     * detail 'high' | 'low' wählt die Geometrie-Feinheit.
+     * density 0..1 scales trees/bushes above the mandatory instances; tufts 0..1;
+     * detail 'high' | 'low' picks the geometry detail.
      */
     setDensity(density, tufts, detail = 'high') {
       for (const m of scalable) {

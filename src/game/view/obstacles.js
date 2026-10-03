@@ -1,5 +1,5 @@
-// Hindernis-Meshes: Ständer, gestreifte Stangen (instanziert, fallen sichtbar), Füllteile,
-// Richtungsfahnen, Nummernschilder und Hervorhebung des Hindernisses, das an der Reihe ist.
+// Obstacle meshes: stands, striped poles (instanced, visibly falling), fillers, direction flags,
+// number boards and the highlight of the obstacle that is due next.
 import * as THREE from 'three';
 import { STAND_WIDTH } from '../sim/tuning.js';
 import {
@@ -31,13 +31,13 @@ import {
   fallTarget,
 } from './world-layout.js';
 
-const STRIPES = 11; // ungerade: weiße Enden
+const STRIPES = 11; // odd: white ends
 const MAX_POLES = 128;
 
-// Farbpaare der Hindernisse (Stangenstreifen, Ständerabschnitte, Planke)
+// obstacle colors (pole stripes, stand sections, plank)
 export const OBSTACLE_COLORS = [0xc62828, 0x1e56b8, 0x2e7d32, 0xef8f00, 0x6a3fa0, 0x00838f];
 
-/** Pole-Geometrien (entlang X, zentriert): weiße und farbige Streifen getrennt. */
+/** Pole geometries (along X, centered): white and colored stripes separately. */
 function buildPoleGeometries(radialSegments = 10) {
   const white = createGeometryBuilder();
   const colored = createGeometryBuilder();
@@ -60,7 +60,7 @@ function localMatrix(element) {
   );
 }
 
-/** Statische Teile eines Elements in den Builder schreiben (Weltkoordinaten über Matrix). */
+/** Writes the static parts of an element into the builder (world space via matrix). */
 function addElementStatic(builder, element, color, { flags, board }) {
   const M = localMatrix(element);
   const add = (geom, col, t) => {
@@ -73,7 +73,7 @@ function addElementStatic(builder, element, color, { flags, board }) {
   for (const z of standRows(element)) {
     for (const sx of [-1, 1]) {
       const x = sx * STAND_X;
-      // Pfosten: weiß mit farbigen Abschnitten
+      // post: white with colored sections
       const bands = [0, 0.3, 0.55, 0.8, 1.05, 1.3, H];
       for (let i = 0; i < bands.length - 1; i += 1) {
         const y0 = bands[i];
@@ -82,10 +82,10 @@ function addElementStatic(builder, element, color, { flags, board }) {
         add(boxOnGround(W, y1 - y0, W), i % 2 === 1 ? color : 0xf5f5f2, { x, y: y0, z });
       }
       add(new THREE.BoxGeometry(W + 0.03, 0.04, W + 0.03), color, { x, y: H + 0.02, z });
-      // Füße (T-Form nach außen)
+      // feet (T-shape pointing outwards)
       add(boxOnGround(0.1, 0.07, 0.95), 0xf0f0ec, { x, z });
       add(boxOnGround(0.55, 0.07, 0.1), 0xf0f0ec, { x: x + sx * 0.25, z });
-      // Auflagen (Löffel) unter den Stangenenden dieser Reihe
+      // cups below the pole ends of this row
       for (const p of rails) {
         for (const end of [p.a, p.b]) {
           if (Math.sign(end[0]) !== sx || Math.abs(end[2] - z) > 0.2) continue;
@@ -96,7 +96,7 @@ function addElementStatic(builder, element, color, { flags, board }) {
           });
         }
       }
-      // Richtungsfahne: rot auf der +t-Seite (lokal −X), weiß auf −t
+      // direction flag: red on the +t side (local −X), white on −t
       if (flags) {
         const red = sx === flagSides().red;
         add(new THREE.CylinderGeometry(0.012, 0.012, 0.55, 5), 0x9e9e9e, {
@@ -113,12 +113,12 @@ function addElementStatic(builder, element, color, { flags, board }) {
       }
     }
   }
-  // feste Füllteile
+  // fixed fillers
   if (element.kind === 'vertical') {
     add(new THREE.BoxGeometry(POLE_GEOM_LENGTH, 0.24, 0.05), color, { y: 0.19 });
     add(new THREE.BoxGeometry(POLE_GEOM_LENGTH - 0.3, 0.06, 0.055), 0xf5f5f2, { y: 0.19 });
   }
-  // Nummernschild-Pfosten (links neben dem Hindernis, Vorderseite)
+  // number board post (left of the obstacle, front side)
   if (board) {
     const zFront = standRows(element)[0] - 0.25;
     add(boxOnGround(0.05, 1.05, 0.05), 0xe0e0e0, { x: STAND_X + 0.75, z: zFront });
@@ -149,7 +149,7 @@ function drawNumber(text) {
   };
 }
 
-// --- Fallanimation -----------------------------------------------------------------------------
+// --- Fall animation -----------------------------------------------------------------------------
 
 const X_AXIS = new THREE.Vector3(1, 0, 0);
 const v1 = new THREE.Vector3();
@@ -165,7 +165,7 @@ function poseFromEnds(a, b, roll, outPos, outQuat) {
   outQuat.multiplyQuaternions(q1, q2);
 }
 
-/** Eine einzelne Stange mit Zustand und Animation (lokale Koordinaten des Elements). */
+/** A single pole with state and animation (element-local coordinates). */
 function createPole(def, element, index, rng) {
   const restA = new THREE.Vector3(...def.a);
   const restB = new THREE.Vector3(...def.b);
@@ -198,7 +198,7 @@ function createPole(def, element, index, rng) {
 }
 
 function startFall(pole, side) {
-  // aktuelle Enden aus der aktuellen Lage
+  // current ends from the current pose
   v1.set(pole.length / 2, 0, 0).applyQuaternion(pole.quat);
   pole.fromA.copy(pole.pos).sub(v1);
   pole.fromB.copy(pole.pos).add(v1);
@@ -221,7 +221,7 @@ function startRise(pole) {
 const ea = new THREE.Vector3();
 const eb = new THREE.Vector3();
 
-/** Animation fortschreiben; liefert true, wenn sich die Lage geändert hat. */
+/** Advances the animation; returns true if the pose changed. */
 export function stepPole(pole, dt) {
   if (pole.state === 'falling') {
     pole.t = Math.min(1, pole.t + dt / FALL_DURATION);
@@ -244,7 +244,7 @@ export function stepPole(pole, dt) {
   return false;
 }
 
-// --- Hervorhebung ------------------------------------------------------------------------------
+// --- Highlight ------------------------------------------------------------------------------
 
 function roundedRectShape(hw, hd, r) {
   const s = new THREE.Shape();
@@ -289,7 +289,7 @@ function createBadge() {
     current = text;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, 256, 320);
-    // Pin: Kreis mit Spitze nach unten
+    // pin: circle with a point at the bottom
     ctx.beginPath();
     ctx.moveTo(128, 314);
     ctx.lineTo(70, 200);
@@ -362,7 +362,7 @@ function createHighlight() {
       ringMaterial.opacity = 0.55 + 0.4 * pulse;
       ring.scale.setScalar(1 + 0.03 * pulse);
       badge.sprite.position.y = baseY + Math.sin(time * 2.4) * 0.12;
-      // aus der Ferne nicht zu klein werden
+      // do not get too small from afar
       let s = 1.1;
       if (camera) {
         badge.sprite.getWorldPosition(v1);
@@ -379,10 +379,10 @@ function createHighlight() {
   };
 }
 
-// --- Gesamtverwaltung --------------------------------------------------------------------------
+// --- Manager --------------------------------------------------------------------------
 
 /**
- * materialFactory(kind, params) → { standard, lambert }. Liefert die Hindernis-Verwaltung.
+ * materialFactory(kind, params) → { standard, lambert }. Returns the obstacle manager.
  */
 export function createObstacles({ materialFactory }) {
   const group = new THREE.Group();
@@ -410,7 +410,7 @@ export function createObstacles({ materialFactory }) {
   let boardMesh = null;
   let atlas = null;
   let poles = [];
-  /** elementId → { element, obstacle, index, label, poles: Map rail → pole[] , color } */
+  /** elementId → { element, obstacle, index, label, rails: Map rail → pole[], color } */
   const elements = new Map();
   const highlight = createHighlight();
   group.add(highlight.group);
@@ -533,8 +533,8 @@ export function createObstacles({ materialFactory }) {
   }
 
   /**
-   * rails: Map elementId → boolean[] (true = oben). fallDirOf(elementId) → ±1 (Fallseite
-   * entlang n), optional.
+   * rails: Map elementId → boolean[] (true = up). fallDirOf(elementId) → ±1 (side to fall to
+   * along n), optional.
    */
   function syncRails(rails, dt = 0, fallDirOf = null) {
     if (rails) {
@@ -578,7 +578,7 @@ export function createObstacles({ materialFactory }) {
     getInfo(id) {
       return elements.get(id) ?? null;
     },
-    /** Zustand einer Stange für Tests/Debug: 'up' | 'falling' | 'down' | 'rising'. */
+    /** Pole state for tests/debugging: 'up' | 'falling' | 'down' | 'rising'. */
     railState(id, rail) {
       const list = elements.get(id)?.rails.get(rail);
       return list ? list[0].state : null;

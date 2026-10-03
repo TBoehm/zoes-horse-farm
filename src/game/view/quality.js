@@ -1,5 +1,5 @@
-// Grafikstufen (Konzept Regeln 3, 4): Gerätewahl, Abwärts-Automatik und Voreinstellungen.
-// Rein, ohne three.js.
+// Graphics quality levels (concept rules 3, 4): device pick, downgrade governor and presets.
+// Pure, no three.js.
 
 export const QUALITY_LEVELS = Object.freeze(['low', 'medium', 'high']);
 
@@ -11,7 +11,7 @@ export const QUALITY_PRESETS = Object.freeze({
     material: 'lambert',
     fog: null,
     envMap: false,
-    // Anteil der Umgebungs-Instanzen (Bäume, Büsche, Fernwald)
+    // share of environment instances (trees, bushes, distant forest)
     envDensity: 0.2,
     envDetail: 'low',
     grassTufts: 0,
@@ -23,7 +23,7 @@ export const QUALITY_PRESETS = Object.freeze({
     pixelRatio: 1.5,
     shadows: true,
     shadowMapSize: 1024,
-    // nur Pferd/Hindernisse werfen Schatten
+    // only horse/obstacles cast shadows
     shadowCasters: 'obstacles',
     material: 'standard',
     fog: Object.freeze({ near: 120, far: 520 }),
@@ -58,12 +58,12 @@ const WEAK_GPU =
 const STRONG_GPU = /nvidia|geforce|rtx|radeon\s*(rx|pro)|apple m[1-9]|iris xe|arc\b/i;
 
 /**
- * Startstufe passend zum Gerät (Regel 4: „Automatisch" wählt beim ersten Start).
+ * Initial level for the device (rule 4: "automatic" picks on first start).
  * info: { hardwareConcurrency, deviceMemory, isTouch, rendererString, screenPixels }
  */
 export function pickInitialLevel(info = {}) {
   const cores = Number(info.hardwareConcurrency) || 4;
-  const memory = Number(info.deviceMemory) || null; // nur Chrome/Edge melden das
+  const memory = Number(info.deviceMemory) || null; // only Chrome/Edge report this
   const renderer = String(info.rendererString || '');
   const pixels = Number(info.screenPixels) || 1920 * 1080;
 
@@ -71,7 +71,7 @@ export function pickInitialLevel(info = {}) {
   if (cores <= 2 || (memory !== null && memory <= 2)) return 'low';
 
   if (info.isTouch) {
-    // Tablets/Handys: höchstens Mittel; schwache Geräte Niedrig
+    // tablets/phones: at most medium; weak devices low
     if (cores <= 4 || (memory !== null && memory <= 4) || WEAK_GPU.test(renderer)) return 'low';
     return 'medium';
   }
@@ -82,25 +82,25 @@ export function pickInitialLevel(info = {}) {
   return 'medium';
 }
 
-/** Nächstniedrigere Stufe (nie unter low). */
+/** Next lower level (never below low). */
 export function lowerLevel(level) {
   const i = QUALITY_LEVELS.indexOf(level);
   return QUALITY_LEVELS[Math.max(0, i - 1)];
 }
 
 export const GOVERNOR_DEFAULTS = Object.freeze({
-  windowS: 5, // gleitender Durchschnitt
+  windowS: 5, // moving average
   minFps: 50,
-  graceS: 3, // Karenz nach Unterbrechung
-  cooldownS: 10, // Mindestabstand zwischen Anpassungen
-  maxFrameS: 0.5, // längerer Frame = Unterbrechung
+  graceS: 3, // grace period after an interruption
+  cooldownS: 10, // minimum time between adjustments
+  maxFrameS: 0.5, // longer frame = interruption
 });
 
 /**
- * Abwärts-Automatik nach Regel 4.
- * frame(dtSeconds, measuring): measuring = es wird gerade geritten (Vorstart, Ritt, freier Modus)
- * und das Fenster ist sichtbar. Liefert die aktuelle Stufe.
- * now: optionale Zeitquelle in ms; wird nur genutzt, wenn frame() ohne dt aufgerufen wird.
+ * Downgrade governor according to rule 4.
+ * frame(dtSeconds, measuring): measuring = the player is riding (pre-start, ride, free mode) and
+ * the window is visible. Returns the current level.
+ * now: optional clock in ms; only used when frame() is called without dt.
  */
 export function createQualityGovernor({
   level = 'medium',
@@ -115,7 +115,7 @@ export function createQualityGovernor({
   let grace = cfg.graceS;
   let cooldown = 0;
   let lastNow = null;
-  // Ringpuffer der gemessenen Frame-Dauern
+  // queue of measured frame durations
   let samples = [];
   let head = 0;
   let sum = 0;
@@ -138,7 +138,7 @@ export function createQualityGovernor({
   function push(dt) {
     samples.push(dt);
     sum += dt;
-    // ältere Frames entfernen, solange der Rest noch das ganze Fenster abdeckt
+    // drop old frames while the rest still covers the whole window
     while (windowLength() > 1 && sum - samples[head] >= cfg.windowS) {
       sum -= samples[head];
       head += 1;
@@ -190,9 +190,9 @@ export function createQualityGovernor({
 
   return {
     frame,
-    /** Unterbrechung melden (Pause, Menü, Tab versteckt). */
+    /** Report an interruption (pause, menu, hidden tab). */
     interrupt,
-    /** Manuelle Stufe setzen (ohne onChange). */
+    /** Set a level manually (no onChange). */
     setLevel(next) {
       if (QUALITY_LEVELS.includes(next)) current = next;
       interrupt();

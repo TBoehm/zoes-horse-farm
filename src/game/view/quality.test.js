@@ -7,7 +7,7 @@ import {
   QUALITY_LEVELS,
 } from './quality.js';
 
-/** Lässt den Governor `seconds` lang mit konstanter Bildrate laufen. */
+/** Runs the governor for `seconds` at a constant frame rate. */
 function run(gov, seconds, fps, measuring = true) {
   const dt = 1 / fps;
   const n = Math.round(seconds * fps);
@@ -15,7 +15,7 @@ function run(gov, seconds, fps, measuring = true) {
 }
 
 describe('pickInitialLevel', () => {
-  it('wählt low für Software-Renderer', () => {
+  it('picks low for software renderers', () => {
     for (const r of [
       'Google SwiftShader',
       'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)',
@@ -28,7 +28,7 @@ describe('pickInitialLevel', () => {
     }
   });
 
-  it('wählt high für starken Desktop', () => {
+  it('picks high for a strong desktop', () => {
     expect(
       pickInitialLevel({
         hardwareConcurrency: 12,
@@ -40,7 +40,7 @@ describe('pickInitialLevel', () => {
     ).toBe('high');
   });
 
-  it('Touch-Geräte höchstens medium, schwache low', () => {
+  it('touch devices get at most medium, weak ones low', () => {
     expect(
       pickInitialLevel({
         hardwareConcurrency: 8,
@@ -54,7 +54,7 @@ describe('pickInitialLevel', () => {
     ).toBe('low');
   });
 
-  it('schwacher Desktop medium oder low', () => {
+  it('weak desktop gets medium or low', () => {
     expect(
       pickInitialLevel({ hardwareConcurrency: 4, rendererString: 'Intel(R) UHD Graphics 620' }),
     ).toBe('medium');
@@ -64,7 +64,7 @@ describe('pickInitialLevel', () => {
 });
 
 describe('lowerLevel', () => {
-  it('geht eine Stufe runter, nie unter low', () => {
+  it('goes down one level, never below low', () => {
     expect(lowerLevel('high')).toBe('medium');
     expect(lowerLevel('medium')).toBe('low');
     expect(lowerLevel('low')).toBe('low');
@@ -72,7 +72,7 @@ describe('lowerLevel', () => {
 });
 
 describe('QUALITY_PRESETS', () => {
-  it('hat alle Stufen mit Pixelratio- und Schattenwerten', () => {
+  it('has all levels with pixel ratio and shadow values', () => {
     expect(Object.keys(QUALITY_PRESETS)).toEqual(QUALITY_LEVELS);
     expect(QUALITY_PRESETS.low.pixelRatio).toBe(1);
     expect(QUALITY_PRESETS.medium.pixelRatio).toBe(1.5);
@@ -85,10 +85,10 @@ describe('QUALITY_PRESETS', () => {
 });
 
 describe('createQualityGovernor', () => {
-  it('stuft nach 3 s Karenz + 5 s unter 50 fps eine Stufe runter', () => {
+  it('downgrades one level after 3 s grace + 5 s below 50 fps', () => {
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'high', auto: true, onChange });
-    run(gov, 3, 40); // Karenz
+    run(gov, 3, 40); // grace period
     expect(gov.level).toBe('high');
     run(gov, 4.9, 40);
     expect(gov.level).toBe('high');
@@ -98,7 +98,7 @@ describe('createQualityGovernor', () => {
     expect(onChange).toHaveBeenCalledWith('medium');
   });
 
-  it('bleibt bei mindestens 50 fps', () => {
+  it('stays at 50 fps or more', () => {
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'high', onChange });
     run(gov, 60, 50);
@@ -107,7 +107,7 @@ describe('createQualityGovernor', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('wartet nach einer Anpassung mindestens 10 s', () => {
+  it('waits at least 10 s after an adjustment', () => {
     const changes = [];
     const gov = createQualityGovernor({ level: 'high', onChange: (l) => changes.push(l) });
     let t = 0;
@@ -123,7 +123,7 @@ describe('createQualityGovernor', () => {
     expect(times[1] - times[0]).toBeGreaterThanOrEqual(10 - 1e-6);
   });
 
-  it('nie unter low', () => {
+  it('never below low', () => {
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'low', onChange });
     run(gov, 60, 10);
@@ -131,44 +131,44 @@ describe('createQualityGovernor', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('misst nicht ohne measuring und braucht danach 3 s Karenz', () => {
+  it('does not measure without measuring and needs 3 s grace afterwards', () => {
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'high', onChange });
-    run(gov, 30, 20, false); // Pause/Menü: nie messen
+    run(gov, 30, 20, false); // pause/menu: never measure
     expect(gov.level).toBe('high');
-    run(gov, 7.9, 20); // 3 s Karenz + 4,9 s Messung
+    run(gov, 7.9, 20); // 3 s grace + 4.9 s measuring
     expect(gov.level).toBe('high');
     run(gov, 0.2, 20);
     expect(gov.level).toBe('medium');
   });
 
-  it('Unterbrechung setzt Messfenster und Karenz zurück', () => {
+  it('an interruption resets the window and the grace period', () => {
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'high', onChange });
-    run(gov, 7, 30); // 3 s Karenz + 4 s gemessen
+    run(gov, 7, 30); // 3 s grace + 4 s measured
     gov.frame(1 / 30, false);
-    run(gov, 7, 30); // wieder 3 s Karenz + nur 4 s gemessen
+    run(gov, 7, 30); // again 3 s grace + only 4 s measured
     expect(gov.level).toBe('high');
     run(gov, 1.1, 30);
     expect(gov.level).toBe('medium');
   });
 
-  it('ein Frame über 0,5 s gilt als Unterbrechung', () => {
+  it('a frame longer than 0.5 s counts as an interruption', () => {
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'high', onChange });
     run(gov, 7, 30);
-    gov.frame(0.8, true); // z. B. Tab war versteckt
+    gov.frame(0.8, true); // e.g. the tab was hidden
     run(gov, 7, 30);
     expect(gov.level).toBe('high');
     run(gov, 1.1, 30);
     expect(gov.level).toBe('medium');
   });
 
-  it('kurze Einbrüche werden über 5 s gemittelt', () => {
+  it('short drops are averaged over 5 s', () => {
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'high', onChange });
     run(gov, 3, 60);
-    // 4 s mit 60 fps, 1 s mit 30 fps: Mittel = 270 Frames / 5 s = 54 fps
+    // 4 s at 60 fps, 1 s at 30 fps: mean = 270 frames / 5 s = 54 fps
     for (let k = 0; k < 6; k += 1) {
       run(gov, 4, 60);
       run(gov, 1, 30);
@@ -177,7 +177,7 @@ describe('createQualityGovernor', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('stuft nie hoch', () => {
+  it('never upgrades', () => {
     const gov = createQualityGovernor({ level: 'high' });
     run(gov, 9, 30);
     expect(gov.level).toBe('medium');
@@ -185,7 +185,7 @@ describe('createQualityGovernor', () => {
     expect(gov.level).toBe('medium');
   });
 
-  it('auto=false ändert nie', () => {
+  it('auto=false never changes', () => {
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'high', auto: false, onChange });
     run(gov, 60, 10);
@@ -193,7 +193,7 @@ describe('createQualityGovernor', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('setAuto(true) startet mit Karenz, setLevel setzt manuell', () => {
+  it('setAuto(true) starts with grace, setLevel sets manually', () => {
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'high', auto: false, onChange });
     run(gov, 20, 20);
@@ -207,7 +207,7 @@ describe('createQualityGovernor', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
-  it('nutzt now(), wenn kein dt übergeben wird', () => {
+  it('uses now() when no dt is passed', () => {
     let ms = 0;
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'medium', onChange, now: () => ms });
@@ -219,7 +219,7 @@ describe('createQualityGovernor', () => {
     expect(onChange).toHaveBeenCalledWith('low');
   });
 
-  it('liefert den gleitenden Durchschnitt', () => {
+  it('reports the moving average', () => {
     const gov = createQualityGovernor({ level: 'high' });
     run(gov, 3, 60);
     expect(gov.averageFps).toBeNull();

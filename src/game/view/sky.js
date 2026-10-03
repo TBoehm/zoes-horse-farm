@@ -1,4 +1,4 @@
-// Himmel: Verlaufskuppel mit Sonne (Shader) und ein paar weiche Wolken (ein Draw-Call).
+// Sky: gradient dome with sun (shader) and a few soft clouds (one draw call).
 import * as THREE from 'three';
 import { createCloudAtlas, createRng } from './textures.js';
 
@@ -14,7 +14,7 @@ const vertexShader = /* glsl */ `
   void main() {
     vDir = normalize(position);
     vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    gl_Position = p.xyww; // immer ganz hinten
+    gl_Position = p.xyww; // always at the far plane
   }
 `;
 
@@ -41,8 +41,8 @@ const fragmentShader = /* glsl */ `
 `;
 
 /**
- * sunDirection: Richtung zur Sonne (normiert). Liefert { group, dome, clouds, sunDirection,
- * update(dt, camera) }. Die Gruppe folgt der Kamera, damit der Himmel unendlich weit wirkt.
+ * sunDirection: direction towards the sun (normalized). Returns { group, dome, clouds,
+ * sunDirection, update(dt, camera) }. The group follows the camera so the sky looks infinite.
  */
 export function createSky({ sunDirection, radius = 420, cloudCount = 9, seed = 3 } = {}) {
   const group = new THREE.Group();
@@ -68,7 +68,7 @@ export function createSky({ sunDirection, radius = 420, cloudCount = 9, seed = 3
   dome.renderOrder = -10;
   group.add(dome);
 
-  // Wolken: Quads auf einem Ring, zur Mitte gedreht, Atlas mit 4 Varianten
+  // clouds: quads on a ring facing the center, atlas with 4 variants
   const rng = createRng(seed);
   const positions = [];
   const uvs = [];

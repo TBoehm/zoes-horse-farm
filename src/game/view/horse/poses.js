@@ -35,39 +35,39 @@ export const JUMP_KEYS = [
     [0, 0, 0, 0],
   ]),
   // 0.5: Absprung – Vorhand hebt ab, Hinterhand tritt weit unter
-  pose({ pitch: -0.2, neck: -0.12, head: 0.05, tail: 0.2, pivot: -0.3 }, [
-    [0.1, 0.28, 1.6, 0.8],
-    [0.16, 0.2, 1.3, 0.6],
+  pose({ pitch: -0.22, neck: -0.12, head: 0.05, tail: 0.2, pivot: -0.3 }, [
+    [0.22, 0.4, 1.7, 0.9],
+    [0.26, 0.3, 1.4, 0.7],
     [0.36, 0.0, 0.05, 0.0],
     [0.3, 0.0, 0.05, 0.0],
   ]),
   // 1.0: Hinterhand drückt ab, Vorderbeine eng angewinkelt
-  pose({ pitch: -0.36, bend: 0.02, neck: 0.12, head: 0.08, tail: 0.4, pivot: -0.3 }, [
-    [0.02, 0.56, 2.5, 1.25],
-    [0.06, 0.52, 2.4, 1.2],
+  pose({ pitch: -0.4, bend: 0.02, neck: 0.12, head: 0.08, tail: 0.4, pivot: -0.3 }, [
+    [0.26, 0.66, 2.6, 1.3],
+    [0.3, 0.62, 2.5, 1.25],
     [-0.08, 0.0, -0.15, -0.25],
     [-0.12, 0.0, -0.15, -0.25],
   ]),
   // 1.5: Flug – Basküle, Hals lang nach vorn-unten, Hinterbeine ziehen nach
   pose({ pitch: 0.04, bend: 0.14, neck: 0.42, head: 0.12, tail: 0.6, pivot: 0.1 }, [
-    [-0.04, 0.62, 2.75, 1.35],
-    [-0.01, 0.6, 2.7, 1.3],
+    [0.18, 0.7, 2.8, 1.4],
+    [0.21, 0.68, 2.75, 1.35],
     [-0.36, 0.3, 0.5, 0.6],
     [-0.4, 0.27, 0.5, 0.6],
   ]),
   // 2.0: Vorderbeine strecken sich zur Landung, Hinterbeine angewinkelt
-  pose({ pitch: 0.3, bend: 0.05, neck: 0.02, head: 0.02, tail: 0.5, pivot: 0.65 }, [
+  pose({ pitch: 0.24, bend: 0.05, neck: 0.02, head: 0.02, tail: 0.5, pivot: 0.65 }, [
     [0.2, 0.12, 0.15, 0.15],
     [0.1, 0.02, 0.0, 0.0],
-    [0.12, 0.48, 1.35, 1.0],
-    [0.1, 0.46, 1.35, 1.0],
+    [0.34, 0.42, 1.0, 0.9],
+    [0.3, 0.4, 1.0, 0.9],
   ]),
   // 2.5: Vorhand gelandet, Hinterbeine kommen nach vorn unter den Körper
-  pose({ pitch: 0.15, bend: -0.02, neck: -0.18, head: -0.08, tail: 0.3, pivot: 0.65 }, [
+  pose({ pitch: 0.1, bend: -0.02, neck: -0.18, head: -0.08, tail: 0.3, pivot: 0.65 }, [
     [0.06, 0.0, 0, 0],
     [-0.14, 0.0, 0, 0],
-    [0.3, 0.18, 0.6, 0.5],
-    [0.24, 0.24, 0.7, 0.5],
+    [0.36, 0.16, 0.5, 0.5],
+    [0.3, 0.22, 0.6, 0.5],
   ]),
   // 3.0: Weggaloppieren (neutral)
   pose({ pivot: 0.65 }, [
