@@ -7,11 +7,9 @@ import badges from './badges.js';
 import courses from './courses.js';
 import audio from './audio.js';
 
+/** Every feature area's texts, as `{ de, en }` dictionaries (also the data the tests check). */
+export const STRING_AREAS = [core, riding, profile, badges, courses, audio];
+
 export function registerAllStrings() {
-  registerStrings(core);
-  registerStrings(riding);
-  registerStrings(profile);
-  registerStrings(badges);
-  registerStrings(courses);
-  registerStrings(audio);
+  for (const area of STRING_AREAS) registerStrings(area);
 }

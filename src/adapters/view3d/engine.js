@@ -4,6 +4,7 @@ import { h } from '../ui/dom.js';
 import { createRenderer, resizeRenderer, setMaxPixelRatio } from './renderer.js';
 import { createQualityGovernor, pickInitialLevel, QUALITY_PRESETS } from './quality.js';
 import { createWorld } from './world.js';
+import { DEFAULT_APPEARANCE } from '../../domain/horse/appearance.js';
 import { createHorse } from './horse/index.js';
 import { createCameraRig } from './camera.js';
 
@@ -43,17 +44,17 @@ export function deviceInfo(renderer, inputMode) {
   };
 }
 
-export function createEngine({ app, store, inputMode }) {
+/** `settings`: the application settings service (the only writer of the settings section). */
+export function createEngine({ app, settings: settingsService, inputMode }) {
   const canvas = h('canvas', { class: 'scene-canvas', 'aria-hidden': 'true' });
   canvas.hidden = true;
   app.layers.scene.append(canvas);
 
   // Graphics level (rule 4): on first start, or on "Automatic" without a level, pick one that fits the device
-  let settings = store.get('settings');
-  if (!settings.graphicsLevel) {
-    const level = pickInitialLevel(deviceInfo(probeRendererString(), inputMode));
-    settings = store.update('settings', (s) => ({ ...s, graphicsLevel: level }));
+  if (!settingsService.get().graphicsLevel) {
+    settingsService.setGraphicsAuto(pickInitialLevel(deviceInfo(probeRendererString(), inputMode)));
   }
+  const settings = settingsService.get();
   let level = settings.graphicsLevel;
 
   // Antialiasing is a context attribute and cannot change later: follow the stored level
@@ -62,7 +63,7 @@ export function createEngine({ app, store, inputMode }) {
   const cameraRig = createCameraRig(camera);
 
   const world = createWorld(renderer, { quality: level });
-  const horse = createHorse({ coat: 'bay', marking: 'star', quality: level });
+  const horse = createHorse({ ...DEFAULT_APPEARANCE, quality: level });
   world.scene.add(horse.object);
 
   function applyQuality(next) {
@@ -78,11 +79,11 @@ export function createEngine({ app, store, inputMode }) {
     auto: settings.graphicsAuto,
     onChange: (next) => {
       applyQuality(next);
-      store.update('settings', (s) => ({ ...s, graphicsLevel: next }));
+      settingsService.setAutoLevel(next); // governor downgrade: "Automatic" stays on
     },
   });
 
-  store.onChange('settings', (s) => {
+  settingsService.onChange((s) => {
     if (s.graphicsAuto !== governor.auto) governor.setAuto(s.graphicsAuto);
     if (s.graphicsLevel !== level) {
       governor.setLevel(s.graphicsLevel);

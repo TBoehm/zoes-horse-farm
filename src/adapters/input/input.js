@@ -1,14 +1,13 @@
 // Merges keyboard and touch into one InputState (contract: architecture.md "Eingabe").
 import { createKeyboard } from './keyboard.js';
 import { createTouchControls } from './touch-controls.js';
-
-const clamp1 = (v) => Math.max(-1, Math.min(1, v));
+import { clamp } from '../../shared/math.js';
 
 /** Combines the keyboard and touch states into one InputState. */
 export function mergeInputs(k, tc) {
   return {
-    steer: clamp1(k.steer + tc.steer),
-    throttle: clamp1(k.throttle + tc.throttle),
+    steer: clamp(k.steer + tc.steer, -1, 1),
+    throttle: clamp(k.throttle + tc.throttle, -1, 1),
     gallop: k.gallop || tc.gallop,
     jump: k.jump || tc.jump,
     pause: k.pause || tc.pause,

@@ -1,8 +1,8 @@
 // Badges (concept rule 49): pure check logic, immutable, no DOM.
 // The takeoff assist has no influence on awarding (rule 42).
 
-export const JUMPS_FOR_JUMP_MOUSE = 100;
-export const RIDES_FOR_BUSY = 10;
+const JUMPS_FOR_JUMP_MOUSE = 100;
+const RIDES_FOR_BUSY = 10;
 export const COURSE_COUNT = 5;
 
 /** Order as in rule 49. `award`: 'instant' = after a counted jump, 'rideEnd' = at ride end. */
@@ -32,16 +32,17 @@ function hasBadge(progress, id) {
   return Object.hasOwn(progress.badges ?? {}, id);
 }
 
+const COURSE_IDS = Object.freeze(Array.from({ length: COURSE_COUNT }, (_, i) => String(i + 1)));
+
 function allCoursesThreeStars(progress) {
   const courses = progress.courses ?? {};
-  for (let i = 1; i <= COURSE_COUNT; i++) {
-    if (courses[String(i)]?.stars !== 3) return false;
-  }
-  return true;
+  return COURSE_IDS.every((id) => courses[id]?.stars === 3);
 }
 
+// Only the real courses count, not stray entries of a damaged or newer save.
 function anyCourseThreeStars(progress) {
-  return Object.values(progress.courses ?? {}).some((c) => c?.stars === 3);
+  const courses = progress.courses ?? {};
+  return COURSE_IDS.some((id) => courses[id]?.stars === 3);
 }
 
 /** Awards all still-missing badges from `conditions` (id → bool) with date `nowIso`. */

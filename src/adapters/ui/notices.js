@@ -3,19 +3,25 @@ import { onLangChange, t } from './i18n.js';
 import { isPortrait } from '../platform/input-mode.js';
 import { h, clear } from './dom.js';
 
-export function renderNo3dNotice(root) {
+// Full-page notice with a horse, title, text and hint; `kind` is the key prefix and data attribute.
+function renderFullNotice(root, kind) {
   clear(root);
   root.append(
     h(
       'section',
-      { class: 'notice notice-no3d', role: 'alert', dataset: { notice: 'no3d' } },
+      { class: `notice notice-${kind}`, role: 'alert', dataset: { notice: kind } },
       h('div', { class: 'notice-emoji', 'aria-hidden': 'true' }, '🐴'),
-      h('h1', {}, t('notice.no3d.title')),
-      h('p', {}, t('notice.no3d.text')),
-      h('p', { class: 'notice-hint' }, t('notice.no3d.hint')),
+      h('h1', {}, t(`notice.${kind}.title`)),
+      h('p', {}, t(`notice.${kind}.text`)),
+      h('p', { class: 'notice-hint' }, t(`notice.${kind}.hint`)),
     ),
   );
 }
+
+export const renderNo3dNotice = (root) => renderFullNotice(root, 'no3d');
+
+/** Unexpected start error: a child-friendly notice instead of an empty page. */
+export const renderErrorNotice = (root) => renderFullNotice(root, 'error');
 
 /**
  * In portrait orientation with touch mode active, shows the rotate notice above everything.

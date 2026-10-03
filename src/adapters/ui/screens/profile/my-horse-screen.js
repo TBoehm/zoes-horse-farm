@@ -102,7 +102,7 @@ export function createMyHorseScreen(ctx) {
   world.setObstacles([], { flags: false });
   world.setAid(null);
   world.highlight(null);
-  world.setLines?.(null);
+  world.setLines(null);
   horse.setAppearance({ coat: horseData.coat, marking: horseData.marking });
   horse.object.position.set(0, 0, 0);
   horse.object.rotation.y = 0;
@@ -118,8 +118,8 @@ export function createMyHorseScreen(ctx) {
     camera.position.set(Math.sin(angle) * r, 1.9, Math.cos(angle) * r);
     camera.lookAt(0, 1.15, 0);
     horse.update(dt, IDLE);
-    world.setShadowFocus?.(0, 0);
-    world.update?.(dt, camera);
+    world.setShadowFocus(0, 0);
+    world.update(dt, camera);
   });
 
   return {

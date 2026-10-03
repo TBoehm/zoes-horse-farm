@@ -1,10 +1,7 @@
 // Speed, gait, steering and fencing (concept rules 8, 9, 10, 24).
+import { clamp } from '../../shared/math.js';
 import { ARENA } from './tuning.js';
 import { forwardOf, headingOf, wrapAngle } from './geometry.js';
-
-export function clamp(v, lo, hi) {
-  return v < lo ? lo : v > hi ? hi : v;
-}
 
 /** Gait from speed; with gallop it is always canter (rule 9). */
 export function gaitForSpeed(speed, gallop, speeds) {
@@ -16,7 +13,8 @@ export function gaitForSpeed(speed, gallop, speeds) {
 
 /**
  * Continuously variable speed by throttle (−1..1, rate proportional to deflection).
- * state: { speed, gallop, settling } – is mutated.
+ * state: { speed, gallop, settling } – is mutated. `settling` is set by the caller when the gallop
+ * ends below trotMin (ease up to trot) and by this function when it ends above trotMax.
  */
 export function updateSpeed(state, throttle, dt, tuning) {
   const s = tuning.speeds;
@@ -34,7 +32,18 @@ export function updateSpeed(state, throttle, dt, tuning) {
     }
   } else {
     if (v > s.trotMax) state.settling = true;
-    if (state.settling) {
+    if (state.settling && v < s.trotMin) {
+      // The gallop ended during the strike-off: ease up to trot instead of falling to a walk
+      // (rule 9). Braking (S) takes over at once.
+      if (th < 0) {
+        state.settling = false;
+        v = clamp(v + delta, 0, s.trotMax);
+        if (v < s.haltBelow) v = 0;
+      } else {
+        v = Math.min(s.trotMin, v + c.gallopEndTrotUp * dt + Math.max(0, delta));
+        if (v >= s.trotMin) state.settling = false;
+      }
+    } else if (state.settling) {
       // after the gallop ends, smoothly back to working trot
       v = Math.max(s.trotMedium, v - c.settleDecel * dt + Math.min(0, delta));
       if (v <= s.trotMedium + 1e-9) state.settling = false;

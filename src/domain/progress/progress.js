@@ -1,5 +1,6 @@
 // Progress (concept rules 36, 37, 44, 47, 48): pure and immutable, no DOM.
 // All functions return new objects; unknown fields are preserved unchanged.
+import { isPlainObject } from '../../shared/math.js';
 import { BADGE_IDS, COURSE_COUNT } from './badges.js';
 import { isBetterResult } from '../course/scoring.js';
 
@@ -10,10 +11,6 @@ export const PROGRESS_DEFAULTS = Object.freeze({
   finishedRides: 0,
   badges: Object.freeze({}),
 });
-
-function isPlainObject(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 function toCount(value) {
   return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;

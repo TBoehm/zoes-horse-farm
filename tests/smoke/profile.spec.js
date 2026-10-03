@@ -7,6 +7,7 @@ import {
   openGameMenu,
   startFreeRide,
   storeSection,
+  waitForRide,
   watchPage,
   webglOrSkip,
 } from './helpers.js';
@@ -231,6 +232,48 @@ test.describe('badge toast', () => {
   });
 });
 
+test.describe('badge toast on a phone (touch mode)', () => {
+  test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
+
+  test('stays in the gap between the joystick and the buttons and covers no touch control', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName === 'firefox', 'isMobile is not supported by Firefox');
+    test.setTimeout(150_000);
+    await openGameMenu(page, test, browserName, { lang: 'de' });
+    expect(await page.evaluate(() => window.__zhfTest.touchMode())).toBe(true);
+    await page.locator('[data-entry="free"]').tap();
+    await waitForRide(page, 'free');
+    await jumpOverCross(page);
+    const toast = page.locator('.badge-toast[data-toast="firstJump"]');
+    await expect(toast).toBeVisible();
+    // measure once the entry animation is over
+    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+    const toastBox = await toast.boundingBox();
+    const view = page.viewportSize();
+    expect(toastBox.x).toBeGreaterThanOrEqual(0);
+    expect(toastBox.x + toastBox.width).toBeLessThanOrEqual(view.width);
+    expect(toastBox.y + toastBox.height).toBeLessThanOrEqual(view.height);
+    // toast box ∩ every touch control box = ∅ (joystick area, Gallop, Jump, Camera, Pause)
+    const controls = await page
+      .locator('.touch-btn, .touch-left')
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+    expect(controls.length).toBeGreaterThanOrEqual(5);
+    for (const c of controls) {
+      const overlaps =
+        toastBox.x < c.right &&
+        toastBox.x + toastBox.width > c.left &&
+        toastBox.y < c.bottom &&
+        toastBox.y + toastBox.height > c.top;
+      expect(
+        overlaps,
+        `toast overlaps a control at ${Math.round(c.left)},${Math.round(c.top)}`,
+      ).toBe(false);
+    }
+  });
+});
+
 test.describe('delete progress', () => {
   const SAVE = {
     ...NAMED,
@@ -281,6 +324,33 @@ test.describe('delete progress', () => {
     // the name question does not come back
     await page.reload();
     await expect(page.locator('[data-screen="menu"]')).toBeVisible();
+  });
+
+  test('the confirmation is fully visible on a low phone screen (568x320)', async ({
+    page,
+    browserName,
+  }) => {
+    await page.setViewportSize({ width: 568, height: 320 });
+    await openGameMenu(page, test, browserName, { save: SAVE });
+    await page.locator('[data-entry="settings"]').click();
+    await page.locator('[data-action="reset"]').click();
+    const body = await page.locator('.panel-settings .settings-body').boundingBox();
+    // the question and both buttons are inside the visible part of the scrolling settings list
+    for (const selector of [
+      '[data-dialog="reset"]',
+      '[data-action="reset-confirm"]',
+      '[data-action="reset-cancel"]',
+    ]) {
+      const box = await page.locator(selector).boundingBox();
+      expect(box.y, selector).toBeGreaterThanOrEqual(body.y - 1);
+      expect(box.y + box.height, selector).toBeLessThanOrEqual(body.y + body.height + 1);
+    }
+    // nothing of the settings list sticks out sideways
+    const overflow = await page.evaluate(() => {
+      const el = document.querySelector('.panel-settings .settings-body');
+      return { scroll: el.scrollWidth, client: el.clientWidth };
+    });
+    expect(overflow.scroll).toBeLessThanOrEqual(overflow.client);
   });
 
   test('the settings from the pause menu have no delete button', async ({ page, browserName }) => {

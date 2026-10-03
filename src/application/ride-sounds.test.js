@@ -20,6 +20,13 @@ describe('sound mapper', () => {
     ]);
   });
 
+  it('returns one shared empty list when no sound is due', () => {
+    const mapper = createSoundMapper();
+    const a = mapper.commandsFor([{ type: 'hop' }]);
+    expect(a).toHaveLength(0);
+    expect(mapper.commandsFor([])).toBe(a);
+  });
+
   it('plays at most one rail-down sound per element per jump', () => {
     const mapper = createSoundMapper();
     const out = mapper.commandsFor([

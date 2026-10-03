@@ -182,8 +182,6 @@ export function createHorse(options = {}) {
     get appearance() {
       return { ...appearance };
     },
-    /** Internal motion state (read-only; tests/debug). */
-    motion,
     update,
     setAppearance(a) {
       appearance = applyAppearance(uniforms, { ...appearance, ...a });

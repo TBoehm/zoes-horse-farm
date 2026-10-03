@@ -280,13 +280,20 @@
     margin: 0;
     font-size: 0.9rem;
   }
+  /* up to six chips in two rows */
+  .new-badges {
+    gap: 3px 6px;
+  }
   .badge-chip {
-    font-size: 0.9rem;
+    gap: 4px;
+    padding: 1px 10px 1px 1px;
+    font-size: 0.8rem;
   }
   .badge-chip .badge-emblem {
-    width: 24px;
-    height: 24px;
-    font-size: 0.8rem;
+    width: 20px;
+    height: 20px;
+    font-size: 0.7rem;
+    box-shadow: 0 1px 0 #a86e12;
   }
   .results-head {
     display: flex;

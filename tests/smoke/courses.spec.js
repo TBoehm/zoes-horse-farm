@@ -222,6 +222,30 @@ test.describe('results screen', () => {
     });
   }
 
+  test('six new badges still fit on a phone (568x320) without scrolling', async ({
+    page,
+    browserName,
+  }) => {
+    await page.setViewportSize({ width: 568, height: 320 });
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, progress: { unlocked: 2 } },
+    });
+    // the ride-end badges of the longest realistic case: six at once
+    const awarded = ['clean', 'oxerPro', 'comboPro', 'allOpen', 'starRider', 'busy'];
+    await page.evaluate((params) => window.__zhfTest.go('results', params), { ...RESULT, awarded });
+    await expect(page.locator('.new-badges [data-badge]')).toHaveCount(6);
+    const fit = await page.evaluate(() => {
+      const body = document.querySelector('.results-body');
+      return { scroll: body.scrollHeight, client: body.clientHeight };
+    });
+    expect(fit.scroll).toBeLessThanOrEqual(fit.client + 1);
+    for (const selector of ['.new-badges', '.unlocked-note', '[data-action="again"]']) {
+      const box = await page.locator(selector).boundingBox();
+      expect(box.y, selector).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height, selector).toBeLessThanOrEqual(320);
+    }
+  });
+
   test('the same figures in German; "next course" only when it is open', async ({
     page,
     browserName,

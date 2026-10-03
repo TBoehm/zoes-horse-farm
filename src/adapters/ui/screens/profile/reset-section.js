@@ -57,6 +57,8 @@ export function renderResetSection(ctx, { fromPause }) {
         status.textContent = '';
         // the safe choice has the focus (Enter or Space does not delete by accident)
         cancel.focus({ preventScroll: true });
+        // on a low phone screen the question and both buttons must be fully visible
+        confirmBox.scrollIntoView({ block: 'nearest' });
       },
     },
     t('reset.button'),

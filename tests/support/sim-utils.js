@@ -2,7 +2,13 @@
 import { createRidingSim } from '../../src/domain/sim/riding-sim.js';
 import { createRng } from '../../src/domain/sim/rng.js';
 import { TUNING } from '../../src/domain/sim/tuning.js';
-import { axisOf, crossAxisOf, headingOf, toLocal, wrapAngle } from '../../src/domain/sim/geometry.js';
+import {
+  axisOf,
+  crossAxisOf,
+  headingOf,
+  toLocal,
+  wrapAngle,
+} from '../../src/domain/sim/geometry.js';
 import { blockExtents } from '../../src/domain/sim/jump.js';
 
 export const DEG = Math.PI / 180;

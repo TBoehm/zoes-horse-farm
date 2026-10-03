@@ -1,6 +1,7 @@
 // 2D leg IK in the sagittal plane (local y/z plane of the leg's parent bone). Pure, no three.js.
 // Angle convention: angD(dz, dy) = atan2(dz, −dy), 0 = straight down, positive = forwards.
 // A bone rotation rotation.x = r changes a segment's angD by −r.
+import { clamp } from '../../../shared/math.js';
 
 export const angD = (dz, dy) => Math.atan2(dz, -dy);
 export const wrap = (a) => {
@@ -79,9 +80,9 @@ function twoBone(rootZ, rootY, tz, ty, l1, l2, sigma) {
   const dMax = l1 + l2 - 1e-4;
   const dMin = Math.abs(l1 - l2) + 1e-4;
   const reach = d <= dMax;
-  d = Math.min(dMax, Math.max(dMin, d));
+  d = clamp(d, dMin, dMax);
   const c = (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d);
-  const alpha = Math.acos(Math.max(-1, Math.min(1, c)));
+  const alpha = Math.acos(clamp(c, -1, 1));
   const base = angD(dz, dy);
   const t1 = base + sigma * alpha;
   const mz = rootZ + l1 * dirZ(t1);

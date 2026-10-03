@@ -4,8 +4,8 @@ import { createAudio } from '../audio/index.js';
 import { createMusicGate } from './music-gate.js';
 
 function volumeRow(ctx, channel) {
-  const { t, h, store } = ctx;
-  const s = store.get('settings');
+  const { t, h, settings } = ctx;
+  const s = settings.get();
   const volKey = `${channel}Volume`;
   const muteKey = `${channel}Muted`;
   const slider = h('input', {
@@ -17,14 +17,12 @@ function volumeRow(ctx, channel) {
     'aria-label': t(`settings.${channel}Volume`),
     dataset: { name: volKey },
   });
-  slider.addEventListener('input', () =>
-    store.update('settings', (x) => ({ ...x, [volKey]: Number(slider.value) / 100 })),
-  );
+  slider.addEventListener('input', () => settings.setVolume(channel, Number(slider.value) / 100));
   // Only the switch (no label of its own): it shows "sound on"; muted = off (volume is kept, rule 52)
   const toggle = toggleRow({
     name: muteKey,
     value: !s[muteKey],
-    onChange: (on) => store.update('settings', (x) => ({ ...x, [muteKey]: !on })),
+    onChange: (on) => settings.setMuted(channel, !on),
   });
   toggle.setAttribute('aria-label', t(`settings.${channel}On`));
   return h(
@@ -35,12 +33,13 @@ function volumeRow(ctx, channel) {
   );
 }
 
-export function registerAudio(app, store) {
-  const audio = createAudio(store.get('settings'));
+export function registerAudio(app) {
+  const { settings } = app.ctx;
+  const audio = createAudio(settings.get());
   app.services.audio = audio;
   audio.installUnlock(window);
 
-  store.onChange('settings', (s) => audio.setVolumes(s));
+  settings.onChange((s) => audio.setVolumes(s));
   const musicGate = createMusicGate((wanted) => audio.setMusicWanted(wanted));
   app.on('screen', (screen) => musicGate.onScreen(screen));
   const onVisibility = () => audio.setHidden(document.hidden);

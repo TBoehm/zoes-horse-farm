@@ -1,6 +1,7 @@
 // Key poses for jump, hop and refusal (pure, no three.js).
 // A pose vector holds body/neck values and, per leg, the hoof offset relative to the rest position
 // in the local frame of the leg's parent bone (i.e. body-relative), plus flexions.
+import { clamp } from '../../../shared/math.js';
 
 export const POSE_KEYS = [
   'pitch', // body pitch, + = nose down (rad)
@@ -92,7 +93,7 @@ export const STOP_POSE = pose(
 /** Phase + progress → continuous jump parameter J ∈ [0, 3]. */
 export function jumpParam(jump) {
   if (!jump) return 0;
-  const p = Math.min(1, Math.max(0, jump.progress ?? 0));
+  const p = clamp(jump.progress ?? 0, 0, 1);
   if (jump.phase === 'takeoff') return p;
   if (jump.phase === 'flight') return 1 + p;
   return 2 + p;
@@ -100,7 +101,7 @@ export function jumpParam(jump) {
 
 /** Catmull-Rom over evenly spaced key poses (spacing 0.5 in J). */
 export function samplePoses(keys, J, out = new Array(POSE_SIZE)) {
-  const x = Math.min(keys.length - 1, Math.max(0, J / 0.5));
+  const x = clamp(J / 0.5, 0, keys.length - 1);
   const i = Math.min(keys.length - 2, Math.floor(x));
   const t = x - i;
   const k0 = keys[Math.max(0, i - 1)];

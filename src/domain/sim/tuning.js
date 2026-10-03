@@ -54,6 +54,11 @@ export const TUNING = {
     turnSpeedRef: 5.0,
     // steering responsiveness (1/s)
     turnResponse: 10,
+    // gamepad/touch stick deflection below this value counts as centered
+    stickDeadZone: 0.12,
+    // ending the gallop below trotMin (strike-off): acceleration (m/s²) up to the working trot
+    // instead of dropping to a walk
+    gallopEndTrotUp: 2.5,
   },
 
   fence: {
@@ -61,6 +66,9 @@ export const TUNING = {
     frontalAngle: 35 * DEG,
     // turn rate (rad/s) at which the heading eases parallel to the wall on a glancing hit
     slideTurnRate: 6.0,
+    // after a frontal stop the stop only counts as "left" again once the horse is this far
+    // (m) from the wall or turned away
+    releaseGap: 0.05,
   },
 
   jump: {
@@ -81,12 +89,21 @@ export const TUNING = {
       minSpeed: 2.0,
     },
     // half time window of the zone (s); depth = 2 · window · speed
-    window: { cross: 0.22, base: 0.22, perHeight: 0.14, perSpread: 0.08, min: 0.08 },
+    window: {
+      cross: 0.22,
+      base: 0.22,
+      perHeight: 0.14,
+      perSpread: 0.08,
+      min: 0.08,
+      // height (m) above which the window narrows
+      heightRef: 0.4,
+    },
     // reach starts this much time (at least reachMin m) before the zone
     reachLead: 0.35,
     reachMin: 0.6,
-    // last takeoff point: this much time behind the zone, but never closer than min
-    lastPoint: { lead: 0.12, min: 0.3 },
+    // last takeoff point: this much time behind the zone, but never closer than min and never
+    // farther than this share of the near edge
+    lastPoint: { lead: 0.12, min: 0.3, maxShareOfNear: 0.9 },
     // angle tolerance of the safe core
     safeAngle: { base: 12 * DEG, perDifficulty: 2 * DEG },
     // target speed range (m/s)
@@ -137,6 +154,8 @@ export const TUNING = {
     stopMargin: 0.4,
     // the stop decelerates at least this much (m/s²), however much room there is
     stopDecelMin: 4,
+    // smallest braking distance (m) assumed for the stop deceleration (avoids division by ~0)
+    minStopRoom: 0.05,
     runoutDuration: 1.2,
     // turn rate when evading/running past (rad/s)
     maneuverTurnRate: 5.0,
@@ -145,6 +164,11 @@ export const TUNING = {
     // from this lateral component (sin 10°) on, the course direction decides the evasion side
     driftSide: Math.sin(10 * DEG),
   },
+
+  // fallen rails are rebuilt this long after the fall (rules 26, 29, 41); course run and free mode
+  rebuildDelayS: 3,
+  // how long the "missing obstacle" hint stays visible (s)
+  missingHintS: 5,
 
   sim: { maxDt: 0.1, substep: 1 / 120 },
 };

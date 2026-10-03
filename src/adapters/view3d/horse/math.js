@@ -1,6 +1,7 @@
 // Pure math helpers (no three.js).
+import { clamp } from '../../../shared/math.js';
 
-export const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+export { clamp };
 export const lerp = (a, b, t) => a + (b - a) * t;
 export function smoothstep(a, b, x) {
   const t = clamp((x - a) / (b - a), 0, 1);

@@ -1,11 +1,11 @@
 // Free mode (rule 41): fixed layout, no scoring, feedback on knockdown/refusal, fallen rails are
-// rebuilt after about 3 s, both jump directions count. No store access: the ride session passes
+// rebuilt after TUNING.rebuildDelayS, both jump directions count. No store access: the ride session passes
 // the settings it needs.
 import { FREE_LAYOUT } from '../../domain/course/courses.js';
+import { TUNING } from '../../domain/sim/tuning.js';
 
-export const REBUILD_DELAY_S = 3;
-
-export function createFreeMode() {
+/** @param {{ tuning?: object }} [options] */
+export function createFreeMode({ tuning = TUNING } = {}) {
   return {
     id: 'free',
     obstacles: FREE_LAYOUT.obstacles,
@@ -22,7 +22,7 @@ export function createFreeMode() {
     onRestart() {},
     onEvents(events, host) {
       for (const e of events) {
-        if (e.type === 'railDown') host.rebuildIn(e.elementId, REBUILD_DELAY_S);
+        if (e.type === 'railDown') host.rebuildIn(e.elementId, tuning.rebuildDelayS);
         if (e.type === 'refusal') host.feedback('feedback.refusal');
         if (e.type === 'landed' && e.knocked) host.feedback('feedback.knockdown');
       }

@@ -1,11 +1,12 @@
 // Pure logic of the audio module (no WebAudio): volume mapping, music state,
 // scheduler timing, randomness and impulse response for the reverb.
+import { clamp } from '../../shared/math.js';
 
 export const DEFAULT_VOLUME = 0.5;
 
 export function clamp01(value, fallback = DEFAULT_VOLUME) {
   if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
-  return Math.min(1, Math.max(0, value));
+  return clamp(value, 0, 1);
 }
 
 // API volume 0..1 linear, internally quadratic (perceptual): 0.5 -> 0.25 (-12 dB).

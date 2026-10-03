@@ -6,7 +6,7 @@ import { formatCs } from './format.js';
 
 /**
  * @returns {{ el: HTMLElement, renderTexts(): void, render(model: object): void }}
- * model = { phase, timeMs, allowedS, faults, overTime, nextLabel, missingHint }
+ * model = { phase, timeCs, allowedS, faults, overTime, nextLabel, missingHint }
  */
 export function createCourseHud() {
   const chip = (field) => {
@@ -36,8 +36,8 @@ export function createCourseHud() {
     render(model) {
       const lang = getLang();
       const riding = model.phase !== 'prestart';
-      time.value.textContent = formatCs(Math.floor(model.timeMs / 10), lang);
-      allowed.value.textContent = `${model.allowedS} s`;
+      time.value.textContent = formatCs(model.timeCs, lang);
+      allowed.value.textContent = t('hud.allowedValue', { seconds: model.allowedS });
       faults.value.textContent = String(model.faults);
       next.value.textContent =
         model.nextLabel === 'finish' ? t('hud.finish') : String(model.nextLabel);

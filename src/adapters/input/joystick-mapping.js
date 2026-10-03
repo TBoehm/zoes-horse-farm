@@ -1,6 +1,8 @@
 // Pure mapping of a nipplejs stick position to steer/throttle (rule 10), with a dead zone.
+import { clamp } from '../../shared/math.js';
+import { TUNING } from '../../domain/sim/tuning.js';
 
-export const STICK_DEAD_ZONE = 0.12;
+const STICK_DEAD_ZONE = TUNING.control.stickDeadZone;
 
 const NEUTRAL = Object.freeze({ steer: 0, throttle: 0 });
 
@@ -17,7 +19,7 @@ function shape(v) {
  */
 export function mapStick(force, radian) {
   if (!Number.isFinite(force) || !Number.isFinite(radian) || force <= 0) return { ...NEUTRAL };
-  const mag = Math.min(1, force);
+  const mag = clamp(force, 0, 1);
   return { steer: shape(Math.cos(radian) * mag), throttle: shape(Math.sin(radian) * mag) };
 }
 

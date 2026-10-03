@@ -10,14 +10,11 @@ import {
   toCentiseconds,
 } from './scoring.js';
 
-export const REBUILD_AFTER_S = 3; // rebuild of unscored knockdowns (rules 26, 29)
-export const MISSING_HINT_MS = 5000; // how long the "missing obstacle" hint stays
-
 /**
  * Does the segment prev→next cross the line in direction line.dir?
  * Returns true only when changing from the back side (−dir) to the front side.
  */
-export function crossesLine(line, prev, next) {
+function crossesLine(line, prev, next) {
   const [ax, az] = line.a;
   const ex = line.b[0] - ax;
   const ez = line.b[1] - az;
@@ -75,10 +72,14 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
     return toCentiseconds(ms) * 10 - allowedMs;
   }
 
+  function timeFaultsNow() {
+    return phase === 'prestart' ? 0 : timeFaults(overMs(rideMs()));
+  }
+
   function faults() {
-    const time = phase === 'prestart' ? 0 : timeFaults(overMs(rideMs()));
+    const time = timeFaultsNow();
     const total = knockdowns * KNOCKDOWN_FAULTS + refusals * REFUSAL_FAULTS + time;
-    return { knockdowns, refusals, time, total };
+    return { knockdowns, refusals, timeFaults: time, total };
   }
 
   function isCurrent(elementId, dir) {
@@ -120,7 +121,7 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
     result = {
       courseId: course.id,
       timeCs: toCentiseconds(finalMs),
-      faults: { knockdowns, refusals, timeFaults: f.time, total: f.total },
+      faults: { knockdowns, refusals, timeFaults: f.timeFaults, total: f.total },
       stars: starsFor(f.total),
       cleanOxer: oxers.some((e) => cleanAt([e.id])),
       cleanCombination: combos.some((o) => cleanAt(o.elements.map((e) => e.id))),
@@ -150,6 +151,10 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
     },
     get timeMs() {
       return rideMs();
+    },
+    /** True once the allowed time is exceeded (same truncated hundredths as the time faults). */
+    get overTime() {
+      return timeFaultsNow() > 0;
     },
     get missingHint() {
       return missingHint;
@@ -198,7 +203,7 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
       }
       // unscored; poles of a scored knockdown stay down until the ride ends
       const rebuild = knocked && !(phase === 'riding' && lying.has(elementId));
-      return { scored: false, rebuildAfterS: rebuild ? REBUILD_AFTER_S : null };
+      return { scored: false, rebuildAfterS: rebuild ? tuning.rebuildDelayS : null };
     },
 
     onRefusal(elementId, dir) {
@@ -211,7 +216,8 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
     update(horse, timeMs) {
       if (phase !== 'riding') return;
       nowMs = timeMs;
-      if (missingHint !== null && timeMs - hintSince >= MISSING_HINT_MS) missingHint = null;
+      if (missingHint !== null && timeMs - hintSince >= tuning.missingHintS * 1000)
+        missingHint = null;
       // Turning away between a and b (rule 31)
       if (part === 1) {
         const b = currentElement();

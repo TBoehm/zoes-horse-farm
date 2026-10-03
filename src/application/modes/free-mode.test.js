@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createFreeMode, REBUILD_DELAY_S } from './free-mode.js';
+import { createFreeMode } from './free-mode.js';
+import { TUNING } from '../../domain/sim/tuning.js';
 import { fakeHost } from '../../../tests/support/test-host.js';
 
 describe('free mode', () => {
@@ -19,6 +20,13 @@ describe('free mode', () => {
     expect(mode.rules.canRefuse('f1', -1)).toBe(true);
   });
 
+  it('takes the rebuild delay from the tuning value', () => {
+    const mode = createFreeMode({ tuning: { ...TUNING, rebuildDelayS: 9 } });
+    const host = fakeHost();
+    mode.onEvents([{ type: 'railDown', elementId: 'f2', rail: 0 }], host);
+    expect(host.calls.rebuildIn).toEqual([['f2', 9]]);
+  });
+
   it('rebuilds fallen rails after the delay and gives feedback', () => {
     const mode = createFreeMode();
     const host = fakeHost();
@@ -31,7 +39,7 @@ describe('free mode', () => {
       ],
       host,
     );
-    expect(host.calls.rebuildIn).toEqual([['f2', REBUILD_DELAY_S]]);
+    expect(host.calls.rebuildIn).toEqual([['f2', TUNING.rebuildDelayS]]);
     expect(host.calls.feedback).toEqual(['feedback.refusal', 'feedback.knockdown']);
   });
 

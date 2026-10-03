@@ -2,6 +2,8 @@
 // No DOM, no WebAudio.
 
 const SOUND_BY_EVENT = { takeoff: 'takeoff', landed: 'landing' };
+// Shared result for the (common) steps without any sound: no allocation per frame.
+const NO_COMMANDS = Object.freeze([]);
 
 export function createSoundMapper() {
   // elements whose rail-down sound already played in the current jump
@@ -9,18 +11,18 @@ export function createSoundMapper() {
   return {
     /** Sound commands for the events of one step (a jump makes at most one rail-down sound). */
     commandsFor(events) {
-      const commands = [];
+      let commands = null;
       for (const e of events) {
         if (e.type === 'takeoff') railSounded.delete(e.elementId);
         if (e.type === 'railDown') {
           if (railSounded.has(e.elementId)) continue;
           railSounded.add(e.elementId);
-          commands.push({ type: 'sound', name: 'railDown' });
+          (commands ??= []).push({ type: 'sound', name: 'railDown' });
         } else if (SOUND_BY_EVENT[e.type]) {
-          commands.push({ type: 'sound', name: SOUND_BY_EVENT[e.type] });
+          (commands ??= []).push({ type: 'sound', name: SOUND_BY_EVENT[e.type] });
         }
       }
-      return commands;
+      return commands ?? NO_COMMANDS;
     },
     reset() {
       railSounded.clear();

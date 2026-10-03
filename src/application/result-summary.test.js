@@ -20,8 +20,12 @@ const params = (over = {}) => ({
 describe('summarizeResult', () => {
   it('turns fault counts into penalty points', () => {
     const { rows } = summarizeResult(fakeStore({ progress: { unlocked: 2 } }), params());
-    expect(rows.knockdowns).toEqual({ count: 2, points: 2 * KNOCKDOWN_FAULTS });
-    expect(rows.refusals).toEqual({ count: 1, points: REFUSAL_FAULTS });
+    expect(rows.knockdowns).toEqual({
+      count: 2,
+      points: 2 * KNOCKDOWN_FAULTS,
+      each: KNOCKDOWN_FAULTS,
+    });
+    expect(rows.refusals).toEqual({ count: 1, points: REFUSAL_FAULTS, each: REFUSAL_FAULTS });
     expect(rows.timeFaults).toBe(3);
     expect(rows.total).toBe(15);
   });

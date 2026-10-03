@@ -126,6 +126,11 @@ describe('Ride-end badges', () => {
     expect(r.awarded).toEqual(['clean']);
   });
 
+  it('clean: a 3-star entry for a course outside 1..5 does not count', () => {
+    const stray = { ...fresh(), courses: { 7: { faults: 0, timeCs: 5000, stars: 3 } } };
+    expect(finishRide(stray, result({ total: 4, stars: 2 })).awarded).not.toContain('clean');
+  });
+
   it('oxer pro only from the ride result', () => {
     expect(finishRide(fresh(), result({ cleanOxer: true })).awarded).toEqual(['oxerPro']);
     expect(finishRide(fresh(), result({ cleanOxer: false })).awarded).toEqual([]);

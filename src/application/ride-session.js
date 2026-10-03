@@ -6,6 +6,9 @@ import { createRidingSim } from '../domain/sim/riding-sim.js';
 import { finishRide, recordJump } from './progress-service.js';
 import { createSoundMapper } from './ride-sounds.js';
 
+// Shared result for steps without commands/events (read only): no allocation per frame.
+const NONE = Object.freeze([]);
+
 /**
  * @param {object} deps
  * @param {object} deps.mode strategy from application/modes (free or course)
@@ -24,26 +27,45 @@ export function createRideSession({ mode, store, clock, rng }) {
   let rebuilds = [];
   let finished = false;
   let commands = [];
-  const sounds = createSoundMapper();
   // Direction (+1 / −1) of the last fall per element, for the pole animation of the 3D view
   const fallDirs = new Map();
+  // Scratch objects reused every frame (the view is read by the render loop at 60 Hz)
+  const prev = { x: 0, z: 0 };
+  const frame = { horse: sim.horse, prev };
+  const aidScratch = { elementId: null, dir: 1, zone: null };
+  const view = {
+    horse: sim.horse,
+    rails: sim.rails,
+    fallDirs,
+    aid: null,
+    highlight: null,
+    finishMarked: false,
+    lines: null,
+    hud: null,
+  };
+  const sounds = createSoundMapper();
   // The jump aid needs the settings every frame: keep a copy and refresh it on change
   let settings = store.get('settings');
   const stopListening = store.onChange('settings', (next) => {
     settings = next;
   });
 
+  function cancelRebuild(elementId) {
+    if (rebuilds.length > 0) rebuilds = rebuilds.filter((r) => r.elementId !== elementId);
+  }
+
   // What a mode may ask for while it handles events or updates.
   const host = {
     feedback: (key) => commands.push({ type: 'feedback', key }),
     rebuildIn(elementId, seconds) {
-      rebuilds = rebuilds.filter((r) => r.elementId !== elementId);
+      cancelRebuild(elementId);
       rebuilds.push({ elementId, left: seconds });
     },
     rebuildNow(elementId) {
-      rebuilds = rebuilds.filter((r) => r.elementId !== elementId);
+      cancelRebuild(elementId);
       sim.rebuild(elementId);
     },
+    cancelRebuild,
   };
 
   function handleEvents(events) {
@@ -61,9 +83,16 @@ export function createRideSession({ mode, store, clock, rng }) {
   }
 
   function tickRebuilds(dt) {
-    for (const r of rebuilds) r.left -= dt;
-    for (const r of rebuilds.filter((x) => x.left <= 0)) sim.rebuild(r.elementId);
-    rebuilds = rebuilds.filter((r) => r.left > 0);
+    if (rebuilds.length === 0) return;
+    let due = false;
+    for (const r of rebuilds) {
+      r.left -= dt;
+      if (r.left <= 0) {
+        sim.rebuild(r.elementId);
+        due = true;
+      }
+    }
+    if (due) rebuilds = rebuilds.filter((r) => r.left > 0);
   }
 
   function finish({ screen, result, params }) {
@@ -74,6 +103,7 @@ export function createRideSession({ mode, store, clock, rng }) {
   }
 
   function takeCommands() {
+    if (commands.length === 0) return NONE;
     const out = commands;
     commands = [];
     return out;
@@ -98,11 +128,12 @@ export function createRideSession({ mode, store, clock, rng }) {
    * @returns {{ events: object[], commands: object[] }}
    */
   function step(dt, input) {
-    if (finished) return { events: [], commands: [] };
-    const prev = { x: sim.horse.x, z: sim.horse.z };
+    if (finished) return { events: NONE, commands: NONE };
+    prev.x = sim.horse.x;
+    prev.z = sim.horse.z;
     const events = sim.step(dt, input);
     handleEvents(events);
-    const update = mode.update(dt, { horse: sim.horse, prev }, host);
+    const update = mode.update(dt, frame, host);
     tickRebuilds(dt);
     if (update?.finished) finish(update.finished);
     return { events, commands: takeCommands() };
@@ -120,21 +151,23 @@ export function createRideSession({ mode, store, clock, rng }) {
     quitScreen: mode.quitScreen,
     /** Stops listening to the store; call when the ride screen is left. */
     dispose: stopListening,
-    /** Plain data for the UI to display; `horse`, `rails` and `fallDirs` are live (not copied). */
+    /** Plain data for the UI to display. The same object (and the same `aid` object) is reused on
+     * every read: read it, do not keep it. `horse`, `rails` and `fallDirs` are live (not copied). */
     get view() {
       const target = mode.aidTarget({ approach: sim.approach, settings });
-      return {
-        horse: sim.horse,
-        rails: sim.rails,
-        fallDirs,
-        aid: target
-          ? { ...target, zone: sim.zoneFor(target.elementId, target.dir, sim.horse.speed) }
-          : null,
-        highlight: mode.highlight ?? null,
-        finishMarked: Boolean(mode.finishMarked),
-        lines: mode.lines ?? null,
-        hud: mode.hudModel ? mode.hudModel() : null,
-      };
+      if (target) {
+        aidScratch.elementId = target.elementId;
+        aidScratch.dir = target.dir;
+        aidScratch.zone = sim.zoneFor(target.elementId, target.dir, sim.horse.speed);
+        view.aid = aidScratch;
+      } else {
+        view.aid = null;
+      }
+      view.highlight = mode.highlight ?? null;
+      view.finishMarked = Boolean(mode.finishMarked);
+      view.lines = mode.lines ?? null;
+      view.hud = mode.hudModel ? mode.hudModel() : null;
+      return view;
     },
   };
 }

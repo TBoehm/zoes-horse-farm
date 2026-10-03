@@ -13,7 +13,7 @@ import { h, clear } from './dom.js';
  *   `el` is not used then
  * - rerenderOnLang (default true): rebuild when the language changes
  */
-export function createApp({ root, store, inputMode, clock }) {
+export function createApp({ root, store, settings, inputMode, clock }) {
   const emitter = createEmitter();
   const factories = new Map();
   const stack = [];
@@ -30,6 +30,7 @@ export function createApp({ root, store, inputMode, clock }) {
       return app;
     },
     store,
+    settings, // application/settings-service: the only way to change settings
     inputMode,
     clock,
     services,

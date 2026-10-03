@@ -71,7 +71,7 @@ export function createCourseSelectScreen(ctx) {
 }
 
 export function createPrestartScreen(ctx, params) {
-  const { t, h, store, app, services } = ctx;
+  const { t, h, store, settings, app, services } = ctx;
   // A locked or unknown course cannot be started, not even by a forced screen change (rule 35)
   if (!canStart(store, params.courseId)) {
     return { el: h('div'), redirect: { name: 'courseSelect' } };
@@ -104,9 +104,9 @@ export function createPrestartScreen(ctx, params) {
       toggleRow({
         name: 'aidCourse',
         label: t('prestart.aid'),
-        value: store.get('settings').aidCourse,
+        value: settings.get().aidCourse,
         // changes the saved "in courses" setting (rule 42)
-        onChange: (v) => store.update('settings', (s) => ({ ...s, aidCourse: v })),
+        onChange: (v) => settings.setAid('course', v),
       }),
     ),
     h(
@@ -127,8 +127,8 @@ export function createPrestartScreen(ctx, params) {
 }
 
 // "3 x 4 = 12" from the figures of the result summary; nothing to show for 0
-function pointsText(t, { count, points }) {
-  return count > 0 ? t('results.points', { count, each: points / count, points }) : '0';
+function pointsText(t, { count, each, points }) {
+  return count > 0 ? t('results.points', { count, each, points }) : '0';
 }
 
 // The finish signal plays first; the melody of the results screen starts after it

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createCourseRun, MISSING_HINT_MS } from './course-run.js';
+import { createCourseRun } from './course-run.js';
+import { TUNING } from '../sim/tuning.js';
 import { COURSES } from './courses.js';
 
 const el = (id, kind, x, z) => ({
@@ -77,7 +78,7 @@ describe('Pre-start (rule 26)', () => {
     const run = createCourseRun(testCourse());
     expect(run.phase).toBe('prestart');
     expect(run.timeMs).toBe(0);
-    expect(run.faults).toEqual({ knockdowns: 0, refusals: 0, time: 0, total: 0 });
+    expect(run.faults).toEqual({ knockdowns: 0, refusals: 0, timeFaults: 0, total: 0 });
     expect(run.highlight).toEqual({ elementId: 'v1', number: 1 });
     expect(run.current).toEqual({ obstacleIndex: 0, part: 0, elementId: 'v1' });
     expect(run.nextLabel).toBe(1);
@@ -96,7 +97,7 @@ describe('Pre-start (rule 26)', () => {
     const run = createCourseRun(testCourse());
     run.update({ x: 0, z: -30, heading: 0 }, 50000);
     expect(run.timeMs).toBe(0);
-    expect(run.faults.time).toBe(0);
+    expect(run.faults.timeFaults).toBe(0);
   });
 
   it('no refusal in pre-start, not even at obstacle 1', () => {
@@ -230,7 +231,7 @@ describe('Fault points (rule 32)', () => {
   it('knockdown at the current obstacle: 4 faults, counts as jumped, pole stays down', () => {
     const run = riding();
     expect(run.onLanded('v1', 1, true)).toEqual({ scored: true, rebuildAfterS: null });
-    expect(run.faults).toEqual({ knockdowns: 1, refusals: 0, time: 0, total: 4 });
+    expect(run.faults).toEqual({ knockdowns: 1, refusals: 0, timeFaults: 0, total: 4 });
     expect(run.current.elementId).toBe('o2');
     expect(run.drainRebuilds()).toEqual([]);
   });
@@ -240,7 +241,7 @@ describe('Fault points (rule 32)', () => {
     run.onRefusal('v1', 1);
     run.onRefusal('v1', 1);
     run.onRefusal('v1', 1);
-    expect(run.faults).toEqual({ knockdowns: 0, refusals: 3, time: 0, total: 12 });
+    expect(run.faults).toEqual({ knockdowns: 0, refusals: 3, timeFaults: 0, total: 12 });
     expect(run.phase).toBe('riding');
     expect(run.current.elementId).toBe('v1');
     // a jump shortly after the refusal is scored normally
@@ -260,13 +261,35 @@ describe('Fault points (rule 32)', () => {
     expect(run.onLanded('v1', -1, true)).toEqual({ scored: false, rebuildAfterS: null });
   });
 
+  it('the rebuild delay of unscored knockdowns comes from the tuning value', () => {
+    const run = createCourseRun(testCourse(), { tuning: { ...TUNING, rebuildDelayS: 7 } });
+    crossStart(run);
+    expect(run.onLanded('v1', -1, true)).toEqual({ scored: false, rebuildAfterS: 7 });
+  });
+
+  it('overTime follows the truncated hundredths like the time faults', () => {
+    const run = riding(testCourse(), 0);
+    expect(run.overTime).toBe(false);
+    run.update({ x: 0, z: 0, heading: 0 }, 30000);
+    expect(run.overTime).toBe(false);
+    run.update({ x: 0, z: 0, heading: 0 }, 30009);
+    expect(run.overTime).toBe(false);
+    run.update({ x: 0, z: 0, heading: 0 }, 30010);
+    expect(run.overTime).toBe(true);
+    expect(run.faults.timeFaults).toBe(1);
+  });
+
+  it('overTime is false before the start', () => {
+    expect(createCourseRun(testCourse()).overTime).toBe(false);
+  });
+
   it('time faults run along during the ride and go into the total', () => {
     const run = riding(testCourse(), 0);
     run.onLanded('v1', 1, true);
     run.update({ x: 0, z: 0, heading: 0 }, 30000);
-    expect(run.faults.time).toBe(0);
+    expect(run.faults.timeFaults).toBe(0);
     run.update({ x: 0, z: 0, heading: 0 }, 30010);
-    expect(run.faults).toEqual({ knockdowns: 1, refusals: 0, time: 1, total: 5 });
+    expect(run.faults).toEqual({ knockdowns: 1, refusals: 0, timeFaults: 1, total: 5 });
   });
 });
 
@@ -282,9 +305,21 @@ describe('Finish before all obstacles (rule 30)', () => {
   it('hint disappears after a few seconds', () => {
     const run = riding();
     crossFinish(run, 8000);
-    run.update({ x: 10, z: -22, heading: Math.PI }, 8000 + MISSING_HINT_MS - 1);
+    run.update({ x: 10, z: -22, heading: Math.PI }, 8000 + TUNING.missingHintS * 1000 - 1);
     expect(run.missingHint).toBe(1);
-    run.update({ x: 10, z: -22, heading: Math.PI }, 8000 + MISSING_HINT_MS);
+    run.update({ x: 10, z: -22, heading: Math.PI }, 8000 + TUNING.missingHintS * 1000);
+    expect(run.missingHint).toBeNull();
+  });
+
+  it('hint duration comes from the tuning value', () => {
+    const tuning = { ...TUNING, missingHintS: 1 };
+    const run = createCourseRun(testCourse(), { tuning });
+    run.onLineCross({ x: 0, z: -26 }, { x: 0, z: -24 }, 0);
+    run.onLanded('v1', 1, false);
+    crossFinish(run, 8000);
+    run.update({ x: 10, z: -22, heading: Math.PI }, 8999);
+    expect(run.missingHint).toBe(2);
+    run.update({ x: 10, z: -22, heading: Math.PI }, 9000);
     expect(run.missingHint).toBeNull();
   });
 
@@ -334,7 +369,7 @@ describe('Double combination (rule 31)', () => {
     const run = toCombination(riding());
     run.onLanded('k3a', 1, true);
     run.onRefusal('k3b', 1);
-    expect(run.faults).toEqual({ knockdowns: 1, refusals: 1, time: 0, total: 8 });
+    expect(run.faults).toEqual({ knockdowns: 1, refusals: 1, timeFaults: 0, total: 8 });
     expect(run.current).toEqual({ obstacleIndex: 2, part: 0, elementId: 'k3a' });
     expect(run.drainRebuilds().sort()).toEqual(['k3a', 'k3b']);
     expect(run.drainRebuilds()).toEqual([]);
@@ -355,7 +390,7 @@ describe('Double combination (rule 31)', () => {
     run.drainRebuilds();
     run.onLanded('k3a', 1, true);
     run.onLanded('k3b', 1, true);
-    expect(run.faults).toEqual({ knockdowns: 3, refusals: 1, time: 0, total: 16 });
+    expect(run.faults).toEqual({ knockdowns: 3, refusals: 1, timeFaults: 0, total: 16 });
     expect(run.current).toBeNull();
   });
 
@@ -364,7 +399,7 @@ describe('Double combination (rule 31)', () => {
     run.onLanded('k3a', 1, true);
     run.update(horseAwayFromB, 9000);
     expect(run.current).toEqual({ obstacleIndex: 2, part: 0, elementId: 'k3a' });
-    expect(run.faults).toEqual({ knockdowns: 1, refusals: 0, time: 0, total: 4 });
+    expect(run.faults).toEqual({ knockdowns: 1, refusals: 0, timeFaults: 0, total: 4 });
     expect(run.drainRebuilds().sort()).toEqual(['k3a', 'k3b']);
   });
 
@@ -405,7 +440,7 @@ describe('Result', () => {
       cleanOxer: true,
       cleanCombination: true,
     });
-    expect(run.faults).toEqual({ knockdowns: 1, refusals: 0, time: 2, total: 6 });
+    expect(run.faults).toEqual({ knockdowns: 1, refusals: 0, timeFaults: 2, total: 6 });
   });
 
   it('clean ride: 3 stars', () => {

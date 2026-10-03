@@ -545,34 +545,44 @@ export function createObstacles({ materialFactory }) {
     return meshes;
   }
 
+  // Map#forEach with a stable callback does not allocate (for…of would create an iterator and an
+  // entry array per frame); the current call's direction maps are handed over through these slots.
+  let syncFallDirs = null;
+  let syncApproachDirs = null;
+  function syncElementRails(states, id) {
+    const info = elements.get(id);
+    if (!info || !states) return;
+    const lists = info.railLists;
+    for (let railIndex = 0; railIndex < lists.length; railIndex += 1) {
+      const list = lists[railIndex];
+      if (!list) continue;
+      const up = states[railIndex] !== false;
+      for (let i = 0; i < list.length; i += 1) {
+        const pole = list[i];
+        const isUp = pole.state === 'up' || pole.state === 'rising';
+        if (up && !isUp) startRise(pole);
+        else if (!up && isUp) {
+          const side =
+            (syncFallDirs && syncFallDirs.get(id)) ||
+            (syncApproachDirs && syncApproachDirs.get(id)) ||
+            (pole.rng() < 0.5 ? -1 : 1);
+          startFall(pole, Math.sign(side) || 1);
+        }
+      }
+    }
+  }
+
   /**
    * rails: Map elementId → boolean[] (true = up). fallDirs / approachDirs: optional Maps
    * elementId → ±1 (side to fall to along n; fallDirs wins). Runs every frame: no allocations.
    */
   function syncRails(rails, dt = 0, fallDirs = null, approachDirs = null) {
     if (rails) {
-      for (const [id, states] of rails) {
-        const info = elements.get(id);
-        if (!info || !states) continue;
-        const lists = info.railLists;
-        for (let railIndex = 0; railIndex < lists.length; railIndex += 1) {
-          const list = lists[railIndex];
-          if (!list) continue;
-          const up = states[railIndex] !== false;
-          for (let i = 0; i < list.length; i += 1) {
-            const pole = list[i];
-            const isUp = pole.state === 'up' || pole.state === 'rising';
-            if (up && !isUp) startRise(pole);
-            else if (!up && isUp) {
-              const side =
-                (fallDirs && fallDirs.get(id)) ||
-                (approachDirs && approachDirs.get(id)) ||
-                (pole.rng() < 0.5 ? -1 : 1);
-              startFall(pole, Math.sign(side) || 1);
-            }
-          }
-        }
-      }
+      syncFallDirs = fallDirs;
+      syncApproachDirs = approachDirs;
+      rails.forEach(syncElementRails);
+      syncFallDirs = null;
+      syncApproachDirs = null;
     }
     let dirty = false;
     for (let i = 0; i < poles.length; i += 1) {

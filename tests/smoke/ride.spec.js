@@ -86,6 +86,31 @@ test.describe('free riding (SRT-002)', () => {
       () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
     );
     expect((await rideState(page)).horse.gait).toBe('halt');
+    // Turn away from the fence on the spot (W released), Shift still held ...
+    await keys.set('w', false);
+    await keys.set('a', true);
+    await page.waitForFunction(() => Math.cos(window.__zhfTest.ride().horse.heading) < -0.7, null, {
+      polling: 50,
+    });
+    await keys.set('a', false);
+    // ... trotting off does not start the canter: the old Shift press is used up ...
+    await keys.set('w', true);
+    await page.waitForFunction(() => window.__zhfTest.ride().horse.gait === 'trot', null, {
+      polling: 50,
+    });
+    await page.evaluate(
+      () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+    );
+    const trotting = (await rideState(page)).horse;
+    expect(trotting.gallop).toBe(false);
+    expect(trotting.gait).not.toBe('canter');
+    // ... only releasing and pressing Shift again does
+    await keys.set('Shift', false);
+    await keys.set('Shift', true);
+    await page.waitForFunction(() => window.__zhfTest.ride().horse.gait === 'canter', null, {
+      polling: 50,
+    });
+    expect((await rideState(page)).horse.gallop).toBe(true);
     await keys.releaseAll();
   });
 

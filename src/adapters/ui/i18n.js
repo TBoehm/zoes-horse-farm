@@ -1,9 +1,9 @@
 // Bilingual texts (rule 6). Feature areas register their texts with registerStrings.
+import { LANGS } from '../../application/languages.js';
+
 const dictionaries = { de: {}, en: {} };
 const listeners = new Set();
 let lang = 'de';
-
-export const LANGS = ['de', 'en'];
 
 export function registerStrings({ de = {}, en = {} }) {
   Object.assign(dictionaries.de, de);
@@ -33,10 +33,6 @@ export function onLangChange(fn) {
   return () => listeners.delete(fn);
 }
 
-export function hasString(key, language = lang) {
-  return Object.hasOwn(dictionaries[language], key);
-}
-
 export function t(key, params) {
   const text = dictionaries[lang][key] ?? dictionaries.de[key] ?? dictionaries.en[key];
   if (text === undefined) {
@@ -45,9 +41,4 @@ export function t(key, params) {
   }
   if (!params) return text;
   return text.replace(/\{(\w+)\}/g, (m, name) => (name in params ? String(params[name]) : m));
-}
-
-/** Tests only: all registered keys per language. */
-export function _dictionaries() {
-  return dictionaries;
 }

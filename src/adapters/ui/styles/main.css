@@ -211,6 +211,7 @@ body {
 
 .setting-row {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -418,7 +419,7 @@ html.rotate-blocked .layer-scene {
   }
   .settings-body {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: 28px;
     row-gap: 6px;
   }
@@ -438,6 +439,7 @@ html.rotate-blocked .layer-scene {
     width: 110px;
   }
   .settings-body .setting-row-wide,
+  .settings-body .setting-volume,
   .settings-body .setting-reset {
     grid-column: 1 / -1;
   }
@@ -456,6 +458,11 @@ html.rotate-blocked .layer-scene {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* Scroll hint: the last rows fade out at the bottom edge; the padding keeps the final row
+     clear of the fade once the list is scrolled to its end */
+  padding-bottom: 22px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
 }
 
 .panel-settings .panel-actions,

@@ -465,6 +465,19 @@ describe('Self jump and refusal (rules 20, 22)', () => {
     expect(p.along).toBeGreaterThan(-1);
   });
 
+  it('a refusal after the gallop ended in the strike-off stays a halt (no trot fall-back)', () => {
+    const c = makeElement('cross', 0.45);
+    const sim = makeSim([c]);
+    placeBefore(sim, c, 1.2, { speed: 0.6, gallop: true });
+    // the gallop is released while still below trotMin, then the horse refuses the cross
+    sim.step(1 / 60, { gallop: false });
+    const { events } = drive(sim, {}, { maxT: 4 });
+    expect(ofType(events, 'refusal')).toHaveLength(1);
+    drive(sim, {}, { maxT: 3 });
+    expect(sim.horse.speed).toBe(0);
+    expect(sim.horse.gait).toBe('halt');
+  });
+
   it('too little speed: refusal speed (stops)', () => {
     const o = makeElement('oxer', 0.85, { spread: 0.7 });
     const sim = makeSim([o]);

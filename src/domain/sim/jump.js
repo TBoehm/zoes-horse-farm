@@ -1,7 +1,7 @@
 // Jump rules per element: takeoff zone, target ranges, jumpability, knockdown risk
 // (concept rules 15–20). Pure stateless functions.
 import { POLE_LENGTH, STAND_WIDTH } from './tuning.js';
-import { clamp } from './movement.js';
+import { clamp } from '../../shared/math.js';
 
 const DEG = Math.PI / 180;
 
@@ -49,7 +49,9 @@ export function zoneWindow(element, tuning) {
   const w = tuning.jump.window;
   if (element.kind === 'cross') return w.cross;
   const v =
-    w.base - w.perHeight * Math.max(0, element.height - 0.4) - w.perSpread * (element.spread || 0);
+    w.base -
+    w.perHeight * Math.max(0, element.height - w.heightRef) -
+    w.perSpread * (element.spread || 0);
   return Math.max(w.min, v);
 }
 
@@ -71,7 +73,10 @@ export function zoneForElement(element, speed, tuning) {
   const half = zoneWindow(element, tuning) * v;
   const far = center + half;
   const near = Math.max(z.minNear, center - half);
-  const lastPoint = Math.min(near * 0.9, Math.max(j.lastPoint.min, near - j.lastPoint.lead * v));
+  const lastPoint = Math.min(
+    near * j.lastPoint.maxShareOfNear,
+    Math.max(j.lastPoint.min, near - j.lastPoint.lead * v),
+  );
   const reach = far + Math.max(j.reachMin, j.reachLead * v);
   return { far, near, lastPoint, reach, center };
 }

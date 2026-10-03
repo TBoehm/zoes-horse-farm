@@ -1,5 +1,6 @@
 // Riding simulation (contract: docs/specs/springreiten-trainer/architecture.md, "Reit-Simulation").
 // Pure and deterministic: all random draws go through the injected rng.
+import { clamp } from '../../shared/math.js';
 import { TUNING } from './tuning.js';
 import { createRng } from './rng.js';
 import {
@@ -16,7 +17,6 @@ import {
   advance,
   applyFence,
   arenaBounds,
-  clamp,
   gaitForSpeed,
   updateSpeed,
   updateSteering,
@@ -190,6 +190,9 @@ export function createRidingSim({
     if (!input.gallop) gallopBlocked = false;
     const want = input.gallop && !gallopBlocked && !refusal;
     if (want && !horse.gallop) settling = false;
+    // Released during the strike-off (still below trotMin): fall back to trot, not to a walk.
+    // Forced ends (fence, refusal) go through endGallop and stay halts.
+    if (horse.gallop && !want && horse.speed < T.speeds.trotMin) settling = true;
     horse.gallop = want;
   }
 
@@ -376,10 +379,11 @@ export function createRidingSim({
   function refuse(el, info, reason, type, events) {
     events.push({ type: 'refusal', elementId: el.id, dir: info.dir, reason });
     endGallop('refusal', events);
+    settling = false;
     locks.add(el.id);
     hop = null;
     if (type === 'stop') {
-      const room = Math.max(0.05, info.distance - T.refusal.stopMargin);
+      const room = Math.max(T.refusal.minStopRoom, info.distance - T.refusal.stopMargin);
       refusal = {
         type,
         t: 0,
@@ -536,7 +540,7 @@ export function createRidingSim({
       const f = forwardOf(horse.heading);
       const { maxX, maxZ } = arenaBounds(T);
       const gap = n.x !== 0 ? maxX - n.x * horse.x : maxZ - n.z * horse.z;
-      if (gap > 0.05 || f.x * n.x + f.z * n.z < Math.cos(T.fence.frontalAngle)) {
+      if (gap > T.fence.releaseGap || f.x * n.x + f.z * n.z < Math.cos(T.fence.frontalAngle)) {
         fenceStopNormal = null;
       }
     }

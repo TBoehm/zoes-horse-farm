@@ -182,16 +182,18 @@
 
 .badge-toast {
   position: fixed;
-  bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--toast-index, 0) * 46px);
-  left: 50%;
+  /* --toast-bottom is the stack offset set by badge-toast.js; --toast-x / --toast-max-w follow
+     the free gap between the touch controls (touch mode only) */
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--toast-bottom, 0px));
+  left: var(--toast-x, 50%);
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: min(92vw, 380px);
+  max-width: var(--toast-max-w, min(92vw, 380px));
   width: max-content;
   padding: 4px 14px 4px 4px;
-  border-radius: 999px;
+  border-radius: 22px;
   background: var(--c-panel);
   box-shadow: var(--shadow);
   font-weight: 800;
@@ -202,7 +204,8 @@
   animation: toast-in 0.3s ease;
   transition:
     opacity 0.4s ease,
-    bottom 0.2s ease;
+    bottom 0.2s ease,
+    left 0.2s ease;
 }
 
 .badge-toast[hidden] {

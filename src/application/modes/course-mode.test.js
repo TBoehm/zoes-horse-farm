@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createCourseMode } from './course-mode.js';
 import { COURSES } from '../../domain/course/courses.js';
+import { toCentiseconds } from '../../domain/course/scoring.js';
 import { fakeHost } from '../../../tests/support/test-host.js';
 
 const course = COURSES[0];
@@ -39,6 +40,7 @@ describe('course mode', () => {
     expect(mode.hudModel()).toEqual({
       phase: 'prestart',
       timeMs: 0,
+      timeCs: 0,
       allowedS: course.allowedTimeS,
       faults: 0,
       overTime: false,
@@ -54,6 +56,20 @@ describe('course mode', () => {
     mode.update(course.allowedTimeS - 1, { horse: start.next, prev: start.next }, host);
     expect(mode.hudModel().overTime).toBe(false);
     mode.update(2, { horse: start.next, prev: start.next }, host);
+    expect(mode.hudModel().overTime).toBe(true);
+  });
+
+  it('provides the time in hundredths (truncated) and flags over-time by the same rule', () => {
+    const { mode, host } = setup();
+    const start = across(course.start);
+    mode.update(0.1, { horse: start.next, prev: start.prev }, host);
+    mode.update(1.239, { horse: start.next, prev: start.next }, host);
+    expect(mode.hudModel().timeCs).toBe(toCentiseconds(mode.run.timeMs));
+    expect(mode.hudModel().timeCs).toBe(123);
+    // exactly the allowed time is not over; one hundredth later is
+    mode.update(course.allowedTimeS - 1.239, { horse: start.next, prev: start.next }, host);
+    expect(mode.hudModel().overTime).toBe(false);
+    mode.update(0.0101, { horse: start.next, prev: start.next }, host);
     expect(mode.hudModel().overTime).toBe(true);
   });
 
@@ -140,6 +156,30 @@ describe('course mode', () => {
     expect(host.calls.rebuildIn).toHaveLength(1);
     expect(host.calls.rebuildIn[0][0]).toBe(id);
     expect(host.calls.feedback).toEqual([]);
+  });
+
+  it('cancels a pending unscored rebuild when the same element is knocked in a scored jump', () => {
+    const { mode, host } = setup();
+    const id = course.obstacles[0].elements[0].id;
+    // before the start the knockdown is unscored: a rebuild is scheduled
+    mode.onEvents([{ type: 'landed', elementId: id, dir: 1, knocked: true }], host);
+    expect(host.calls.rebuildIn).toHaveLength(1);
+    startRide(mode);
+    mode.onEvents([{ type: 'landed', elementId: id, dir: 1, knocked: true }], host);
+    expect(host.calls.cancelRebuild).toEqual([id]);
+    expect(host.calls.feedback).toContain('feedback.knockdown');
+  });
+
+  it('does not cancel rebuilds for clean or unscored landings', () => {
+    const { mode, host } = setup();
+    startRide(mode);
+    const [first, second] = [
+      course.obstacles[0].elements[0].id,
+      course.obstacles[1].elements[0].id,
+    ];
+    mode.onEvents([{ type: 'landed', elementId: first, dir: 1, knocked: false }], host);
+    mode.onEvents([{ type: 'landed', elementId: second, dir: -1, knocked: true }], host);
+    expect(host.calls.cancelRebuild).toEqual([]);
   });
 
   it('counts a refusal and gives feedback', () => {

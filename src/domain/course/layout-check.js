@@ -1,9 +1,10 @@
 // Geometric check of obstacle layouts (courses and free mode).
-// Used by the tests; pure, no three.js.
+// Used as a test oracle (courses.test.js, layout-check.test.js), not by the game itself; pure,
+// no three.js.
 import { ARENA, POLE_LENGTH, STAND_WIDTH } from '../sim/tuning.js';
 import { axisOf, toLocal } from '../sim/geometry.js';
 
-export const LAYOUT_LIMITS = Object.freeze({
+const LAYOUT_LIMITS = Object.freeze({
   approach: 14, // m of straight approach before the leading edge
   landing: 8, // m clear after landing (rear pole)
   corridorHalfWidth: POLE_LENGTH / 2 + 1,
@@ -20,7 +21,7 @@ function rect(cx, cz, u, halfAlong, halfAcross) {
   return { cx, cz, ux: u.x, uz: u.z, halfAlong, halfAcross };
 }
 
-export function rectCorners(r) {
+function rectCorners(r) {
   const vx = -r.uz;
   const vz = r.ux;
   const out = [];

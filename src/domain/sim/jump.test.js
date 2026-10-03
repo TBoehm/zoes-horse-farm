@@ -67,6 +67,24 @@ describe('Takeoff zone, reach, last takeoff point', () => {
     expect(zoneWindow(oxer85, TUNING)).toBeLessThan(0.12);
   });
 
+  it('the window narrows only above the tuning height reference', () => {
+    const raised = {
+      ...TUNING,
+      jump: { ...TUNING.jump, window: { ...TUNING.jump.window, heightRef: 0.6 } },
+    };
+    expect(zoneWindow(vertical60, raised)).toBeCloseTo(TUNING.jump.window.base, 9);
+    expect(zoneWindow(vertical80, raised)).toBeGreaterThan(zoneWindow(vertical80, TUNING));
+  });
+
+  it('the last takeoff point is capped by the tuning share of the near edge', () => {
+    const strict = {
+      ...TUNING,
+      jump: { ...TUNING.jump, lastPoint: { lead: 0, min: 0.1, maxShareOfNear: 0.5 } },
+    };
+    const z = zoneForElement(vertical80, 5.8, strict);
+    expect(z.lastPoint).toBeCloseTo(z.near * 0.5, 9);
+  });
+
   it('the zone adapts to speed (farther away and deeper at higher speed)', () => {
     const slow = zoneForElement(vertical80, 4.5, TUNING);
     const fast = zoneForElement(vertical80, 7, TUNING);

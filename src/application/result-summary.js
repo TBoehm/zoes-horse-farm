@@ -18,8 +18,12 @@ export function summarizeResult(store, { courseId, result, isNewBest, unlockedCo
     isNewBest: Boolean(isNewBest),
     unlockedCourse: unlockedCourse ?? null,
     rows: {
-      knockdowns: { count: f.knockdowns, points: f.knockdowns * KNOCKDOWN_FAULTS },
-      refusals: { count: f.refusals, points: f.refusals * REFUSAL_FAULTS },
+      knockdowns: {
+        count: f.knockdowns,
+        points: f.knockdowns * KNOCKDOWN_FAULTS,
+        each: KNOCKDOWN_FAULTS,
+      },
+      refusals: { count: f.refusals, points: f.refusals * REFUSAL_FAULTS, each: REFUSAL_FAULTS },
       timeFaults: f.timeFaults,
       total: f.total,
     },

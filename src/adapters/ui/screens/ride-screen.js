@@ -25,11 +25,10 @@ export function registerRideHud(id, factory) {
  * @param {{ rng: () => number }} deps random source, injected by the composition root
  */
 export function createRideScreen(ctx, params = {}, { rng }) {
-  const { app, store, inputMode, services, clock } = ctx;
+  const { app, store, settings, inputMode, services, clock } = ctx;
   // A locked course cannot be ridden (the course card is only disabled): back to the selection
   if (params.mode === 'course' && !canStart(store, params.courseId)) {
-    queueMicrotask(() => app.go('courseSelect'));
-    return { el: h('section', { class: 'ride-screen', hidden: true }), destroy() {} };
+    return { el: h('div'), redirect: { name: 'courseSelect' } };
   }
   const engine = getEngine(ctx);
   const { world, horse, cameraRig, governor } = engine;
@@ -71,7 +70,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
 
   // Session lines carry label keys; translate them here (the language may have changed)
   function applyLines(lines) {
-    world.setLines?.(
+    world.setLines(
       lines
         ? {
             ...lines,
@@ -111,7 +110,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   renderTexts();
   world.highlight(null);
   world.setAid(null);
-  world.setFinishMarked?.(false);
+  world.setFinishMarked(false);
 
   let feedbackTimer = 0;
 
@@ -150,7 +149,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     const view = session.view;
     applyLines(view.lines);
     renderHud(view.hud);
-    horse.setAppearance?.(store.get('horse'));
+    horse.setAppearance(store.get('horse'));
     placeHorse(view.horse);
     cameraRig.snap();
     governor.interrupt();
@@ -209,7 +208,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     }
     if (inp.camera) {
       const next = cameraRig.toggle();
-      store.update('settings', (s) => ({ ...s, camera: next }));
+      settings.setCamera(next);
     }
     if (execute(session.step(dt, inp).commands)) return;
 
@@ -223,16 +222,16 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     horse.update(dt, view.horse);
     placeHorse(view.horse);
     world.syncRails(view.rails, dt, view.fallDirs ?? undefined);
-    world.setShadowFocus?.(view.horse.x, view.horse.z);
+    world.setShadowFocus(view.horse.x, view.horse.z);
     world.highlight(view.highlight?.elementId ?? null, view.highlight?.number);
-    world.setFinishMarked?.(view.finishMarked);
+    world.setFinishMarked(view.finishMarked);
     world.setAid(view.aid);
     cameraRig.update(dt, view.horse, horse.earAnchor);
-    world.update?.(dt, engine.camera);
+    world.update(dt, engine.camera);
     governor.frame(rawDt, !document.hidden);
   }
 
-  cameraRig.setMode(store.get('settings').camera);
+  cameraRig.setMode(settings.get().camera);
   restart();
   engine.run(frame);
 
@@ -255,7 +254,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('keydown', onPauseKey);
       input.dispose();
-      session.dispose?.();
+      session.dispose();
       services.audio?.setPaused(false);
       if (services.ride?.session === session) delete services.ride;
     },

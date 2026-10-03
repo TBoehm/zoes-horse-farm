@@ -1,6 +1,7 @@
 // Save data in the browser (rules 44–47): save immediately, load robustly, preserve unknown data.
 import { createEmitter } from '../../shared/events.js';
-import { SAVE_VERSION, getSections, isPlainObject } from '../../application/save-schema.js';
+import { isPlainObject } from '../../shared/math.js';
+import { SAVE_VERSION, getSections } from '../../application/save-schema.js';
 
 export const SAVE_KEY = 'zoes-horse-farm.save';
 export const SESSION_NOTICE_KEY = 'zoes-horse-farm.saveNoticeShown';

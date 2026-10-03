@@ -1,9 +1,8 @@
 // Coat colours and head markings as pure data (sRGB 0..1). The shader (material.js) renders them.
 
-import { COATS, MARKINGS } from '../../../domain/horse/appearance.js';
+import { COATS, DEFAULT_APPEARANCE, MARKINGS } from '../../../domain/horse/appearance.js';
 
-export { COATS, MARKINGS };
-export const DEFAULT_APPEARANCE = Object.freeze({ coat: 'bay', marking: 'star' });
+export { COATS, DEFAULT_APPEARANCE, MARKINGS };
 
 const WHITE = [0.93, 0.92, 0.9];
 

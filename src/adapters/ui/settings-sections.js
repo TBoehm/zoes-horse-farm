@@ -7,8 +7,8 @@ registerSettingsSection({
   id: 'graphics',
   order: 20,
   render(ctx) {
-    const { t, store, services, inputMode } = ctx;
-    const s = store.get('settings');
+    const { t, settings, services, inputMode } = ctx;
+    const s = settings.get();
     return choiceGroup({
       name: 'graphics',
       label: t('settings.graphics'),
@@ -19,9 +19,9 @@ registerSettingsSection({
           // New pick that fits the device (rule 4)
           const engine = services.engine;
           const level = engine ? pickInitialLevel(deviceInfo(engine.renderer, inputMode)) : null;
-          store.update('settings', (x) => ({ ...x, graphicsAuto: true, graphicsLevel: level }));
+          settings.setGraphicsAuto(level);
         } else {
-          store.update('settings', (x) => ({ ...x, graphicsAuto: false, graphicsLevel: value }));
+          settings.setGraphicsLevel(value);
         }
       },
     });
@@ -32,15 +32,20 @@ registerSettingsSection({
   id: 'aid',
   order: 30,
   render(ctx) {
-    const { t, store, h } = ctx;
-    const s = store.get('settings');
-    const row = (key) =>
+    const { t, settings, h } = ctx;
+    const s = settings.get();
+    const row = (key, mode) =>
       toggleRow({
         name: key,
         label: t(`settings.${key}`),
         value: s[key],
-        onChange: (v) => store.update('settings', (x) => ({ ...x, [key]: v })),
+        onChange: (v) => settings.setAid(mode, v),
       });
-    return h('div', { class: 'settings-group' }, row('aidFree'), row('aidCourse'));
+    return h(
+      'div',
+      { class: 'settings-group' },
+      row('aidFree', 'free'),
+      row('aidCourse', 'course'),
+    );
   },
 });

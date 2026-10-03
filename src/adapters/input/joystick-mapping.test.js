@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { mapStick, readStickEvent, STICK_DEAD_ZONE } from './joystick-mapping.js';
+import { TUNING } from '../../domain/sim/tuning.js';
+import { mapStick, readStickEvent } from './joystick-mapping.js';
+
+const STICK_DEAD_ZONE = TUNING.control.stickDeadZone;
 
 const deg = (d) => (d * Math.PI) / 180;
 

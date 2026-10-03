@@ -1,6 +1,7 @@
 // Pure calculations for the 3D world (no three.js): obstacle layout, flags, falling poles,
 // take-off aid, lines, fence and environment planning. The three.js modules only use these.
 import { ARENA, POLE_LENGTH, STAND_WIDTH } from '../../domain/sim/tuning.js';
+import { clamp } from '../../shared/math.js';
 
 export const POLE_RADIUS = 0.05;
 export const POLE_GEOM_LENGTH = POLE_LENGTH - 0.02;
@@ -110,15 +111,15 @@ export function fallCurve(t) {
 
 /** Progress of both ends; lead = 0: end a falls first. */
 export function endProgress(t, lead = 0) {
-  const first = Math.min(1, Math.max(0, t / (1 - FALL_LAG)));
-  const second = Math.min(1, Math.max(0, (t - FALL_LAG) / (1 - FALL_LAG)));
+  const first = clamp(t / (1 - FALL_LAG), 0, 1);
+  const second = clamp((t - FALL_LAG) / (1 - FALL_LAG), 0, 1);
   return lead === 0 ? { a: first, b: second } : { a: second, b: first };
 }
 
 /** Progress of one end (a or b) without allocating; same values as endProgress. */
 export function endProgressOf(t, lead, isA) {
-  const first = Math.min(1, Math.max(0, t / (1 - FALL_LAG)));
-  const second = Math.min(1, Math.max(0, (t - FALL_LAG) / (1 - FALL_LAG)));
+  const first = clamp(t / (1 - FALL_LAG), 0, 1);
+  const second = clamp((t - FALL_LAG) / (1 - FALL_LAG), 0, 1);
   return (lead === 0) === isA ? first : second;
 }
 
@@ -225,7 +226,8 @@ export function linePosts(seg) {
 /** Signs for start/finish; if both lines coincide there is one shared sign. */
 export function planLines(lines) {
   if (!lines) return [];
-  const labels = { start: 'Start', finish: 'Finish', ...(lines.labels || {}) };
+  // The texts are translated by the caller (i18n); there is no built-in fallback text
+  const labels = { start: '', finish: '', ...(lines.labels || {}) };
   const s = lines.start && lineSegment(lines.start.a, lines.start.b);
   const f = lines.finish && lineSegment(lines.finish.a, lines.finish.b);
   const same =
@@ -316,7 +318,7 @@ export const SITE = Object.freeze({
 export const HILL_START = 90;
 
 const smooth = (x, a, b) => {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  const t = clamp((x - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
 };
 
@@ -376,7 +378,7 @@ export function scatter(rng, count, minR, maxR, margin = 0, accept = null) {
 
 /** Visible instances per quality level: mandatory instances + share of the rest. */
 export function instanceCount(total, priority, density) {
-  const prio = Math.min(total, Math.max(0, priority || 0));
-  const d = Math.min(1, Math.max(0, density));
+  const prio = clamp(priority || 0, 0, total);
+  const d = clamp(density, 0, 1);
   return Math.min(total, prio + Math.round((total - prio) * d));
 }

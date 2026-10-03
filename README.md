@@ -10,7 +10,7 @@ App-Icon (`public/icon.svg`, PNGs werden beim Build erzeugt).
 
 ## Entwicklung
 
-Voraussetzung: Node.js 22.
+Voraussetzung: Node.js 20 oder neuer (die CI nutzt Node.js 22).
 
 ```bash
 npm ci

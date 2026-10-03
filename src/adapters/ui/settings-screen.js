@@ -1,6 +1,7 @@
 // Settings with extensible sections. Feature areas register sections with
 // registerSettingsSection. params.fromPause: opened from the pause menu (rules 38, 48, 51).
-import { LANGS, setLang } from './i18n.js';
+import { LANGS } from '../../application/languages.js';
+import { setLang } from './i18n.js';
 import { h } from './dom.js';
 
 const sections = [];
@@ -14,7 +15,7 @@ export function registerSettingsSection(section) {
 }
 
 /** Choice group of large buttons (radio behaviour). */
-export function choiceGroup({ label, options, value, onChange, name }) {
+export function choiceGroup({ label, options, value, onChange, name, wide = false }) {
   const group = h('div', { class: 'choice-group', role: 'radiogroup', 'aria-label': label });
   const buttons = options.map((opt) =>
     h(
@@ -35,10 +36,10 @@ export function choiceGroup({ label, options, value, onChange, name }) {
   );
   const idx = (opt) => options.indexOf(opt);
   group.append(...buttons);
-  const wide = options.length > 3 ? ' setting-row-wide' : '';
+  const wideClass = wide || options.length > 3 ? ' setting-row-wide' : '';
   return h(
     'div',
-    { class: `setting-row${wide}` },
+    { class: `setting-row${wideClass}` },
     h('span', { class: 'setting-label' }, label),
     group,
   );
@@ -73,14 +74,15 @@ registerSettingsSection({
   id: 'language',
   order: 10,
   render(ctx) {
-    const { t, store } = ctx;
+    const { t, settings } = ctx;
     return choiceGroup({
       name: 'lang',
+      wide: true,
       label: t('settings.language'),
-      value: store.get('settings').lang,
+      value: settings.get().lang,
       options: LANGS.map((l) => ({ value: l, label: t(`lang.${l}`) })),
       onChange: (lang) => {
-        store.update('settings', (s) => ({ ...s, lang }));
+        settings.setLang(lang);
         setLang(lang);
       },
     });

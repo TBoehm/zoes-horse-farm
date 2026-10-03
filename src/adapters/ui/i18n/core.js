@@ -14,6 +14,9 @@ export default {
     'notice.no3d.title': 'Oh nein!',
     'notice.no3d.text': 'Dein Gerät oder Browser kann das Spiel leider nicht anzeigen.',
     'notice.no3d.hint': 'Probier es mit einem anderen Browser oder Gerät.',
+    'notice.error.title': 'Huch, da ist etwas schiefgelaufen!',
+    'notice.error.text': 'Das Spiel konnte leider nicht starten.',
+    'notice.error.hint': 'Lade die Seite bitte noch einmal neu.',
     'notice.save.text':
       'Dein Fortschritt wird gerade nicht gespeichert. Du kannst trotzdem spielen.',
   },
@@ -32,6 +35,9 @@ export default {
     'notice.no3d.title': 'Oh no!',
     'notice.no3d.text': 'Sorry, your device or browser cannot show the game.',
     'notice.no3d.hint': 'Try another browser or device.',
+    'notice.error.title': 'Oops, something went wrong!',
+    'notice.error.text': 'Sorry, the game could not start.',
+    'notice.error.hint': 'Please reload the page and try again.',
     'notice.save.text': 'Your progress is not being saved right now. You can still play.',
   },
 };

@@ -1,9 +1,10 @@
 // Save-game sections with field-by-field sanitizing (rule 47).
 // Invalid or missing fields → default value, readable fields stay, unknown fields are preserved.
 
-export const SAVE_VERSION = 1;
+import { isPlainObject } from '../shared/math.js';
+import { LANGS } from './languages.js';
 
-const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+export const SAVE_VERSION = 1;
 
 export const field = {
   enum: (values, fallback) => ({
@@ -53,8 +54,6 @@ export function addSettingsFields(fields) {
 }
 
 let settingsFields = {
-  lang: field.enum(['de', 'en'], (env) => env.defaultLang ?? 'en'),
+  lang: field.enum(LANGS, (env) => env.defaultLang ?? 'en'),
 };
 registerSection('settings', objectSection(settingsFields));
-
-export { isPlainObject };

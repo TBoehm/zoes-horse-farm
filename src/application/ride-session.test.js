@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRideSession } from './ride-session.js';
-import { createFreeMode, REBUILD_DELAY_S } from './modes/free-mode.js';
+import { createFreeMode } from './modes/free-mode.js';
 import { createCourseMode } from './modes/course-mode.js';
 import { FREE_LAYOUT } from '../domain/course/courses.js';
 import { COMBI_DISTANCE, TUNING, approachInfo, zoneForElement } from '../domain/sim/index.js';
@@ -109,6 +109,41 @@ describe('view', () => {
   });
 });
 
+describe('view reuse (no per-frame allocation)', () => {
+  it('returns the same view object on every read, with fresh content', () => {
+    const { session } = setup();
+    const first = session.view;
+    session.step(DT, { throttle: 1 });
+    expect(session.view).toBe(first);
+    expect(session.view.horse.speed).toBeGreaterThan(0);
+  });
+
+  it('reuses one aid object while the aid is shown and drops it with null when not', () => {
+    const aidOn = { current: true };
+    const mode = crossMode({
+      distance: 10,
+      aidTarget: () => (aidOn.current ? { elementId: 'c', dir: 1 } : null),
+    });
+    const { session } = setup({ mode });
+    const aid = session.view.aid;
+    expect(aid).not.toBeNull();
+    session.step(DT, { throttle: 1 });
+    expect(session.view.aid).toBe(aid);
+    aidOn.current = false;
+    expect(session.view.aid).toBeNull();
+    aidOn.current = true;
+    expect(session.view.aid).toMatchObject({ elementId: 'c', dir: 1 });
+  });
+
+  it('returns shared empty lists for steps without commands', () => {
+    const { session } = setup();
+    const a = session.step(DT, {});
+    const b = session.step(DT, {});
+    expect(a.commands).toHaveLength(0);
+    expect(a.commands).toBe(b.commands);
+  });
+});
+
 describe('step', () => {
   it('moves the horse with the input and returns sim events', () => {
     const { session } = setup();
@@ -177,7 +212,7 @@ describe('knockdown, feedback and rebuild timers', () => {
     const { session } = knockSetup();
     pressOnce(session, railDownIn);
     expect(session.view.rails.get('c')).toEqual([false]);
-    run(session, {}, { maxT: REBUILD_DELAY_S - 0.5 });
+    run(session, {}, { maxT: TUNING.rebuildDelayS - 0.5 });
     expect(session.view.rails.get('c')).toEqual([false]);
     run(session, {}, { maxT: 1 });
     expect(session.view.rails.get('c')).toEqual([true]);
@@ -214,6 +249,33 @@ describe('mode-requested immediate rebuild', () => {
   });
 });
 
+describe('mode-requested cancel of a pending rebuild', () => {
+  it('keeps the rails down when the mode cancels the delayed rebuild of an element', () => {
+    const z = zoneForElement(cross, TUNING.speeds.trotMax, TUNING);
+    const base = crossMode({ distance: z.reach - 0.05, speed: TUNING.speeds.trotMax });
+    const mode = {
+      ...base,
+      onEvents(events, host) {
+        for (const e of events) {
+          if (e.type === 'railDown') host.rebuildIn(e.elementId, 1);
+          if (e.type === 'landed') host.cancelRebuild(e.elementId);
+        }
+      },
+    };
+    const { session } = setup({ mode, rng: () => 0 });
+    pressOnce(session, railDownIn);
+    run(session, {}, { maxT: 3 });
+    expect(session.view.rails.get('c')).toEqual([false]);
+  });
+
+  it('ignores a cancel for an element without a pending rebuild', () => {
+    const base = crossMode({ distance: 10 });
+    const mode = { ...base, onEvents: (_e, host) => host.cancelRebuild('unknown') };
+    const { session } = setup({ mode });
+    expect(() => session.step(DT, { throttle: 1 })).not.toThrow();
+  });
+});
+
 describe('end of a gallop', () => {
   it('asks the input to end the gallop when the horse is stopped at the fence', () => {
     const z = zoneForElement(cross, TUNING.speeds.canterMin, TUNING);
@@ -229,6 +291,30 @@ describe('end of a gallop', () => {
     );
     expect(ofType(out.events, 'gallopEnded').length).toBeGreaterThan(0);
     expect(ofType(out.commands, 'endGallop')).toEqual([{ type: 'endGallop' }]);
+  });
+});
+
+describe('end of a gallop by a refusal at speed', () => {
+  it('refuses a canter that is too slow for the oxer: endGallop command and no gallop', () => {
+    const oxer = { id: 'o', kind: 'oxer', height: 0.85, spread: 0.7, x: 0, z: 0, rot: 0 };
+    const mode = crossMode({
+      distance: 9,
+      speed: TUNING.speeds.canterMin,
+      gallop: true,
+      obstacles: [{ number: null, elements: [oxer], directed: false }],
+    });
+    const { session } = setup({ mode });
+    // Shift stays held and the throttle is released: the canter stays at its minimum speed
+    const out = run(
+      session,
+      { gallop: true, throttle: 0 },
+      { maxT: 8, done: (o) => ofType(o.events, 'refusal').length > 0 },
+    );
+    expect(ofType(out.events, 'refusal')).toEqual([
+      expect.objectContaining({ elementId: 'o', reason: 'speed' }),
+    ]);
+    expect(ofType(out.commands, 'endGallop')).toEqual([{ type: 'endGallop' }]);
+    expect(session.view.horse.gallop).toBe(false);
   });
 });
 
@@ -430,8 +516,8 @@ describe('jump counting at session level (rule 40)', () => {
     expect(store.data.progress.jumps).toBe(0);
   });
 
-  it('asks for the end of the gallop after a refusal', () => {
-    // canter at the cross with a gait that is no problem, but too slow: refuse at the last point
+  it('asks for the end of the gallop after a refusal while walking', () => {
+    // walking at the cross: refuse at the last point (the canter variant is above)
     const mode = crossMode({ distance: 4, speed: 1.2 });
     const { session } = setup({ mode });
     const out = run(
@@ -691,8 +777,8 @@ describe('abort without credit (rules 40, 49)', () => {
     expect(store.data.progress.finishedRides).toBe(10);
     const rideEnd = ['clean', 'oxerPro', 'comboPro', 'allOpen', 'starRider', 'busy'];
     for (const id of rideEnd) expect(store.data.progress.badges).not.toHaveProperty(id);
-    expect(ofType([...commands, ...more], 'badges').flatMap((c) => c.ids)).not.toEqual(
-      expect.arrayContaining(['busy']),
-    );
+    // only instant badges may come up during an aborted ride
+    const announced = ofType([...commands, ...more], 'badges').flatMap((c) => c.ids);
+    for (const id of announced) expect(['firstJump', 'jumpMouse']).toContain(id);
   });
 });

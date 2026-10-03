@@ -3,6 +3,7 @@
 // adapter (adapters/ui/screens/courses/course-hud.js); texts are passed as keys.
 import { courseById } from '../../domain/course/courses.js';
 import { createCourseRun } from '../../domain/course/course-run.js';
+import { toCentiseconds } from '../../domain/course/scoring.js';
 
 /**
  * Pure strategy: knows the course run, but neither the store nor the progress. The ride session
@@ -13,6 +14,7 @@ export function createCourseMode(params = {}) {
   const course = courseById(params.courseId);
   let run = createCourseRun(course);
   let clockMs = 0;
+  const next = { x: 0, z: 0 }; // reused every frame
 
   return {
     id: 'course',
@@ -44,9 +46,10 @@ export function createCourseMode(params = {}) {
       return {
         phase: run.phase,
         timeMs: run.timeMs,
+        timeCs: toCentiseconds(run.timeMs),
         allowedS: course.allowedTimeS,
         faults: run.faults.total,
-        overTime: run.timeMs > course.allowedTimeS * 1000,
+        overTime: run.overTime,
         nextLabel: run.nextLabel,
         missingHint: run.missingHint ?? null,
       };
@@ -61,7 +64,11 @@ export function createCourseMode(params = {}) {
           const riding = run.phase === 'riding';
           const res = run.onLanded(e.elementId, e.dir, e.knocked);
           if (res?.scored) {
-            if (e.knocked) host.feedback('feedback.knockdown');
+            if (e.knocked) {
+              host.feedback('feedback.knockdown');
+              // the poles of a scored knockdown stay down: drop a pending unscored rebuild
+              host.cancelRebuild(e.elementId);
+            }
           } else if (riding) {
             // a jump that does not count (wrong obstacle or direction), during the ride only
             host.feedback('feedback.wrongObstacle');
@@ -82,7 +89,9 @@ export function createCourseMode(params = {}) {
      */
     update(dt, { horse, prev }, host) {
       if (run.phase === 'riding') clockMs += dt * 1000;
-      run.onLineCross(prev, { x: horse.x, z: horse.z }, clockMs);
+      next.x = horse.x;
+      next.z = horse.z;
+      run.onLineCross(prev, next, clockMs);
       run.update(horse, clockMs);
       for (const id of run.drainRebuilds()) host.rebuildNow(id);
       if (run.phase !== 'finished') return null;

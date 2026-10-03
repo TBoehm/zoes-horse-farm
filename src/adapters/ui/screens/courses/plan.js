@@ -16,6 +16,22 @@ export function crossingArrow(line, length = 4) {
   };
 }
 
+/**
+ * World positions (x, z) of the two flags of an obstacle element. Rule: red on the rider's right
+ * (+t, the cross axis of the element), white on the left, seen in jump direction.
+ * @param {{ x: number, z: number, rot: number }} el
+ * @returns {{ red: { x: number, z: number }, white: { x: number, z: number } }}
+ */
+export function flagPoints(el, margin = 0.4) {
+  const tx = -Math.cos(el.rot);
+  const tz = Math.sin(el.rot);
+  const d = POLE_LENGTH / 2 + margin;
+  return {
+    red: { x: el.x + tx * d, z: el.z + tz * d },
+    white: { x: el.x - tx * d, z: el.z - tz * d },
+  };
+}
+
 export function drawCoursePlan(canvas, course, { startLabel, finishLabel } = {}) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const cssW = canvas.clientWidth || 520;
@@ -122,9 +138,10 @@ function drawElement(ctx, P, scale, el) {
     ctx.lineTo(x2, y2);
     ctx.stroke();
   }
-  // Flags: red on the right (+t), white on the left (−t)
-  const flag = (sign, color) => {
-    const [fx, fy] = P(el.x + tx * (half + 0.4) * sign, el.z + tz * (half + 0.4) * sign);
+  // Flags: red on the right, white on the left (see flagPoints)
+  const flags = flagPoints(el);
+  const flag = (point, color) => {
+    const [fx, fy] = P(point.x, point.z);
     ctx.fillStyle = color;
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
@@ -133,8 +150,8 @@ function drawElement(ctx, P, scale, el) {
     ctx.fill();
     ctx.stroke();
   };
-  flag(1, '#e53935');
-  flag(-1, '#ffffff');
+  flag(flags.red, '#e53935');
+  flag(flags.white, '#ffffff');
 }
 
 function arrow(ctx, x0, y0, x1, y1, color) {

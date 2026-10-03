@@ -3,8 +3,8 @@ import { TUNING } from '../sim/tuning.js';
 
 export const KNOCKDOWN_FAULTS = 4;
 export const REFUSAL_FAULTS = 4;
-export const TIME_FAULT_STEP_CS = 400; // one fault per started 4 s
-export const ALLOWED_TIME_FACTOR = 1.5;
+const TIME_FAULT_STEP_CS = 400; // one fault per started 4 s
+const ALLOWED_TIME_FACTOR = 1.5;
 
 function mid(line) {
   return [(line.a[0] + line.b[0]) / 2, (line.a[1] + line.b[1]) / 2];
@@ -38,7 +38,7 @@ export function idealLineLength(course) {
 }
 
 /** Reference speed for the allowed time: medium canter, course 1 medium trot (rule 33). */
-export function referenceSpeed(course, tuning = TUNING) {
+function referenceSpeed(course, tuning = TUNING) {
   return course.pace === 'trot' ? tuning.speeds.trotMedium : tuning.speeds.canterMedium;
 }
 

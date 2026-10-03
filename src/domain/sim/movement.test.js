@@ -86,6 +86,59 @@ describe('Speed (rules 8–10)', () => {
     expect(sim.horse.gait).toBe('trot');
   });
 
+  it('gallop ended during the strike-off (below trotMin): back to trot, not to a walk', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: -30, heading: 0 });
+    sim.step(DT, { gallop: false });
+    drive(sim, { gallop: true }, { maxT: 0.3 });
+    expect(sim.horse.gallop).toBe(true);
+    expect(sim.horse.speed).toBeLessThan(S.trotMin);
+    sim.step(DT, { gallop: false });
+    expect(sim.horse.gallop).toBe(false);
+    drive(sim, {}, { maxT: 1 });
+    expect(sim.horse.gait).toBe('trot');
+    expect(sim.horse.speed).toBeCloseTo(S.trotMin, 6);
+  });
+
+  it('eases up to trot at the tuning rate (no jump in speed)', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: -30, heading: 0 });
+    sim.step(DT, { gallop: false });
+    drive(sim, { gallop: true }, { maxT: 0.2 });
+    const v0 = sim.horse.speed;
+    sim.step(DT, { gallop: false });
+    expect(sim.horse.speed - v0).toBeLessThanOrEqual(TUNING.control.gallopEndTrotUp * DT + 1e-9);
+    expect(sim.horse.speed).toBeGreaterThan(v0);
+  });
+
+  it('ending the gallop from a halt after a very short press still reaches trot', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: -30, heading: 0 });
+    sim.step(DT, { gallop: false });
+    sim.step(DT, { gallop: true });
+    sim.step(DT, { gallop: false });
+    drive(sim, {}, { maxT: 2 });
+    expect(sim.horse.gait).toBe('trot');
+  });
+
+  it('S after the strike-off gallop ends brakes to a halt instead of trotting on', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: -30, heading: 0 });
+    sim.step(DT, { gallop: false });
+    drive(sim, { gallop: true }, { maxT: 0.3 });
+    drive(sim, { throttle: -1 }, { maxT: 2 });
+    expect(sim.horse.speed).toBe(0);
+    expect(sim.horse.gait).toBe('halt');
+  });
+
+  it('a walking horse without gallop stays at its pace (no automatic trot)', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: -30, heading: 0, speed: 1.0 });
+    drive(sim, {}, { maxT: 2 });
+    expect(sim.horse.speed).toBeCloseTo(1.0, 9);
+    expect(sim.horse.gait).toBe('walk');
+  });
+
   it('after reset the horse only gallops after a fresh key press', () => {
     const sim = makeSim([]);
     sim.reset({ x: 0, z: 0, heading: 0 });
@@ -148,6 +201,17 @@ describe('Fencing (rule 24)', () => {
     expect(sim.horse.gait).toBe('halt');
     expect(sim.horse.gallop).toBe(false);
     expect(sim.horse.x).toBeLessThanOrEqual(ARENA.width / 2 - TUNING.horse.radius + 1e-9);
+  });
+
+  it('a fence stop during the strike-off stays a halt (no trot fall-back)', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: ARENA.length / 2 - TUNING.horse.radius - 0.1, heading: 0 });
+    sim.step(DT, { gallop: false });
+    drive(sim, { gallop: true }, { maxT: 0.5 });
+    expect(sim.horse.speed).toBe(0);
+    drive(sim, {}, { maxT: 1 });
+    expect(sim.horse.speed).toBe(0);
+    expect(sim.horse.gait).toBe('halt');
   });
 
   it('after a fence stop it only gallops after a fresh key press', () => {
