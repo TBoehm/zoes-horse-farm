@@ -64,27 +64,31 @@ erzwingt die Grenzen.
 
 | Pfad | Inhalt | Darf importieren |
 | --- | --- | --- |
-| `src/shared/` | reine Helfer ohne Seiteneffekte (Event-Emitter, Mathe) | nichts außer `shared` |
+| `src/shared/` | reine Helfer ohne Seiteneffekte (Event-Emitter, `math.js`: `clamp`, `isPlainObject`) | nichts außer `shared` |
 | `src/domain/sim/` | Reit-/Sprung-Simulation, Spielwerte (`tuning.js`), Geometrie, seedbarer Zufall | `domain`, `shared` |
 | `src/domain/course/` | Parcours-Layouts, freie Aufstellung, Ritt-Zustandsautomat, Wertung | `domain`, `shared` |
 | `src/domain/progress/` | Fortschritt, Bestleistung, Freischaltung, Auszeichnungen | `domain`, `shared` |
 | `src/domain/horse/` | Pferdename, Fellfarben, Abzeichen (Werte und Regeln) | `domain`, `shared` |
 | `src/application/save-schema.js` | Spielstand-Bereiche mit Bereinigung (Regel 47), Einstellungsfelder | `domain`, `shared` |
+| `src/application/languages.js` | `LANGS` – die angebotenen Sprachen (einzige Quelle für Schema und UI) | – |
+| `src/application/settings-service.js` | Anwendungsfälle für Einstellungen: der **einzige Schreiber** des Bereichs `settings` (siehe „Einstellungs-Dienst“) | `domain`, `application`, `shared` |
 | `src/application/settings-schema.js` | Registriert Einstellungsfelder (Grafik, Kamera, Hilfe, Klang) und die Bereiche `horse`/`progress` im Spielstand-Schema | `domain`, `application`, `shared` |
 | `src/application/ride-session.js` | Anwendungsfall „Ritt": Sim-Schritt, Ereignisse, Stangen-Wiederaufbau, Sprungzähler + Sofort-Auszeichnungen, Absprung-Hilfe, Rückmeldungen | `domain`, `application`, `shared` |
-| `src/application/modes/` | Modus-Strategien `free-mode.js`, `course-mode.js` (Uhr, HUD-Modell, Rittende → Fortschritt + Auszeichnungen) | `domain`, `application`, `shared` |
+| `src/application/modes/` | Modus-Strategien `free-mode.js`, `course-mode.js` (Uhr, HUD-Modell, Rittende-Ergebnis). **Modi speichern nichts**: nur die Ritt-Sitzung schreibt, und zwar über den Fortschritts-Dienst | `domain`, `application`, `shared` |
 | `src/application/progress-service.js` | Sprung zählen, Ritt abschließen, Fortschritt löschen (über Port `store`) | `domain`, `shared` |
 | `src/adapters/storage/` | localStorage-Store (implementiert Port `store`) | innen |
 | `src/adapters/platform/` | WebGL-Prüfung, Touch-Modus, Hochformat, PWA | innen |
 | `src/adapters/input/` | Tastatur, Touch-Bedienung (nipplejs) → `InputState` | innen |
 | `src/adapters/view3d/` | Renderer, Grafikstufen, Welt, Hindernisse, Pferd/Reiter, Kamera, Engine | innen |
 | `src/adapters/audio/` | WebAudio-Synthese | innen |
-| `src/adapters/ui/` | App-Rahmen, Bildschirme (`screens/`), Einstellungs-Abschnitte (`settings-sections.js`, `audio-wiring.js`), i18n + Texte, Styles | innen |
-| `src/main.js` | Composition Root | alles |
+| `src/adapters/ui/` | App-Rahmen, Bildschirme (`screens/`, z. B. `screens/ride-screen.js`), Einstellungs-Abschnitte (`settings-sections.js`, `audio-wiring.js`), i18n + Texte, Styles | innen |
+| `src/main.js` | Composition Root (verdrahtet Store, Einstellungs-Dienst, App, Bildschirme; Startfehler → allgemeine Fehlermeldung) | alles |
+| `tests/support/` | Test-Hilfen, die nie in den Produktions-Build gelangen: `sim-utils.js`, `test-ports.js` (Fake-Store/-Uhr), `test-host.js`, `autopilot.js` (+ Fahrbarkeits-Test). Vitest-Include und ESLint-Override sind dafür eingerichtet | alles |
 
 ### Ports (als Parameter injiziert)
 
 - `store`: `{ get(section), update(section, fn), onChange(section, fn) }` – Adapter: `adapters/storage`.
+  `update` gibt den **bereinigten** neuen Bereich zurück (nicht, was die Funktion geliefert hat).
 - `clock`: `{ nowIso() }` für Auszeichnungs-Datum; Zeit im Spiel kommt als `dt`.
 - `rng`: `() => number` in [0, 1) – Domain nutzt nie `Math.random()` direkt.
 - Die Ritt-Sitzung liefert Ereignisse/Kommandos (`endGallop`, `badgesAwarded`, `feedback`,
@@ -109,7 +113,35 @@ Weitere Application-Dienste: `progress-service.js` (recordJump, finishRide, rese
 `horse-service.js` (Name, Aussehen), `course-catalog.js` (Auswahl, Freischaltung),
 `badge-overview.js`, `result-summary.js`, `modes/index.js` (`createRideMode(params)`; Modi bekommen
 keinen Store, Fortschritt schreibt nur die Sitzung über den Fortschritts-Dienst).
-Pause, Kamera-Umschaltung, Auto-Pause und DOM bleiben im UI-Adapter (`adapters/ui/screens/ride`).
+Pause, Kamera-Umschaltung, Auto-Pause und DOM bleiben im UI-Adapter
+(`adapters/ui/screens/ride-screen.js`). `session.view` und `view.aid` sind **wiederverwendete
+Objekte** (kein Allokieren pro Frame): Felder lesen, die Objekte nicht über Frames speichern; leere
+`commands`/`events`-Arrays sind eingefroren (nie `push`). Der Modus bekommt einen `host`
+(`feedback`, `rebuildIn`, `rebuildNow`, `cancelRebuild`); ein gezählter Abwurf bricht einen noch
+ausstehenden unbewerteten 3-s-Wiederaufbau desselben Elements ab. Das HUD-Modell des Parcours ist
+`{ phase, timeMs, timeCs, allowedS, faults, overTime, nextLabel, missingHint }`; die Ergebnis-Zeilen
+(`result-summary.js`) liefern je Fehlerart `{ count, each, points }`. Das UI rechnet nichts davon nach.
+
+`services.ride` (`{ session, engine, screen }`, gesetzt vom Ritt-Bildschirm, beim Verlassen entfernt)
+ist **nur für den Test-Hook** (`adapters/platform/test-hooks.js`, nur mit `?testhooks`): er liest
+daraus einen Schnappschuss. Produktionscode liest es nicht.
+
+### Einstellungs-Dienst (application/settings-service.js)
+
+```js
+const settings = createSettingsService(store);   // in main.js einmal erzeugt, als ctx.settings verteilt
+settings.get()                    // gespeicherter Stand (bereinigte Kopie)
+settings.setLang('de'|'en')
+settings.setGraphicsAuto(deviceLevel|null)  // „Automatisch“ an, Stufe passend zum Gerät
+settings.setGraphicsLevel(level)            // manuelle Wahl, Automatik aus
+settings.setAutoLevel(level)                // Governor senkt die Stufe, Automatik bleibt an
+settings.setCamera('follow'|'rider')        // CAMERA_MODES in settings-schema.js
+settings.setAid('free'|'course', on)
+settings.setVolume('music'|'sfx', v) ; settings.setMuted('music'|'sfx', m)
+settings.onChange(fn) → unsubscribe
+```
+Kein Adapter ruft `store.update('settings', …)` direkt auf (Einstellungs-Bildschirm, Audio-
+Verdrahtung, Ritt-Bildschirm/Kamera, Vorstart-Hilfe-Schalter, Engine/Grafik-Governor).
 
 ## Schnittstellen
 
@@ -122,7 +154,9 @@ getLang(); setLang('de'|'en'); onLangChange(fn) → unsubscribe
 detectLang(navigatorLanguages) → 'de'|'en'
 ```
 Jeder Bereich registriert seine Texte in `src/adapters/ui/i18n/<bereich>.js` (Default-Export
-`{ de, en }`), importiert in `src/adapters/ui/i18n/index.js`. Ein Test prüft: gleiche Schlüssel in de und en.
+`{ de, en }`), importiert in `src/adapters/ui/i18n/index.js` (`STRING_AREAS`, `registerAllStrings()`).
+Ein Test liest `STRING_AREAS` und prüft: gleiche Schlüssel und Platzhalter in de und en, keine
+doppelten Schlüssel. Die Sprachliste `LANGS` kommt aus `application/languages.js`.
 
 ### Speicher (`src/adapters/storage/local-store.js`, `src/application/save-schema.js`)
 
@@ -142,7 +176,7 @@ API:
 ```js
 const store = createStore({ backend = localStorage, sessionBackend = sessionStorage });
 store.get('settings')                 // bereinigte Kopie (Defaults für Fehlendes/Ungültiges)
-store.update('settings', s => ({...s, lang: 'en'}))  // speichert sofort
+store.update('settings', s => ({...s, lang: 'en'}))  // speichert sofort, gibt den bereinigten Bereich zurück
 store.flush()                         // aktuellen Stand schreiben (erster Start)
 store.canSave                         // false, wenn Schreiben scheitert
 store.shouldShowSaveNotice()          // true höchstens einmal je Sitzung (sessionStorage)
@@ -160,18 +194,35 @@ unbekannte Felder bleiben). Neue Bereiche: neuen Sanitizer registrieren (`regist
 
 `InputState` je Frame: `{ steer: -1..1 (rechts +), throttle: -1..1 (W +), gallop: bool,
 jump: bool (Flanke: in diesem Frame gedrückt), pause: bool (Flanke), camera: bool (Flanke) }`.
-Tastatur: `gallop = shiftHeld && !shiftLatched`; `latchGallop()` setzt `shiftLatched` bis Shift
-losgelassen wird. Touch: Galopp-Umschalter; `latchGallop()` schaltet ihn aus.
+
+```js
+const input = createInput({ container, inputMode, isActive });  // isActive: false bei Pause/anderem Bildschirm
+input.poll()            // InputState (Tastatur + Touch zusammengeführt)
+input.endGallop()       // Spiel beendet den Galopp (Verweigerung, Zaun): Touch aus, Shift neu drücken
+input.resetTouchGallop()// nur der Touch-Galopp-Schalter aus (z. B. beim Verlassen des Rittes)
+input.clearEdges()      // Flanken (Sprung/Pause/Kamera) verwerfen, z. B. nach „Weiter“
+input.keyboard.latchGallop({ onNextShiftPress })  // Galopp sperren, bis Shift losgelassen ist;
+                        // mit onNextShiftPress zählt auch der nächste Shift-Druck nicht
+                        // (Moduswechsel durch Shift selbst, Regeln 9/11)
+input.keyboard          // createKeyboard(target, { isActive }): inaktiv → keine Tasten aufnehmen
+input.touch.setGallop(bool) // Galopp-Umschalter setzen (Touch)
+```
+Tastatur: `gallop = shiftHeld && !shiftLatched`. Ein fokussiertes Bedienelement (Button, Eingabefeld,
+Schieberegler) **behält seine Tasten** (Leertaste/Enter/Pfeile): die Tastatur ignoriert Ereignisse,
+deren Ziel ein solches Element ist. Touch: Galopp-Umschalter; Joystick-Totzone aus
+`TUNING.control.stickDeadZone`.
 
 ### Reit-Simulation (`src/domain/sim/`, rein, deterministisch mit injiziertem RNG)
 
 ```js
 const sim = createRidingSim({ obstacles, rules, rng = createRng(1), tuning = TUNING });
 sim.reset({ x, z, heading });           // Halt, kein Galopp
+sim.setObstacles(obstacles);            // Hindernisse austauschen (z. B. anderer Parcours)
+sim.elements                            // flache Liste aller Elemente der aktuellen Hindernisse
 const events = sim.step(dt, input);     // input = InputState
 sim.horse  // { x, z, heading, speed, gait: 'halt'|'walk'|'trot'|'canter', gallop,
            //   y, jump: null|{ phase: 'takeoff'|'flight'|'landing', progress 0..1, elementId },
-           //   hop: null|{ progress }, refusal: null|{ type: 'stop'|'runout', progress },
+           //   hop: null|{ progress }, refusal: null|{ type: 'stop'|'runout', elementId, progress },
            //   turnRate }
 sim.rails  // Map elementId → boolean[] (true = Stange liegt oben)
 sim.rebuild(elementId)                  // Stangen wieder aufbauen
@@ -188,7 +239,17 @@ Events (Array, je Step): `{type:'takeoff', elementId, dir, self, risk}`,
 (Sprung gezählt), `{type:'refusal', elementId, dir, reason:'gait'|'speed'|'angle'}`,
 `{type:'swerve', elementId}`, `{type:'hop'}`, `{type:'fenceStop'}`,
 `{type:'gallopEnded', reason:'refusal'|'fence'}`.
-Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven) nur in `src/domain/sim/tuning.js`.
+Weitere Regeln der Sim: Eine Leertaste kurz vor der Landung wird gepuffert und wirkt nach der
+Landung auf das nächste Element in Reichweite (Kombination, Teil b); sie wird nie zu einem Hop.
+Der Aufprall auf Ständer/Hindernis ohne Sprung lässt das Pferd seitlich ausweichen (`swerve`) bei
+**jeder** Geschwindigkeit ab der Halt-Schwelle (`speeds.haltBelow`), also auch im Schritt. Endet der
+Galopp unter `trotMin` (Absprung-Anlauf), beschleunigt das Pferd mit `control.gallopEndTrotUp`
+bis in den Arbeitstrab statt in den Schritt zu fallen; Zaun/Verweigerung halten an.
+Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven, Wiederaufbau-Verzögerung `rebuildDelayS`,
+Hinweis-Dauer `missingHintS`, `control.stickDeadZone`) nur in `src/domain/sim/tuning.js`;
+Regel-Konstanten (Fehlerpunkte, Zeitfehler-Schritt, Sterne, Auszeichnungs-Schwellen) bleiben in
+ihren Domain-Modulen. Die Governor-Defaults (`GOVERNOR_DEFAULTS` in `view3d/quality.js`) sind
+Regel-4-Werte und bleiben dort.
 
 ### Parcours (`src/domain/course/`, rein)
 
@@ -205,7 +266,7 @@ run.onLineCross(prev, next, timeMs)        // Start-/Ziellinie mit Richtung
 run.onLanded(elementId, dir, knocked)      // → { scored, rebuildAfterS: 3|null }
 run.onRefusal(elementId, dir)
 run.update(horse, timeMs)                  // Kombination-Abwenden, Zeit
-run.faults → { knockdowns, refusals, time, total } ; run.timeMs ; run.result (bei finished)
+run.faults → { knockdowns, refusals, timeFaults, total } ; run.timeMs ; run.overTime ; run.result (bei finished)
 run.missingHint                            // Nummer des fehlenden Hindernisses (Regel 30) oder null
 run.drainRebuilds() → elementIds           // sofort wieder aufzubauen (Kombination neuer Anlauf)
 ```
@@ -215,17 +276,29 @@ run.drainRebuilds() → elementIds           // sofort wieder aufzubauen (Kombin
 ```js
 const world = createWorld(renderer, { quality });  // Szene, Licht, Himmel, Reitplatz, Umgebung
 world.setObstacles(obstacles, { flags: bool });     // baut Meshes
-world.syncRails(sim.rails, dt)                      // animiert fallende/aufgebaute Stangen
+world.syncRails(rails, dt, fallDirs)                // animiert fallende/aufgebaute Stangen;
+                                                    // fallDirs: Map elementId → ±1 (Fallrichtung)
 world.highlight(elementIdOrNull, number)            // Hervorhebung + Nummer
 world.setAid(null | { elementId, dir, zone })       // Absprung-Hilfe
+world.setLines(null | { start, finish, labels: { start, finish } })  // Start-/Ziellinie; Texte vom Aufrufer übersetzt
 world.setFinishMarked(bool)
+world.setShadowFocus(x, z)                          // Schatten folgt dem Pferd
 world.setQuality('low'|'medium'|'high')
-const horse = createHorse({ coat, marking });       // THREE.Group, schaut nach +Z
+world.update(dt, camera)                            // Himmel, Umgebung, Ringe, Linien (je Frame)
+world.dispose()
+const horse = createHorse({ coat, marking, quality });  // → { object, earAnchor, ... }
+horse.object                                         // THREE.Group, schaut nach +Z
 horse.update(dt, sim.horse)                          // Gangart-/Sprung-Animation
 horse.setAppearance({ coat, marking })
+horse.setQuality(level)
 horse.earAnchor                                      // Object3D für Reiter-Sicht
-horse.onFootfall = (gait) => {}                      // für Hufschlag
+horse.onFootfall = (gait, leg) => {}                 // für Hufschlag
+horse.dispose()
 ```
+Die öffentliche Pferd-API enthält keine interne Bewegungs-Zustandsstruktur (nur über Tests der
+reinen Module `motion.js`, `gaits.js` erreichbar). Die Geschwindigkeitsschwellen der Gangarten
+(`view3d/horse/gaits.js`) werden aus `TUNING.speeds` abgeleitet, nicht kopiert; die Standard-Optik
+(`DEFAULT_APPEARANCE`) kommt aus `domain/horse/appearance.js`.
 
 ### Audio (`src/adapters/audio/`)
 
