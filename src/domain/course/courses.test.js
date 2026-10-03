@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ARENA, COMBI_DISTANCE } from '../sim/tuning.js';
 import { axisOf, toLocal } from '../sim/geometry.js';
-import { COURSES, FREE_LAYOUT, relatedDistance } from './courses.js';
+import { COURSES, FREE_LAYOUT, courseById, relatedDistance } from './courses.js';
 import { checkLayout, corridorOf, footprint, rectsOverlap } from './layout-check.js';
 
 const elementsOf = (layout) => layout.obstacles.flatMap((o) => o.elements);
@@ -234,5 +234,18 @@ describe('Regel 41: freier Modus', () => {
     expect(Math.abs(p.x)).toBeLessThanOrEqual(ARENA.width / 2 - 4);
     expect(Math.abs(p.z)).toBeLessThanOrEqual(ARENA.length / 2 - 4);
     expect(axisOf({ rot: p.heading }).z).toBeCloseTo(1, 9);
+  });
+});
+
+describe('courseById', () => {
+  it('finds a course by number or numeric string', () => {
+    expect(courseById(3)).toBe(COURSES[2]);
+    expect(courseById('2')).toBe(COURSES[1]);
+  });
+
+  it('falls back to the first course for unknown ids', () => {
+    expect(courseById(99)).toBe(COURSES[0]);
+    expect(courseById(undefined)).toBe(COURSES[0]);
+    expect(courseById('x')).toBe(COURSES[0]);
   });
 });

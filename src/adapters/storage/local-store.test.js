@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createStore, SAVE_KEY } from './storage.js';
-import { field, objectSection, registerSection } from './save-schema.js';
+import { createStore, SAVE_KEY } from './local-store.js';
+import { field, objectSection, registerSection } from '../../application/save-schema.js';
 
 function memoryStorage(initial = {}) {
   const map = new Map(Object.entries(initial));

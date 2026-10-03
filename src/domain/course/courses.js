@@ -262,6 +262,11 @@ export const COURSES = [
   }),
 ];
 
+/** The course with the given id (number or numeric string); falls back to the first course. */
+export function courseById(id) {
+  return COURSES.find((c) => c.id === Number(id)) ?? COURSES[0];
+}
+
 // Freier Modus: ungerichtet, ohne Nummern; jede Linie aus beiden Richtungen anzureiten,
 // an den Querseiten und zwischen den Linien Platz zum Wenden
 export const FREE_LAYOUT = {

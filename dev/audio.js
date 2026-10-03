@@ -1,5 +1,5 @@
 // Demo für src/audio (nur Entwicklung, nicht ausgeliefert).
-import { createAudio } from '../src/audio/index.js';
+import { createAudio } from '../src/adapters/audio/index.js';
 
 const audio = createAudio({ musicVolume: 0.5, musicMuted: false, sfxVolume: 0.5, sfxMuted: false });
 audio.installUnlock(window);

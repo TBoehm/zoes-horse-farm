@@ -1,6 +1,6 @@
 // Einstellungen mit erweiterbaren Abschnitten. Bereiche melden Abschnitte mit
 // registerSettingsSection an. params.fromPause: aus dem Pausemenü geöffnet (Regeln 38, 48, 51).
-import { LANGS, setLang } from '../core/i18n.js';
+import { LANGS, setLang } from './i18n.js';
 import { h } from './dom.js';
 
 const sections = [];

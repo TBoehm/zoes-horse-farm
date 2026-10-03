@@ -1,6 +1,6 @@
 // Pure calculations for the 3D world (no three.js): obstacle layout, flags, falling poles,
 // take-off aid, lines, fence and environment planning. The three.js modules only use these.
-import { ARENA, POLE_LENGTH, STAND_WIDTH } from '../sim/tuning.js';
+import { ARENA, POLE_LENGTH, STAND_WIDTH } from '../../domain/sim/tuning.js';
 
 export const POLE_RADIUS = 0.05;
 export const POLE_GEOM_LENGTH = POLE_LENGTH - 0.02;

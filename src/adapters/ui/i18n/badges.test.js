@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BADGES } from './badges.js';
-import strings from './strings.js';
+import { BADGES } from '../../../domain/progress/badges.js';
+import strings from './badges.js';
 
 describe('Auszeichnungs-Texte', () => {
   it('de und en haben dieselben Schlüssel', () => {

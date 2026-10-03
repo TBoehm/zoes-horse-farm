@@ -1,13 +1,12 @@
 // Parcours-Auswahl, Vorstart-Karte und Ergebnis (Regeln 26, 35, 55).
-import { getLang } from '../core/i18n.js';
-import { toggleRow } from '../app/settings-screen.js';
-import { COURSES } from '../game/course/courses.js';
-import { displayName } from '../profile/horse-name.js';
-import { BADGES } from '../progress/badges.js';
+import { getLang } from '../../i18n.js';
+import { toggleRow } from '../../settings-screen.js';
+import { COURSES, courseById } from '../../../../domain/course/courses.js';
+import { displayName } from '../../../../domain/horse/horse-name.js';
+import { BADGES } from '../../../../domain/progress/badges.js';
 import { badgeEmblem } from '../profile/badges-screen.js';
 import { drawCoursePlan } from './plan.js';
 import { formatCs } from './format.js';
-import { courseById } from './course-mode.js';
 
 function stars(h, count, label) {
   return h(

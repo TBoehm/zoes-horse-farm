@@ -1,8 +1,8 @@
 // Touch-Bedienung (Regel 10): Joystick links, „Galopp" (Umschalter) und „Springen" rechts,
 // „Pause" und „Kamera" oben rechts. Alle Elemente mindestens 44×44 px.
 import nipplejs from 'nipplejs';
-import { onLangChange, t } from '../../core/i18n.js';
-import { h } from '../../app/dom.js';
+import { onLangChange, t } from '../ui/i18n.js';
+import { h } from '../ui/dom.js';
 
 const DEAD_ZONE = 0.12;
 

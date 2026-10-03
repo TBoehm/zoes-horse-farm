@@ -1,6 +1,7 @@
 // Reit-Simulation (Vertrag: docs/specs/springreiten-trainer/architecture.md, „Reit-Simulation").
 // Rein und deterministisch: alle Zufallszüge laufen über das injizierte rng.
 import { TUNING } from './tuning.js';
+import { createRng } from './rng.js';
 import {
   approachInfo,
   axisOf,
@@ -63,7 +64,9 @@ function rayHitsBox(a, c, da, dc, halfA, halfC) {
 export function createRidingSim({
   obstacles = [],
   rules = ALWAYS_REFUSE,
-  rng = Math.random,
+  // Default is a fixed-seed generator: the domain never reads Math.random itself; the caller
+  // (composition root / ride screen) injects the real random source.
+  rng = createRng(1),
   tuning = TUNING,
 } = {}) {
   const T = tuning;

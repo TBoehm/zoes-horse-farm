@@ -1,5 +1,5 @@
 // Namensfrage beim ersten Start (Regel 43). Erscheint bei jedem Start, bis beantwortet/übersprungen.
-import { cleanName, NAME_MAX } from './horse-name.js';
+import { cleanName, NAME_MAX } from '../../../../domain/horse/horse-name.js';
 
 export function createNamePromptScreen(ctx, params = {}) {
   const { t, h, store, app } = ctx;

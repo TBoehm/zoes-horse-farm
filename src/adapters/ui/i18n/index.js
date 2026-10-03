@@ -1,11 +1,11 @@
 // Registriert die Texte aller Bereiche.
-import { registerStrings } from '../core/i18n.js';
+import { registerStrings } from '../i18n.js';
 import core from './core.js';
 import riding from './riding.js';
-import profile from '../profile/profile-strings.js';
-import badges from '../progress/strings.js';
-import courses from '../course-ui/course-strings.js';
-import audio from '../audio/audio-strings.js';
+import profile from './profile.js';
+import badges from './badges.js';
+import courses from './courses.js';
+import audio from './audio.js';
 
 export function registerAllStrings() {
   registerStrings(core);

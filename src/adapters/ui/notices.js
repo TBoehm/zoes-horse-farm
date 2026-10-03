@@ -1,6 +1,6 @@
 // Hinweise: „Gerät drehen" (Regel 12), „Kein 3D" (Regel 7), „Speichern nicht möglich" (Regel 46).
-import { onLangChange, t } from '../core/i18n.js';
-import { isPortrait } from '../core/input-mode.js';
+import { onLangChange, t } from './i18n.js';
+import { isPortrait } from '../platform/input-mode.js';
 import { h, clear } from './dom.js';
 
 export function renderNo3dNotice(root) {

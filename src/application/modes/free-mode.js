@@ -1,6 +1,6 @@
 // Freier Modus (Regel 41): feste Aufstellung, keine Wertung, Rückmeldung bei Abwurf/Verweigerung,
 // Stangen werden nach etwa 3 s wieder aufgebaut, beide Sprungrichtungen gültig.
-import { FREE_LAYOUT } from '../course/courses.js';
+import { FREE_LAYOUT } from '../../domain/course/courses.js';
 
 export const REBUILD_DELAY_S = 3;
 
@@ -12,6 +12,7 @@ export function createFreeMode(ctx) {
     flags: false,
     lines: null,
     quitLabelKey: 'pause.toMenu',
+    quitScreen: 'menu',
     rules: { canRefuse: () => true },
     startPose() {
       return FREE_LAYOUT.startPose;
@@ -29,9 +30,6 @@ export function createFreeMode(ctx) {
       if (!store.get('settings').aidFree) return null;
       const a = api.sim.approach;
       return a ? { elementId: a.elementId, dir: a.dir } : null;
-    },
-    quit(app) {
-      app.go('menu');
     },
   };
 }

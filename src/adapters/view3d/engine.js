@@ -1,10 +1,10 @@
 // 3D-Engine: ein Renderer, eine Welt, ein Pferd mit Reiter, eine Kamera – über alle Ritte geteilt.
 import * as THREE from 'three';
-import { h } from '../app/dom.js';
-import { createRenderer, resizeRenderer, setMaxPixelRatio } from './view/renderer.js';
-import { createQualityGovernor, pickInitialLevel, QUALITY_PRESETS } from './view/quality.js';
-import { createWorld } from './view/world.js';
-import { createHorse } from './view/horse/index.js';
+import { h } from '../ui/dom.js';
+import { createRenderer, resizeRenderer, setMaxPixelRatio } from './renderer.js';
+import { createQualityGovernor, pickInitialLevel, QUALITY_PRESETS } from './quality.js';
+import { createWorld } from './world.js';
+import { createHorse } from '../../game/view/horse/index.js';
 import { createCameraRig } from './camera.js';
 
 function rendererString(renderer) {

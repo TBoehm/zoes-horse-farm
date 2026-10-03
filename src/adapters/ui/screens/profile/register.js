@@ -1,11 +1,11 @@
 // Anmeldung von „Mein Pferd", „Auszeichnungen", Namensfrage und „Fortschritt löschen" (SRT-005).
-import { registerMenuEntry, registerMenuHeader } from '../app/menu.js';
-import { registerSettingsSection } from '../app/settings-screen.js';
+import { registerMenuEntry, registerMenuHeader } from '../../menu.js';
+import { registerSettingsSection } from '../../settings-screen.js';
 import { createBadgesScreen } from './badges-screen.js';
 import { createMyHorseScreen } from './my-horse-screen.js';
 import { createNamePromptScreen } from './name-prompt.js';
 import { renderResetSection } from './reset-section.js';
-import { displayName } from './horse-name.js';
+import { displayName } from '../../../../domain/horse/horse-name.js';
 
 export function registerProfile(app) {
   app.register('namePrompt', createNamePromptScreen);

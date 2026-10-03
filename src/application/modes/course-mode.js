@@ -1,65 +1,27 @@
-// Parcours-Modus für den Reit-Bildschirm (SRT-004): Vorstart, Ritt, Wertung, Rittende.
-import { getLang, t } from '../core/i18n.js';
-import { h } from '../app/dom.js';
-import { COURSES } from '../game/course/courses.js';
-import { createCourseRun } from '../game/course/course-run.js';
-import { applyFinishedRide } from '../progress/progress.js';
-import { checkRideEndBadges } from '../progress/badges.js';
-import { formatSeconds } from './format.js';
+// Course mode for the ride screen (SRT-004): prestart, ride, scoring, end of ride.
+// No DOM and no i18n here: the HUD is exposed as plain data (hudModel) and rendered by the UI
+// adapter (adapters/ui/screens/courses/course-hud.js); texts are passed as keys.
+import { courseById } from '../../domain/course/courses.js';
+import { createCourseRun } from '../../domain/course/course-run.js';
+import { applyFinishedRide } from '../../domain/progress/progress.js';
+import { checkRideEndBadges } from '../../domain/progress/badges.js';
 
 export const WRONG_REBUILD_S = 3;
 
-export function courseById(id) {
-  return COURSES.find((c) => c.id === Number(id)) ?? COURSES[0];
-}
-
+/**
+ * @param {{ store: object, clock: { nowIso(): string } }} ctx ports: save store and clock
+ * @param {{ courseId?: number|string }} params
+ */
 export function createCourseMode(ctx, params) {
-  const { store, services } = ctx;
+  const { store, clock } = ctx;
   const course = courseById(params.courseId);
   let run = createCourseRun(course);
   let clockMs = 0;
   let missingTimer = 0;
 
-  const chip = (field) => {
-    const label = h('small', {});
-    const value = h('span', { dataset: { hud: field } });
-    return {
-      el: h('div', { class: 'hud-chip', dataset: { chip: field } }, label, value),
-      label,
-      value,
-    };
-  };
-  const time = chip('time');
-  const allowed = chip('allowed');
-  const faults = chip('faults');
-  const next = chip('next');
-  const notice = h('div', { class: 'hud-chip hud-notice', dataset: { hud: 'notice' } });
-  const hud = h('div', { class: 'hud-row' }, time.el, allowed.el, faults.el, next.el, notice);
-
-  function renderHud() {
-    const lang = getLang();
-    const riding = run.phase !== 'prestart';
-    time.value.textContent = `${formatSeconds(Math.floor(run.timeMs / 10), lang)} s`;
-    allowed.value.textContent = `${course.allowedTimeS} s`;
-    faults.value.textContent = String(run.faults.total);
-    next.value.textContent = run.nextLabel === 'finish' ? t('hud.finish') : String(run.nextLabel);
-    time.el.hidden = !riding;
-    faults.el.hidden = !riding;
-    time.el.classList.toggle('is-warning', run.timeMs > course.allowedTimeS * 1000);
-    if (run.phase === 'prestart') {
-      notice.textContent = t('ride.prestartHint');
-      notice.hidden = false;
-    } else if (run.missingHint !== null && run.missingHint !== undefined) {
-      notice.textContent = t('hud.missing', { n: run.missingHint });
-      notice.hidden = false;
-    } else {
-      notice.hidden = true;
-    }
-  }
-
   function finish(api) {
     const result = run.result;
-    const nowIso = new Date().toISOString();
+    const nowIso = clock.nowIso();
     let summary = null;
     store.update('progress', (p) => {
       const applied = applyFinishedRide(p, result);
@@ -67,14 +29,16 @@ export function createCourseMode(ctx, params) {
       summary = { ...applied, awarded: badges.awarded };
       return badges.progress;
     });
-    api.input.resetTouchGallop();
-    services.audio?.sfx.finishSignal();
-    api.app.go('results', {
-      courseId: course.id,
-      result,
-      isNewBest: summary.isNewBest,
-      unlockedCourse: summary.unlockedCourse,
-      awarded: summary.awarded,
+    // The host resets the touch gallop, plays the finish signal and opens the results screen.
+    api.finish({
+      screen: 'results',
+      params: {
+        courseId: course.id,
+        result,
+        isNewBest: summary.isNewBest,
+        unlockedCourse: summary.unlockedCourse,
+        awarded: summary.awarded,
+      },
     });
   }
 
@@ -83,31 +47,34 @@ export function createCourseMode(ctx, params) {
     course,
     obstacles: course.obstacles,
     flags: true,
+    /** Start/finish lines; the host translates the label keys. */
     get lines() {
       return {
         start: course.start,
         finish: course.finish,
-        labels: { start: t('prestart.legendStart'), finish: t('prestart.legendFinish') },
+        labelKeys: { start: 'prestart.legendStart', finish: 'prestart.legendFinish' },
       };
     },
-    hud,
     quitLabelKey: 'pause.toSelect',
-    // Delegation, weil „Neu starten" einen neuen Ritt erzeugt
+    quitScreen: 'courseSelect',
+    // Delegation, because "restart" creates a new run
     rules: { canRefuse: (id, dir) => run.rules.canRefuse(id, dir) },
     startPose: () => course.startPose,
-    renderTexts() {
-      time.label.textContent = t('hud.time');
-      allowed.label.textContent = t('hud.allowed');
-      faults.label.textContent = t('hud.faults');
-      next.label.textContent = t('hud.next');
-      renderHud();
+    /** Plain-data HUD model for the UI adapter. */
+    hudModel() {
+      return {
+        phase: run.phase,
+        timeMs: run.timeMs,
+        allowedS: course.allowedTimeS,
+        faults: run.faults.total,
+        nextLabel: run.nextLabel,
+        missingHint: run.missingHint ?? null,
+      };
     },
-    onRestart(api) {
+    onRestart() {
       run = createCourseRun(course);
       clockMs = 0;
       missingTimer = 0;
-      api.world.setLines?.(this.lines);
-      renderHud();
     },
     onEvents(events, api) {
       for (const e of events) {
@@ -134,16 +101,12 @@ export function createCourseMode(ctx, params) {
       const hl = run.highlight;
       api.world.highlight(hl?.elementId ?? null, hl?.number);
       api.world.setFinishMarked?.(Boolean(run.finishMarked));
-      renderHud();
       if (run.phase === 'finished') finish(api);
     },
     aidTarget() {
       if (!store.get('settings').aidCourse) return null;
       const cur = run.current;
       return cur ? { elementId: cur.elementId, dir: 1 } : null;
-    },
-    quit(app) {
-      app.go('courseSelect');
     },
     get run() {
       return run;

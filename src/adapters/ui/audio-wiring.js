@@ -1,14 +1,6 @@
-// Klang einbinden (SRT-006): Lautstärken speichern, Musik je Bildschirm, Hintergrund stumm.
-import { addSettingsFields, field } from '../core/save-schema.js';
-import { registerSettingsSection, toggleRow } from '../app/settings-screen.js';
-import { createAudio } from './index.js';
-
-addSettingsFields({
-  musicVolume: field.number(0, 1, 0.5),
-  musicMuted: field.bool(false),
-  sfxVolume: field.number(0, 1, 0.5),
-  sfxMuted: field.bool(false),
-});
+// Sound wiring (SRT-006): store volumes, music per screen, mute in the background.
+import { registerSettingsSection, toggleRow } from './settings-screen.js';
+import { createAudio } from '../audio/index.js';
 
 function volumeRow(ctx, channel) {
   const { t, h, store } = ctx;
@@ -30,7 +22,7 @@ function volumeRow(ctx, channel) {
   const mute = toggleRow({
     name: muteKey,
     label: t('settings.sound'),
-    // Schalter zeigt „Ton an"; Stumm = aus (Lautstärke bleibt erhalten, Regel 52)
+    // The switch shows "sound on"; muted = off (volume is kept, rule 52)
     value: !s[muteKey],
     onChange: (on) => store.update('settings', (x) => ({ ...x, [muteKey]: !on })),
   });

@@ -1,7 +1,7 @@
 // Obstacle meshes: stands, striped poles (instanced, visibly falling), fillers, direction flags,
 // number boards and the highlight of the obstacle that is due next.
 import * as THREE from 'three';
-import { STAND_WIDTH } from '../sim/tuning.js';
+import { STAND_WIDTH } from '../../domain/sim/tuning.js';
 import {
   createGeometryBuilder,
   boxOnGround,

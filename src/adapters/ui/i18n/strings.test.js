@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { _dictionaries } from '../core/i18n.js';
+import { _dictionaries } from '../i18n.js';
 import { registerAllStrings } from './index.js';
 
 describe('Texte (Regel 6)', () => {

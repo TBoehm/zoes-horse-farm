@@ -1,7 +1,7 @@
 // Kurze Einblendung sofort vergebener Auszeichnungen, ohne das Spiel zu unterbrechen (Regel 49).
-import { t } from '../core/i18n.js';
-import { h } from '../app/dom.js';
-import { BADGES } from '../progress/badges.js';
+import { t } from '../../i18n.js';
+import { h } from '../../dom.js';
+import { BADGES } from '../../../../domain/progress/badges.js';
 import { badgeEmblem } from './badges-screen.js';
 
 export function showBadgeToast(layer, badgeId, durationMs = 3200) {

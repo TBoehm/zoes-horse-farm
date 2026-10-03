@@ -1,5 +1,5 @@
 // Draufsicht-Plan eines Parcours auf einem Canvas (Vorstart-Karte, Regeln 26, 28).
-import { ARENA, POLE_LENGTH } from '../game/sim/tuning.js';
+import { ARENA, POLE_LENGTH } from '../../../../domain/sim/tuning.js';
 
 export function drawCoursePlan(canvas, course, { startLabel, finishLabel } = {}) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -48,7 +48,7 @@ export function drawCoursePlan(canvas, course, { startLabel, finishLabel } = {})
   if (course.finish) line(course.finish, '#b3261e', finishLabel);
 
   for (const obstacle of course.obstacles) {
-    obstacle.elements.forEach((el, i) => drawElement(ctx, P, scale, el));
+    obstacle.elements.forEach((el) => drawElement(ctx, P, scale, el));
     const first = obstacle.elements[0];
     const last = obstacle.elements[obstacle.elements.length - 1];
     const cx = (first.x + last.x) / 2;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { POLE_LENGTH, ARENA } from '../sim/tuning.js';
-import { crossAxisOf } from '../sim/geometry.js';
+import { POLE_LENGTH, ARENA } from '../../domain/sim/tuning.js';
+import { crossAxisOf } from '../../domain/sim/geometry.js';
 import {
   axesOf,
   flagSides,

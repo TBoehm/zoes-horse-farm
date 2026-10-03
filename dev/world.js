@@ -1,10 +1,10 @@
 // 3D world demo (not shipped): npx vite → /dev/world.html
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { createRenderer, resizeRenderer } from '../src/game/view/renderer.js';
-import { createWorld } from '../src/game/view/world.js';
-import { pickInitialLevel } from '../src/game/view/quality.js';
-import { COMBI_DISTANCE } from '../src/game/sim/tuning.js';
+import { createRenderer, resizeRenderer } from '../src/adapters/view3d/renderer.js';
+import { createWorld } from '../src/adapters/view3d/world.js';
+import { pickInitialLevel } from '../src/adapters/view3d/quality.js';
+import { COMBI_DISTANCE } from '../src/domain/sim/tuning.js';
 
 const params = new URLSearchParams(location.search);
 const canvas = document.getElementById('c');

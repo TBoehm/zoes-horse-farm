@@ -1,13 +1,13 @@
 // Reit-Bildschirm: Spielschleife, Eingabe, Pause, HUD und Rückmeldungen (SRT-002 bis SRT-004).
-import { onLangChange, t } from '../core/i18n.js';
-import { h } from '../app/dom.js';
-import { getEngine } from './engine.js';
-import { createInput } from './input/input.js';
-import { createRidingSim } from './sim/riding-sim.js';
-import { createFreeMode } from './modes/free-mode.js';
-import { addJump } from '../progress/progress.js';
-import { checkInstantBadges } from '../progress/badges.js';
-import { showBadgeToast } from '../profile/badge-toast.js';
+import { onLangChange, t } from '../i18n.js';
+import { h } from '../dom.js';
+import { getEngine } from '../../view3d/engine.js';
+import { createInput } from '../../input/input.js';
+import { createRidingSim } from '../../../domain/sim/riding-sim.js';
+import { createFreeMode } from '../../../application/modes/free-mode.js';
+import { addJump } from '../../../domain/progress/progress.js';
+import { checkInstantBadges } from '../../../domain/progress/badges.js';
+import { showBadgeToast } from './profile/badge-toast.js';
 
 const MODES = { free: createFreeMode };
 

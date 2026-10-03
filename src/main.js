@@ -1,22 +1,23 @@
 // Einstieg: Prüfungen, Spielstand, Sprache, App-Rahmen.
-import './styles/main.css';
-import './styles/ride.css';
-import './styles/profile.css';
-import './styles/courses.css';
-import { detectLang, getLang, setLang } from './core/i18n.js';
-import { createStore, requestPersistentStorage } from './core/storage.js';
-import { hasWebGL } from './core/webgl.js';
-import { createInputMode, detectDevice } from './core/input-mode.js';
-import { registerAllStrings } from './i18n/index.js';
-import { createApp } from './app/app.js';
-import { createMainMenuScreen, registerMenuEntry } from './app/menu.js';
-import { createSettingsScreen } from './app/settings-screen.js';
-import { installRotateNotice, renderNo3dNotice, showSaveNotice } from './app/notices.js';
-import './game/save-sections.js';
-import { createRideScreen } from './game/ride-screen.js';
-import { firstScreen, registerProfile } from './profile/profile.js';
-import { registerCourses } from './course-ui/register.js';
-import { registerAudio } from './audio/register.js';
+import './adapters/ui/styles/main.css';
+import './adapters/ui/styles/ride.css';
+import './adapters/ui/styles/profile.css';
+import './adapters/ui/styles/courses.css';
+import { detectLang, getLang, setLang } from './adapters/ui/i18n.js';
+import { createStore, requestPersistentStorage } from './adapters/storage/local-store.js';
+import { hasWebGL } from './adapters/platform/webgl.js';
+import { createInputMode, detectDevice } from './adapters/platform/input-mode.js';
+import { registerAllStrings } from './adapters/ui/i18n/index.js';
+import { createApp } from './adapters/ui/app.js';
+import { createMainMenuScreen, registerMenuEntry } from './adapters/ui/menu.js';
+import { createSettingsScreen } from './adapters/ui/settings-screen.js';
+import { installRotateNotice, renderNo3dNotice, showSaveNotice } from './adapters/ui/notices.js';
+import './application/settings-schema.js';
+import './adapters/ui/settings-sections.js';
+import { createRideScreen } from './adapters/ui/screens/ride-screen.js';
+import { firstScreen, registerProfile } from './adapters/ui/screens/profile/register.js';
+import { registerCourses } from './adapters/ui/screens/courses/register.js';
+import { registerAudio } from './adapters/ui/audio-wiring.js';
 
 function boot() {
   const root = document.getElementById('app');

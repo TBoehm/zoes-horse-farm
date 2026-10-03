@@ -1,6 +1,6 @@
 // App-Rahmen: Ebenen (3D, Oberfläche, Hinweise) und Bildschirm-Stapel.
-import { createEmitter } from '../core/events.js';
-import { onLangChange, t } from '../core/i18n.js';
+import { createEmitter } from '../../shared/events.js';
+import { onLangChange, t } from './i18n.js';
 import { h, clear } from './dom.js';
 
 /**

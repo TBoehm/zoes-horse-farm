@@ -1,6 +1,6 @@
 // Touch-Modus (Regel 11): reine Touch-Geräte immer, reine Tastatur-Geräte nie,
 // Geräte mit beidem starten ohne und wechseln bei Berührung bzw. Spieltaste.
-import { createEmitter } from './events.js';
+import { createEmitter } from '../../shared/events.js';
 
 export const GAME_KEYS = new Set([
   'KeyW',

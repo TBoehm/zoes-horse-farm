@@ -1,6 +1,6 @@
 // Spielstand im Browser (Regeln 44–47): sofort speichern, robust laden, Unbekanntes erhalten.
-import { createEmitter } from './events.js';
-import { SAVE_VERSION, getSections, isPlainObject } from './save-schema.js';
+import { createEmitter } from '../../shared/events.js';
+import { SAVE_VERSION, getSections, isPlainObject } from '../../application/save-schema.js';
 
 export const SAVE_KEY = 'zoes-horse-farm.save';
 export const SESSION_NOTICE_KEY = 'zoes-horse-farm.saveNoticeShown';

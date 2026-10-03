@@ -1,5 +1,5 @@
 // „Fortschritt löschen" in den Einstellungen, nur aus dem Hauptmenü (Regel 48).
-import { resetProgress } from '../progress/progress.js';
+import { resetProgress } from '../../../../domain/progress/progress.js';
 
 export function renderResetSection(ctx, { fromPause }) {
   if (fromPause) return null;

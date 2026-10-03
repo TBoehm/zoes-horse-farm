@@ -1,8 +1,8 @@
 // „Mein Pferd": Name, Fellfarbe, Kopfabzeichen mit 3D-Vorschau (Regel 43).
-import { choiceGroup } from '../app/settings-screen.js';
-import { getEngine } from '../game/engine.js';
-import { COATS, MARKINGS } from '../game/save-sections.js';
-import { cleanName, NAME_MAX } from './horse-name.js';
+import { choiceGroup } from '../../settings-screen.js';
+import { getEngine } from '../../../view3d/engine.js';
+import { COATS, MARKINGS } from '../../../../domain/horse/appearance.js';
+import { cleanName, NAME_MAX } from '../../../../domain/horse/horse-name.js';
 
 const IDLE = { speed: 0, gait: 'halt', turnRate: 0, y: 0, jump: null, hop: null, refusal: null };
 

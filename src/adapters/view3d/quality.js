@@ -1,7 +1,8 @@
 // Graphics quality levels (concept rules 3, 4): device pick, downgrade governor and presets.
 // Pure, no three.js.
+import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
 
-export const QUALITY_LEVELS = Object.freeze(['low', 'medium', 'high']);
+export const QUALITY_LEVELS = GRAPHICS_LEVELS;
 
 export const QUALITY_PRESETS = Object.freeze({
   low: Object.freeze({

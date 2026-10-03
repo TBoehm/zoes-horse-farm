@@ -1,6 +1,6 @@
 // Übersicht aller Auszeichnungen (Regel 50).
-import { getLang } from '../core/i18n.js';
-import { BADGES } from '../progress/badges.js';
+import { getLang } from '../../i18n.js';
+import { BADGES } from '../../../../domain/progress/badges.js';
 
 export function formatDate(iso, lang = getLang()) {
   const d = new Date(iso);

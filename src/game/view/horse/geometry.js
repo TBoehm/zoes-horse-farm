@@ -265,9 +265,9 @@ function makeHead() {
 // Beine
 const FRONT_SECT = table([
   // k (Segment + Anteil), halbe Breite, vorn, hinten
-  [0.0, 0.08, 0.08, 0.1],
-  [1.0, 0.09, 0.09, 0.12],
-  [1.5, 0.1, 0.1, 0.13],
+  [0.0, 0.06, 0.05, 0.07],
+  [1.0, 0.075, 0.06, 0.1],
+  [1.5, 0.095, 0.09, 0.125],
   [2.0, 0.095, 0.095, 0.12],
   [2.13, 0.09, 0.095, 0.085],
   [2.5, 0.07, 0.07, 0.06],
@@ -284,9 +284,9 @@ const FRONT_SECT = table([
   [5.0, 0.05, 0.047, 0.045],
 ]);
 const HIND_SECT = table([
-  [0.0, 0.09, 0.07, 0.1],
-  [1.0, 0.1, 0.09, 0.15],
-  [1.5, 0.11, 0.1, 0.22],
+  [0.0, 0.06, 0.05, 0.07],
+  [1.0, 0.075, 0.06, 0.1],
+  [1.5, 0.1, 0.085, 0.17],
   [2.0, 0.115, 0.09, 0.3],
   [2.3, 0.105, 0.08, 0.23],
   [2.6, 0.085, 0.064, 0.15],
@@ -310,7 +310,7 @@ function legChain(front, side) {
     : [R.hip, R.stifle, R.hock, R.fetlock];
   const P = pts.map((p) => V([p[0] * side, p[1], p[2]]));
   const hoof = V([R.hoof[0] * side, R.hoof[1], R.hoof[2]]);
-  const top = P[0].clone().addScaledVector(P[0].clone().sub(P[1]), front ? 0.35 : 0.3);
+  const top = P[0].clone().addScaledVector(P[0].clone().sub(P[1]), 0.15);
   const coronet = P[3].clone().lerp(hoof, 0.5);
   return { chain: [top, ...P, coronet], hoof };
 }

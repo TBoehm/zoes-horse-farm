@@ -1,6 +1,6 @@
 // Arena: sand footing with track, wooden fence (instanced), gate, start/finish lines.
 import * as THREE from 'three';
-import { ARENA } from '../sim/tuning.js';
+import { ARENA } from '../../domain/sim/tuning.js';
 import { FENCE, GATE, planFence, planLines } from './world-layout.js';
 import {
   createSandTextures,
