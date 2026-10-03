@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canStart, getCourse, listCourses, nextCourse } from './course-catalog.js';
 import { COURSES } from '../domain/course/courses.js';
-import { fakeStore } from './test-ports.js';
+import { fakeStore } from '../../tests/support/test-ports.js';
 
 describe('listCourses', () => {
   it('lists all courses with obstacle count; only course 1 is open at the start', () => {

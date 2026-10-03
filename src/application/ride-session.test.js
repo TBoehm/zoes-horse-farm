@@ -5,8 +5,8 @@ import { createCourseMode } from './modes/course-mode.js';
 import { FREE_LAYOUT } from '../domain/course/courses.js';
 import { COMBI_DISTANCE, TUNING, approachInfo, zoneForElement } from '../domain/sim/index.js';
 import { PROGRESS_DEFAULTS } from '../domain/progress/progress.js';
-import { createCourseRider } from './testing/autopilot.js';
-import { fakeStore, fixedClock, seededRng } from './test-ports.js';
+import { createCourseRider } from '../../tests/support/autopilot.js';
+import { fakeStore, fixedClock, seededRng } from '../../tests/support/test-ports.js';
 
 const DT = 1 / 60;
 const NOW = '2026-01-02T03:04:05.000Z';

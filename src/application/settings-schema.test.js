@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import './settings-schema.js';
 import { getSections } from './save-schema.js';
 import { resetProgress } from './progress-service.js';
-import { fakeStore } from './test-ports.js';
+import { fakeStore } from '../../tests/support/test-ports.js';
 
 const settings = getSections().get('settings');
 const SOUND_FIELDS = ['musicVolume', 'musicMuted', 'sfxVolume', 'sfxMuted'];

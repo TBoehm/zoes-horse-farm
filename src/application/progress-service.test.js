@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { finishRide, recordJump, resetProgress } from './progress-service.js';
-import { fakeStore, fixedClock } from './test-ports.js';
+import { fakeStore, fixedClock } from '../../tests/support/test-ports.js';
 
 const NOW = '2026-01-02T03:04:05.000Z';
 const clean = (courseId, timeCs = 5000) => ({

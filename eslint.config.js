@@ -44,7 +44,6 @@ export default [
       'public/generated/**',
       'test-results/**',
       'playwright-report/**',
-      '.shot.mjs',
     ],
   },
   js.configs.recommended,

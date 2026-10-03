@@ -1,15 +1,15 @@
 // Deterministic "autopilot" rider for rideability tests (test-only helper, not production code).
 // It rides through the real ride session (sim + course run + course mode): pure pursuit along the
 // course track, perpendicular approach, speed hold and a jump press inside the take-off zone.
-import { COURSES } from '../../domain/course/courses.js';
-import { createCourseMode } from '../modes/course-mode.js';
-import { createFreeMode } from '../modes/free-mode.js';
-import { createRideSession } from '../ride-session.js';
-import { approachInfo, axisOf, headingOf, wrapAngle } from '../../domain/sim/geometry.js';
-import { zoneForElement } from '../../domain/sim/jump.js';
-import { TUNING } from '../../domain/sim/tuning.js';
-import { createRng } from '../../domain/sim/rng.js';
-import { fakeStore, fixedClock } from '../test-ports.js';
+import { COURSES } from '../../src/domain/course/courses.js';
+import { createCourseMode } from '../../src/application/modes/course-mode.js';
+import { createFreeMode } from '../../src/application/modes/free-mode.js';
+import { createRideSession } from '../../src/application/ride-session.js';
+import { approachInfo, axisOf, headingOf, wrapAngle } from '../../src/domain/sim/geometry.js';
+import { zoneForElement } from '../../src/domain/sim/jump.js';
+import { TUNING } from '../../src/domain/sim/tuning.js';
+import { createRng } from '../../src/domain/sim/rng.js';
+import { fakeStore, fixedClock } from './test-ports.js';
 
 export const DT = 1 / 60;
 const APPROACH_LEN = 14; // straight run-in before the first element of an obstacle (m)

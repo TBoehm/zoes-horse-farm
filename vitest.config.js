@@ -2,7 +2,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.js'],
+    // Smoke tests (tests/smoke/*.spec.js) run in Playwright, not here.
+    include: ['src/**/*.test.js', 'tests/**/*.test.js'],
     environment: 'node',
   },
 });

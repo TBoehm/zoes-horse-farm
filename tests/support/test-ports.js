@@ -1,6 +1,6 @@
 // Test doubles for the application ports: store, clock and rng. Used by the application tests only.
-import { PROGRESS_DEFAULTS } from '../domain/progress/progress.js';
-import { createRng } from '../domain/sim/rng.js';
+import { PROGRESS_DEFAULTS } from '../../src/domain/progress/progress.js';
+import { createRng } from '../../src/domain/sim/rng.js';
 
 /** In-memory store implementing the store port { get, update, onChange }. */
 export function fakeStore({ settings = {}, horse = {}, progress = {} } = {}) {

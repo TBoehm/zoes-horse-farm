@@ -17,7 +17,7 @@ import {
   placeBefore,
   pressAt,
   turnInPlace,
-} from './test-utils.js';
+} from '../../../tests/support/sim-utils.js';
 
 const S = TUNING.speeds;
 const TROT = { throttle: 0 };

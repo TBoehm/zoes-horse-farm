@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFreeMode, REBUILD_DELAY_S } from './free-mode.js';
-import { fakeHost } from './test-host.js';
+import { fakeHost } from '../../../tests/support/test-host.js';
 
 describe('free mode', () => {
   it('is DOM-free data: no HUD, no lines, quits to the menu', () => {

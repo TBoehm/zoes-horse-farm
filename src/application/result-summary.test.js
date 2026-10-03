@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { summarizeResult } from './result-summary.js';
 import { KNOCKDOWN_FAULTS, REFUSAL_FAULTS } from '../domain/course/scoring.js';
-import { fakeStore } from './test-ports.js';
+import { fakeStore } from '../../tests/support/test-ports.js';
 
 const params = (over = {}) => ({
   courseId: 1,

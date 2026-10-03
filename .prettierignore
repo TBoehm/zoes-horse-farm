@@ -6,4 +6,3 @@ playwright-report
 package-lock.json
 docs
 .claude
-.shot.mjs

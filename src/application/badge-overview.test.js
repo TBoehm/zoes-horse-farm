@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { badgeSummary, describeBadge, listBadges } from './badge-overview.js';
 import { BADGES } from '../domain/progress/badges.js';
-import { fakeStore } from './test-ports.js';
+import { fakeStore } from '../../tests/support/test-ports.js';
 
 const DATE = '2026-01-02T03:04:05.000Z';
 

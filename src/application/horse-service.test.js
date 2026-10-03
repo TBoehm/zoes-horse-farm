@@ -9,7 +9,7 @@ import {
   setAppearance,
   skipName,
 } from './horse-service.js';
-import { fakeStore } from './test-ports.js';
+import { fakeStore } from '../../tests/support/test-ports.js';
 
 describe('answerName', () => {
   it('saves the trimmed name and marks the question as answered', () => {

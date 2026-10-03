@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Zoe's Horse Farm – Springreiten-Trainer im Browser (three.js, statisch)",
+  "description": "Zoe's Horse Farm – show-jumping trainer in the browser (three.js, static)",
   "scripts": {
     "icons": "node scripts/generate-icons.mjs",
     "predev": "npm run icons",

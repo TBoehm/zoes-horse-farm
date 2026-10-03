@@ -3,7 +3,11 @@
 // Cadence (riding theory): walk ≈ 55/min, trot ≈ 80/min, canter ≈ 100/min; speed rises mainly
 // through stride length. No foot sliding: hoof travel during stance L = duty · speed / frequency
 // (the hoof rests relative to the ground).
+import { TUNING } from '../../../domain/sim/tuning.js';
 import { clamp, lerp, smoothstep } from './math.js';
+
+// Speed thresholds come from the simulation tuning, so animation and simulation cannot drift apart.
+const { walkMax, trotMin, trotMax, canterMin, canterMax } = TUNING.speeds;
 
 export const GAIT_KEYS = ['halt', 'walk', 'trot', 'canter'];
 
@@ -13,7 +17,7 @@ export const GAITS = {
   walk: {
     // four-beat: LH → LF → RH → RF
     offsets: [0.25, 0.75, 0, 0.5],
-    duty: (v) => lerp(0.64, 0.58, clamp(v / 1.8, 0, 1)),
+    duty: (v) => lerp(0.64, 0.58, clamp(v / walkMax, 0, 1)),
     freq: (v) => 0.92 * powSafe(Math.max(v, 0.25) / 1.6, 0.35),
     lift: [0.1, 0.1, 0.09, 0.09],
     flex: [1.05, 1.05, 0.45, 0.45],
@@ -24,7 +28,7 @@ export const GAITS = {
   trot: {
     // two-beat diagonal: LF + RH, then RF + LH
     offsets: [0, 0.5, 0.5, 0],
-    duty: (v) => lerp(0.44, 0.36, clamp((v - 2) / 2, 0, 1)),
+    duty: (v) => lerp(0.44, 0.36, clamp((v - trotMin) / (trotMax - trotMin), 0, 1)),
     freq: (v) => 1.33 * powSafe(Math.max(v, 1.2) / 3.2, 0.25),
     lift: [0.2, 0.2, 0.15, 0.15],
     flex: [1.75, 1.75, 0.8, 0.8],
@@ -36,7 +40,7 @@ export const GAITS = {
     // left lead: RH → (LH + RF) → LF → suspension. Right lead mirrored.
     offsets: [0.47, 0.26, 0.22, 0],
     offsetsRight: [0.26, 0.47, 0, 0.22],
-    duty: (v) => lerp(0.38, 0.3, clamp((v - 4.5) / 3.5, 0, 1)),
+    duty: (v) => lerp(0.38, 0.3, clamp((v - canterMin) / (canterMax - canterMin), 0, 1)),
     freq: (v) => 1.67 * powSafe(Math.max(v, 3) / 6, 0.2),
     lift: [0.27, 0.27, 0.2, 0.2],
     flex: [1.95, 1.95, 1.0, 1.0],

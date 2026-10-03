@@ -7,7 +7,9 @@ Diese Regeln gelten für jede Änderung (auch für Subagents). Details:
 
 - **Code immer auf Englisch:** Bezeichner, Kommentare, Testbeschreibungen (`describe`/`it`),
   Log- und Fehlermeldungen, Dateinamen. Nutzersichtbare Texte stehen nur in den i18n-Dateien
-  (DE + EN). Planungs-Dokumente (Konzept, Tickets, Specs) bleiben deutsch.
+  (DE + EN). Ausnahme: statische Texte, die vor dem Start von JavaScript sichtbar sind
+  (`index.html` meta description/noscript, PWA-Manifest), stehen zweisprachig direkt dort.
+  Planungs-Dokumente (Konzept, Tickets, Specs) bleiben deutsch.
 - **TDD:** Für Domain- und Application-Code zuerst einen fehlschlagenden Test schreiben, dann den
   minimalen Code, dann aufräumen (Red → Green → Refactor). Kein neuer Domain-/Application-Code ohne
   Test. Adapter (three.js, DOM, WebAudio, Storage) werden über reine Hilfsfunktionen (mit Tests) und

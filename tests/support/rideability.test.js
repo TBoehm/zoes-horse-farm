@@ -2,7 +2,7 @@
 // 25, 31, 33, 41; SRT-004 "course 1 can be done at trot without time faults").
 // The autopilot is deterministic; the sloppy variant jitters the jump timing with a seeded rng.
 import { describe, expect, it } from 'vitest';
-import { COURSES, FREE_LAYOUT } from '../../domain/course/courses.js';
+import { COURSES, FREE_LAYOUT } from '../../src/domain/course/courses.js';
 import { rideCourse, rideFreeObstacle } from './autopilot.js';
 
 const jumpsOf = (course) => course.obstacles.reduce((n, o) => n + o.elements.length, 0);

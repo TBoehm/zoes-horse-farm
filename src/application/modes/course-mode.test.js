@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createCourseMode } from './course-mode.js';
 import { COURSES } from '../../domain/course/courses.js';
-import { fakeHost } from './test-host.js';
+import { fakeHost } from '../../../tests/support/test-host.js';
 
 const course = COURSES[0];
 

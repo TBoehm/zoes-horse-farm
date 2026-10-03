@@ -10,7 +10,7 @@ import {
   zoneForElement,
   zoneWindow,
 } from './jump.js';
-import { DEG, makeElement } from './test-utils.js';
+import { DEG, makeElement } from '../../../tests/support/sim-utils.js';
 
 const cross = makeElement('cross', 0.45);
 const vertical60 = makeElement('vertical', 0.6);

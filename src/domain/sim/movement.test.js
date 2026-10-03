@@ -3,7 +3,7 @@ import { TUNING, ARENA } from './tuning.js';
 import { forwardOf, wrapAngle } from './geometry.js';
 import { gaitForSpeed, maxTurnRate, turnRadius } from './movement.js';
 import { createRng } from './rng.js';
-import { DEG, DT, drive, makeSim, ofType } from './test-utils.js';
+import { DEG, DT, drive, makeSim, ofType } from '../../../tests/support/sim-utils.js';
 
 const S = TUNING.speeds;
 
