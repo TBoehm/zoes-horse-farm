@@ -1,5 +1,5 @@
-// Entwickler-Demo für das prozedurale Pferd (wird nicht ausgeliefert).
-// URL-Parameter für Screenshots: coat, marking, quality, gait, speed, turn, rider=0, cam=side|
+// Developer demo for the procedural horse (not shipped).
+// URL parameters for screenshots: coat, marking, quality, gait, speed, turn, rider=0, cam=side|
 // front|back|head|top|threequarter, ui=0, move=0
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -33,7 +33,7 @@ Object.assign(sun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near:
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
 
-// Sandboden mit Linien (zum Prüfen von Fußgleiten)
+// sand ground with lines (to check foot sliding)
 const cv = document.createElement('canvas');
 cv.width = cv.height = 256;
 const g = cv.getContext('2d');
@@ -59,7 +59,7 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// UI füllen
+// fill the UI
 for (const c of COATS) $('coat').add(new Option(c, c));
 for (const m of MARKINGS) $('marking').add(new Option(m, m));
 $('coat').value = params.get('coat') || 'bay';
@@ -99,7 +99,7 @@ $('quality').onchange = () => horse.setQuality($('quality').value);
 $('rider').onchange = build;
 $('gait').onchange = () => ($('speed').value = DEFAULT_SPEED[$('gait').value]);
 
-// simulierter Sim-Zustand
+// simulated sim state
 const state = {
   speed: 0,
   gait: 'halt',
@@ -167,7 +167,7 @@ function placeCamera(mode) {
   const h = horse.object;
   const f = new THREE.Vector3(Math.sin(state.heading), 0, Math.cos(state.heading));
   const r = new THREE.Vector3(-f.z, 0, f.x);
-  const c = h.position.clone().addScaledVector(f, -0.7); // Körpermitte
+  const c = h.position.clone().addScaledVector(f, -0.7); // body centre
   const presets = {
     side: [
       r
@@ -207,8 +207,28 @@ function placeCamera(mode) {
         .add(new THREE.Vector3(0, 1.9, 0)),
       new THREE.Vector3(0, 1.1, 0),
     ],
-    head: [f.clone().multiplyScalar(2.75).addScaledVector(r, -0.45).add(new THREE.Vector3(0, 1.95, 0)), f.clone().multiplyScalar(1.5).add(new THREE.Vector3(0, 1.82, 0))],
-    headSide: [f.clone().multiplyScalar(1.5).addScaledVector(r, -1.5).add(new THREE.Vector3(0, 1.95, 0)), f.clone().multiplyScalar(1.45).add(new THREE.Vector3(0, 1.8, 0))],
+    head: [
+      f
+        .clone()
+        .multiplyScalar(2.75)
+        .addScaledVector(r, -0.45)
+        .add(new THREE.Vector3(0, 1.95, 0)),
+      f
+        .clone()
+        .multiplyScalar(1.5)
+        .add(new THREE.Vector3(0, 1.82, 0)),
+    ],
+    headSide: [
+      f
+        .clone()
+        .multiplyScalar(1.5)
+        .addScaledVector(r, -1.5)
+        .add(new THREE.Vector3(0, 1.95, 0)),
+      f
+        .clone()
+        .multiplyScalar(1.45)
+        .add(new THREE.Vector3(0, 1.8, 0)),
+    ],
     top: [
       f
         .clone()
@@ -243,7 +263,7 @@ function frame(dt) {
   horse.object.rotation.y = state.heading;
   if (camMode) placeCamera(camMode);
   else if ($('move').checked) {
-    // Kamera folgt
+    // camera follows
     const dp = horse.object.position.clone().sub(prevPos);
     camera.position.add(dp);
     controls.target.add(dp);
@@ -272,8 +292,8 @@ function loop(now) {
   if (!window.__manual) frame(dt);
   const i = renderer.info.render;
   $('info').textContent =
-    `Dreiecke ${i.triangles} · Draw-Calls ${i.calls} · ${fps.toFixed(0)} fps\n` +
-    `Hufschlag: ${footfalls.join(' ')}`;
+    `Triangles ${i.triangles} · draw calls ${i.calls} · ${fps.toFixed(0)} fps\n` +
+    `Footfalls: ${footfalls.join(' ')}`;
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
@@ -284,14 +304,14 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-// Schnittstelle für automatisierte Screenshots
+// interface for automated screenshots
 window.demo = {
   get horse() {
     return horse;
   },
   state,
   renderer,
-  /** Simulation deterministisch vorspulen (stoppt die Echtzeit-Schleife). */
+  /** Advance the simulation deterministically (stops the real-time loop). */
   advance(seconds, step = 1 / 60) {
     window.__manual = true;
     for (let t = 0; t < seconds - 1e-9; t += step) frame(step);

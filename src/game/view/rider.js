@@ -14,7 +14,7 @@ import {
   table,
   torusData,
 } from './horse/loft.js';
-import { clamp, lerp, smoothstep } from './horse/math.js';
+import { clamp, smoothstep } from './horse/math.js';
 import { riderSeat } from './horse/seat.js';
 import { createVertexColorMaterial } from './horse/material.js';
 
@@ -163,7 +163,22 @@ function buildRiderGeometry(index, level) {
   });
 
   // Neck, head, ponytail
-  limb(b, [[0, 0.6, -0.035], [0, 0.69, -0.025], [0, 0.78, -0.01]], [[0, 0.048], [1, 0.045]], ['neck', 'head'], C.skin, D, { n: 3 });
+  limb(
+    b,
+    [
+      [0, 0.6, -0.035],
+      [0, 0.69, -0.025],
+      [0, 0.78, -0.01],
+    ],
+    [
+      [0, 0.048],
+      [1, 0.045],
+    ],
+    ['neck', 'head'],
+    C.skin,
+    D,
+    { n: 3 },
+  );
   const hd = ellipsoidData(0.083, 0.112, 0.1, D.head[0], D.head[1]);
   b.addIndexed(
     hd.p,
@@ -172,9 +187,33 @@ function buildRiderGeometry(index, level) {
     () => [['head', 1]],
     (v) => ({ color: v.z < -0.02 && v.y > 0.755 ? C.hair : C.skin }),
   );
-  limb(b, [[0, 0.815, -0.09], [0, 0.76, -0.13], [0, 0.66, -0.15]], [[0, 0.03], [0.5, 0.026], [1, 0.012]], ['head', 'head'], C.hair, D, { n: 4 });
+  limb(
+    b,
+    [
+      [0, 0.815, -0.09],
+      [0, 0.76, -0.13],
+      [0, 0.66, -0.15],
+    ],
+    [
+      [0, 0.03],
+      [0.5, 0.026],
+      [1, 0.012],
+    ],
+    ['head', 'head'],
+    C.hair,
+    D,
+    { n: 4 },
+  );
   // Helmet (shell) with peak
-  const helmet = new THREE.SphereGeometry(1, D.head[0], D.head[1], 0, Math.PI * 2, 0, Math.PI * 0.56);
+  const helmet = new THREE.SphereGeometry(
+    1,
+    D.head[0],
+    D.head[1],
+    0,
+    Math.PI * 2,
+    0,
+    Math.PI * 0.56,
+  );
   helmet.scale(0.096, 0.1, 0.116);
   b.addIndexed(
     Array.from(helmet.attributes.position.array),
@@ -211,8 +250,16 @@ function buildRiderGeometry(index, level) {
       D,
     );
     const hand = ellipsoidData(0.028, 0.042, 0.05, D.misc, 6);
-    const hp = V(J.wrist).setX(J.wrist[0] * s).add(new THREE.Vector3(-0.01 * s, -0.01, 0.04));
-    b.addIndexed(hand.p, hand.idx, new THREE.Matrix4().makeRotationX(0.5).setPosition(hp), () => [[`${p}hand`, 1]], () => ({ color: C.glove }));
+    const hp = V(J.wrist)
+      .setX(J.wrist[0] * s)
+      .add(new THREE.Vector3(-0.01 * s, -0.01, 0.04));
+    b.addIndexed(
+      hand.p,
+      hand.idx,
+      new THREE.Matrix4().makeRotationX(0.5).setPosition(hp),
+      () => [[`${p}hand`, 1]],
+      () => ({ color: C.glove }),
+    );
     // Leg: thigh (breeches), shin and foot (boot)
     limb(
       b,
@@ -247,7 +294,13 @@ function buildRiderGeometry(index, level) {
     // Stirrup iron under the ball of the foot, leather up to the saddle
     const iron = torusData(0.055, 0.007, 4, D.misc);
     const ip = new THREE.Vector3(J.toe[0] * s, J.toe[1] + 0.055 - 0.035, J.toe[2] - 0.07);
-    b.addIndexed(iron.p, iron.idx, new THREE.Matrix4().makeScale(0.9, 1, 1).setPosition(ip), () => [[`${p}foot`, 1]], () => ({ color: C.steel }));
+    b.addIndexed(
+      iron.p,
+      iron.idx,
+      new THREE.Matrix4().makeScale(0.9, 1, 1).setPosition(ip),
+      () => [[`${p}foot`, 1]],
+      () => ({ color: C.steel }),
+    );
     const top = new THREE.Vector3(0.2 * s, -0.04, 0.1);
     const bottom = ip.clone().add(new THREE.Vector3(0, 0.05, 0));
     new Loft({
@@ -272,7 +325,10 @@ export function createRider({ quality = 'medium' } = {}) {
   object.add(bones.base);
   object.updateMatrixWorld(true);
   const skeleton = new THREE.Skeleton(list);
-  const mesh = new THREE.SkinnedMesh(buildRiderGeometry(index, level), createVertexColorMaterial(level, 0.7));
+  const mesh = new THREE.SkinnedMesh(
+    buildRiderGeometry(index, level),
+    createVertexColorMaterial(level, 0.7),
+  );
   mesh.name = 'rider-body';
   mesh.frustumCulled = false;
   object.add(mesh);
@@ -364,7 +420,6 @@ export function createRider({ quality = 'medium' } = {}) {
         B[`${p}hand`].quaternion.copy(qParent).invert();
         B[`${p}hand`].rotateZ(-0.5 * s);
       }
-      void dt;
     },
     setQuality(l) {
       if (l === level) return;
@@ -382,6 +437,5 @@ export function createRider({ quality = 'medium' } = {}) {
       object.removeFromParent();
     },
   };
-  void lerp;
   return api;
 }

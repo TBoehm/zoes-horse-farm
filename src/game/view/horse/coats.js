@@ -1,4 +1,4 @@
-// Fellfarben und Kopfabzeichen als reine Daten (sRGB 0..1). Der Shader (material.js) setzt sie um.
+// Coat colours and head markings as pure data (sRGB 0..1). The shader (material.js) renders them.
 
 import { COATS, MARKINGS } from '../../../domain/horse/appearance.js';
 
@@ -7,8 +7,8 @@ export const DEFAULT_APPEARANCE = Object.freeze({ coat: 'bay', marking: 'star' }
 
 const WHITE = [0.93, 0.92, 0.9];
 
-// base: Grundfell, dark: Oberlinie/Apfelung, belly: Unterseite, hair: Mähne/Schweif,
-// points: Anteil dunkler Beine unten (pointColor), muzzle: Maul/Nüstern-Haut, hoof: Horn
+// base: main coat, dark: topline/dapple net, belly: underside, hair: mane/tail,
+// points: amount of dark lower legs (pointColor), muzzle: muzzle/nostril skin, hoof: horn
 const PALETTE = {
   chestnut: {
     base: [0.52, 0.24, 0.1],
@@ -93,7 +93,7 @@ export function markingIndex(marking) {
   return i < 0 ? MARKINGS.indexOf(DEFAULT_APPEARANCE.marking) : i;
 }
 
-/** Abzeichen-Regionen in Kopf-Koordinaten (s entlang Kopf ab Genick, u lateral; Meter). */
+/** Marking regions in head coordinates (s along the head from the poll, u lateral; meters). */
 export const MARKING_REGIONS = {
   star: { s: 0.155, rs: 0.048, ru: 0.038 },
   blaze: { s0: 0.08, s1: 0.615, w0: 0.026, w1: 0.042 },

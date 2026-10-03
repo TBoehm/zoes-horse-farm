@@ -5,10 +5,42 @@ import { jumpParam } from './poses.js';
 
 const KEYS = ['rise', 'forward', 'lean', 'handX', 'handY', 'handZ', 'footForward'];
 
-const SIT = { rise: 0, forward: 0, lean: 0.1, handX: 0.09, handY: 0.2, handZ: 0.36, footForward: 0 };
-const LIGHT = { rise: 0.05, forward: 0.03, lean: 0.5, handX: 0.09, handY: 0.15, handZ: 0.43, footForward: 0 };
-const TWO_POINT = { rise: 0.12, forward: 0.12, lean: 1.25, handX: 0.1, handY: 0.1, handZ: 0.62, footForward: -0.03 };
-const BACK = { rise: 0, forward: -0.03, lean: -0.1, handX: 0.09, handY: 0.26, handZ: 0.3, footForward: 0.04 };
+const SIT = {
+  rise: 0,
+  forward: 0,
+  lean: 0.1,
+  handX: 0.09,
+  handY: 0.2,
+  handZ: 0.36,
+  footForward: 0,
+};
+const LIGHT = {
+  rise: 0.05,
+  forward: 0.03,
+  lean: 0.5,
+  handX: 0.09,
+  handY: 0.15,
+  handZ: 0.43,
+  footForward: 0,
+};
+const TWO_POINT = {
+  rise: 0.12,
+  forward: 0.12,
+  lean: 1.25,
+  handX: 0.1,
+  handY: 0.1,
+  handZ: 0.62,
+  footForward: -0.03,
+};
+const BACK = {
+  rise: 0,
+  forward: -0.03,
+  lean: -0.1,
+  handX: 0.09,
+  handY: 0.26,
+  handZ: 0.3,
+  footForward: 0.04,
+};
 
 function posting(phi) {
   // rise during one diagonal beat, sit during the other: once per stride
@@ -29,7 +61,13 @@ function lerpTo(out, src, t) {
  * hopWeight, stopWeight, pitch }. Without ctx the gait comes from state.gait.
  */
 export function riderSeat(state = {}, ctx = null, out = {}) {
-  const weights = ctx?.weights || { halt: 0, walk: 0, trot: 0, canter: 0, [state.gait || 'halt']: 1 };
+  const weights = ctx?.weights || {
+    halt: 0,
+    walk: 0,
+    trot: 0,
+    canter: 0,
+    [state.gait || 'halt']: 1,
+  };
   const phi = ctx?.phi ?? 0;
   for (const k of KEYS) out[k] = 0;
   blendInto(out, SIT, (weights.halt || 0) + (weights.walk || 0));

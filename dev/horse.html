@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pferd – Entwickler-Demo</title>
+    <title>Horse demo</title>
     <style>
       html,
       body {
@@ -46,37 +46,37 @@
   </head>
   <body>
     <div id="ui">
-      <label for="gait">Gangart</label>
+      <label for="gait">Gait</label>
       <select id="gait">
         <option value="halt">Halt</option>
-        <option value="walk">Schritt</option>
-        <option value="trot">Trab</option>
-        <option value="canter">Galopp</option>
+        <option value="walk">Walk</option>
+        <option value="trot">Trot</option>
+        <option value="canter">Canter</option>
       </select>
-      <label for="speed">Tempo <span id="speedv"></span></label>
+      <label for="speed">Speed <span id="speedv"></span></label>
       <input id="speed" type="range" min="0" max="8" step="0.1" value="0" />
-      <label for="turn">Kurve <span id="turnv"></span></label>
+      <label for="turn">Turn <span id="turnv"></span></label>
       <input id="turn" type="range" min="-1.5" max="1.5" step="0.05" value="0" />
-      <label for="move">Vorwärts bewegen</label>
+      <label for="move">Move forward</label>
       <input id="move" type="checkbox" checked />
-      <label for="coat">Fellfarbe</label>
+      <label for="coat">Coat</label>
       <select id="coat"></select>
-      <label for="marking">Abzeichen</label>
+      <label for="marking">Marking</label>
       <select id="marking"></select>
-      <label for="quality">Qualität</label>
+      <label for="quality">Quality</label>
       <select id="quality">
         <option>low</option>
         <option selected>medium</option>
         <option>high</option>
       </select>
-      <label for="rider">Reiter</label>
+      <label for="rider">Rider</label>
       <input id="rider" type="checkbox" checked />
-      <label for="slow">Zeitlupe</label>
+      <label for="slow">Slow motion</label>
       <input id="slow" type="checkbox" />
-      <button id="jump">Sprung</button>
-      <button id="hop">Hopser</button>
-      <button id="stop">Verweigern (stop)</button>
-      <button id="runout">Vorbeilaufen</button>
+      <button id="jump">Jump</button>
+      <button id="hop">Hop</button>
+      <button id="stop">Refuse (stop)</button>
+      <button id="runout">Run out</button>
       <div id="info"></div>
     </div>
     <script type="module" src="./horse.js"></script>

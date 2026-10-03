@@ -4,7 +4,7 @@ import { REST } from './anatomy.js';
 
 const P = (a, parent) => ({ y: a[1] - parent[1], z: a[2] - parent[2] });
 
-// Vorwärtskinematik: Segmentwinkel aus den Rotationen (rotation.x = −ΔangD)
+// forward kinematics: segment angles from the rotations (rotation.x = −ΔangD)
 function fkFront(rig, rot) {
   const A = rig.A;
   let acc = -rot[0];
@@ -62,15 +62,15 @@ const hind = makeHindRig(
   P(H.hoof, sr),
 );
 
-describe('Bein-IK', () => {
-  it('Ruhelage ergibt keine Rotation', () => {
+describe('leg IK', () => {
+  it('rest position yields zero rotation', () => {
     const r = solveFront(front, front.H.z, front.H.y, front.t4, 0, 0);
     for (const x of r) expect(x).toBeCloseTo(0, 6);
     const h = solveHind(hind, hind.H.z, hind.H.y, hind.t4, hind.t3);
     for (const x of h) expect(x).toBeCloseTo(0, 6);
   });
 
-  it('Vorderbein erreicht erreichbare Hufpunkte exakt (auch mit gebeugtem Karpus)', () => {
+  it('foreleg reaches reachable hoof points exactly (also with flexed carpus)', () => {
     for (const [dz, dy, knee] of [
       [0.3, 0, 0],
       [-0.25, 0, 0],
@@ -86,7 +86,7 @@ describe('Bein-IK', () => {
     }
   });
 
-  it('Hinterbein erreicht Hufpunkte exakt', () => {
+  it('hind leg reaches hoof points exactly', () => {
     for (const [dz, dy, tilt] of [
       [0.3, 0, 0.2],
       [-0.3, 0, -0.2],
@@ -101,20 +101,20 @@ describe('Bein-IK', () => {
     }
   });
 
-  it('Oberschenkel kippt nie über die Waagerechte nach oben (Hufziel nahe der Hüfte)', () => {
+  it('femur never tips up beyond its limit (hoof target close to the hip)', () => {
     const rot = solveHind(hind, hind.H.z + 0.4, hind.H.y + 0.7, hind.t4, hind.t3 - 1.2);
     const femurAngle = hind.t1 - rot[0];
     expect(femurAngle).toBeLessThanOrEqual(1.35 + 1e-9);
   });
 
-  it('Unerreichbare Ziele: Bein gestreckt, keine NaN', () => {
+  it('unreachable targets: leg straight, no NaN', () => {
     const r = solveFront(front, front.H.z + 2, front.H.y - 1, front.t4, 0, 0);
     for (const x of r) expect(Number.isFinite(x)).toBe(true);
     const h = solveHind(hind, hind.H.z, hind.H.y - 2, hind.t4, hind.t3);
     for (const x of h) expect(Number.isFinite(x)).toBe(true);
   });
 
-  it('Winkel-Helfer', () => {
+  it('angle helpers', () => {
     expect(angD(0, -1)).toBeCloseTo(0);
     expect(angD(1, 0)).toBeCloseTo(Math.PI / 2);
     expect(wrap(3 * Math.PI)).toBeCloseTo(Math.PI);

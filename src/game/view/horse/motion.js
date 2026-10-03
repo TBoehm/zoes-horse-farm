@@ -1,6 +1,6 @@
-// Bewegungszustand des Pferdes (rein, ohne three.js): Überblendung der Gangarten, Taktphase,
-// Huf-Bahnen je Bein, Rumpfbewegung, Sprung-/Hopser-/Verweigerungs-Gewichte und
-// Hufaufsetz-Ereignisse (Footfall). Der three.js-Adapter (index.js) setzt daraus die Knochen.
+// Horse motion state (pure, no three.js): gait blending, stride phase, hoof paths per leg, body
+// motion, jump/hop/refusal weights and footfall events. The three.js adapter (index.js) turns
+// this into bone rotations.
 import {
   GAITS,
   GAIT_KEYS,
@@ -13,14 +13,14 @@ import {
 import { clamp, smoothstep } from './math.js';
 import { jumpParam } from './poses.js';
 
-const GAIT_RATE = 5; // Überblendung Gangarten (1/s)
+const GAIT_RATE = 5; // gait cross-fade rate (1/s)
 
 export function createMotion() {
   return {
     weights: { halt: 1, walk: 0, trot: 0, canter: 0 },
     phi: 0,
     freq: 0,
-    lead: 1, // +1 Linksgalopp, −1 Rechtsgalopp
+    lead: 1, // +1 left lead, −1 right lead
     legs: [0, 1, 2, 3].map(() => ({ dz: 0, y: 0, flex: 0, past: 0, sink: 0, stance: true, c: 1 })),
     body: { bob: 0, pitch: 0, neck: 0, roll: 0 },
     jumpWeight: 0,
@@ -30,8 +30,8 @@ export function createMotion() {
     stopWeight: 0,
     runoutWeight: 0,
     runoutDir: 1,
-    bend: 0, // Biegung, + = nach links (+X)
-    lean: 0, // Neigung, + = nach rechts (rotation.z)
+    bend: 0, // body bend, + = to the left (+X)
+    lean: 0, // lean, + = to the right (rotation.z)
     speed: 0,
     time: 0,
   };
@@ -41,8 +41,8 @@ const tmpLeg = {};
 const tmpBody = {};
 
 /**
- * Einen Zeitschritt rechnen. state = sim.horse. Rückgabe: Beinindizes, deren Huf in diesem
- * Schritt aufgesetzt hat (0 LV, 1 RV, 2 LH, 3 RH).
+ * Advance one time step. state = sim.horse. Returns the leg indices whose hoof touched down
+ * during this step (0 LF, 1 RF, 2 LH, 3 RH).
  */
 export function stepMotion(m, dt, state) {
   const gait = GAIT_KEYS.includes(state.gait) ? state.gait : 'halt';
@@ -51,7 +51,7 @@ export function stepMotion(m, dt, state) {
   m.time += dt;
   m.speed = v;
 
-  // Gangart-Gewichte. Wenden auf der Stelle: Schrittbewegung ohne Vorwärtsweg.
+  // gait weights; turning on the spot: walking steps without forward travel
   const target = { halt: 0, walk: 0, trot: 0, canter: 0 };
   if (gait === 'halt') {
     const step = smoothstep(0.15, 0.6, Math.abs(turn));
@@ -72,12 +72,12 @@ export function stepMotion(m, dt, state) {
   for (const k of GAIT_KEYS) m.weights[k] /= sum;
   const w = m.weights;
 
-  // Taktphase: Frequenz aus den Gangarten (beim Wenden im Halt ein ruhiger Schritt-Takt)
+  // stride phase: frequency from the gaits (calm walk cadence when turning at halt)
   const vf = gait === 'halt' ? Math.max(v, 0.9 * Math.abs(turn)) : v;
   m.freq = blendedFrequency(w, vf);
   m.phi = (m.phi + m.freq * dt) % 1;
 
-  // Sprung, Hopser, Verweigerung
+  // jump, hop, refusal
   if (state.jump) {
     m.jumpWeight = approach(m.jumpWeight, 1, 14, dt);
     m.jumpJ = jumpParam(state.jump);
@@ -102,11 +102,11 @@ export function stepMotion(m, dt, state) {
     m.runoutWeight = approach(m.runoutWeight, 0, 8, dt);
   }
 
-  // Kurven: Biegung in die Kurve, Neigung nach innen (Fliehkraft)
+  // turns: bend into the turn, lean inwards (centripetal)
   m.bend = approach(m.bend, clamp(-turn * 0.28, -0.35, 0.35), 4, dt);
   m.lean = approach(m.lean, clamp(Math.atan((v * turn) / 9.81), -0.3, 0.3), 4, dt);
 
-  // Huf-Bahnen und Bodenkontakt je Bein
+  // hoof paths and ground contact per leg
   const falls = [];
   const quiet = gait === 'halt' || m.jumpWeight > 0.3 || m.hopWeight > 0.4;
   for (let leg = 0; leg < 4; leg++) {
@@ -139,7 +139,7 @@ export function stepMotion(m, dt, state) {
     if (L.stance && !wasDown && !quiet) falls.push(leg);
   }
 
-  // Rumpf
+  // body
   const B = m.body;
   B.bob = 0;
   B.pitch = 0;
@@ -157,7 +157,7 @@ export function stepMotion(m, dt, state) {
   return falls;
 }
 
-/** Grundhaltung des Halses je Gangart (+ = tiefer/vorn). */
+/** Base neck carriage per gait (+ = lower/forward). */
 export function neckCarriage(weights) {
   return weights.halt * 0.04 + weights.walk * 0.12 + weights.trot * 0.0 + weights.canter * -0.05;
 }

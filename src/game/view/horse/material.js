@@ -1,8 +1,8 @@
-// Fell-Material: MeshStandardMaterial (low: MeshLambertMaterial) mit eingeschobenem Shader-Code.
-// Die Farbe entsteht pro Pixel aus der Ruhepose-Position (aRest, 3D-Noise für Apfelung und
-// Schecken-Platten, dunkle Beine), Material-Gewichten (aMat: Langhaar, Huf, Auge, Ohr innen) und
-// Kopf-Koordinaten (aFace: s entlang Kopf, u lateral, Vorderseite) für Abzeichen und Nüstern.
-// setAppearance ändert nur Uniforms – kein Neuaufbau, kein Shader-Neukompilieren.
+// Coat material: MeshStandardMaterial (low: MeshLambertMaterial) with injected shader code.
+// The colour is computed per pixel from the rest-pose position (aRest: 3D noise for dapples and
+// pinto patches, dark lower legs), material weights (aMat: long hair, hoof, eye, inner ear) and head
+// coordinates (aFace: s along the head, u lateral, front-ness) for markings and nostrils.
+// setAppearance only changes uniforms – no rebuild, no shader recompilation.
 import * as THREE from 'three';
 import { MARKING_REGIONS, coatParams, markingIndex, normalizeAppearance } from './coats.js';
 
@@ -65,9 +65,9 @@ ${NOISE}
 float hzPinto(vec3 p, float head){
   float n = hzNoise(p * vec3(1.5, 1.25, 1.5) + vec3(3.1, 0.4, 1.7)) * 0.8
           + hzNoise(p * 4.2 + 7.0) * 0.16;
-  float bias = (1.0 - smoothstep(0.32, 0.8, p.y)) * 0.95   // weiße Beine
-             + smoothstep(1.45, 1.7, p.y) * 0.25 * (1.0 - step(0.5, head)) // über den Rücken
-             - head * 1.2;                                // Kopf dunkel
+  float bias = (1.0 - smoothstep(0.32, 0.8, p.y)) * 0.95   // white legs
+             + smoothstep(1.45, 1.7, p.y) * 0.25 * (1.0 - step(0.5, head)) // across the back
+             - head * 1.2;                                // dark head
   return smoothstep(0.1, 0.17, n + bias);
 }
 vec3 horseCoat(){
@@ -80,11 +80,11 @@ vec3 horseCoat(){
   float fine = hzNoise(p * 3.0) * 0.6 + hzNoise(p * 11.0) * 0.4;
 #endif
   vec3 col = uBase * (1.0 + 0.07 * fine);
-  // Oberlinie dunkler, Bauch/Flanke unten heller
+  // darker topline, lighter belly/lower flank
   float body = step(0.75, p.y);
   col = mix(col, uDark, smoothstep(1.4, 1.75, p.y) * 0.55 * body * (1.0 - head));
   col = mix(col, uBelly, (1.0 - smoothstep(0.88, 1.12, p.y)) * body * 0.5);
-  // Apfelschimmel: helle Flecken in dunklerem Netz, feine Sprenkel
+  // dapple grey: light spots in a darker net, fine flecks
   if (uDapple > 0.5) {
     float d = hzNoise(p * 6.5);
     float d2 = hzNoise(p * 13.0 + 3.0);
@@ -97,19 +97,19 @@ vec3 horseCoat(){
 #endif
     col = mix(g, uBase, head * 0.35);
   }
-  // dunkle Beine unten (Brauner: schwarz bis Karpus/Sprunggelenk)
+  // dark lower legs (bay: black up to carpus/hock)
   col = mix(col, uPointColor, legs * uPoints);
-  // dunkle Ohrränder beim Braunen
+  // dark ear rims on the bay
   col = mix(col, uPointColor, smoothstep(2.18, 2.26, p.y) * uPoints * (1.0 - vMat.x));
-  // Langhaar (Mähne, Schopf, Schweif) mit Strähnen
+  // long hair (mane, forelock, tail) with strands
   float strand = hzNoise(vec3(p.x * 70.0, p.y * 5.0, p.z * 70.0));
   col = mix(col, uHair * (1.0 + 0.22 * strand), vMat.x);
-  // Kopf: Maul dunkler, Abzeichen, Nüstern, Maulspalte
+  // head: darker muzzle, markings, nostrils, mouth line
   if (head > 0.5) {
     float s = vFace.x, u = vFace.y, fr = vFace.z;
     float muz = smoothstep(0.49, 0.585, s);
     col = mix(col, uMuzzle, muz * 0.75);
-    // Augenbogen dunkler
+    // darker brow
     col *= 1.0 - 0.18 * smoothstep(0.04, 0.0, abs(s - 0.15)) * smoothstep(0.1, 0.6, -fr + 0.5) * step(-0.2, fr);
     float wob = hzNoise(vec3(s * 28.0, u * 28.0, 3.0));
     float mark = 0.0;
@@ -126,19 +126,19 @@ vec3 horseCoat(){
     }
     vec3 white = mix(uWhite, vec3(0.86, 0.66, 0.62), muz * 0.6);
     col = mix(col, white, mark);
-    // Nüstern (Komma-Form) und Maulspalte
+    // nostrils (comma shape) and mouth line
     float nz = length(vec2((s - 0.566 + (abs(u) - 0.048) * 0.5) / 0.022, (abs(u) - 0.047) / 0.012));
     float nost = (1.0 - smoothstep(0.7, 1.0, nz)) * smoothstep(0.0, 0.25, fr) * (1.0 - smoothstep(0.75, 0.95, fr));
     col = mix(col, vec3(0.03, 0.02, 0.02), nost * 0.92);
     float mouth = smoothstep(0.03, 0.0, abs(fr + 0.4)) * smoothstep(0.54, 0.57, s);
     col = mix(col, col * 0.25, mouth * 0.85);
   }
-  // Schecke: große weiße Platten (auch im Langhaar)
+  // pinto: large white patches (also in the long hair)
   if (uPinto > 0.5) {
     float wp = hzPinto(p, head);
     col = mix(col, uWhite * (1.0 + 0.05 * fine), wp * (1.0 - vMat.y));
   }
-  // Huf (bei weißem Bein helles Horn), Auge, Ohr innen
+  // hoof (light horn below a white leg), eye, inner ear
   vec3 hoof = uHoof * (1.0 + 0.25 * hzNoise(vec3(p.x * 90.0, p.y * 6.0, p.z * 90.0)));
   if (uPinto > 0.5) hoof = mix(hoof, vec3(0.55, 0.48, 0.38), hzPinto(p + vec3(0.0, 0.12, 0.0), 0.0));
   col = mix(col, hoof, vMat.y);
@@ -187,7 +187,7 @@ export function applyAppearance(uniforms, appearance) {
   return a;
 }
 
-/** Fell-Material für eine Qualitätsstufe; uniforms werden geteilt (Aussehen ändern = Werte setzen). */
+/** Coat material for a quality level; uniforms are shared (changing appearance = setting values). */
 export function createCoatMaterial(level, uniforms) {
   const low = level === 'low';
   const mat = low
@@ -230,7 +230,7 @@ vRest = aRest; vMat = aMat; vFace = aFace;`,
   return mat;
 }
 
-/** Material mit Vertex-Farben (Sattelzeug, Reiter). */
+/** Vertex-colour material (tack, rider). */
 export function createVertexColorMaterial(level, roughness = 0.6) {
   return level === 'low'
     ? new THREE.MeshLambertMaterial({ vertexColors: true })

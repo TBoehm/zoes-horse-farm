@@ -1,5 +1,5 @@
-// Prozedurale Pferde-Geometrie: Rumpf, Hals, Kopf, Beine, Hufe, Ohren, Augen, Mähne, Schweif
-// (eine skinned Geometrie, Material „Fell") und Sattelzeug (zweite Geometrie, Vertex-Farben).
+// Procedural horse geometry: torso, neck, head, legs, hooves, ears, eyes, mane, tail (one skinned
+// geometry, "coat" material) and tack (second geometry, vertex colours).
 import * as THREE from 'three';
 import {
   Loft,
@@ -25,7 +25,7 @@ const hash = (i) => {
   return s - Math.floor(s);
 };
 
-/** Segmentzahlen je Qualitätsstufe: [Ringe entlang, Segmente rundum]. */
+/** Segment counts per quality level: [rings along, segments around]. */
 export const DETAIL = {
   low: {
     torso: [20, 14],
@@ -86,9 +86,9 @@ export const DETAIL = {
 const samples = (n, a = 0, b = 1) => Array.from({ length: n + 1 }, (_, i) => lerp(a, b, i / n));
 
 // ------------------------------------------------------------------------------------------
-// Rumpf
-// z, Oberlinie, Unterlinie, halbe Breite, Lage der breitesten Stelle (0 unten .. 1 oben),
-// Verjüngung oben, Verjüngung unten, Kerbe unten zwischen den Beinen
+// Torso
+// z, topline, underline, half width, height of the widest point (0 bottom .. 1 top),
+// top taper, bottom taper, notch at the bottom between the legs
 const TORSO = table([
   [-0.97, 1.43, 1.25, 0.08, 0.5, 0.75, 0.8, 0.0],
   [-0.93, 1.52, 1.08, 0.165, 0.5, 0.78, 0.75, 0.08],
@@ -126,15 +126,15 @@ export function torsoWeights(p) {
   const sx = Math.abs(x);
   const side = x >= 0 ? 'L' : 'R';
   const sideMask = smoothstep(0.03, 0.12, sx);
-  // Atmen (Bauch)
+  // breathing (belly)
   const bel =
     (1 - smoothstep(0.98, 1.25, y)) * (1 - smoothstep(0.2, 0.42, Math.abs(z + 0.05))) * 0.7;
-  // Schulter: Schulterblatt oben, Oberarm unten
+  // shoulder: scapula above, humerus below
   const es = ((y - 1.15) / 0.32) ** 2 + ((z - 0.66) / 0.27) ** 2;
   const fs = (1 - smoothstep(0.45, 1, es)) * sideMask;
   const scap = 0.4 * fs * smoothstep(1.0, 1.28, y);
   const hum = 0.4 * fs * (1 - smoothstep(1.0, 1.22, y));
-  // Hinterhand: Oberschenkel
+  // hindquarters: femur
   const eh = ((y - 1.12) / 0.3) ** 2 + ((z + 0.68) / 0.32) ** 2;
   const fh = (1 - smoothstep(0.4, 1, eh)) * sideMask;
   const fem = fh * lerp(0.5, 0, smoothstep(0.95, 1.28, y));
@@ -171,7 +171,7 @@ function makeTorso() {
 }
 
 // ------------------------------------------------------------------------------------------
-// Hals und Kopf
+// Neck and head
 const NECK_PTS = [
   [0, 1.25, 0.46],
   [0, 1.42, 0.74],
@@ -180,7 +180,7 @@ const NECK_PTS = [
   [0, 2.05, 1.41],
 ];
 const NECK = table([
-  // u, halbe Breite, Kamm, Kehle, Verjüngung oben
+  // u, half width, crest, throat, top taper
   [0.0, 0.22, 0.32, 0.36, 0.72],
   [0.15, 0.2, 0.28, 0.35, 0.66],
   [0.4, 0.155, 0.21, 0.23, 0.6],
@@ -227,7 +227,7 @@ function makeNeck() {
 const HEAD_S0 = -0.04;
 const HEAD_S1 = 0.625;
 const HEADT = table([
-  // s, halbe Breite, Stirnseite, Kieferseite
+  // s, half width, forehead side, jaw side
   [-0.04, 0.085, 0.07, 0.11],
   [0.0, 0.095, 0.085, 0.135],
   [0.06, 0.113, 0.1, 0.17],
@@ -263,9 +263,9 @@ function makeHead() {
 }
 
 // ------------------------------------------------------------------------------------------
-// Beine
+// Legs
 const FRONT_SECT = table([
-  // k (Segment + Anteil), halbe Breite, vorn, hinten
+  // k (segment + fraction), half width, front, back
   [0.0, 0.06, 0.05, 0.07],
   [1.0, 0.075, 0.06, 0.1],
   [1.5, 0.095, 0.09, 0.125],
@@ -363,7 +363,7 @@ function addHoof(builder, front, side, nh, radial) {
     for (let j = 0; j < radial; j++) {
       const a = (TAU * j) / radial;
       const s = Math.sin(a);
-      // Trachten hinten etwas eingezogen
+      // heels slightly drawn in
       const hlz = s >= 0 ? hl : hl * 0.92;
       const pt = new THREE.Vector3(hoof.x + hw * Math.cos(a), h, cz + hlz * s);
       ids.push(builder.vertex(pt, w, attrs));
@@ -394,7 +394,7 @@ function addHoof(builder, front, side, nh, radial) {
 }
 
 // ------------------------------------------------------------------------------------------
-// Schweif
+// Tail
 const TAIL_PTS = [
   [0, 1.58, -0.8],
   [0, 1.5, -0.95],
@@ -439,7 +439,7 @@ function makeTail() {
 
 // ------------------------------------------------------------------------------------------
 
-/** Baut die Fell-Geometrie (skinned, ein Draw-Call). */
+/** Builds the coat geometry (skinned, one draw call). */
 export function buildBodyGeometry(boneIndex, level = 'medium') {
   const D = DETAIL[level] || DETAIL.medium;
   const b = new MeshBuilder(boneIndex, { aMat: 4, aFace: 3 });
@@ -484,7 +484,7 @@ export function buildBodyGeometry(boneIndex, level = 'medium') {
     }
   }
 
-  // Ohren
+  // ears
   for (const side of SIDES) {
     const base = EAR.base(side);
     const dir = EAR.dir(side);
@@ -512,7 +512,7 @@ export function buildBodyGeometry(boneIndex, level = 'medium') {
     });
   }
 
-  // Augen
+  // eyes
   const eye = ellipsoidData(0.019, 0.018, 0.025, D.eye[0], D.eye[1]);
   for (const side of SIDES) {
     const m = new THREE.Matrix4()
@@ -527,7 +527,7 @@ export function buildBodyGeometry(boneIndex, level = 'medium') {
     );
   }
 
-  // Mähne (liegt nach rechts) und Schopf
+  // mane (lying to the right) and forelock
   const [mn, mv] = D.mane;
   buildShell(b, neck, {
     nu: mn,
@@ -571,7 +571,7 @@ export function buildBodyGeometry(boneIndex, level = 'medium') {
 }
 
 // ------------------------------------------------------------------------------------------
-// Sattelzeug
+// Tack
 
 const COL = {
   pad: [0.93, 0.93, 0.92],
@@ -596,7 +596,7 @@ export function buildTackGeometry(boneIndex, level = 'medium') {
   const torso = makeTorso();
   const head = makeHead();
 
-  // Schabracke
+  // saddle pad
   const [pn, pv] = D.pad;
   buildShell(b, torso, {
     nu: pn,
@@ -615,7 +615,7 @@ export function buildTackGeometry(boneIndex, level = 'medium') {
     },
   });
 
-  // Sattel: Sitz mit Vorder- und Hinterzwiesel
+  // saddle: seat with pommel and cantle
   const [sn, sv0] = D.saddle;
   buildShell(b, torso, {
     nu: sn,
@@ -633,7 +633,7 @@ export function buildTackGeometry(boneIndex, level = 'medium') {
     }),
   });
 
-  // Sattelblätter (nach vorn geschnitten) links und rechts
+  // saddle flaps (forward cut) left and right
   const [fn, fv] = D.flap;
   for (const side of SIDES) {
     buildShell(b, torso, {
@@ -653,7 +653,7 @@ export function buildTackGeometry(boneIndex, level = 'medium') {
     });
   }
 
-  // Sattelgurt
+  // girth
   buildShell(b, torso, {
     nu: 1,
     nv: D.band[1] * 2,
@@ -663,7 +663,7 @@ export function buildTackGeometry(boneIndex, level = 'medium') {
     attrs: () => ({ color: C.girth }),
   });
 
-  // Trense: Nasenriemen, Kopfstück, Stirnriemen, Backenstücke
+  // bridle: noseband, crownpiece, browband, cheekpieces
   const ringBand = (s0, s1, color, th = 0.009) =>
     buildShell(b, head, {
       nu: D.band[0],
@@ -699,7 +699,7 @@ export function buildTackGeometry(boneIndex, level = 'medium') {
       attrs: () => ({ color: C.leather }),
     });
   }
-  // Gebissringe
+  // bit rings
   const ring = torusData(0.026, 0.0045, D.ring[0], D.ring[1]);
   for (const side of SIDES) {
     const p = bitRingPoint(side);
@@ -715,14 +715,14 @@ export function buildTackGeometry(boneIndex, level = 'medium') {
   return b.build();
 }
 
-/** Gebissring (Zügel-Ansatz), Modellraum der Ruhepose. */
+/** Bit ring (rein attachment), rest-pose model space. */
 export function bitRingPoint(side) {
   const s = 0.585;
   const [w] = HEADT(s);
   return headPoint(s, -0.05, (w - 0.004) * side);
 }
 
-/** Auflagepunkt der Zügel am Hals (ohne Reiter), Modellraum der Ruhepose. */
+/** Rein resting point on the neck (no rider), rest-pose model space. */
 export function reinRestPoint(side) {
   return new THREE.Vector3(0.11 * side, 1.66, 0.62);
 }

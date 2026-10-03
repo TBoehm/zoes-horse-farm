@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { GAITS, MAX_STANCE_TRAVEL, legPhase, legSample, offsetsFor } from './gaits.js';
 
-describe('Gangarten: Takt und Schrittlänge (Reitlehre-Kennwerte)', () => {
-  it('Schritt ≈ 55/min, Trab ≈ 80/min, Galopp ≈ 100/min bei typischem Tempo', () => {
+describe('gaits: cadence and stride length (riding-theory values)', () => {
+  it('walk ≈ 55/min, trot ≈ 80/min, canter ≈ 100/min at typical speed', () => {
     expect(GAITS.walk.freq(1.6) * 60).toBeCloseTo(55, -1);
     expect(GAITS.trot.freq(3.2) * 60).toBeCloseTo(80, -1);
     expect(GAITS.canter.freq(6) * 60).toBeCloseTo(100, -1);
   });
 
-  it('Galoppsprung ≈ 3,7 m bei 6 m/s; Tempo steigt vor allem über die Schrittlänge', () => {
+  it('canter stride ≈ 3.7 m at 6 m/s; speed rises mainly through stride length', () => {
     const stride = (v) => v / GAITS.canter.freq(v);
     expect(stride(6)).toBeGreaterThan(3.4);
     expect(stride(6)).toBeLessThan(3.9);
@@ -17,7 +17,7 @@ describe('Gangarten: Takt und Schrittlänge (Reitlehre-Kennwerte)', () => {
     expect(sRatio).toBeGreaterThan(fRatio);
   });
 
-  it('Duty Factor: Schritt ≈ 0,6 (keine Schwebe), Trab 0,35–0,45, Galopp 0,3–0,4', () => {
+  it('duty factor: walk ≈ 0.6 (no suspension), trot 0.35–0.45, canter 0.3–0.4', () => {
     expect(GAITS.walk.duty(1.6)).toBeGreaterThan(0.5);
     for (const v of [2, 3, 4]) {
       expect(GAITS.trot.duty(v)).toBeGreaterThanOrEqual(0.35);
@@ -29,15 +29,15 @@ describe('Gangarten: Takt und Schrittlänge (Reitlehre-Kennwerte)', () => {
     }
   });
 
-  it('Rechtsgalopp ist der gespiegelte Linksgalopp', () => {
+  it('right lead is the mirrored left lead', () => {
     const l = offsetsFor('canter', 1);
     const r = offsetsFor('canter', -1);
     expect([r[0], r[1], r[2], r[3]]).toEqual([l[1], l[0], l[3], l[2]]);
   });
 });
 
-describe('Huf-Bahn', () => {
-  it('Stützphase am Boden, Schwungphase angehoben', () => {
+describe('hoof path', () => {
+  it('stance on the ground, swing lifted', () => {
     const f = GAITS.trot.freq(3);
     const d = GAITS.trot.duty(3);
     const stance = legSample('trot', 0, d / 2, 3, f);
@@ -49,7 +49,7 @@ describe('Huf-Bahn', () => {
     expect(swing.flex).toBeGreaterThan(0.5);
   });
 
-  it('Bahn ist an den Phasengrenzen stetig', () => {
+  it('path is continuous at the phase boundaries', () => {
     const v = 6;
     const f = GAITS.canter.freq(v);
     const d = GAITS.canter.duty(v);
@@ -62,7 +62,7 @@ describe('Huf-Bahn', () => {
     }
   });
 
-  it('Hufweg je Stützphase ist begrenzt (kein Überstrecken)', () => {
+  it('hoof travel per stance is limited (no overextension)', () => {
     const f = GAITS.canter.freq(8);
     const d = GAITS.canter.duty(8);
     const a = legSample('canter', 3, 0, 8, f);
@@ -70,7 +70,7 @@ describe('Huf-Bahn', () => {
     expect(a.dz - b.dz).toBeLessThanOrEqual(MAX_STANCE_TRAVEL + 1e-6);
   });
 
-  it('legPhase bleibt in [0, 1)', () => {
+  it('legPhase stays in [0, 1)', () => {
     expect(legPhase(0.1, 0.75)).toBeCloseTo(0.35);
     expect(legPhase(0.9, 0.25)).toBeCloseTo(0.65);
   });

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { COATS, MARKINGS, coatParams, markingIndex, normalizeAppearance } from './coats.js';
 
-describe('Fellfarben und Abzeichen', () => {
-  it('bietet die fünf Fellfarben und vier Kopfabzeichen aus Regel 43', () => {
+describe('coat colours and markings', () => {
+  it('offers the five coats and four head markings of rule 43', () => {
     expect(COATS).toEqual(['chestnut', 'bay', 'black', 'grey', 'pinto']);
     expect(MARKINGS).toEqual(['none', 'star', 'blaze', 'snip']);
   });
 
-  it('Vorgabe ist Brauner mit Stern; Ungültiges fällt auf die Vorgabe zurück', () => {
+  it('default is bay with star; invalid values fall back to the default', () => {
     expect(normalizeAppearance()).toEqual({ coat: 'bay', marking: 'star' });
     expect(normalizeAppearance({ coat: 'zebra', marking: 'x' })).toEqual({
       coat: 'bay',
@@ -21,14 +21,14 @@ describe('Fellfarben und Abzeichen', () => {
 
   const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 
-  it('Fuchs: rötlich, Langhaar heller als das Fell', () => {
+  it('chestnut: reddish, long hair lighter than the coat', () => {
     const p = coatParams('chestnut');
     expect(p.base[0]).toBeGreaterThan(p.base[2] * 2);
     expect(lum(p.hair)).toBeGreaterThan(lum(p.base));
     expect(p.points).toBe(0);
   });
 
-  it('Brauner: braunes Fell, schwarzes Langhaar und schwarze Beine unten', () => {
+  it('bay: brown coat, black long hair and black lower legs', () => {
     const p = coatParams('bay');
     expect(lum(p.hair)).toBeLessThan(0.08);
     expect(p.points).toBe(1);
@@ -36,7 +36,7 @@ describe('Fellfarben und Abzeichen', () => {
     expect(lum(p.base)).toBeGreaterThan(0.15);
   });
 
-  it('Rappe ist schwarz, Schimmel hell mit Apfelung, Schecke mit weißen Platten', () => {
+  it('black is black, grey is light with dapples, pinto has white patches', () => {
     expect(lum(coatParams('black').base)).toBeLessThan(0.1);
     const g = coatParams('grey');
     expect(lum(g.base)).toBeGreaterThan(0.7);
@@ -45,7 +45,7 @@ describe('Fellfarben und Abzeichen', () => {
     expect(coatParams('pinto').pinto).toBe(1);
   });
 
-  it('Abzeichen sind auf dunklem Fell deutlich, beim Schimmel kaum sichtbar', () => {
+  it('markings are clear on dark coats and barely visible on the grey', () => {
     const contrast = (coat) => lum(coatParams(coat).white) - lum(coatParams(coat).base);
     expect(contrast('bay')).toBeGreaterThan(0.5);
     expect(contrast('grey')).toBeLessThan(0.2);

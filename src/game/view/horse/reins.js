@@ -1,4 +1,4 @@
-// Zügel als dynamisches Band (zwei dünne Röhren, je Frame aktualisiert; ein Draw-Call).
+// Reins as a dynamic band (two thin tubes updated every frame; one draw call).
 import * as THREE from 'three';
 
 const SEG = 10;
@@ -41,7 +41,7 @@ export function createReins() {
     setMaterial(m) {
       mesh.material = m;
     },
-    /** Zügel s (0 links, 1 rechts) von a nach b mit Durchhang sag (m). */
+    /** Rein s (0 left, 1 right) from a to b with sag (m). */
     setRein(s, a, b, sag) {
       const base = s * (SEG + 1) * SIDES;
       tan.subVectors(b, a).normalize();

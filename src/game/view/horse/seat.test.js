@@ -24,7 +24,8 @@ describe('rider seat per gait', () => {
 
   it('trot: rising trot – up and down once per stride', () => {
     const rises = [];
-    for (let i = 0; i < 40; i++) rises.push(riderSeat({ gait: 'trot' }, ctx('trot', { phi: i / 40 })).rise);
+    for (let i = 0; i < 40; i++)
+      rises.push(riderSeat({ gait: 'trot' }, ctx('trot', { phi: i / 40 })).rise);
     expect(Math.max(...rises)).toBeGreaterThan(0.08);
     expect(Math.min(...rises)).toBeLessThan(0.01);
     const ups = rises.filter((r, i) => r > 0.05 && rises[(i + 39) % 40] <= 0.05).length;

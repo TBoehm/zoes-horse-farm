@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { JUMP_KEYS, POSE_KEYS, POSE_SIZE, jumpParam, samplePoses } from './poses.js';
 
-describe('Sprung-Posen', () => {
+describe('jump poses', () => {
   it('Phase + progress → J ∈ [0, 3]', () => {
     expect(jumpParam(null)).toBe(0);
     expect(jumpParam({ phase: 'takeoff', progress: 0.5 })).toBe(0.5);
@@ -10,14 +10,14 @@ describe('Sprung-Posen', () => {
     expect(jumpParam({ phase: 'landing', progress: 7 })).toBe(3);
   });
 
-  it('trifft die Schlüsselposen an den Stützstellen', () => {
+  it('hits the key poses at the knots', () => {
     JUMP_KEYS.forEach((k, i) => {
       const p = samplePoses(JUMP_KEYS, i * 0.5);
       for (let j = 0; j < POSE_SIZE; j++) expect(p[j]).toBeCloseTo(k[j], 6);
     });
   });
 
-  it('Absprung Nase hoch, Flug Basküle, Landung Nase runter', () => {
+  it('take-off nose up, flight bascule, landing nose down', () => {
     const pitch = POSE_KEYS.indexOf('pitch');
     const bend = POSE_KEYS.indexOf('bend');
     expect(samplePoses(JUMP_KEYS, 0.9)[pitch]).toBeLessThan(-0.2);

@@ -1,12 +1,12 @@
-// Prozedurales 3D-Pferd (three.js-Adapter). Reine Berechnungen liegen in motion.js, gaits.js,
-// poses.js, ik.js und coats.js; hier werden daraus Knochen-Rotationen gesetzt.
+// Procedural 3D horse (three.js adapter). Pure computations live in motion.js, gaits.js, poses.js,
+// ik.js, seat.js and coats.js; this file turns them into bone rotations.
 //
 //   const horse = createHorse({ coat: 'bay', marking: 'star', quality: 'medium' });
-//   scene.add(horse.object);          // Ursprung am Boden unter den Vorderbeinen, Blick nach +Z
-//   horse.update(dt, sim.horse);      // Gangart-, Sprung-, Hopser-, Verweigerungs-Animation
+//   scene.add(horse.object);          // origin on the ground below the forelegs, faces +Z
+//   horse.update(dt, sim.horse);      // gait, jump, hop and refusal animation
 //
-// Höhe: sim.horse.y setzt die Integration auf object.position.y; das Modell wendet y nicht
-// zusätzlich an, hält aber Hufe in der Stützphase auf dem Boden (Boden = −y im Modellraum).
+// Height: the integration puts sim.horse.y on object.position.y; the model does not apply y again
+// but keeps stance hooves on the ground (ground = −y in model space).
 import * as THREE from 'three';
 import { createRider } from '../rider.js';
 import { normalizeAppearance } from './coats.js';
@@ -29,7 +29,7 @@ import { GRAPHICS_LEVELS } from '../../../application/graphics-levels.js';
 
 export const QUALITY_LEVELS = GRAPHICS_LEVELS;
 
-/** Abstand Körpermitte → Bezugspunkt der Simulation (Boden unter den Vorderbeinen). */
+/** Distance body centre → simulation reference point (ground below the forelegs). */
 export const ORIGIN_OFFSET_Z = REST.front.hoof[2];
 
 const LEG_PREFIX = ['L', 'R', 'L', 'R'];
@@ -43,7 +43,7 @@ export function createHorse(options = {}) {
   const {
     quality: q0 = 'medium',
     rider: withRider = true,
-    origin = 'front', // 'front' (Sim-Bezugspunkt) oder 'center' (z. B. Menü-Vorschau)
+    origin = 'front', // 'front' (sim reference point) or 'center' (e.g. menu preview)
   } = options;
   let level = QUALITY_LEVELS.includes(q0) ? q0 : 'medium';
   let appearance = normalizeAppearance(options);
@@ -72,7 +72,7 @@ export function createHorse(options = {}) {
     rig.add(m);
   }
 
-  // Bein-Rigs in den lokalen Rahmen von spineFront / spineRear
+  // leg rigs in the local frames of spineFront / spineRear
   const F = REST.front;
   const H = REST.hind;
   const frontRig = makeFrontRig(
@@ -99,7 +99,7 @@ export function createHorse(options = {}) {
   const legX = [F.hoof[0], -F.hoof[0], H.hoof[0], -H.hoof[0]];
   const legZ = [F.hoof[2], F.hoof[2], H.hoof[2], H.hoof[2]];
 
-  // Reiter auf dem Sattel
+  // rider on the saddle
   let rider = null;
   if (withRider) {
     rider = createRider({ quality: level });
@@ -111,14 +111,14 @@ export function createHorse(options = {}) {
     B.root.add(rider.object);
   }
 
-  // Ohren-Anker (Reiter-Sicht), Blick nach vorn
+  // ear anchor (rider view), looking forward
   const earAnchor = new THREE.Object3D();
   earAnchor.name = 'horse-ear-anchor';
   const earLocal = EAR_ANCHOR().sub(new THREE.Vector3(...REST.head));
   earAnchor.position.copy(earLocal);
   B.head.add(earAnchor);
 
-  // Zügel (dynamisch, Gebiss → Hände bzw. Hals)
+  // reins (dynamic, bit → hands or neck)
   const reins = createReins();
   rig.add(reins.mesh);
   const bitLocal = [1, -1].map((s) => bitRingPoint(s).sub(new THREE.Vector3(...REST.head)));
@@ -140,7 +140,7 @@ export function createHorse(options = {}) {
     for (const m of [body, tack, reins.mesh]) m.castShadow = shadows;
     rider?.setQuality(level);
   }
-  // Bind-Matrizen mit der Ruhepose (object noch ohne Transformation)
+  // bind matrices in the rest pose (object not transformed yet)
   object.updateMatrixWorld(true);
   applyQuality();
 
@@ -160,7 +160,6 @@ export function createHorse(options = {}) {
   const mInvRig = new THREE.Matrix4();
   const tmpA = new THREE.Vector3();
   const tmpB = new THREE.Vector3();
-  let idleSeed = 0;
 
   const api = {
     object,
@@ -173,7 +172,7 @@ export function createHorse(options = {}) {
     get appearance() {
       return { ...appearance };
     },
-    /** Interner Bewegungszustand (nur lesen; für Tests/Debug). */
+    /** Internal motion state (read-only; tests/debug). */
     motion,
     update,
     setAppearance(a) {
@@ -209,14 +208,14 @@ export function createHorse(options = {}) {
     const t = m.time;
     const y = state.y || 0;
 
-    // --- Posen mischen (Sprung, Hopser, Verweigerung) ----------------------------------
+    // --- blend poses (jump, hop, refusal) ------------------------------------------------
     pose.fill(0);
     let W = 0;
     if (m.jumpWeight > 1e-3) W += addPose(samplePoses(JUMP_KEYS, m.jumpJ, tmpPose), m.jumpWeight);
     if (m.hopWeight > 1e-3) {
       samplePoses(JUMP_KEYS, m.hopJ, tmpPose);
       const hw = m.hopWeight * (1 - m.jumpWeight);
-      // Hopser = kleiner Sprung: Posen-Ausschlag 40 %
+      // hop = small jump: 40 % pose amplitude
       for (let i = 0; i < POSE_SIZE; i++) if (i !== PI.pivot) tmpPose[i] *= 0.4;
       W += addPose(tmpPose, hw);
     }
@@ -226,9 +225,9 @@ export function createHorse(options = {}) {
       W = 1;
     }
     const pivotZ = W > 1e-4 ? pose[PI.pivot] / W : 0;
-    const G = 1 - W; // Anteil Gangart
+    const G = 1 - W; // gait share
 
-    // --- Rumpf ---------------------------------------------------------------------------
+    // --- body ----------------------------------------------------------------------------
     const breath = Math.sin(t * 2 * Math.PI * 0.22);
     const pitch = m.body.pitch * G + pose[PI.pitch];
     const lift = m.body.bob * G + pose[PI.dy] + m.weights.halt * 0.004 * breath;
@@ -236,7 +235,7 @@ export function createHorse(options = {}) {
     const root = B.root;
     const ry = REST.root[1] + lift;
     const dz0 = -pivotZ;
-    // Drehung um (y = 0, z = pivotZ)
+    // rotation about (y = 0, z = pivotZ)
     root.position.set(
       -Math.sin(roll) * REST.root[1],
       ry * Math.cos(pitch) - dz0 * Math.sin(pitch),
@@ -249,8 +248,7 @@ export function createHorse(options = {}) {
     B.spineRear.rotation.set(-bend * 0.45, -turnBend * 0.22, 0);
     B.belly.scale.set(1 + 0.014 * breath, 1 + 0.01 * breath, 1);
 
-    // --- Hals, Kopf, Ohren, Schweif ------------------------------------------------------
-    idleSeed = t;
+    // --- neck, head, ears, tail ----------------------------------------------------------
     const lazy = m.weights.halt * (0.05 * Math.sin(t * 0.37) + 0.03 * Math.sin(t * 0.91 + 1));
     const neck =
       (neckCarriage(m.weights) + m.body.neck + lazy) * G +
@@ -294,7 +292,7 @@ export function createHorse(options = {}) {
       );
     }
 
-    // --- Beine (IK) ---------------------------------------------------------------------
+    // --- legs (IK) -----------------------------------------------------------------------
     root.updateMatrix();
     B.spineFront.updateMatrix();
     B.spineRear.updateMatrix();
@@ -305,7 +303,7 @@ export function createHorse(options = {}) {
       const rigL = front ? frontRig : hindRig;
       inv.copy(front ? mFront : mRear).invert();
       const L = m.legs[leg];
-      // Gangart-Ziel im Rig-Raum (Boden = −y, weil die Integration das Objekt um y anhebt)
+      // gait target in rig space (ground = −y because the integration lifts the object by y)
       v3.set(legX[leg], -y + L.y, legZ[leg] + L.dz).applyMatrix4(inv);
       down.set(0, -1, 0).transformDirection(inv);
       const a = angD(down.z, down.y);
@@ -329,7 +327,7 @@ export function createHorse(options = {}) {
       }
     }
 
-    // --- Reiter --------------------------------------------------------------------------
+    // --- rider ---------------------------------------------------------------------------
     if (rider) {
       rider.update(dt, state, {
         weights: m.weights,
@@ -345,7 +343,7 @@ export function createHorse(options = {}) {
       });
     }
 
-    // --- Weltmatrizen, Ohren-Anker, Zügel -------------------------------------------------
+    // --- world matrices, ear anchor, reins -----------------------------------------------
     object.updateMatrixWorld(true);
     object.matrixWorld.decompose(tmpA, qObj, tmpB);
     B.head.matrixWorld.decompose(tmpA, qHead, tmpB);
@@ -371,7 +369,6 @@ export function createHorse(options = {}) {
     if (falls.length && api.onFootfall) {
       for (const leg of falls) api.onFootfall(state.gait, leg);
     }
-    void idleSeed;
   }
 
   return api;
