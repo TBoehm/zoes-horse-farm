@@ -230,13 +230,36 @@ horse.onFootfall = (gait) => {}                      // für Hufschlag
 ### Audio (`src/adapters/audio/`)
 
 ```js
-const audio = createAudio({ settings });   // startet erst nach erster Interaktion (unlock)
+const audio = createAudio(settings, deps);   // settings: { musicVolume, musicMuted, sfxVolume, sfxMuted }
+                                             // deps (nur Tests): { AudioContext }
+audio.installUnlock(window)   // Gesten-Listener; legt den AudioContext erst bei der ersten Geste an
+audio.unlock()                // einzelner Entsperr-Versuch (z. B. aus Tests)
 audio.setVolumes({ musicVolume, musicMuted, sfxVolume, sfxMuted })
-audio.setMusicWanted(bool)                 // Screen-abhängig
-audio.setHidden(bool)                      // Hintergrund → stumm
+audio.setMusicWanted(bool)    // Screen-abhängig (siehe Screen-Flag `music`)
+audio.setHidden(bool)         // Hintergrund → stumm, Kontext wird angehalten
+audio.setPaused(bool)         // Pause → keine Effekte
 audio.sfx.hoof(gait) / takeoff() / landing() / railDown() / startSignal() / finishSignal()
-audio.setPaused(bool)                      // Pause → keine Effekte
+audio.getState()              // { unlocked, running, failed, hidden, paused, musicWanted,
+                              //   musicPlaying, sfxCounts: { hoof, takeoff, ... } }
+audio.dispose()
 ```
+- **Entsperren:** `installUnlock` hört auf `pointerdown` (nur Maus), `pointerup` (Touch/Stift),
+  `click`, `keydown` (nicht Escape) und `touchend`. Die Listener bleiben, bis der Kontext wirklich
+  `running` ist, und werden über `ctx.onstatechange` wieder installiert, sobald der Kontext nicht
+  mehr läuft und die Seite sichtbar ist (iOS-Unterbrechung, verweigertes `resume`).
+- **Telemetrie:** `getState().sfxCounts` zählt pro Effektname, welche Effekte wirklich gespielt
+  wurden (nicht gezählt: vor dem Entsperren, pausiert, im Hintergrund, stumm, Kontext nicht
+  `running`). Der Test-Hook `window.__zhfTest.audio()` liefert diesen Zustand; die Smoke-Tests
+  prüfen damit Startsignal (nur bei „Los“), Zielsignal, Pause und Hintergrund.
+- **Startsignal:** der Vorstart-Bildschirm spielt es nur bei „Los“ (nicht bei „Nochmal“ oder
+  Neustart). **Zielsignal:** die Ritt-Sitzung liefert das Kommando `{ type: 'sound', name:
+  'finishSignal' }` vor `finished`; der Ritt-Bildschirm führt es aus (keine Entscheidung im UI).
+- **Musik pro Screen:** Screen-Flag `music`, optional `musicDelayMs` (Ergebnisse: 1,5 s, damit die
+  Melodie nicht mit dem Zielsignal kollidiert); `adapters/ui/music-gate.js` setzt beides um
+  (`audio-wiring.js` verdrahtet Einstellungen, Sichtbarkeit und Musik).
+- **Klang für kleine Lautsprecher:** Hufschlag und Landung haben ein kurzes „Klopp“-Transient
+  (Bandpass-Rauschen 1–2,5 kHz, ca. 20 ms) und mehr Bandpass-Anteil, weil Handy-/Tablet-Lautsprecher
+  unter ca. 350 Hz kaum etwas wiedergeben.
 
 ## Grafikstufen
 

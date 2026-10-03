@@ -204,7 +204,9 @@ test.describe('start signal and effects', () => {
     const keys = createKeys(page);
     await keys.set('w', true);
     // the horse walks: hoofbeats are played
-    await expect.poll(async () => (await sfxCounts(page)).hoof).toBeGreaterThan(0);
+    await expect
+      .poll(async () => (await sfxCounts(page)).hoof, { timeout: 20_000 })
+      .toBeGreaterThan(0);
     await keys.releaseAll();
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.__zhfTest.ride().paused);

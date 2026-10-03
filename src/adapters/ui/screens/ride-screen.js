@@ -255,6 +255,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('keydown', onPauseKey);
       input.dispose();
+      session.dispose?.();
       services.audio?.setPaused(false);
       if (services.ride?.session === session) delete services.ride;
     },

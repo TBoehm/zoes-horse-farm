@@ -72,7 +72,7 @@ export function createTouchControls(container) {
       multitouch: false,
     });
     // nipplejs 1.x: handlers get ONE argument { type, target, data }
-    manager.on('move', (_e, evt) => {
+    manager.on('move', (evt) => {
       ({ steer, throttle } = readStickEvent(evt));
     });
     manager.on('end', releaseStick);

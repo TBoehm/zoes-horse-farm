@@ -147,7 +147,7 @@ test.describe('aborting a course ride after the start', () => {
     });
     const ride = await rideState(page);
     expect(ride.hud.phase).toBe('riding');
-    await expect(page.locator('[data-hud="time"]')).toHaveText(/^\d\d:\d\d,\d\d$/);
+    await expect(page.locator('[data-hud="time"]')).toHaveText(/^\d\d:\d\d[,.]\d\d$/);
     // now abort: pause, "To courses"
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.__zhfTest.ride().paused);

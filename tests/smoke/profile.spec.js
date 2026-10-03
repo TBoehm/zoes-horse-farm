@@ -66,6 +66,20 @@ test.describe('name question (first start)', () => {
   });
 });
 
+test.describe('name question: language default name', () => {
+  test('typing the default name keeps it following the language (name stays empty)', async ({
+    page,
+    browserName,
+  }) => {
+    await openGame(page, { lang: 'en' });
+    await webglOrSkip(page, test, browserName);
+    await page.locator('[data-field="horseName"]').fill('Flash');
+    await page.locator('[data-action="ok"]').click();
+    await expect(page.locator('[data-field="greeting"]')).toContainText('Flash');
+    expect(await storeSection(page, 'horse')).toMatchObject({ name: null, nameAnswered: true });
+  });
+});
+
 test.describe('main menu entries', () => {
   test('all entries of rule 53 in order, with the horse name in the greeting', async ({
     page,

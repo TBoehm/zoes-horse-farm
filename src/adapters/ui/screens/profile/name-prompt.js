@@ -46,7 +46,7 @@ export function createNamePromptScreen(ctx, params = {}) {
   );
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (answerName(store, input.value)) done();
+    if (answerName(store, input.value, { defaultName: t('horse.defaultName') })) done();
   });
   const el = h(
     'section',
