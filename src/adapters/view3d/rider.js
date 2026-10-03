@@ -19,6 +19,13 @@ import { riderSeat } from './horse/seat.js';
 import { createVertexColorMaterial } from './horse/material.js';
 
 const SIDES = [1, -1];
+const boneNames = (p) =>
+  Object.fromEntries(
+    ['thigh', 'shin', 'foot', 'upperArm', 'forearm', 'hand'].map((n) => [n, `${p}${n}`]),
+  );
+// precomputed: update() runs every frame
+const LEFT_NAMES = boneNames('L');
+const RIGHT_NAMES = boneNames('R');
 
 // Bind pose (sitting) joint positions in rider space
 const J = {
@@ -404,21 +411,21 @@ export function createRider({ quality = 'medium' } = {}) {
       B.base.updateMatrixWorld(true);
       invBase.copy(B.base.matrixWorld).invert();
       for (const s of SIDES) {
-        const p = s > 0 ? 'L' : 'R';
+        const names = s > 0 ? LEFT_NAMES : RIGHT_NAMES;
         // legs: ankle in the stirrup (fixed on the saddle), knee forward/outward
         pTarget.set(J.ankle[0] * s, J.ankle[1], J.ankle[2] + seat.footForward);
         pPole.set(0.6 * s, -0.1, 1.2);
-        twoBone(B[`${p}thigh`], B[`${p}shin`], B[`${p}foot`], pTarget, pPole);
-        frameOf(B[`${p}shin`], vA, qParent);
-        B[`${p}foot`].quaternion.copy(qParent).invert();
-        B[`${p}foot`].rotateX(-0.1);
+        twoBone(B[names.thigh], B[names.shin], B[names.foot], pTarget, pPole);
+        frameOf(B[names.shin], vA, qParent);
+        B[names.foot].quaternion.copy(qParent).invert();
+        B[names.foot].rotateX(-0.1);
         // arms: hands on the reins above the withers, elbows down/back/outward
         pTarget.set(seat.handX * s, seat.handY, seat.handZ);
         pPole.set(0.5 * s, -0.4, -0.6);
-        twoBone(B[`${p}upperArm`], B[`${p}forearm`], B[`${p}hand`], pTarget, pPole);
-        frameOf(B[`${p}forearm`], vA, qParent);
-        B[`${p}hand`].quaternion.copy(qParent).invert();
-        B[`${p}hand`].rotateZ(-0.5 * s);
+        twoBone(B[names.upperArm], B[names.forearm], B[names.hand], pTarget, pPole);
+        frameOf(B[names.forearm], vA, qParent);
+        B[names.hand].quaternion.copy(qParent).invert();
+        B[names.hand].rotateZ(-0.5 * s);
       }
     },
     setQuality(l) {

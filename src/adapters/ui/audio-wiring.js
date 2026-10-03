@@ -1,6 +1,7 @@
 // Sound wiring (SRT-006): store volumes, music per screen, mute in the background.
 import { registerSettingsSection, toggleRow } from './settings-screen.js';
 import { createAudio } from '../audio/index.js';
+import { createMusicGate } from './music-gate.js';
 
 function volumeRow(ctx, channel) {
   const { t, h, store } = ctx;
@@ -19,14 +20,12 @@ function volumeRow(ctx, channel) {
   slider.addEventListener('input', () =>
     store.update('settings', (x) => ({ ...x, [volKey]: Number(slider.value) / 100 })),
   );
-  const mute = toggleRow({
+  // Only the switch (no label of its own): it shows "sound on"; muted = off (volume is kept, rule 52)
+  const toggle = toggleRow({
     name: muteKey,
-    label: t('settings.sound'),
-    // The switch shows "sound on"; muted = off (volume is kept, rule 52)
     value: !s[muteKey],
     onChange: (on) => store.update('settings', (x) => ({ ...x, [muteKey]: !on })),
   });
-  const toggle = mute.querySelector('button');
   toggle.setAttribute('aria-label', t(`settings.${channel}On`));
   return h(
     'div',
@@ -42,7 +41,8 @@ export function registerAudio(app, store) {
   audio.installUnlock(window);
 
   store.onChange('settings', (s) => audio.setVolumes(s));
-  app.on('screen', ({ music }) => audio.setMusicWanted(music));
+  const musicGate = createMusicGate((wanted) => audio.setMusicWanted(wanted));
+  app.on('screen', (screen) => musicGate.onScreen(screen));
   const onVisibility = () => audio.setHidden(document.hidden);
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('pagehide', () => audio.setHidden(true));

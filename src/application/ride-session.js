@@ -4,11 +4,7 @@
 // and time, shows `view` and executes the returned commands. No DOM, no three.js.
 import { createRidingSim } from '../domain/sim/riding-sim.js';
 import { finishRide, recordJump } from './progress-service.js';
-
-// The jump aid always shows the zone for at least this speed (m/s), so it is useful at a halt too.
-const AID_MIN_SPEED = 1;
-
-const SOUND_BY_EVENT = { takeoff: 'takeoff', landed: 'landing', railDown: 'railDown' };
+import { createSoundMapper } from './ride-sounds.js';
 
 /**
  * @param {object} deps
@@ -19,14 +15,23 @@ const SOUND_BY_EVENT = { takeoff: 'takeoff', landed: 'landing', railDown: 'railD
  *
  * Commands returned by restart()/step():
  *   { type: 'endGallop' }  { type: 'resetTouchGallop' }  { type: 'feedback', key }
- *   { type: 'badges', ids }  { type: 'sound', name }
- *   { type: 'finished', screen, params }  (course ride ended, progress is already saved)
+ *   { type: 'badges', ids }  { type: 'sound', name }  (takeoff, landing, railDown, finishSignal)
+ *   { type: 'finished', screen, params }  (course ride ended, progress is already saved;
+ *   a { type: 'sound', name: 'finishSignal' } comes right before it)
  */
 export function createRideSession({ mode, store, clock, rng }) {
   const sim = createRidingSim({ obstacles: mode.obstacles, rules: mode.rules, rng });
   let rebuilds = [];
   let finished = false;
   let commands = [];
+  const sounds = createSoundMapper();
+  // Direction (+1 / −1) of the last fall per element, for the pole animation of the 3D view
+  const fallDirs = new Map();
+  // The jump aid needs the settings every frame: keep a copy and refresh it on change
+  let settings = store.get('settings');
+  const stopListening = store.onChange('settings', (next) => {
+    settings = next;
+  });
 
   // What a mode may ask for while it handles events or updates.
   const host = {
@@ -49,8 +54,9 @@ export function createRideSession({ mode, store, clock, rng }) {
         const ids = recordJump(store, clock);
         if (ids.length) commands.push({ type: 'badges', ids });
       }
-      if (SOUND_BY_EVENT[e.type]) commands.push({ type: 'sound', name: SOUND_BY_EVENT[e.type] });
+      if (e.type === 'railDown') fallDirs.set(e.elementId, e.dir);
     }
+    commands.push(...sounds.commandsFor(events));
     mode.onEvents(events, host);
   }
 
@@ -62,6 +68,7 @@ export function createRideSession({ mode, store, clock, rng }) {
 
   function finish({ screen, result, params }) {
     finished = true;
+    commands.push({ type: 'sound', name: 'finishSignal' });
     const outcome = finishRide(store, clock, result);
     commands.push({ type: 'finished', screen, params: { ...params, result, ...outcome } });
   }
@@ -75,6 +82,8 @@ export function createRideSession({ mode, store, clock, rng }) {
   function restart() {
     rebuilds = [];
     finished = false;
+    sounds.reset();
+    fallDirs.clear();
     sim.reset(mode.startPose());
     sim.rebuildAll();
     mode.onRestart();
@@ -109,14 +118,18 @@ export function createRideSession({ mode, store, clock, rng }) {
     flags: mode.flags,
     quitLabelKey: mode.quitLabelKey,
     quitScreen: mode.quitScreen,
-    /** Plain data for the UI to display; `horse` and `rails` are live (not copied). */
+    /** Stops listening to the store; call when the ride screen is left. */
+    dispose: stopListening,
+    /** Plain data for the UI to display; `horse`, `rails` and `fallDirs` are live (not copied). */
     get view() {
-      const target = mode.aidTarget({ approach: sim.approach, settings: store.get('settings') });
-      const speed = Math.max(sim.horse.speed, AID_MIN_SPEED);
+      const target = mode.aidTarget({ approach: sim.approach, settings });
       return {
         horse: sim.horse,
         rails: sim.rails,
-        aid: target ? { ...target, zone: sim.zoneFor(target.elementId, target.dir, speed) } : null,
+        fallDirs,
+        aid: target
+          ? { ...target, zone: sim.zoneFor(target.elementId, target.dir, sim.horse.speed) }
+          : null,
         highlight: mode.highlight ?? null,
         finishMarked: Boolean(mode.finishMarked),
         lines: mode.lines ?? null,

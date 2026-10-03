@@ -34,6 +34,10 @@ export const TUNING = {
     halfWidth: 0.45,
     // minimum distance before a pole as long as no jump happens
     frontMargin: 0.15,
+    // the hindquarters (rear point) are this far behind the reference point and also stay
+    // inside the arena, rearMargin away from the fence
+    rearLength: 1.5,
+    rearMargin: 0.3,
   },
 
   control: {
@@ -55,6 +59,8 @@ export const TUNING = {
   fence: {
     // angle to the wall normal below which an impact counts as frontal
     frontalAngle: 35 * DEG,
+    // turn rate (rad/s) at which the heading eases parallel to the wall on a glancing hit
+    slideTurnRate: 6.0,
   },
 
   jump: {
@@ -119,16 +125,25 @@ export const TUNING = {
       clearance: 0.25,
     },
     hop: { duration: 0.4, height: 0.2 },
+    // oxer, risk > 0 in the middle of the zone: chance that the pole crossed first is chosen
+    railChoice: { firstProbability: 0.5 },
+    // Space pressed this long before landing counts for the next obstacle (s)
+    spaceBuffer: 0.15,
   },
 
   refusal: {
     stopDuration: 1.2,
-    stopMargin: 0.15,
+    // the stop ends this far before the leading edge, so the horse clearly stands "in front"
+    stopMargin: 0.4,
+    // the stop decelerates at least this much (m/s²), however much room there is
+    stopDecelMin: 4,
     runoutDuration: 1.2,
     // turn rate when evading/running past (rad/s)
     maneuverTurnRate: 5.0,
     clearMargin: 0.1,
     maneuverTimeout: 5.0,
+    // from this lateral component (sin 10°) on, the course direction decides the evasion side
+    driftSide: Math.sin(10 * DEG),
   },
 
   sim: { maxDt: 0.1, substep: 1 / 120 },

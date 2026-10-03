@@ -26,12 +26,12 @@ export function obstaclesOf(...elements) {
   return elements.map((el) => ({ number: null, elements: [el], directed: false }));
 }
 
-export function makeSim(elements, { seed = 1, rng, canRefuse, obstacles } = {}) {
+export function makeSim(elements, { seed = 1, rng, canRefuse, obstacles, tuning = TUNING } = {}) {
   return createRidingSim({
     obstacles: obstacles ?? obstaclesOf(...elements),
     rules: { canRefuse: canRefuse ?? (() => true) },
     rng: rng ?? createRng(seed),
-    tuning: TUNING,
+    tuning,
   });
 }
 

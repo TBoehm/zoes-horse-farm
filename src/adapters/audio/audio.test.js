@@ -69,6 +69,8 @@ class FakeContext {
     this.resumeCalls = 0;
     this.suspendCalls = 0;
     this.closed = false;
+    this.refuseResume = false;
+    this.onstatechange = null;
     instances.push(this);
     for (const kind of [
       'Gain',
@@ -93,8 +95,14 @@ class FakeContext {
 
   resume() {
     this.resumeCalls++;
-    this.state = 'running';
+    if (!this.refuseResume) this.setState('running');
     return Promise.resolve();
+  }
+
+  // The browser changes the state and then fires `statechange`
+  setState(state) {
+    this.state = state;
+    this.onstatechange?.();
   }
 
   suspend() {
@@ -255,6 +263,48 @@ describe('effects', () => {
     expect(audio.getState().musicPlaying).toBe(true);
   });
 
+  it('counts the effects that were really played per name, in getState', () => {
+    const audio = make();
+    expect(audio.getState().sfxCounts).toEqual({
+      hoof: 0,
+      takeoff: 0,
+      landing: 0,
+      railDown: 0,
+      startSignal: 0,
+      finishSignal: 0,
+    });
+    audio.unlock();
+    audio.sfx.startSignal();
+    audio.sfx.hoof('walk');
+    audio.sfx.hoof('trot');
+    audio.sfx.finishSignal();
+    expect(audio.getState().sfxCounts).toMatchObject({ hoof: 2, startSignal: 1, finishSignal: 1 });
+    // a copy: changing it does not change the audio service
+    audio.getState().sfxCounts.hoof = 99;
+    expect(audio.getState().sfxCounts.hoof).toBe(2);
+  });
+
+  it('does not count effects that are dropped (paused, hidden, muted, not running, locked)', () => {
+    const audio = make();
+    audio.sfx.landing(); // before unlock
+    audio.unlock();
+    audio.setPaused(true);
+    audio.sfx.landing();
+    audio.setPaused(false);
+    audio.setHidden(true);
+    audio.sfx.landing();
+    audio.setHidden(false);
+    audio.setVolumes({ sfxMuted: true });
+    audio.sfx.landing();
+    audio.setVolumes({ sfxMuted: false });
+    ctxOf().state = 'suspended';
+    audio.sfx.landing();
+    expect(audio.getState().sfxCounts.landing).toBe(0);
+    ctxOf().state = 'running';
+    audio.sfx.landing();
+    expect(audio.getState().sfxCounts.landing).toBe(1);
+  });
+
   it('ignores effects while the context is not running', () => {
     const audio = make();
     audio.unlock();
@@ -377,11 +427,17 @@ describe('installUnlock', () => {
     };
   }
 
-  it('registers pointerdown, keydown, touchend and removes them after unlocking', async () => {
+  it('registers the gesture events and removes them after unlocking', async () => {
     const audio = make();
     const target = fakeTarget();
     audio.installUnlock(target);
-    expect([...target.handlers.keys()].sort()).toEqual(['keydown', 'pointerdown', 'touchend']);
+    expect([...target.handlers.keys()].sort()).toEqual([
+      'click',
+      'keydown',
+      'pointerdown',
+      'pointerup',
+      'touchend',
+    ]);
     target.handlers.get('pointerdown')({ type: 'pointerdown', pointerType: 'mouse' });
     await vi.advanceTimersByTimeAsync(0);
     expect(instances).toHaveLength(1);
@@ -399,6 +455,31 @@ describe('installUnlock', () => {
     expect(instances).toHaveLength(1);
   });
 
+  it('a pen or stylus unlocks with pointerup or click (its pointerdown is no user activation)', () => {
+    for (const trigger of [
+      { type: 'pointerup', pointerType: 'pen' },
+      { type: 'click' },
+      { type: 'pointerup', pointerType: 'touch' },
+    ]) {
+      instances = [];
+      const audio = make();
+      const target = fakeTarget();
+      audio.installUnlock(target);
+      target.handlers.get('pointerdown')({ type: 'pointerdown', pointerType: 'pen' });
+      expect(instances).toHaveLength(0);
+      target.handlers.get(trigger.type)(trigger);
+      expect(instances, trigger.type).toHaveLength(1);
+    }
+  });
+
+  it('a mouse pointerup alone does not unlock (pointerdown does)', () => {
+    const audio = make();
+    const target = fakeTarget();
+    audio.installUnlock(target);
+    target.handlers.get('pointerup')({ type: 'pointerup', pointerType: 'mouse' });
+    expect(instances).toHaveLength(0);
+  });
+
   it('returns an unsubscribe function and is harmless without a target', () => {
     const audio = make();
     const target = fakeTarget();
@@ -406,6 +487,123 @@ describe('installUnlock', () => {
     remove();
     expect(target.handlers.size).toBe(0);
     expect(() => audio.installUnlock(null)).not.toThrow();
+  });
+});
+
+describe('re-arming the unlock (iOS interruptions, refused resume)', () => {
+  function fakeTarget() {
+    const handlers = new Map();
+    return {
+      handlers,
+      addEventListener: (type, fn) => handlers.set(type, fn),
+      removeEventListener: (type, fn) => {
+        if (handlers.get(type) === fn) handlers.delete(type);
+      },
+    };
+  }
+  const press = (target) => target.handlers.get('pointerdown')({ type: 'pointerdown' });
+
+  it('an interruption after unlocking installs the gesture listeners again; the next gesture resumes', async () => {
+    const audio = make();
+    audio.setMusicWanted(true);
+    const target = fakeTarget();
+    audio.installUnlock(target);
+    press(target);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(target.handlers.size).toBe(0);
+    // e.g. a phone call or the screen lock on iOS
+    ctxOf().setState('interrupted');
+    expect(target.handlers.size).toBeGreaterThan(0);
+    press(target);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ctxOf().resumeCalls).toBe(1);
+    expect(ctxOf().state).toBe('running');
+    expect(target.handlers.size).toBe(0);
+    expect(audio.getState().musicPlaying).toBe(true);
+  });
+
+  it('a suspended context re-arms as well', async () => {
+    const audio = make();
+    const target = fakeTarget();
+    audio.installUnlock(target);
+    press(target);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(target.handlers.size).toBe(0);
+    ctxOf().setState('suspended');
+    expect(target.handlers.size).toBeGreaterThan(0);
+  });
+
+  it('keeps the listeners while a resume is refused and removes them once it works', async () => {
+    const audio = make();
+    const target = fakeTarget();
+    audio.installUnlock(target);
+    press(target);
+    await vi.advanceTimersByTimeAsync(0);
+    ctxOf().setState('interrupted');
+    ctxOf().refuseResume = true;
+    press(target);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ctxOf().resumeCalls).toBe(1);
+    expect(target.handlers.size).toBeGreaterThan(0);
+    ctxOf().refuseResume = false;
+    press(target);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ctxOf().resumeCalls).toBe(2);
+    expect(target.handlers.size).toBe(0);
+  });
+
+  it('does not re-arm while the page is in the background (it suspends the context itself)', async () => {
+    const audio = make();
+    const target = fakeTarget();
+    audio.installUnlock(target);
+    press(target);
+    await vi.advanceTimersByTimeAsync(0);
+    audio.setHidden(true);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(ctxOf().state).toBe('suspended');
+    expect(target.handlers.size).toBe(0);
+  });
+
+  it('returning to the page with a refused resume waits for the next gesture', async () => {
+    const audio = make();
+    const target = fakeTarget();
+    audio.installUnlock(target);
+    press(target);
+    await vi.advanceTimersByTimeAsync(0);
+    audio.setHidden(true);
+    await vi.advanceTimersByTimeAsync(200);
+    ctxOf().refuseResume = true;
+    audio.setHidden(false);
+    expect(ctxOf().state).toBe('suspended');
+    expect(target.handlers.size).toBeGreaterThan(0);
+    ctxOf().refuseResume = false;
+    press(target);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ctxOf().state).toBe('running');
+    expect(target.handlers.size).toBe(0);
+  });
+
+  it('the returned remove function ends the re-arming for good', async () => {
+    const audio = make();
+    const target = fakeTarget();
+    const remove = audio.installUnlock(target);
+    press(target);
+    await vi.advanceTimersByTimeAsync(0);
+    remove();
+    ctxOf().setState('interrupted');
+    expect(target.handlers.size).toBe(0);
+  });
+
+  it('after dispose a state change installs nothing', async () => {
+    const audio = make();
+    const target = fakeTarget();
+    audio.installUnlock(target);
+    press(target);
+    await vi.advanceTimersByTimeAsync(0);
+    const ctx = ctxOf();
+    audio.dispose();
+    ctx.setState('interrupted');
+    expect(target.handlers.size).toBe(0);
   });
 });
 

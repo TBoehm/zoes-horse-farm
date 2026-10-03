@@ -83,21 +83,3 @@ export function isBetterResult(candidate, best) {
   if (a !== b) return a < b;
   return candidate.timeCs < best.timeCs;
 }
-
-function pad2(n) {
-  return String(n).padStart(2, '0');
-}
-
-/** Hundredths → 'm:ss,hh' (e.g. 4827 → '0:48,27'). */
-export function formatTime(cs) {
-  const total = Math.max(0, Math.floor(cs));
-  const minutes = Math.floor(total / 6000);
-  const seconds = Math.floor((total % 6000) / 100);
-  return `${minutes}:${pad2(seconds)},${pad2(total % 100)}`;
-}
-
-/** Hundredths → 'ss,hh s' (e.g. 4827 → '48,27 s', 6250 → '62,50 s'). */
-export function formatSeconds(cs) {
-  const total = Math.max(0, Math.floor(cs));
-  return `${Math.floor(total / 100)},${pad2(total % 100)} s`;
-}

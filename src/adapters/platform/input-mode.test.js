@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyDevice, createInputMode } from './input-mode.js';
+import { classifyDevice, createInputMode, GAME_KEYS } from './input-mode.js';
 
 describe('touch mode (rule 11)', () => {
   it('classifies devices', () => {
@@ -35,5 +35,23 @@ describe('touch mode (rule 11)', () => {
     m.handleKey({ code: 'Space' });
     expect(m.touch).toBe(false);
     expect(changes).toEqual([true, false]);
+  });
+});
+
+describe('shared game keys', () => {
+  it('arrow keys steer, so they end the touch mode like WASD', () => {
+    for (const code of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']) {
+      const m = createInputMode({ device: 'hybrid' });
+      m.handlePointer({ pointerType: 'touch', type: 'pointerdown' });
+      expect(m.touch).toBe(true);
+      m.handleKey({ code });
+      expect(m.touch).toBe(false);
+    }
+  });
+
+  it('is the same list the keyboard adapter handles', () => {
+    expect(GAME_KEYS.has('KeyW')).toBe(true);
+    expect(GAME_KEYS.has('ArrowLeft')).toBe(true);
+    expect(GAME_KEYS.has('KeyX')).toBe(false);
   });
 });

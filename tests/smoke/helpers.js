@@ -90,6 +90,15 @@ export const screenName = (page) => page.evaluate(() => window.__zhfTest.screen(
 export const rideState = (page) => page.evaluate(() => window.__zhfTest.ride());
 export const storeSection = (page, name) => page.evaluate((n) => window.__zhfTest.store(n), name);
 export const audioState = (page) => page.evaluate(() => window.__zhfTest.audio());
+/** How often each effect was really played (dropped ones are not counted). */
+export const sfxCounts = async (page) => (await audioState(page)).sfxCounts;
+
+/** Emulates a tab that goes to the background (or comes back): `hidden` + `visibilitychange`. */
+export const setTabHidden = (page, hidden) =>
+  page.evaluate((value) => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => value });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
 
 /** Waits until a ride is running (optionally in a given mode) and returns its state. */
 export async function waitForRide(page, mode) {
@@ -222,9 +231,10 @@ const COURSE_1_LINE = [
 
 /**
  * Rides course 1 from the pre-start to the finish in the canter (needs the jump aid in the courses:
- * Space is pressed in the middle of the take-off zone). Returns once the results screen is shown.
+ * Space is pressed in the middle of the take-off zone). Returns once the results screen is shown,
+ * or earlier when `stopWhen(ride)` (a function of the ride state) returns true.
  */
-export async function rideCourseOne(page, { timeoutMs = 240_000 } = {}) {
+export async function rideCourseOne(page, { timeoutMs = 240_000, stopWhen } = {}) {
   const keys = createKeys(page);
   const t0 = Date.now();
   const pressed = new Set();
@@ -234,6 +244,7 @@ export async function rideCourseOne(page, { timeoutMs = 240_000 } = {}) {
     if (Date.now() - t0 > timeoutMs) throw new Error('bot: course 1 not finished in time');
     const ride = await rideState(page);
     if (!ride) break;
+    if (stopWhen?.(ride)) break;
     const { horse, aid } = ride;
     // canter at medium speed
     await keys.set('w', horse.speed < 5.0);

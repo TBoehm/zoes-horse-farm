@@ -13,7 +13,7 @@ export default {
     'myHorse.title': 'Mein Pferd',
     'myHorse.name': 'Name',
     'myHorse.coat': 'Fellfarbe',
-    'myHorse.marking': 'Abzeichen',
+    'myHorse.marking': 'Kopfabzeichen',
     'coat.chestnut': 'Fuchs',
     'coat.bay': 'Brauner',
     'coat.black': 'Rappe',

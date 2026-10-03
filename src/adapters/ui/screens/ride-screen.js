@@ -5,8 +5,10 @@ import { onLangChange, t } from '../i18n.js';
 import { h } from '../dom.js';
 import { getEngine } from '../../view3d/engine.js';
 import { createInput } from '../../input/input.js';
+import { trapTab } from '../../input/focus-trap.js';
 import { createRideMode } from '../../../application/modes/index.js';
 import { createRideSession } from '../../../application/ride-session.js';
+import { canStart } from '../../../application/course-catalog.js';
 import { showBadgeToast } from './profile/badge-toast.js';
 
 const HUDS = {};
@@ -24,6 +26,11 @@ export function registerRideHud(id, factory) {
  */
 export function createRideScreen(ctx, params = {}, { rng }) {
   const { app, store, inputMode, services, clock } = ctx;
+  // A locked course cannot be ridden (the course card is only disabled): back to the selection
+  if (params.mode === 'course' && !canStart(store, params.courseId)) {
+    queueMicrotask(() => app.go('courseSelect'));
+    return { el: h('section', { class: 'ride-screen', hidden: true }), destroy() {} };
+  }
   const engine = getEngine(ctx);
   const { world, horse, cameraRig, governor } = engine;
   const session = createRideSession({ mode: createRideMode(params), store, clock, rng });
@@ -34,7 +41,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   const feedbackEl = h('div', { class: 'ride-feedback', role: 'status', 'aria-live': 'polite' });
   const hint = h('div', { class: 'ride-hint' });
   const controls = h('div', { class: 'ride-controls' });
-  const pauseTitle = h('h2', {});
+  const pauseTitle = h('h2', { id: 'ride-pause-title' });
   const btn = (action, cls = '') =>
     h('button', { class: `btn ${cls}`, type: 'button', dataset: { action } });
   const resumeBtn = btn('resume', 'btn-menu');
@@ -43,7 +50,14 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   const settingsBtn = btn('settings', 'btn-secondary');
   const pauseMenu = h(
     'div',
-    { class: 'pause-overlay', hidden: true, dataset: { overlay: 'pause' } },
+    {
+      class: 'pause-overlay',
+      hidden: true,
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-labelledby': 'ride-pause-title',
+      dataset: { overlay: 'pause' },
+    },
     h(
       'section',
       { class: 'panel panel-pause' },
@@ -55,6 +69,18 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   if (hudView) hud.append(hudView.el);
   const renderHud = (model = session.view.hud) => hudView?.render(model);
 
+  // Session lines carry label keys; translate them here (the language may have changed)
+  function applyLines(lines) {
+    world.setLines?.(
+      lines
+        ? {
+            ...lines,
+            labels: { start: t(lines.labelKeys.start), finish: t(lines.labelKeys.finish) },
+          }
+        : null,
+    );
+  }
+
   const renderTexts = () => {
     pauseTitle.textContent = t('pause.title');
     resumeBtn.textContent = t('pause.resume');
@@ -64,33 +90,29 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     hint.textContent = t('ride.pauseHint');
     hudView?.renderTexts();
     renderHud();
+    applyLines(session.view.lines); // the line labels are translated texts too
   };
-  renderTexts();
   const offLang = onLangChange(renderTexts);
 
+  let paused = false;
+
   // --- Input and world ---
-  const input = createInput({ container: controls, inputMode });
+  // The keyboard only listens while this ride is the top screen and not paused (M1)
+  const input = createInput({
+    container: controls,
+    inputMode,
+    isActive: () => !paused && app.current === 'ride',
+  });
   const updateHint = () => (hint.hidden = inputMode.touch);
   updateHint();
   const offMode = inputMode.onChange(updateHint);
 
   world.setObstacles(session.obstacles, { flags: session.flags });
-  // Session lines carry label keys; translate them here (the language may have changed)
-  const applyLines = (lines) =>
-    world.setLines?.(
-      lines
-        ? {
-            ...lines,
-            labels: { start: t(lines.labelKeys.start), finish: t(lines.labelKeys.finish) },
-          }
-        : null,
-    );
-  applyLines(session.view.lines);
+  renderTexts();
   world.highlight(null);
   world.setAid(null);
   world.setFinishMarked?.(false);
 
-  let paused = false;
   let feedbackTimer = 0;
 
   function showFeedback(key) {
@@ -110,7 +132,6 @@ export function createRideScreen(ctx, params = {}, { rng }) {
       else if (cmd.type === 'sound') services.audio?.sfx[cmd.name]?.();
       else if (cmd.type === 'finished') {
         input.resetTouchGallop();
-        services.audio?.sfx.finishSignal();
         app.go(cmd.screen, cmd.params);
         return true;
       }
@@ -144,6 +165,8 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     governor.interrupt();
     services.audio?.setPaused(paused);
     if (paused) resumeBtn.focus({ preventScroll: true });
+    // a focused menu button must not keep Space/Enter once the ride goes on
+    else if (el.contains(document.activeElement)) document.activeElement.blur();
   }
 
   resumeBtn.addEventListener('click', () => setPaused(false));
@@ -159,6 +182,17 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   const onBlur = () => setPaused(true);
   document.addEventListener('visibilitychange', onHidden);
   window.addEventListener('blur', onBlur);
+  // Pause menu: Esc continues, Tab stays inside the dialog (keyboard handler is inactive then)
+  const onPauseKey = (e) => {
+    if (!paused || app.current !== 'ride') return;
+    if (e.code === 'Escape') {
+      e.preventDefault();
+      if (!e.repeat) setPaused(false);
+    } else {
+      trapTab(e, pauseMenu);
+    }
+  };
+  window.addEventListener('keydown', onPauseKey);
   const offRotate = app.on('rotateBlocked', (blocked) => blocked && setPaused(true));
 
   horse.onFootfall = (gait) => !paused && services.audio?.sfx.hoof(gait);
@@ -188,7 +222,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     renderHud(view.hud);
     horse.update(dt, view.horse);
     placeHorse(view.horse);
-    world.syncRails(view.rails, dt);
+    world.syncRails(view.rails, dt, view.fallDirs ?? undefined);
     world.setShadowFocus?.(view.horse.x, view.horse.z);
     world.highlight(view.highlight?.elementId ?? null, view.highlight?.number);
     world.setFinishMarked?.(view.finishMarked);
@@ -219,6 +253,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
       horse.onFootfall = null;
       document.removeEventListener('visibilitychange', onHidden);
       window.removeEventListener('blur', onBlur);
+      window.removeEventListener('keydown', onPauseKey);
       input.dispose();
       services.audio?.setPaused(false);
       if (services.ride?.session === session) delete services.ride;

@@ -2,7 +2,7 @@
 // Registered for the mode id 'course' (see register.js); the ride screen owns the instance.
 import { getLang, t } from '../../i18n.js';
 import { h } from '../../dom.js';
-import { formatSeconds } from './format.js';
+import { formatCs } from './format.js';
 
 /**
  * @returns {{ el: HTMLElement, renderTexts(): void, render(model: object): void }}
@@ -36,7 +36,7 @@ export function createCourseHud() {
     render(model) {
       const lang = getLang();
       const riding = model.phase !== 'prestart';
-      time.value.textContent = `${formatSeconds(Math.floor(model.timeMs / 10), lang)} s`;
+      time.value.textContent = formatCs(Math.floor(model.timeMs / 10), lang);
       allowed.value.textContent = `${model.allowedS} s`;
       faults.value.textContent = String(model.faults);
       next.value.textContent =

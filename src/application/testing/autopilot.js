@@ -172,24 +172,30 @@ function count(events, type) {
 }
 
 /**
- * Rides a whole course with the autopilot through the real ride session.
+ * Autopilot that rides a course step by step through the real ride session (for tests that
+ * stop half way, e.g. an aborted ride).
  * @param {number} courseId
- * @param {{ speed?: number, canter?: boolean, jitterS?: number, seed?: number, maxT?: number }} [opts]
+ * @param {{ store?: object, speed?: number, canter?: boolean, jitterS?: number, seed?: number }} [opts]
  *   defaults: the pace of the course (trot → medium trot, canter → medium canter with gallop)
- * @returns {{ finished: boolean, result: object|null, timeS: number, allowedS: number,
- *   events: object[], refusals: number, knockdowns: number, jumps: number }}
+ * @returns {{ session: object, store: object, course: object,
+ *   step: () => { events: object[], commands: object[] } }}
  */
-export function rideCourse(courseId, opts = {}) {
+export function createCourseRider(courseId, opts = {}) {
   const course = COURSES.find((c) => c.id === courseId);
   const trot = course.pace === 'trot';
   const {
+    store = fakeStore(),
     speed = trot ? TUNING.speeds.trotMedium : TUNING.speeds.canterMedium,
     canter = !trot,
     jitterS = 0,
     seed = 1,
-    maxT = course.allowedTimeS * 3 + 60,
   } = opts;
-  const session = sessionFor(createCourseMode({ courseId }), seed);
+  const session = createRideSession({
+    mode: createCourseMode({ courseId }),
+    store,
+    clock: fixedClock(),
+    rng: createRng(seed),
+  });
   const pilot = createAutopilot({
     route: routeOf(course),
     targets: courseTargets(course),
@@ -198,12 +204,35 @@ export function rideCourse(courseId, opts = {}) {
     jitterS,
     rng: createRng(seed + 1000),
   });
+  return {
+    session,
+    store,
+    course,
+    step() {
+      const out = session.step(DT, pilot.next(session.view.horse));
+      pilot.onEvents(out.events);
+      return out;
+    },
+  };
+}
+
+/**
+ * Rides a whole course with the autopilot through the real ride session.
+ * @param {number} courseId
+ * @param {{ speed?: number, canter?: boolean, jitterS?: number, seed?: number, maxT?: number }} [opts]
+ *   defaults: the pace of the course (trot → medium trot, canter → medium canter with gallop)
+ * @returns {{ finished: boolean, result: object|null, timeS: number, allowedS: number,
+ *   events: object[], refusals: number, knockdowns: number, jumps: number }}
+ */
+export function rideCourse(courseId, opts = {}) {
+  const { maxT = COURSES.find((c) => c.id === courseId).allowedTimeS * 3 + 60, ...riderOpts } =
+    opts;
+  const rider = createCourseRider(courseId, riderOpts);
   const events = [];
   let result = null;
   let t = 0;
   while (t < maxT && !result) {
-    const out = session.step(DT, pilot.next(session.view.horse));
-    pilot.onEvents(out.events);
+    const out = rider.step();
     events.push(...out.events);
     result = out.commands.find((c) => c.type === 'finished')?.params.result ?? null;
     t += DT;
@@ -212,7 +241,7 @@ export function rideCourse(courseId, opts = {}) {
     finished: result !== null,
     result,
     timeS: result ? result.timeCs / 100 : t,
-    allowedS: course.allowedTimeS,
+    allowedS: rider.course.allowedTimeS,
     events,
     refusals: count(events, 'refusal'),
     knockdowns: count(events, 'railDown'),

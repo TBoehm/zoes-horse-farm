@@ -7,6 +7,7 @@ import {
   rideCourseOne,
   rideState,
   screenName,
+  sfxCounts,
   storeSection,
   waitForRide,
   watchPage,
@@ -44,6 +45,14 @@ test.describe('course selection', () => {
     // even a forced click does nothing
     await page.locator('[data-course="2"]').dispatchEvent('click');
     expect(await screenName(page)).toBe('courseSelect');
+    // nor does a forced screen change to a locked or unknown course: back to the selection
+    for (const courseId of [3, 99]) {
+      await page.evaluate((id) => window.__zhfTest.go('prestart', { courseId: id }), courseId);
+      await expect(page.locator('.course-card')).toHaveCount(5);
+      expect(await screenName(page)).toBe('courseSelect');
+      expect(await page.evaluate(() => window.__zhfTest.stack())).toEqual(['courseSelect']);
+    }
+    await expect(page.locator('canvas.course-plan')).toHaveCount(0);
     // each card shows number and obstacle count
     await expect(page.locator('[data-course="1"]')).toContainText('4');
     await expect(page.locator('[data-course="5"]')).toContainText('8');
@@ -62,7 +71,7 @@ test.describe('course selection', () => {
     await page.locator('[data-entry="courses"]').click();
     await expect(page.locator('.course-card.is-open')).toHaveCount(2);
     await expect(page.locator('[data-course="1"] [data-stars]')).toHaveAttribute('data-stars', '2');
-    await expect(page.locator('[data-course="1"]')).toContainText('0:52.30');
+    await expect(page.locator('[data-course="1"]')).toContainText('00:52.30');
   });
 });
 
@@ -116,6 +125,44 @@ test.describe('pre-start, HUD and pause in a course', () => {
   });
 });
 
+test.describe('aborting a course ride after the start', () => {
+  test('after crossing the start line and a first jump: no credit, but the jump counts; the HUD shows mm:ss,hh', async ({
+    page,
+    browserName,
+  }) => {
+    test.setTimeout(180_000);
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { aidCourse: true } },
+    });
+    await page.locator('[data-entry="courses"]').click();
+    await page.locator('[data-course="1"]').click();
+    await page.locator('[data-action="go"]').click();
+    await waitForRide(page, 'course');
+    // the time chip only shows once the start line is crossed
+    await expect(page.locator('[data-chip="time"]')).toBeHidden();
+    // ride over the start line to the first jump (the bot stops once obstacle 1 is behind us)
+    await rideCourseOne(page, {
+      stopWhen: (ride) => ride.hud.phase === 'riding' && ride.hud.nextLabel === 2,
+    });
+    const ride = await rideState(page);
+    expect(ride.hud.phase).toBe('riding');
+    await expect(page.locator('[data-hud="time"]')).toHaveText(/^\d\d:\d\d,\d\d$/);
+    // now abort: pause, "To courses"
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__zhfTest.ride().paused);
+    await page.locator('[data-action="quit"]').click();
+    await expect(page.locator('.course-card')).toHaveCount(5);
+    const progress = await storeSection(page, 'progress');
+    // no credit for an aborted ride (rule 40) ...
+    expect(progress).toMatchObject({ unlocked: 1, finishedRides: 0, courses: {} });
+    expect(progress.badges).toEqual({ firstJump: expect.any(String) });
+    // ... but the jump that was made still counts
+    expect(progress.jumps).toBeGreaterThanOrEqual(1);
+    expect(watch.errors).toEqual([]);
+  });
+});
+
 test.describe('results screen', () => {
   test('shows name, time, penalty points as count x points and the buttons (English)', async ({
     page,
@@ -127,7 +174,7 @@ test.describe('results screen', () => {
     await page.evaluate((params) => window.__zhfTest.go('results', params), RESULT);
     await expect(page.locator('.panel-results')).toBeVisible();
     await expect(page.locator('.results-horse')).toContainText('Blitz');
-    await expect(page.locator('[data-result="time"]')).toContainText('0:48.27');
+    await expect(page.locator('[data-result="time"]')).toContainText('00:48.27');
     await expect(page.locator('[data-result="knockdowns"]')).toContainText('2 × 4 = 8');
     await expect(page.locator('[data-result="refusals"]')).toContainText('1 × 4 = 4');
     await expect(page.locator('[data-result="timeFaults"]')).toContainText('3');
@@ -141,6 +188,39 @@ test.describe('results screen', () => {
     await page.locator('[data-action="again"]').click();
     await expect(page.locator('canvas.course-plan')).toBeVisible();
   });
+
+  for (const [width, height] of [
+    [640, 360],
+    [568, 320],
+  ]) {
+    test(`new badges and the unlock note are visible without scrolling on a phone (${width}x${height})`, async ({
+      page,
+      browserName,
+    }) => {
+      await page.setViewportSize({ width, height });
+      await openGameMenu(page, test, browserName, {
+        save: { ...NAMED, progress: { unlocked: 2 } },
+      });
+      await page.evaluate(
+        (params) =>
+          window.__zhfTest.go('results', { ...params, awarded: ['clean', 'oxerPro', 'comboPro'] }),
+        RESULT,
+      );
+      await expect(page.locator('.new-badges [data-badge]')).toHaveCount(3);
+      // nothing is hidden below the fold: the results body does not scroll ...
+      const fit = await page.evaluate(() => {
+        const body = document.querySelector('.results-body');
+        return { scroll: body.scrollHeight, client: body.clientHeight };
+      });
+      expect(fit.scroll).toBeLessThanOrEqual(fit.client + 1);
+      // ... and the badges, the unlock note and the buttons are all inside the screen
+      for (const selector of ['.new-badges', '.unlocked-note', '[data-action="again"]']) {
+        const box = await page.locator(selector).boundingBox();
+        expect(box.y, selector).toBeGreaterThanOrEqual(0);
+        expect(box.y + box.height, selector).toBeLessThanOrEqual(height);
+      }
+    });
+  }
 
   test('the same figures in German; "next course" only when it is open', async ({
     page,
@@ -189,6 +269,8 @@ test.describe('a complete ride of course 1', () => {
     expect(progress.courses[1].stars).toBeGreaterThanOrEqual(1);
     await expect(page.locator('[data-action="next"]')).toBeVisible();
     await expect(page.locator('.unlocked-note')).toBeVisible();
+    // one start signal (on "Go") and one finish signal for the whole ride
+    expect(await sfxCounts(page)).toMatchObject({ startSignal: 1, finishSignal: 1 });
     // the same data after a reload
     await page.reload();
     await page.locator('[data-screen="menu"]').waitFor();

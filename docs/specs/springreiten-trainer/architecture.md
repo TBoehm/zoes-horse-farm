@@ -97,9 +97,12 @@ const session = createRideSession({ mode, store, clock, rng });  // mode = creat
 session.restart();                       // Startpose, Stangen auf, Modus zurücksetzen
 const out = session.step(dt, input);     // input = InputState ohne pause/camera
 // out = { events (Sim), commands: [{type:'endGallop'} | {type:'resetTouchGallop'} |
-//         {type:'feedback', key} | {type:'badges', ids} | {type:'sound', name} |
+//         {type:'feedback', key} | {type:'badges', ids} | {type:'sound', name: 'takeoff'|'landing'|'railDown'|'finishSignal'} |
 //         {type:'finished', screen, params: {courseId, result, isNewBest, unlockedCourse, awarded}}] }
-session.view  // { horse, rails, aid: null|{elementId, dir, zone}, highlight, finishMarked,
+// On a real finish the session sends {type:'sound', name:'finishSignal'} right before 'finished';
+// the ride screen plays no finish sound of its own. At most one railDown sound per element per jump.
+session.dispose()                        // stops the store listener (settings cache)
+session.view  // { horse, rails, fallDirs (Map elementId → ±1, last fall direction), aid: null|{elementId, dir, zone}, highlight, finishMarked,
               //   lines, hud: mode-spezifisches Modell (reine Daten) }
 ```
 Weitere Application-Dienste: `progress-service.js` (recordJump, finishRide, resetProgress),
@@ -181,7 +184,7 @@ sim.zoneFor(elementId, dir, speed) → { far, near, lastPoint, reach }  // Abst�
 rules.canRefuse(elementId, dir) → bool   // freier Modus: true; Parcours: nur an der Reihe + Richtung + Ritt
 ```
 Events (Array, je Step): `{type:'takeoff', elementId, dir, self, risk}`,
-`{type:'railDown', elementId, rail}`, `{type:'landed', elementId, dir, knocked: bool}`
+`{type:'railDown', elementId, rail, dir}` (dir = jump direction ±1), `{type:'landed', elementId, dir, knocked: bool}`
 (Sprung gezählt), `{type:'refusal', elementId, dir, reason:'gait'|'speed'|'angle'}`,
 `{type:'swerve', elementId}`, `{type:'hop'}`, `{type:'fenceStop'}`,
 `{type:'gallopEnded', reason:'refusal'|'fence'}`.

@@ -39,6 +39,12 @@ function rigPoint(a, parent) {
   return { y: a[1] - parent[1], z: a[2] - parent[2] };
 }
 
+/** Occasional ear flick (0 most of the time), k = ear index. */
+function earFlick(t, k) {
+  const s = Math.sin(t * (0.7 + 0.13 * k) + k * 2.1);
+  return s > 0.96 ? (s - 0.96) * 12 : 0;
+}
+
 export function createHorse(options = {}) {
   const {
     quality: q0 = 'medium',
@@ -155,6 +161,8 @@ export function createHorse(options = {}) {
   const v3 = new THREE.Vector3();
   const down = new THREE.Vector3();
   const rotOut = new Array(5);
+  const riderCtx = {}; // reused every frame
+  const tailBones = [1, 2, 3, 4, 5].map((k) => B[`tail${k}`]);
   const qObj = new THREE.Quaternion();
   const qHead = new THREE.Quaternion();
   const qWant = new THREE.Quaternion();
@@ -265,18 +273,14 @@ export function createHorse(options = {}) {
       turnBend * 0.2 + m.weights.halt * 0.08 * Math.sin(t * 0.23),
       0,
     );
-    const flick = (k) => {
-      const s = Math.sin(t * (0.7 + 0.13 * k) + k * 2.1);
-      return s > 0.96 ? (s - 0.96) * 12 : 0;
-    };
     const earBack = m.stopWeight * 0.6;
     B.Lear.rotation.set(
-      -0.1 - earBack - flick(1) * 0.5 * m.weights.halt,
+      -0.1 - earBack - earFlick(t, 1) * 0.5 * m.weights.halt,
       0.15 * Math.sin(t * 0.3),
       0,
     );
     B.Rear.rotation.set(
-      -0.1 - earBack - flick(2) * 0.5 * m.weights.halt,
+      -0.1 - earBack - earFlick(t, 2) * 0.5 * m.weights.halt,
       -0.15 * Math.sin(t * 0.27 + 1),
       0,
     );
@@ -285,7 +289,7 @@ export function createHorse(options = {}) {
       0.05 + 0.25 * m.weights.halt * Math.max(0, Math.sin(t * 0.43) - 0.7) * 3 + 0.04 * motionLift;
     const tailLift = motionLift + pose[PI.tail];
     for (let k = 0; k < 5; k++) {
-      const tb = B[`tail${k + 1}`];
+      const tb = tailBones[k];
       tb.rotation.set(
         (k === 0 ? 0.15 + tailLift * 0.7 : tailLift * (0.25 - k * 0.04)) +
           0.03 * Math.sin(2 * Math.PI * m.phi * 2 - k),
@@ -331,18 +335,17 @@ export function createHorse(options = {}) {
 
     // --- rider ---------------------------------------------------------------------------
     if (rider) {
-      rider.update(dt, state, {
-        weights: m.weights,
-        phi: m.phi,
-        lead: m.lead,
-        jumpWeight: m.jumpWeight,
-        jumpJ: m.jumpJ,
-        hopWeight: m.hopWeight,
-        stopWeight: m.stopWeight,
-        pitch,
-        neck,
-        speed: m.speed,
-      });
+      riderCtx.weights = m.weights;
+      riderCtx.phi = m.phi;
+      riderCtx.lead = m.lead;
+      riderCtx.jumpWeight = m.jumpWeight;
+      riderCtx.jumpJ = m.jumpJ;
+      riderCtx.hopWeight = m.hopWeight;
+      riderCtx.stopWeight = m.stopWeight;
+      riderCtx.pitch = pitch;
+      riderCtx.neck = neck;
+      riderCtx.speed = m.speed;
+      rider.update(dt, state, riderCtx);
     }
 
     // --- world matrices, ear anchor, reins -----------------------------------------------

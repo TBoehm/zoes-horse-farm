@@ -3,7 +3,6 @@ export default {
   de: {
     'settings.music': 'Musik',
     'settings.sfx': 'Effekte',
-    'settings.sound': 'Ton',
     'settings.musicVolume': 'Lautstärke Musik',
     'settings.sfxVolume': 'Lautstärke Effekte',
     'settings.musicOn': 'Musik an',
@@ -12,7 +11,6 @@ export default {
   en: {
     'settings.music': 'Music',
     'settings.sfx': 'Sounds',
-    'settings.sound': 'Sound',
     'settings.musicVolume': 'Music volume',
     'settings.sfxVolume': 'Sound volume',
     'settings.musicOn': 'Music on',

@@ -3,7 +3,7 @@ import { TUNING, ARENA } from './tuning.js';
 import { forwardOf, wrapAngle } from './geometry.js';
 import { gaitForSpeed, maxTurnRate, turnRadius } from './movement.js';
 import { createRng } from './rng.js';
-import { DEG, drive, makeSim, ofType } from './test-utils.js';
+import { DEG, DT, drive, makeSim, ofType } from './test-utils.js';
 
 const S = TUNING.speeds;
 
@@ -190,6 +190,71 @@ describe('Fencing (rule 24)', () => {
     expect(sim.horse.x).toBeCloseTo(ARENA.width / 2 - TUNING.horse.radius, 9);
   });
 
+  it('oblique: the heading eases parallel to the wall instead of snapping', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 18, z: 0, heading: 40 * DEG, speed: 5, gallop: true });
+    const headings = [];
+    drive(sim, { gallop: true }, { maxT: 2, onStep: (s) => headings.push(s.horse.heading) });
+    // never turns more than the slide turn rate allows within one step
+    let previous = 40 * DEG;
+    for (const h of headings) {
+      expect(Math.abs(wrapAngle(h - previous))).toBeLessThanOrEqual(
+        TUNING.fence.slideTurnRate * DT + 1e-9,
+      );
+      previous = h;
+    }
+    // it really took several steps (a snap would jump from 40° to 0° at once)
+    expect(headings.filter((h) => h > 1 * DEG && h < 39 * DEG).length).toBeGreaterThan(3);
+    expect(wrapAngle(sim.horse.heading)).toBeCloseTo(0, 9);
+  });
+
+  it('the hindquarters stay inside the arena when the horse turns around at the wall', () => {
+    const sim = makeSim([]);
+    // halt at the east wall facing it, then turn on the spot until it faces away
+    sim.reset({ x: 15, z: 0, heading: 90 * DEG, speed: 5, gallop: true });
+    drive(sim, { gallop: true }, { maxT: 2 });
+    sim.step(DT, { gallop: false });
+    const limit = ARENA.width / 2 - TUNING.horse.rearMargin + 1e-9;
+    drive(
+      sim,
+      { steer: 1 },
+      {
+        maxT: 6,
+        onStep: (s) => {
+          const rear = s.horse.x - Math.sin(s.horse.heading) * TUNING.horse.rearLength;
+          expect(rear).toBeLessThanOrEqual(limit);
+        },
+      },
+    );
+    expect(Math.abs(wrapAngle(sim.horse.heading - 270 * DEG))).toBeLessThan(0.5);
+  });
+
+  it('the hindquarters stay inside in all four corners, whatever the heading', () => {
+    const limitX = ARENA.width / 2 - TUNING.horse.rearMargin + 1e-9;
+    const limitZ = ARENA.length / 2 - TUNING.horse.rearMargin + 1e-9;
+    const sim = makeSim([]);
+    for (const [cx, cz] of [
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
+    ]) {
+      sim.reset({ x: cx * 19, z: cz * 34, heading: 0 });
+      drive(
+        sim,
+        { steer: 1 },
+        {
+          maxT: 8,
+          onStep: (s) => {
+            const f = { x: Math.sin(s.horse.heading), z: Math.cos(s.horse.heading) };
+            expect(Math.abs(s.horse.x - f.x * TUNING.horse.rearLength)).toBeLessThanOrEqual(limitX);
+            expect(Math.abs(s.horse.z - f.z * TUNING.horse.rearLength)).toBeLessThanOrEqual(limitZ);
+          },
+        },
+      );
+    }
+  });
+
   it('the horse never leaves the arena (random riding)', () => {
     const sim = makeSim([]);
     const rng = createRng(3);
@@ -197,6 +262,8 @@ describe('Fencing (rule 24)', () => {
     let throttle = 1;
     const maxX = ARENA.width / 2 - TUNING.horse.radius + 1e-9;
     const maxZ = ARENA.length / 2 - TUNING.horse.radius + 1e-9;
+    const rearMaxX = ARENA.width / 2 - TUNING.horse.rearMargin + 1e-9;
+    const rearMaxZ = ARENA.length / 2 - TUNING.horse.rearMargin + 1e-9;
     drive(
       sim,
       (_s, t) => {
@@ -211,6 +278,10 @@ describe('Fencing (rule 24)', () => {
         onStep: (s) => {
           expect(Math.abs(s.horse.x)).toBeLessThanOrEqual(maxX);
           expect(Math.abs(s.horse.z)).toBeLessThanOrEqual(maxZ);
+          const f = forwardOf(s.horse.heading);
+          const rear = TUNING.horse.rearLength;
+          expect(Math.abs(s.horse.x - f.x * rear)).toBeLessThanOrEqual(rearMaxX);
+          expect(Math.abs(s.horse.z - f.z * rear)).toBeLessThanOrEqual(rearMaxZ);
         },
       },
     );

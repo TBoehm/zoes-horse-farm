@@ -4,6 +4,7 @@ import { getEngine } from '../../../view3d/engine.js';
 import {
   appearanceOptions,
   displayName,
+  isValidName,
   NAME_MAX_LENGTH,
   rename,
   setAppearance,
@@ -27,11 +28,24 @@ export function createMyHorseScreen(ctx) {
     'aria-label': t('myHorse.name'),
     dataset: { field: 'horseName' },
   });
+  const nameHint = h(
+    'p',
+    { class: 'field-hint is-invalid', role: 'alert', hidden: true },
+    t('namePrompt.hint'),
+  );
+  const showValidity = (valid) => {
+    nameInput.classList.toggle('is-invalid', !valid);
+    nameInput.setAttribute('aria-invalid', String(!valid));
+    nameHint.hidden = valid;
+  };
   // An invalid input is not saved; the last valid name stays (rule 43)
-  const saveName = () => rename(store, nameInput.value, { defaultName: t('horse.defaultName') });
-  nameInput.addEventListener('input', saveName);
+  nameInput.addEventListener('input', () => {
+    rename(store, nameInput.value, { defaultName: t('horse.defaultName') });
+    showValidity(isValidName(nameInput.value));
+  });
   nameInput.addEventListener('blur', () => {
     nameInput.value = displayName(store.get('horse'), t('horse.defaultName'));
+    showValidity(true);
   });
 
   const choose = (key) => (value) => horse.setAppearance(setAppearance(store, { [key]: value }));
@@ -44,11 +58,13 @@ export function createMyHorseScreen(ctx) {
     h(
       'div',
       { class: 'settings-body' },
+      // Full-width row: the input must not shrink to a few pixels next to the label on phones
       h(
         'label',
-        { class: 'setting-row' },
+        { class: 'setting-row setting-row-wide setting-name' },
         h('span', { class: 'setting-label' }, t('myHorse.name')),
         nameInput,
+        nameHint,
       ),
       choiceGroup({
         name: 'coat',

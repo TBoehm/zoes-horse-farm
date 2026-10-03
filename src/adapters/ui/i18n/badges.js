@@ -9,9 +9,11 @@ export default {
     'badge.clean.name': 'Fehlerfrei',
     'badge.clean.condition': 'Reite einen Parcours ohne Fehler.',
     'badge.oxerPro.name': 'Oxer-Profi',
-    'badge.oxerPro.condition': 'Springe einen Oxer ohne Abwurf und ohne Verweigerung.',
+    'badge.oxerPro.condition':
+      'Springe im Parcours einen Oxer ohne Abwurf und ohne Verweigerung und komm ins Ziel.',
     'badge.comboPro.name': 'Kombi-Könner',
-    'badge.comboPro.condition': 'Springe eine Kombination ohne Abwurf und ohne Verweigerung.',
+    'badge.comboPro.condition':
+      'Springe im Parcours eine Kombination ohne Abwurf und ohne Verweigerung und komm ins Ziel.',
     'badge.allOpen.name': 'Alles offen',
     'badge.allOpen.condition': 'Schalte alle 5 Parcours frei.',
     'badge.starRider.name': 'Sternenreiter',
@@ -28,9 +30,11 @@ export default {
     'badge.clean.name': 'Clear Round',
     'badge.clean.condition': 'Ride a course with no faults.',
     'badge.oxerPro.name': 'Oxer Pro',
-    'badge.oxerPro.condition': 'Jump an oxer with no knockdown and no refusal.',
+    'badge.oxerPro.condition':
+      'Jump an oxer in a course with no knockdown and no refusal, and reach the finish.',
     'badge.comboPro.name': 'Combo Champ',
-    'badge.comboPro.condition': 'Jump a combination with no knockdown and no refusal.',
+    'badge.comboPro.condition':
+      'Jump a combination in a course with no knockdown and no refusal, and reach the finish.',
     'badge.allOpen.name': 'All Open',
     'badge.allOpen.condition': 'Unlock all 5 courses.',
     'badge.starRider.name': 'Star Rider',

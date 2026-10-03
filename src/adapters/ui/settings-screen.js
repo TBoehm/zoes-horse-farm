@@ -44,7 +44,10 @@ export function choiceGroup({ label, options, value, onChange, name }) {
   );
 }
 
-/** On/off switch as a large button. */
+/**
+ * On/off switch as a large button. Returns the row with its label, or only the switch button when
+ * `label` is left out (for rows that bring their own label, e.g. volume rows).
+ */
 export function toggleRow({ label, value, onChange, name }) {
   const btn = h(
     'button',
@@ -62,6 +65,7 @@ export function toggleRow({ label, value, onChange, name }) {
     btn.setAttribute('aria-checked', String(next));
     onChange(next);
   });
+  if (label === undefined) return btn;
   return h('div', { class: 'setting-row' }, h('span', { class: 'setting-label' }, label), btn);
 }
 

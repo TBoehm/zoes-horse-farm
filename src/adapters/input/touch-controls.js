@@ -3,8 +3,7 @@
 import nipplejs from 'nipplejs';
 import { onLangChange, t } from '../ui/i18n.js';
 import { h } from '../ui/dom.js';
-
-const DEAD_ZONE = 0.12;
+import { readStickEvent } from './joystick-mapping.js';
 
 export function createTouchControls(container) {
   let steer = 0;
@@ -14,7 +13,7 @@ export function createTouchControls(container) {
   let pause = false;
   let camera = false;
 
-  const base = h('div', { class: 'joystick', dataset: { control: 'joystick' } });
+  const base = h('div', { class: 'touch-joystick', dataset: { control: 'joystick' } });
   const gallopBtn = h(
     'button',
     { class: 'touch-btn touch-gallop', type: 'button', 'aria-pressed': 'false' },
@@ -56,8 +55,6 @@ export function createTouchControls(container) {
   };
 
   // Joystick via nipplejs (static in the bottom-left zone)
-  const shape = (v) =>
-    Math.abs(v) < DEAD_ZONE ? 0 : Math.sign(v) * ((Math.abs(v) - DEAD_ZONE) / (1 - DEAD_ZONE));
   const releaseStick = () => {
     steer = 0;
     throttle = 0;
@@ -74,10 +71,9 @@ export function createTouchControls(container) {
       restOpacity: 0.6,
       multitouch: false,
     });
-    manager.on('move', (_evt, data) => {
-      const mag = Math.min(1, data.force ?? 0);
-      steer = shape(Math.cos(data.angle.radian) * mag);
-      throttle = shape(Math.sin(data.angle.radian) * mag);
+    // nipplejs 1.x: handlers get ONE argument { type, target, data }
+    manager.on('move', (_e, evt) => {
+      ({ steer, throttle } = readStickEvent(evt));
     });
     manager.on('end', releaseStick);
   };

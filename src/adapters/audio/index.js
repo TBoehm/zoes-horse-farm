@@ -6,8 +6,6 @@ import { LOOP_STEPS, STEP_SECONDS, buildLoop } from './melody.js';
 import { playMusicEvent } from './music.js';
 import * as sfxVoices from './sfx.js';
 
-export { channelGain, normalizeSettings, shouldMusicRun, volumeToGain } from './logic.js';
-
 const MASTER_LEVEL = 2;
 const LOOKAHEAD = 0.15;
 const TICK_MS = 30;
@@ -17,6 +15,10 @@ const MUSIC_FADE_IN = 0.25;
 const MUSIC_FADE_OUT = 0.1;
 const REVERB_SEND = 0.3;
 const SUSPEND_DELAY_MS = 120;
+// Events that count as a user gesture for the browser (touch pointerdown and Escape do not; the
+// pointer events of a pen only count on pointerup/click).
+const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'click', 'keydown', 'touchend'];
+const SFX_NAMES = ['hoof', 'takeoff', 'landing', 'railDown', 'startSignal', 'finishSignal'];
 
 const noop = () => {};
 
@@ -42,6 +44,9 @@ export function createAudio(settings = {}, deps = {}) {
   let graph = null; // { master, musicGain, sfxGain, reverbIn, noise }
   let run = null; // running melody: { gain, timer, nextTime, step }
   let sfxSession = null; // Gain through which all effects run; pause/background cuts it
+  let unlockTarget = null; // where the gesture listeners live (installUnlock)
+  let armed = false; // gesture listeners installed right now
+  const sfxCounts = Object.fromEntries(SFX_NAMES.map((name) => [name, 0]));
   const voice = { ctx: null, noise: null, rng: mulberry32(2024), state: {} };
   const loop = buildLoop();
 
@@ -61,6 +66,7 @@ export function createAudio(settings = {}, deps = {}) {
     }
     try {
       ctx = new Ctor({ latencyHint: 'interactive' });
+      ctx.onstatechange = onStateChange;
       const master = ctx.createGain();
       master.gain.value = hidden ? 0 : MASTER_LEVEL;
       const comp = ctx.createDynamicsCompressor();
@@ -113,6 +119,7 @@ export function createAudio(settings = {}, deps = {}) {
     voice.noise = null;
     const old = ctx;
     ctx = null;
+    if (old) old.onstatechange = null;
     if (old && typeof old.close === 'function') {
       try {
         const p = old.close();
@@ -205,8 +212,9 @@ export function createAudio(settings = {}, deps = {}) {
     );
   }
 
-  function playSfx(fn, ...args) {
+  function playSfx(name, fn, ...args) {
     if (!canPlaySfx()) return;
+    sfxCounts[name]++;
     guard(() => {
       if (!sfxSession) {
         sfxSession = ctx.createGain();
@@ -229,23 +237,50 @@ export function createAudio(settings = {}, deps = {}) {
     });
   }
 
+  // ---- Gesture unlock (re-armed whenever the browser stops the context again) ----
+
+  function onGesture(e) {
+    if (e.type === 'pointerdown' && e.pointerType && e.pointerType !== 'mouse') return;
+    if (e.type === 'pointerup' && (!e.pointerType || e.pointerType === 'mouse')) return;
+    if (e.type === 'keydown' && e.key === 'Escape') return;
+    unlock();
+    // Stay armed until the context really runs (resume can be refused or stay pending)
+    Promise.resolve(resumePromise).then(() => {
+      if (disposed || failed || hidden || (ctx && ctx.state === 'running')) disarm();
+    });
+  }
+
+  function arm() {
+    if (armed || !unlockTarget || disposed || failed) return;
+    armed = true;
+    for (const type of UNLOCK_EVENTS) {
+      unlockTarget.addEventListener(type, onGesture, { capture: true, passive: true });
+    }
+  }
+
+  function disarm() {
+    if (!armed || !unlockTarget) return;
+    armed = false;
+    for (const type of UNLOCK_EVENTS) unlockTarget.removeEventListener(type, onGesture, true);
+  }
+
+  // iOS interrupts the context (phone call, lock screen, other app) and a resume without gesture
+  // can be refused: while the page is visible and the context is not running, wait for a gesture.
+  function onStateChange() {
+    if (!ctx || disposed) return;
+    if (ctx.state === 'running') disarm();
+    else if (!hidden) arm();
+  }
+
   function installUnlock(target = globalThis) {
     if (!target || typeof target.addEventListener !== 'function') return noop;
-    const events = ['pointerdown', 'keydown', 'touchend'];
-    const remove = () => {
-      for (const e of events) target.removeEventListener(e, handler, true);
+    disarm();
+    unlockTarget = target;
+    arm();
+    return () => {
+      disarm();
+      unlockTarget = null;
     };
-    function handler(e) {
-      // Touch pointerdown and Escape do not count as user activation in the browser
-      if (e.type === 'pointerdown' && e.pointerType && e.pointerType !== 'mouse') return;
-      if (e.type === 'keydown' && e.key === 'Escape') return;
-      unlock();
-      Promise.resolve(resumePromise).then(() => {
-        if (disposed || failed || hidden || (ctx && ctx.state === 'running')) remove();
-      });
-    }
-    for (const e of events) target.addEventListener(e, handler, { capture: true, passive: true });
-    return remove;
   }
 
   function setVolumes(next = {}) {
@@ -274,6 +309,7 @@ export function createAudio(settings = {}, deps = {}) {
       }, SUSPEND_DELAY_MS);
     } else {
       resumeContext();
+      if (ctx.state !== 'running') arm();
     }
   }
 
@@ -297,6 +333,7 @@ export function createAudio(settings = {}, deps = {}) {
 
   function dispose() {
     if (disposed) return;
+    disarm();
     guard(() => {
       if (run) stopRun(true);
     });
@@ -313,6 +350,7 @@ export function createAudio(settings = {}, deps = {}) {
       paused,
       musicWanted: wanted,
       musicPlaying: Boolean(run),
+      sfxCounts: { ...sfxCounts },
     };
   }
 
@@ -326,12 +364,12 @@ export function createAudio(settings = {}, deps = {}) {
     dispose,
     getState,
     sfx: {
-      hoof: (gait) => playSfx(sfxVoices.hoof, gait),
-      takeoff: () => playSfx(sfxVoices.takeoff),
-      landing: () => playSfx(sfxVoices.landing),
-      railDown: () => playSfx(sfxVoices.railDown),
-      startSignal: () => playSfx(sfxVoices.startSignal),
-      finishSignal: () => playSfx(sfxVoices.finishSignal),
+      hoof: (gait) => playSfx('hoof', sfxVoices.hoof, gait),
+      takeoff: () => playSfx('takeoff', sfxVoices.takeoff),
+      landing: () => playSfx('landing', sfxVoices.landing),
+      railDown: () => playSfx('railDown', sfxVoices.railDown),
+      startSignal: () => playSfx('startSignal', sfxVoices.startSignal),
+      finishSignal: () => playSfx('finishSignal', sfxVoices.finishSignal),
     },
   };
 }

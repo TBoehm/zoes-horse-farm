@@ -70,7 +70,6 @@ export function approachInfo(element, horse, approachDistance) {
   if (Math.sign(fAlong) !== dir) return null;
   const halfSpread = (element.spread || 0) / 2;
   const distance = Math.abs(local.along) - halfSpread;
-  if (distance < -halfSpread) return null;
   const angle = Math.acos(Math.min(1, Math.abs(fAlong)));
   // lateral offset at the intersection with the element's center plane
   const travel = Math.abs(local.along) / Math.abs(fAlong);

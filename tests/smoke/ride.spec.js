@@ -19,6 +19,18 @@ import {
 // A small window keeps the software renderer of the CI browser fast enough
 test.use({ viewport: { width: 640, height: 400 } });
 
+/** Touch input through the Chrome DevTools Protocol (real touch events, like a finger). */
+async function createFinger(page) {
+  const client = await page.context().newCDPSession(page);
+  const send = (type, points) =>
+    client.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+  return {
+    down: (x, y) => send('touchStart', [{ x, y, id: 1 }]),
+    move: (x, y) => send('touchMove', [{ x, y, id: 1 }]),
+    up: () => send('touchEnd', []),
+  };
+}
+
 test.describe('free riding (SRT-002)', () => {
   test('starts, renders a non-blank 3D scene without console errors or asset files', async ({
     page,
@@ -103,6 +115,11 @@ test.describe('free riding (SRT-002)', () => {
     await page.waitForFunction(() => window.__zhfTest.ride().paused);
     await keys.releaseAll();
     await expect(page.locator('[data-overlay="pause"] [data-action]')).toHaveCount(4);
+    // the pause menu is a modal dialog with a name
+    const dialog = page.locator('[data-overlay="pause"]');
+    await expect(dialog).toHaveAttribute('role', 'dialog');
+    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    await expect(dialog).toHaveAttribute('aria-labelledby', 'ride-pause-title');
     const before = await rideState(page);
     // a few frames pass while paused; nothing moves
     await page.evaluate(
@@ -115,6 +132,42 @@ test.describe('free riding (SRT-002)', () => {
     await page.locator('[data-action="resume"]').click();
     await page.waitForFunction(() => !window.__zhfTest.ride().paused);
     expect((await rideState(page)).horse.speed).toBeGreaterThan(0.5);
+  });
+
+  test('pause menu: Esc continues, Tab stays inside, Space presses the focused button', async ({
+    page,
+    browserName,
+  }) => {
+    await openGameMenu(page, test, browserName);
+    await startFreeRide(page);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__zhfTest.ride().paused);
+    await expect(page.locator('[data-action="resume"]')).toBeFocused();
+    // Tab never leaves the four buttons of the dialog
+    for (let i = 0; i < 6; i += 1) await page.keyboard.press('Tab');
+    expect(
+      await page.evaluate(() => document.activeElement.closest('[data-overlay="pause"]') !== null),
+    ).toBe(true);
+    // Esc in the pause menu continues the ride
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !window.__zhfTest.ride().paused);
+    // Space on a focused menu button is not swallowed by the game: it presses the button
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__zhfTest.ride().paused);
+    await expect(page.locator('[data-action="resume"]')).toBeFocused();
+    await page.keyboard.press('Space');
+    await page.waitForFunction(() => !window.__zhfTest.ride().paused);
+    // while the ride is paused (and in the settings on top of it) keys do nothing in the game
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__zhfTest.ride().paused);
+    await page.locator('[data-action="settings"]').click();
+    await expect(page.locator('.panel-settings')).toBeVisible();
+    await page.keyboard.down('w');
+    await page.keyboard.down('ArrowLeft');
+    await page.keyboard.up('ArrowLeft');
+    await page.keyboard.up('w');
+    await page.locator('.panel-settings [data-action="back"]').click();
+    expect((await rideState(page)).horse.speed).toBe(0);
   });
 
   test('pause menu: restart puts the horse back, "to menu" leaves, settings keep the pause', async ({
@@ -262,6 +315,67 @@ test.describe('touch controls (SRT-002)', () => {
     await page.locator('[data-action="resume"]').tap();
     await page.locator('.touch-camera').tap();
     await page.waitForFunction(() => window.__zhfTest.ride().cameraMode === 'rider');
+  });
+
+  test('dragging the joystick rides: speed rises, the horse turns, no page errors (SRT-002 B1)', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CDP touch input needs Chromium');
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName);
+    await page.locator('[data-entry="free"]').tap();
+    const start = await waitForRide(page, 'free');
+    expect(start.horse.speed).toBe(0);
+    const box = await page.locator('[data-control="joystick"]').boundingBox();
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    const finger = await createFinger(page);
+
+    // push forward and to the right: the horse speeds up and turns right (heading decreases)
+    await finger.down(cx, cy);
+    await finger.move(cx + 10, cy - 10);
+    await finger.move(cx + 40, cy - 60);
+    await finger.move(cx + 45, cy - 62);
+    await page.waitForFunction(() => window.__zhfTest.ride().horse.speed > 0.5, null, {
+      polling: 100,
+    });
+    await page.waitForFunction(() => window.__zhfTest.ride().horse.heading < -0.05, null, {
+      polling: 100,
+    });
+    const moving = await rideState(page);
+    expect(moving.horse.gait).not.toBe('halt');
+
+    // the stick released: steering and throttle stop (the speed stays, like after releasing W)
+    await finger.up();
+    const frames = (n) =>
+      page.evaluate(
+        (count) =>
+          new Promise((resolve) => {
+            let left = count;
+            const tick = () => (--left <= 0 ? resolve() : requestAnimationFrame(tick));
+            requestAnimationFrame(tick);
+          }),
+        n,
+      );
+    await frames(6); // the turn rate eases out
+    const released = await rideState(page);
+    await frames(6);
+    const later = await rideState(page);
+    expect(Math.abs(later.horse.heading - released.horse.heading)).toBeLessThan(0.03);
+    expect(Math.abs(later.horse.speed - released.horse.speed)).toBeLessThan(0.3);
+
+    // pulling the stick down brakes
+    await finger.down(cx, cy);
+    await finger.move(cx, cy + 20);
+    await finger.move(cx, cy + 60);
+    await page.waitForFunction(
+      (before) => window.__zhfTest.ride().horse.speed < before - 0.3,
+      later.horse.speed,
+      { polling: 100 },
+    );
+    await finger.up();
+    expect(watch.errors).toEqual([]);
   });
 
   test('turning to portrait pauses the ride and shows the rotate notice', async ({

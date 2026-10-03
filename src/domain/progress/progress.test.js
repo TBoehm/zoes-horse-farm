@@ -3,7 +3,6 @@ import {
   PROGRESS_DEFAULTS,
   addJump,
   applyFinishedRide,
-  isBetterResult,
   resetProgress,
   sanitizeProgress,
 } from './progress.js';
@@ -54,7 +53,7 @@ describe('sanitizeProgress', () => {
     expect(sanitizeProgress({ unlocked: '4' }).unlocked).toBe(1);
   });
 
-  it('keeps only courses 1..5 with valid numbers', () => {
+  it('drops invalid entries of courses 1..5 (unknown keys are kept, see below)', () => {
     const p = sanitizeProgress({
       courses: {
         1: { faults: 0, timeCs: 100, stars: 3 },
@@ -67,7 +66,9 @@ describe('sanitizeProgress', () => {
         foo: { faults: 0, timeCs: 100, stars: 3 },
       },
     });
-    expect(Object.keys(p.courses)).toEqual(['1']);
+    expect(Object.keys(p.courses).filter((k) => ['1', '2', '3', '4', '5'].includes(k))).toEqual([
+      '1',
+    ]);
   });
 
   it('validates badge dates but keeps unknown ids', () => {
@@ -104,30 +105,39 @@ describe('sanitizeProgress', () => {
     expect(sanitizeProgress(undefined).courses).not.toBe(PROGRESS_DEFAULTS.courses);
   });
 
+  it('keeps unknown keys in courses untouched (rule 47), but still cleans courses 1..5', () => {
+    const future = { faults: 'x', note: [1, 2] };
+    const p = sanitizeProgress({
+      courses: {
+        1: { faults: 2, timeCs: 5000, stars: 2 },
+        2: { faults: -1, timeCs: 5000, stars: 2 },
+        6: future,
+        extra: 'text',
+      },
+    });
+    expect(p.courses).toEqual({
+      1: { faults: 2, timeCs: 5000, stars: 2 },
+      6: future,
+      extra: 'text',
+    });
+    expect(p.courses['6']).toBe(future);
+  });
+
+  it('keeps an unknown courses key named __proto__ as plain data', () => {
+    const raw = JSON.parse(
+      '{"courses":{"__proto__":{"x":1},"1":{"faults":0,"timeCs":1,"stars":3}}}',
+    );
+    const p = sanitizeProgress(raw);
+    expect(Object.getPrototypeOf(p.courses)).toBe(Object.prototype);
+    expect(Object.keys(p.courses).sort()).toEqual(['1', '__proto__']);
+    expect({}.x).toBeUndefined();
+  });
+
   it('survives keys such as __proto__ from JSON', () => {
     const raw = JSON.parse('{"badges":{"__proto__":{"x":1}},"__proto__":{"y":2}}');
     const p = sanitizeProgress(raw);
     expect(Object.getPrototypeOf(p)).toBe(Object.prototype);
     expect({}.y).toBeUndefined();
-  });
-});
-
-describe('isBetterResult', () => {
-  it('is always better when there is no previous best', () => {
-    expect(isBetterResult({ faults: 20, timeCs: 99999 }, undefined)).toBe(true);
-    expect(isBetterResult({ faults: 20, timeCs: 99999 }, null)).toBe(true);
-  });
-
-  it('compares faults first, then time in hundredths', () => {
-    const best = { faults: 4, timeCs: 5000 };
-    expect(isBetterResult({ faults: 3, timeCs: 9000 }, best)).toBe(true);
-    expect(isBetterResult({ faults: 5, timeCs: 1000 }, best)).toBe(false);
-    expect(isBetterResult({ faults: 4, timeCs: 4999 }, best)).toBe(true);
-    expect(isBetterResult({ faults: 4, timeCs: 5001 }, best)).toBe(false);
-  });
-
-  it('same faults and same time are not an improvement', () => {
-    expect(isBetterResult({ faults: 4, timeCs: 5000 }, { faults: 4, timeCs: 5000 })).toBe(false);
   });
 });
 

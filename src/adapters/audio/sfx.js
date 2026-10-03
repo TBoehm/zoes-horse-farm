@@ -3,14 +3,26 @@
 import { jitter, noiseBurst, tone } from './dsp.js';
 import { midiToFreq } from './logic.js';
 
-// Sand surface: dull thud (sine with pitch drop) + soft noise, barely any click.
+// Sand surface: dull thud (sine with pitch drop) + soft noise + a short mid-range "clop".
+// The clop is what small speakers (phones, tablets) can actually play: they reproduce next to
+// nothing below about 350 Hz.
 const GAITS = {
-  walk: { vol: 0.62, freq: 105, noiseFreq: 520, noiseDecay: 0.07 },
-  trot: { vol: 0.8, freq: 122, noiseFreq: 700, noiseDecay: 0.06 },
-  canter: { vol: 0.98, freq: 138, noiseFreq: 860, noiseDecay: 0.085 },
+  walk: { vol: 0.62, freq: 105, noiseFreq: 520, noiseDecay: 0.07, clopFreq: 1300 },
+  trot: { vol: 0.8, freq: 122, noiseFreq: 700, noiseDecay: 0.06, clopFreq: 1500 },
+  canter: { vol: 0.98, freq: 138, noiseFreq: 860, noiseDecay: 0.085, clopFreq: 1700 },
 };
 
-export const GAIT_NAMES = Object.keys(GAITS);
+// Hoof on sand: band-passed noise knock (about 20 ms) plus a tiny falling "tock" tone.
+function clop(v, out, t, { freq, peak }) {
+  noiseBurst(v, out, t, { freq, q: 1, attack: 0.001, decay: 0.02, peak });
+  tone(v, out, t, {
+    freq: freq * 0.7,
+    freqEnd: freq * 0.45,
+    glide: 0.02,
+    decay: 0.03,
+    peak: peak * 0.2,
+  });
+}
 
 function thud(v, out, t, { freq, peak, decay = 0.1, sand = 1 }) {
   tone(v, out, t, { freq, freqEnd: freq * 0.42, glide: 0.07, decay, peak });
@@ -36,8 +48,9 @@ export function hoof(v, out, t, gait) {
     q: 0.8,
     attack: 0.004,
     decay: g.noiseDecay,
-    peak: 0.34 * vol,
+    peak: 0.5 * vol,
   });
+  clop(v, out, t, { freq: g.clopFreq * jitter(v, 0.08), peak: 1.4 * vol });
   noiseBurst(v, out, t, { filter: 'lowpass', freq: 260, decay: 0.06, peak: 0.3 * vol });
   noiseBurst(v, out, t, {
     filter: 'highpass',
@@ -64,10 +77,12 @@ export function takeoff(v, out, t) {
 }
 
 export function landing(v, out, t) {
-  thud(v, out, t, { freq: 112, peak: 0.9, decay: 0.15 });
-  thud(v, out, t + 0.07, { freq: 100, peak: 0.8, decay: 0.16 });
-  noiseBurst(v, out, t, { freq: 700, q: 0.8, decay: 0.13, peak: 0.28 });
-  noiseBurst(v, out, t + 0.03, { freq: 1200, q: 0.7, attack: 0.03, decay: 0.2, peak: 0.08 });
+  thud(v, out, t, { freq: 112, peak: 0.75, decay: 0.15 });
+  thud(v, out, t + 0.07, { freq: 100, peak: 0.65, decay: 0.16 });
+  noiseBurst(v, out, t, { freq: 800, q: 0.7, decay: 0.13, peak: 0.7 });
+  noiseBurst(v, out, t + 0.03, { freq: 1400, q: 0.7, attack: 0.03, decay: 0.2, peak: 0.3 });
+  clop(v, out, t, { freq: 1400 * jitter(v, 0.05), peak: 2.2 });
+  clop(v, out, t + 0.07, { freq: 1250 * jitter(v, 0.05), peak: 1.8 });
 }
 
 function woodClack(v, out, t, freq, peak) {

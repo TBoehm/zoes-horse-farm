@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { TUNING } from '../sim/tuning.js';
 import {
   allowedTime,
-  formatSeconds,
-  formatTime,
   idealLine,
   idealLineLength,
   isBetterResult,
@@ -133,20 +131,5 @@ describe('Best result (glossary)', () => {
     };
     expect(isBetterResult(result, { faults: 4, timeCs: 3000 })).toBe(true);
     expect(isBetterResult({ faults: 4, timeCs: 3000 }, result)).toBe(false);
-  });
-});
-
-describe('Time format', () => {
-  it('m:ss,hh', () => {
-    expect(formatTime(4827)).toBe('0:48,27');
-    expect(formatTime(6250)).toBe('1:02,50');
-    expect(formatTime(5)).toBe('0:00,05');
-    expect(formatTime(0)).toBe('0:00,00');
-  });
-
-  it('ss,hh s', () => {
-    expect(formatSeconds(4827)).toBe('48,27 s');
-    expect(formatSeconds(6250)).toBe('62,50 s');
-    expect(formatSeconds(7)).toBe('0,07 s');
   });
 });

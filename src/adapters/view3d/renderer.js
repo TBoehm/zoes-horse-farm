@@ -1,6 +1,8 @@
 // WebGL renderer with a consistent color / tone-mapping setup.
 import * as THREE from 'three';
 
+const SIZE = new THREE.Vector2(); // scratch: resize is checked every frame
+
 /**
  * Creates the renderer. Antialiasing cannot be toggled later (context attribute), so pick it
  * to match the initial quality level.
@@ -41,7 +43,7 @@ export function resizeRenderer(renderer, camera, width, height, maxPixelRatio) {
   const h = Math.max(1, Math.floor(height ?? canvas.clientHeight ?? 1));
   const max = maxPixelRatio ?? renderer.userData?.maxPixelRatio ?? 2;
   const ratio = Math.min(defaultDpr(), max);
-  const size = renderer.getSize(new THREE.Vector2());
+  const size = renderer.getSize(SIZE);
   const changed = size.x !== w || size.y !== h || renderer.getPixelRatio() !== ratio;
   if (!changed) return false;
   renderer.setPixelRatio(ratio);

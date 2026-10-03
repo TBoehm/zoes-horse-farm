@@ -29,6 +29,14 @@ describe('badge texts', () => {
     ]);
   });
 
+  it('oxer and combination badges say that it must happen in a course ride that reaches the finish', () => {
+    for (const id of ['oxerPro', 'comboPro']) {
+      const key = BADGES.find((b) => b.id === id).conditionKey;
+      expect(strings.de[key], `de ${id}`).toMatch(/im Parcours.*Ziel/);
+      expect(strings.en[key], `en ${id}`).toMatch(/in a course.*finish/);
+    }
+  });
+
   it('placeholders match in both languages', () => {
     const placeholders = (s) => (s.match(/\{\w+\}/g) ?? []).sort().join();
     for (const key of Object.keys(strings.de)) {

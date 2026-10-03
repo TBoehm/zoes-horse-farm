@@ -32,8 +32,6 @@ import {
 } from './jump.js';
 
 const ALWAYS_REFUSE = { canRefuse: () => true };
-// from this lateral component (≈ sin 10°) on, the course direction decides the evasion side
-const DRIFT_SIDE = Math.sin((10 * Math.PI) / 180);
 
 function sideOf(value) {
   return value >= 0 ? 1 : -1;
@@ -98,6 +96,8 @@ export function createRidingSim({
   let refusal = null;
   let maneuver = null;
   let approach = null;
+  // seconds a Space press during landing stays valid for the next obstacle
+  let spaceBuffer = 0;
   const locks = new Set();
   const armed = new Set();
 
@@ -143,6 +143,7 @@ export function createRidingSim({
     hop = null;
     refusal = null;
     maneuver = null;
+    spaceBuffer = 0;
     locks.clear();
     armed.clear();
     approach = computeApproach();
@@ -200,8 +201,18 @@ export function createRidingSim({
 
   // ---- Jumping ---------------------------------------------------------------
 
-  function pressJump(events) {
-    if (jump || refusal || maneuver) return;
+  // `buffered`: a press carried over from the landing; it only jumps when an obstacle is within
+  // reach and never turns into a hop.
+  function pressJump(events, { buffered = false } = {}) {
+    if (refusal || maneuver) {
+      spaceBuffer = 0;
+      return;
+    }
+    if (jump) {
+      // a press shortly before landing is kept for the next obstacle (combination part b)
+      if (horse.jump?.phase === 'landing') spaceBuffer = T.jump.spaceBuffer;
+      return;
+    }
     let cand = null;
     for (const a of approaches()) {
       const zone = zoneForElement(a.el, horse.speed, T);
@@ -209,6 +220,7 @@ export function createRidingSim({
       if (!cand || a.info.distance < cand.info.distance) cand = { ...a, zone };
     }
     if (cand) {
+      spaceBuffer = 0;
       // Obstacle within reach: jump or nothing (no hop), rules 19, 21
       const ok =
         gaitAllows(cand.el, horse.gait) &&
@@ -217,6 +229,7 @@ export function createRidingSim({
       if (ok) takeoff(cand.el, cand.info, false, events);
       return;
     }
+    if (buffered) return;
     if ((horse.gait === 'trot' || horse.gait === 'canter') && !hop) {
       hop = { t: 0 };
       events.push({ type: 'hop' });
@@ -231,7 +244,7 @@ export function createRidingSim({
     let pref;
     if (info.distance < zone.near) pref = first;
     else if (info.distance > zone.far) pref = second;
-    else pref = rng() < 0.5 ? first : second;
+    else pref = rng() < T.jump.railChoice.firstProbability ? first : second;
     if (up[pref]) return pref;
     return up[1 - pref] ? 1 - pref : -1;
   }
@@ -301,7 +314,7 @@ export function createRidingSim({
       if (c.falls && up[c.rail]) {
         up[c.rail] = false;
         jump.knocked = true;
-        events.push({ type: 'railDown', elementId: jump.el.id, rail: c.rail });
+        events.push({ type: 'railDown', elementId: jump.el.id, rail: c.rail, dir: jump.dir });
       }
     }
   }
@@ -371,7 +384,7 @@ export function createRidingSim({
         type,
         t: 0,
         elementId: el.id,
-        decel: Math.max(4, (horse.speed * horse.speed) / (2 * room)),
+        decel: Math.max(T.refusal.stopDecelMin, (horse.speed * horse.speed) / (2 * room)),
       };
     } else {
       refusal = { type, t: 0, elementId: el.id };
@@ -387,10 +400,10 @@ export function createRidingSim({
     const fc = f.x * t.x + f.z * t.z;
     let out;
     if (face === 'front') {
-      const side = Math.abs(fc) > DRIFT_SIDE ? sideOf(fc) : sideOf(offset);
+      const side = Math.abs(fc) > T.refusal.driftSide ? sideOf(fc) : sideOf(offset);
       out = headingOf(t.x * side, t.z * side);
     } else {
-      const side = Math.abs(fa) > DRIFT_SIDE ? sideOf(fa) : sideOf(offset);
+      const side = Math.abs(fa) > T.refusal.driftSide ? sideOf(fa) : sideOf(offset);
       out = headingOf(n.x * side, n.z * side);
     }
     maneuver = {
@@ -489,17 +502,18 @@ export function createRidingSim({
       const w = fromLocal(el, a, c);
       horse.x = w.x;
       horse.z = w.z;
-      // Horse hits a stand/obstacle without jumping: evade sideways (rule 22)
-      if (!jump && !maneuver && !refusal && horse.speed >= T.speeds.trotMin) {
+      // Horse hits a stand/obstacle without jumping: evade sideways (rule 22). Rule 22 has no
+      // gait condition, so even a walking horse swerves instead of treading on the spot.
+      if (!jump && !maneuver && !refusal && horse.speed >= T.speeds.haltBelow) {
         startManeuver(el, face, face === 'front' ? p.across : p.along);
         events.push({ type: 'swerve', elementId: el.id });
       }
     }
   }
 
-  function handleFence(events) {
+  function handleFence(dt, events) {
     const speedBefore = horse.speed;
-    const res = applyFence(horse, T, { allowStop: !jump });
+    const res = applyFence(horse, T, { allowStop: !jump, dt });
     if (res && res.frontal) {
       const n = res.normal;
       const repeat = fenceStopNormal && fenceStopNormal.x === n.x && fenceStopNormal.z === n.z;
@@ -533,7 +547,9 @@ export function createRidingSim({
   function releaseLocks() {
     for (const id of locks) {
       const el = byId.get(id);
-      if (!el || Math.hypot(horse.x - el.x, horse.z - el.z) > T.approachDistance) locks.delete(id);
+      // same measure as the approach: distance from the leading edge along the jump axis
+      const along = el ? Math.abs(toLocal(el, horse.x, horse.z).along) - (el.spread || 0) / 2 : 0;
+      if (!el || along > T.approachDistance) locks.delete(id);
     }
   }
 
@@ -562,6 +578,10 @@ export function createRidingSim({
   function substep(dt, input, events) {
     const prevX = horse.x;
     const prevZ = horse.z;
+    if (spaceBuffer > 0) {
+      spaceBuffer = Math.max(0, spaceBuffer - dt);
+      if (spaceBuffer > 0 && !jump) pressJump(events, { buffered: true });
+    }
     if (jump) {
       advanceJump(dt, events);
     } else {
@@ -580,7 +600,7 @@ export function createRidingSim({
       advance(horse, horse.speed, dt);
     }
     constrainObstacles(prevX, prevZ, events);
-    handleFence(events);
+    handleFence(dt, events);
     if (maneuver) updateManeuver(dt);
     if (refusal) updateRefusal(dt);
     if (hop) {

@@ -175,8 +175,42 @@
   font-size: 1.1rem;
 }
 
+.unlocked-note {
+  margin: 6px 0;
+}
+
 .new-badges h3 {
-  margin: 10px 0 8px;
+  margin: 6px 0 4px;
+  font-size: 1rem;
+}
+
+/* New badges: compact chips right under the stars (no big cards, so nothing is pushed down) */
+.badge-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.badge-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 3px;
+  border-radius: 999px;
+  background: #fff7e6;
+  border: 2px solid #f2d48a;
+  font-size: 0.95rem;
+}
+
+.badge-chip .badge-emblem {
+  width: 28px;
+  height: 28px;
+  font-size: 0.95rem;
+  box-shadow: 0 2px 0 #a86e12;
 }
 
 @media (max-height: 520px) {
@@ -211,21 +245,89 @@
     margin-top: 0;
     align-self: end;
   }
-  /* Results: figures in two columns and smaller stars, so that most fits without scrolling */
+  /* Results: summary left, figures right, the new-badge chips across the full width below, so
+     that all of it fits on phones (640x360, 568x320) without scrolling */
   .panel-results {
-    width: min(640px, 100%);
+    width: min(680px, 100%);
+    padding: 10px 18px;
+  }
+  .panel-results .results-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr);
+    grid-template-areas:
+      'summary table'
+      'badges badges';
+    column-gap: 16px;
+    row-gap: 4px;
+    align-content: start;
+    align-items: center;
+  }
+  .results-summary {
+    grid-area: summary;
+  }
+  .result-table {
+    grid-area: table;
+  }
+  .new-badges {
+    grid-area: badges;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .new-badges h3 {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  .badge-chip {
+    font-size: 0.9rem;
+  }
+  .badge-chip .badge-emblem {
+    width: 24px;
+    height: 24px;
+    font-size: 0.8rem;
+  }
+  .results-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0 10px;
+  }
+  .panel-results h2 {
+    margin: 0;
+    font-size: 1.3rem;
+  }
+  .results-horse {
+    margin: 0;
+    font-size: 0.95rem;
   }
   .panel-results .stars {
     font-size: 1.8rem;
   }
+  .new-best {
+    margin: 2px auto;
+    padding: 1px 12px;
+    font-size: 0.9rem;
+  }
+  .unlocked-note {
+    margin: 2px 0 0;
+    font-size: 0.9rem;
+  }
   .result-table {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px 10px;
-    margin: 6px 0;
+    gap: 3px;
+    margin: 0;
+  }
+  .result-row {
+    padding: 3px 10px;
+    font-size: 0.9rem;
   }
   .result-row[data-result='total'] {
-    grid-column: 1 / -1;
+    font-size: 0.95rem;
+  }
+  .panel-results .panel-actions {
+    margin-top: 6px;
   }
 }
 

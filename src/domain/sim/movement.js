@@ -83,11 +83,29 @@ export function arenaBounds(tuning) {
 }
 
 /**
- * Fencing (rule 24). Returns { frontal, slid, normal } for the wall hit, or null.
- * Always clamps the position into the arena. Frontal: only reported, the caller stops.
- * Oblique: heading parallel to the wall, speed unchanged.
+ * The hindquarters (a rear point behind the reference point) must not poke through the fence
+ * either: the horse is pushed inward by the overshoot, e.g. when it turns around at the wall.
  */
-export function applyFence(horse, tuning, { allowStop = true } = {}) {
+function keepRearInside(horse, tuning) {
+  const f = forwardOf(horse.heading);
+  const length = tuning.horse.rearLength;
+  const maxX = ARENA.width / 2 - tuning.horse.rearMargin;
+  const maxZ = ARENA.length / 2 - tuning.horse.rearMargin;
+  const rx = horse.x - f.x * length;
+  const rz = horse.z - f.z * length;
+  if (rx > maxX) horse.x -= rx - maxX;
+  else if (rx < -maxX) horse.x -= rx + maxX;
+  if (rz > maxZ) horse.z -= rz - maxZ;
+  else if (rz < -maxZ) horse.z -= rz + maxZ;
+}
+
+/**
+ * Fencing (rule 24). Returns { frontal, slid, normal } for the wall hit, or null.
+ * Always clamps the position into the arena (reference point and hindquarters).
+ * Frontal: only reported, the caller stops. Oblique: the heading eases parallel to the wall
+ * (with `dt`, at fence.slideTurnRate; without it at once), speed unchanged.
+ */
+export function applyFence(horse, tuning, { allowStop = true, dt } = {}) {
   const { maxX, maxZ } = arenaBounds(tuning);
   const cosFrontal = Math.cos(tuning.fence.frontalAngle);
   let result = null;
@@ -112,8 +130,17 @@ export function applyFence(horse, tuning, { allowStop = true } = {}) {
     const tx = -w.nz;
     const tz = w.nx;
     const sign = f.x * tx + f.z * tz >= 0 ? 1 : -1;
-    horse.heading = headingOf(tx * sign, tz * sign);
+    const target = headingOf(tx * sign, tz * sign);
+    if (dt > 0) {
+      const maxStep = tuning.fence.slideTurnRate * dt;
+      horse.heading = wrapAngle(
+        horse.heading + clamp(wrapAngle(target - horse.heading), -maxStep, maxStep),
+      );
+    } else {
+      horse.heading = target;
+    }
     if (!result) result = { frontal: false, slid: true, normal: { x: w.nx, z: w.nz } };
   }
+  keepRearInside(horse, tuning);
   return result;
 }

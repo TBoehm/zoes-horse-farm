@@ -1,6 +1,7 @@
 // SRT-005 in the browser: name question, "My horse", badges overview and "Delete progress".
 import { expect, test } from '@playwright/test';
 import {
+  jumpOverCross,
   NAMED,
   openGame,
   openGameMenu,
@@ -129,6 +130,39 @@ test.describe('my horse', () => {
   });
 });
 
+test.describe('my horse on a phone', () => {
+  test.use({ viewport: { width: 568, height: 320 } });
+
+  test('the name field is a full-width row and shows a hint while the name is invalid', async ({
+    page,
+    browserName,
+  }) => {
+    await openGameMenu(page, test, browserName, { lang: 'de' });
+    await page.locator('[data-entry="horse"]').click();
+    const input = page.locator('[data-field="horseName"]');
+    const hint = page.locator('.setting-name .field-hint');
+    await expect(hint).toBeHidden();
+    expect((await input.boundingBox()).width).toBeGreaterThanOrEqual(150);
+    // an invalid name: the hint "1 bis 16 Zeichen" and a red field, the old name stays
+    await input.fill('   ');
+    await expect(hint).toBeVisible();
+    await expect(hint).toHaveText('1 bis 16 Zeichen');
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect((await storeSection(page, 'horse')).name).toBe('Blitz');
+    // a valid name clears it again
+    await input.fill('Donner');
+    await expect(hint).toBeHidden();
+    await expect(input).toHaveAttribute('aria-invalid', 'false');
+    await expect.poll(async () => (await storeSection(page, 'horse')).name).toBe('Donner');
+  });
+
+  test('the head marking is called "Kopfabzeichen" (German)', async ({ page, browserName }) => {
+    await openGameMenu(page, test, browserName, { lang: 'de' });
+    await page.locator('[data-entry="horse"]').click();
+    await expect(page.getByRole('radiogroup', { name: 'Kopfabzeichen' })).toHaveCount(1);
+  });
+});
+
 test.describe('badges overview', () => {
   test('shows all 8 badges; earned ones with a date, missing ones with their condition', async ({
     page,
@@ -146,6 +180,40 @@ test.describe('badges overview', () => {
     await expect(page.locator('.badge-card.is-missing')).toHaveCount(7);
     await expect(page.locator('[data-badge="firstJump"]')).toContainText('2026');
     await expect(page.locator('[data-badge="jumpMouse"] .badge-condition')).not.toBeEmpty();
+  });
+
+  test('oxer and combination badges say that it must happen in a course ride up to the finish', async ({
+    page,
+    browserName,
+  }) => {
+    await openGameMenu(page, test, browserName, { lang: 'de' });
+    await page.locator('[data-entry="badges"]').click();
+    for (const id of ['oxerPro', 'comboPro']) {
+      const condition = page.locator(`[data-badge="${id}"] .badge-condition`);
+      await expect(condition).toContainText('im Parcours');
+      await expect(condition).toContainText('komm ins Ziel');
+    }
+  });
+});
+
+test.describe('badge toast', () => {
+  test('is small, sits at the bottom centre and goes away again', async ({ page, browserName }) => {
+    test.setTimeout(150_000);
+    await openGameMenu(page, test, browserName);
+    await startFreeRide(page);
+    await jumpOverCross(page);
+    // the first counted jump gives the first badge
+    const toast = page.locator('.badge-toast[data-toast="firstJump"]');
+    await expect(toast).toBeVisible();
+    const box = await toast.boundingBox();
+    const view = page.viewportSize();
+    // at the bottom, centred (the course HUD sits top left)
+    expect(box.y + box.height).toBeGreaterThan(view.height * 0.6);
+    expect(Math.abs(box.x + box.width / 2 - view.width / 2)).toBeLessThan(4);
+    expect(box.height).toBeLessThanOrEqual(48);
+    const emblem = await toast.locator('.badge-emblem').boundingBox();
+    expect(emblem.width).toBeLessThanOrEqual(40);
+    await expect(toast).toHaveCount(0, { timeout: 6000 });
   });
 });
 
@@ -171,6 +239,8 @@ test.describe('delete progress', () => {
     await page.locator('[data-entry="settings"]').click();
     await page.locator('[data-action="reset"]').click();
     await expect(page.locator('[data-dialog="reset"]')).toBeVisible();
+    // the safe choice has the focus
+    await expect(page.locator('[data-action="reset-cancel"]')).toBeFocused();
     // "Cancel" changes nothing
     await page.locator('[data-action="reset-cancel"]').click();
     expect((await storeSection(page, 'progress')).jumps).toBe(150);

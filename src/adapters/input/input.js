@@ -4,33 +4,45 @@ import { createTouchControls } from './touch-controls.js';
 
 const clamp1 = (v) => Math.max(-1, Math.min(1, v));
 
-export function createInput({ container, inputMode, target = window }) {
-  const keyboard = createKeyboard(target);
-  const touch = createTouchControls(container);
+/** Combines the keyboard and touch states into one InputState. */
+export function mergeInputs(k, tc) {
+  return {
+    steer: clamp1(k.steer + tc.steer),
+    throttle: clamp1(k.throttle + tc.throttle),
+    gallop: k.gallop || tc.gallop,
+    jump: k.jump || tc.jump,
+    pause: k.pause || tc.pause,
+    camera: k.camera || tc.camera,
+  };
+}
+
+/**
+ * @param {{ isActive?: () => boolean }} [keyboardOptions] see createKeyboard
+ * @param {object} [deps] replaceable parts (tests)
+ */
+export function createInput({
+  container,
+  inputMode,
+  target = window,
+  isActive,
+  deps: { createKeyboard: makeKeyboard = createKeyboard, createTouchControls: makeTouch } = {},
+}) {
+  const keyboard = makeKeyboard(target, { isActive });
+  const touch = (makeTouch ?? createTouchControls)(container);
   touch.setVisible(inputMode.touch);
 
-  // Rules 9/11: switching the touch mode ends an active gallop
+  // Rules 9/11: switching the touch mode ends an active gallop. The switch is often caused by the
+  // Shift key itself (its keydown reaches the mode detection first), so that press must not count.
   const offMode = inputMode.onChange((on) => {
     touch.setVisible(on);
     touch.setGallop(false);
-    keyboard.latchGallop();
+    keyboard.latchGallop({ onNextShiftPress: true });
   });
 
   return {
     keyboard,
     touch,
-    poll() {
-      const k = keyboard.poll();
-      const tc = touch.poll();
-      return {
-        steer: clamp1(k.steer + tc.steer),
-        throttle: clamp1(k.throttle + tc.throttle),
-        gallop: k.gallop || tc.gallop,
-        jump: k.jump || tc.jump,
-        pause: k.pause || tc.pause,
-        camera: k.camera || tc.camera,
-      };
-    },
+    poll: () => mergeInputs(keyboard.poll(), touch.poll()),
     /** The game ends the gallop (refusal, fence): touch off, shift must be pressed again. */
     endGallop() {
       touch.setGallop(false);

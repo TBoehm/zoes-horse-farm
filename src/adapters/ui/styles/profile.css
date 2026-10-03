@@ -28,6 +28,35 @@
   text-align: center;
 }
 
+.setting-name {
+  flex-wrap: wrap;
+}
+
+.setting-name .text-input {
+  flex: 1 1 160px;
+  width: auto;
+  min-width: 0;
+}
+
+.setting-name .field-hint {
+  flex: 1 0 100%;
+  margin: 0;
+}
+
+.setting-name .field-hint[hidden] {
+  display: none;
+}
+
+.text-input.is-invalid {
+  border-color: #c0392b;
+  background: #fff1ec;
+}
+
+.field-hint.is-invalid {
+  color: #a8281b;
+  font-weight: 700;
+}
+
 .field-hint {
   margin: 6px 0 0;
   color: var(--c-ink-soft);
@@ -153,28 +182,39 @@
 
 .badge-toast {
   position: fixed;
-  top: calc(max(12px, env(safe-area-inset-top)) + var(--toast-index, 0) * 76px);
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--toast-index, 0) * 46px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 18px 8px 8px;
+  gap: 8px;
+  max-width: min(92vw, 380px);
+  width: max-content;
+  padding: 4px 14px 4px 4px;
   border-radius: 999px;
   background: var(--c-panel);
   box-shadow: var(--shadow);
   font-weight: 800;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
+  line-height: 1.2;
   z-index: 600;
   pointer-events: none;
   animation: toast-in 0.3s ease;
-  transition: opacity 0.4s ease;
+  transition:
+    opacity 0.4s ease,
+    bottom 0.2s ease;
+}
+
+.badge-toast[hidden] {
+  display: none;
 }
 
 .badge-toast .badge-emblem {
-  width: 52px;
-  height: 52px;
-  font-size: 1.6rem;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  font-size: 1.1rem;
+  box-shadow: 0 2px 0 #a86e12;
 }
 
 .badge-toast.is-leaving {
@@ -183,7 +223,7 @@
 
 @keyframes toast-in {
   from {
-    transform: translate(-50%, -20px);
+    transform: translate(-50%, 16px);
     opacity: 0;
   }
 }

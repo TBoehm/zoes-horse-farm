@@ -1,6 +1,21 @@
 // Top-down plan of a course on a canvas (prestart map, rules 26, 28).
 import { ARENA, POLE_LENGTH } from '../../../../domain/sim/tuning.js';
 
+/**
+ * Arrow across a start or finish line in riding direction, centred on the line (world metres).
+ * @param {{ a: number[], b: number[], dir: number[] }} line
+ * @returns {{ from: number[], to: number[] }}
+ */
+export function crossingArrow(line, length = 4) {
+  const mx = (line.a[0] + line.b[0]) / 2;
+  const mz = (line.a[1] + line.b[1]) / 2;
+  const half = length / 2;
+  return {
+    from: [mx - line.dir[0] * half, mz - line.dir[1] * half],
+    to: [mx + line.dir[0] * half, mz + line.dir[1] * half],
+  };
+}
+
 export function drawCoursePlan(canvas, course, { startLabel, finishLabel } = {}) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const cssW = canvas.clientWidth || 520;
@@ -37,11 +52,16 @@ export function drawCoursePlan(canvas, course, { startLabel, finishLabel } = {})
     ctx.lineTo(x2, y2);
     ctx.stroke();
     ctx.setLineDash([]);
+    // Arrow: in which direction the line is crossed
+    const { from, to } = crossingArrow(l, 4.5);
+    const [f0x, f0y] = P(from[0], from[1]);
+    const [f1x, f1y] = P(to[0], to[1]);
+    arrow(ctx, f0x, f0y, f1x, f1y, color);
     if (label) {
       ctx.fillStyle = color;
       ctx.font = `800 ${Math.max(11, scale * 1.6)}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(label, (x1 + x2) / 2, Math.min(y1, y2) - 6);
+      ctx.fillText(label, (x1 + x2) / 2, Math.min(y1, y2, f0y, f1y) - 6);
     }
   };
   if (course.start) line(course.start, '#2f7d32', startLabel);

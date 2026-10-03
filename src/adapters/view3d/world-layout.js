@@ -115,6 +115,13 @@ export function endProgress(t, lead = 0) {
   return lead === 0 ? { a: first, b: second } : { a: second, b: first };
 }
 
+/** Progress of one end (a or b) without allocating; same values as endProgress. */
+export function endProgressOf(t, lead, isA) {
+  const first = Math.min(1, Math.max(0, t / (1 - FALL_LAG)));
+  const second = Math.min(1, Math.max(0, (t - FALL_LAG) / (1 - FALL_LAG)));
+  return (lead === 0) === isA ? first : second;
+}
+
 /** Point of a falling end: eased horizontally, fall curve vertically. */
 export function fallPoint(from, to, t) {
   const k = easeOut(t);
@@ -124,6 +131,16 @@ export function fallPoint(from, to, t) {
     from[1] + (to[1] - from[1]) * f,
     from[2] + (to[2] - from[2]) * k,
   ];
+}
+
+/** Like fallPoint, but for {x, y, z} objects (e.g. THREE.Vector3) and without allocating. */
+export function fallPointInto(out, from, to, t) {
+  const k = easeOut(t);
+  const f = fallCurve(t);
+  out.x = from.x + (to.x - from.x) * k;
+  out.y = from.y + (to.y - from.y) * f;
+  out.z = from.z + (to.z - from.z) * k;
+  return out;
 }
 
 /**
@@ -191,6 +208,18 @@ export function lineSegment(a, b) {
     length: Math.hypot(dx, dz),
     angle: Math.atan2(dx, dz),
   };
+}
+
+/**
+ * Flag posts of a line. The domain puts end `a` on the rider's LEFT and `b` on the RIGHT (see
+ * `line()` in domain/course/courses.js), and the flags follow the obstacle rule: red on the
+ * right, white on the left, in riding direction.
+ */
+export function linePosts(seg) {
+  return [
+    { x: seg.a.x, z: seg.a.z, red: false },
+    { x: seg.b.x, z: seg.b.z, red: true },
+  ];
 }
 
 /** Signs for start/finish; if both lines coincide there is one shared sign. */

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { POLE_LENGTH, ARENA } from '../../domain/sim/tuning.js';
+import { COURSES } from '../../domain/course/courses.js';
 import { crossAxisOf } from '../../domain/sim/geometry.js';
 import {
   axesOf,
@@ -12,11 +13,14 @@ import {
   highlightText,
   fallCurve,
   endProgress,
+  endProgressOf,
   fallPoint,
+  fallPointInto,
   fallTarget,
   aidPlacement,
   lineSegment,
   planLines,
+  linePosts,
   planFence,
   FENCE,
   GATE,
@@ -142,6 +146,27 @@ describe('falling poles', () => {
     expect(endProgress(0, 1)).toEqual({ a: 0, b: 0 });
   });
 
+  it('endProgressOf is the allocation-free form of endProgress', () => {
+    for (const lead of [0, 1]) {
+      for (const t of [0, 0.1, 0.3, 0.5, 0.9, 1]) {
+        const ref = endProgress(t, lead);
+        expect(endProgressOf(t, lead, true)).toBe(ref.a);
+        expect(endProgressOf(t, lead, false)).toBe(ref.b);
+      }
+    }
+  });
+
+  it('fallPointInto writes the same point as fallPoint into a vector-like object', () => {
+    const from = { x: 0, y: 0.8, z: 0 };
+    const to = { x: 0.2, y: 0.05, z: 1 };
+    const out = { x: 9, y: 9, z: 9 };
+    for (const t of [0, 0.3, 0.8, 1]) {
+      const ref = fallPoint([from.x, from.y, from.z], [to.x, to.y, to.z], t);
+      expect(fallPointInto(out, from, to, t)).toBe(out);
+      expect([out.x, out.y, out.z]).toEqual(ref);
+    }
+  });
+
   it('fallPoint interpolates from cup to ground', () => {
     expect(fallPoint([0, 0.8, 0], [0.2, 0.05, 1], 0)).toEqual([0, 0.8, 0]);
     const end = fallPoint([0, 0.8, 0], [0.2, 0.05, 1], 1);
@@ -218,6 +243,31 @@ describe('lines', () => {
     expect(plan[0].text).toBe('S · Z');
     expect(plan[0].finish).toBe(true);
     expect(planLines(null)).toEqual([]);
+  });
+});
+
+describe('start/finish line flags (SRT-004)', () => {
+  it("red flag stands on the rider's right, white on the left, for every course line", () => {
+    for (const course of COURSES) {
+      for (const line of [course.start, course.finish]) {
+        const posts = linePosts(lineSegment(line.a, line.b));
+        const red = posts.find((p) => p.red);
+        const white = posts.find((p) => !p.red);
+        expect(posts).toHaveLength(2);
+        const mx = (red.x + white.x) / 2;
+        const mz = (red.z + white.z) / 2;
+        // right of the rider for heading h = (-cos h, sin h); riding direction is line.dir
+        const right = { x: -line.dir[1], z: line.dir[0] };
+        expect((red.x - mx) * right.x + (red.z - mz) * right.z).toBeGreaterThan(2);
+        expect((white.x - mx) * right.x + (white.z - mz) * right.z).toBeLessThan(-2);
+      }
+    }
+  });
+
+  it('the red flag is the b end (a is the left end of the line)', () => {
+    // a is the rider's left end: riding +z, a is at x = +3 (left), b at x = -3 (right)
+    const posts = linePosts(lineSegment([3, 0], [-3, 0]));
+    expect(posts.find((p) => p.red)).toMatchObject({ x: -3, z: 0 });
   });
 });
 

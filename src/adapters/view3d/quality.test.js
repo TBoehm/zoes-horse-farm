@@ -82,6 +82,12 @@ describe('QUALITY_PRESETS', () => {
     expect(QUALITY_PRESETS.high.shadowMapSize).toBe(2048);
     expect(QUALITY_PRESETS.low.material).toBe('lambert');
   });
+
+  it('antialiasing is off on low and on above (SRT-002 m4)', () => {
+    expect(QUALITY_PRESETS.low.antialias).toBe(false);
+    expect(QUALITY_PRESETS.medium.antialias).toBe(true);
+    expect(QUALITY_PRESETS.high.antialias).toBe(true);
+  });
 });
 
 describe('createQualityGovernor', () => {
@@ -153,14 +159,33 @@ describe('createQualityGovernor', () => {
     expect(gov.level).toBe('medium');
   });
 
-  it('a frame longer than 0.5 s counts as an interruption', () => {
+  it('a frame longer than 2 s counts as an interruption', () => {
     const onChange = vi.fn();
     const gov = createQualityGovernor({ level: 'high', onChange });
     run(gov, 7, 30);
-    gov.frame(0.8, true); // e.g. the tab was hidden
+    gov.frame(2.5, true); // e.g. the machine was suspended
     run(gov, 7, 30);
     expect(gov.level).toBe('high');
     run(gov, 1.1, 30);
+    expect(gov.level).toBe('medium');
+  });
+
+  it('very slow frames (0.5 s to 2 s) are averaged, not treated as interruptions (SRT-002 M3)', () => {
+    const onChange = vi.fn();
+    const gov = createQualityGovernor({ level: 'high', onChange });
+    // 0.6 s per frame is under 2 fps: the device is far too slow and must step down
+    run(gov, 3, 1 / 0.6); // grace period
+    run(gov, 6, 1 / 0.6);
+    expect(gov.level).toBe('medium');
+    expect(onChange).toHaveBeenCalledWith('medium');
+  });
+
+  it('a single long frame does not reset the window of a slow device', () => {
+    const gov = createQualityGovernor({ level: 'high' });
+    run(gov, 3, 20); // grace
+    run(gov, 3, 20); // 3 s of window collected
+    gov.frame(0.8, true); // one hitch
+    run(gov, 2.5, 20);
     expect(gov.level).toBe('medium');
   });
 

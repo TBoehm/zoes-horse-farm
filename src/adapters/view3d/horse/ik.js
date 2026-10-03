@@ -69,6 +69,9 @@ export function makeHindRig(P, T, K, F, H) {
   };
 }
 
+// Result of twoBone, reused: the solvers run four times per frame
+const IK = { t1: 0, mz: 0, my: 0, t2: 0, reach: true };
+
 function twoBone(rootZ, rootY, tz, ty, l1, l2, sigma) {
   const dz = tz - rootZ;
   const dy = ty - rootY;
@@ -83,7 +86,12 @@ function twoBone(rootZ, rootY, tz, ty, l1, l2, sigma) {
   const t1 = base + sigma * alpha;
   const mz = rootZ + l1 * dirZ(t1);
   const my = rootY + l1 * dirY(t1);
-  return { t1, mz, my, t2: angD(tz - mz, ty - my), reach };
+  IK.t1 = t1;
+  IK.mz = mz;
+  IK.my = my;
+  IK.t2 = angD(tz - mz, ty - my);
+  IK.reach = reach;
+  return IK;
 }
 
 /**

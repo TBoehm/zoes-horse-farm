@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanName, displayName } from './horse-name.js';
+import { cleanName } from './horse-name.js';
 
 describe('Horse name (rule 43)', () => {
   it('trims leading and trailing whitespace', () => {
@@ -15,10 +15,5 @@ describe('Horse name (rule 43)', () => {
     expect(cleanName('A')).toBe('A');
     expect(cleanName('B'.repeat(16))).toBe('B'.repeat(16));
     expect(cleanName('Äpfelchen 🐴')).toBe('Äpfelchen 🐴');
-  });
-  it('uses the language default name when there is no custom name', () => {
-    const t = () => 'Blitz';
-    expect(displayName({ name: null }, t)).toBe('Blitz');
-    expect(displayName({ name: 'Luna' }, t)).toBe('Luna');
   });
 });

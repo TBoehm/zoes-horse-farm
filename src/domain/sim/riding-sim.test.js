@@ -299,7 +299,9 @@ describe('Knockdown and poles (rule 23)', () => {
         if (ofType(ev, 'railDown').length) railAt = toLocal(c, s.horse.x, s.horse.z).along;
       },
     });
-    expect(ofType(events, 'railDown')).toEqual([{ type: 'railDown', elementId: 'c', rail: 0 }]);
+    expect(ofType(events, 'railDown')).toEqual([
+      { type: 'railDown', elementId: 'c', rail: 0, dir: 1 },
+    ]);
     expect(railAt).toBeGreaterThanOrEqual(0);
     expect(railAt).toBeLessThan(0.2);
     expect(sim.rails.get('c')).toEqual([false]);
@@ -331,7 +333,7 @@ describe('Knockdown and poles (rule 23)', () => {
       placeBefore(sim, o, z.near + 0.3, { dir, speed: 5.8, gallop: true });
       const { events } = drive(sim, pressAt(CANTER, (z.near + z.lastPoint) / 2), { maxT: 4 });
       expect(ofType(events, 'railDown')).toEqual([
-        { type: 'railDown', elementId: 'o', rail: dir > 0 ? 0 : 1 },
+        { type: 'railDown', elementId: 'o', rail: dir > 0 ? 0 : 1, dir },
       ]);
       expect(sim.rails.get('o')).toEqual(dir > 0 ? [false, true] : [true, false]);
       sim.rebuildAll();
@@ -676,22 +678,239 @@ describe('Stands (rule 22)', () => {
     expect(sim.horse.x).toBeGreaterThan(3);
   });
 
-  it('walking against the obstacle: stays in front, without an evasion maneuver', () => {
+  it('walking against the stand: evades like at trot, the horse never treads on the spot', () => {
     const v = makeElement('vertical', 0.6);
     const sim = makeSim([v], { canRefuse: () => false });
     sim.reset({ x: -10, z: 0, heading: Math.PI / 2, speed: 1.2 });
     let inside = false;
-    drive(
-      sim,
-      {},
-      {
-        maxT: 10,
-        onStep: (s) => {
-          if (insideBlock(s, v)) inside = true;
-        },
+    const walk = (s) => ({ throttle: s.horse.speed < 1.2 ? 1 : 0 });
+    const { events } = drive(sim, walk, {
+      maxT: 16,
+      onStep: (s) => {
+        if (insideBlock(s, v)) inside = true;
+        expect(s.horse.gait).not.toBe('trot');
       },
-    );
+    });
     expect(inside).toBe(false);
+    expect(ofType(events, 'swerve')).toHaveLength(1);
+    expect(ofType(events, 'refusal')).toHaveLength(0);
+    // it got past the obstacle instead of standing against it
+    expect(sim.horse.x).toBeGreaterThan(3);
+  });
+
+  it('after a refusal stop, walking into the locked element evades instead of pinning', () => {
+    const v = makeElement('vertical', 0.6);
+    const sim = makeSim([v]);
+    placeBefore(sim, v, 6, { speed: S.trotMedium });
+    drive(sim, TROT, { maxT: 3, until: (s) => s.horse.refusal === null && s.horse.speed === 0 });
+    expect(sim.horse.speed).toBe(0);
+    const walk = (s) => ({ throttle: s.horse.speed < 1.2 ? 1 : 0 });
+    let inside = false;
+    const { events } = drive(sim, walk, {
+      maxT: 12,
+      onStep: (s) => {
+        if (insideBlock(s, v)) inside = true;
+      },
+    });
+    expect(inside).toBe(false);
+    expect(ofType(events, 'refusal')).toHaveLength(0);
+    expect(ofType(events, 'swerve')).toHaveLength(1);
+    expect(toLocal(v, sim.horse.x, sim.horse.z).along).toBeGreaterThan(1);
+  });
+
+  it('standing at the obstacle (halt) does not trigger an evasion', () => {
+    const v = makeElement('vertical', 0.6);
+    const sim = makeSim([v], { canRefuse: () => false });
+    placeBefore(sim, v, 0.2, { speed: 0 });
+    const { events } = drive(sim, {}, { maxT: 2 });
+    expect(ofType(events, 'swerve')).toHaveLength(0);
+  });
+});
+
+describe('Values from tuning.js', () => {
+  it('keeps the formerly hard-coded values in the tuning table', () => {
+    expect(TUNING.refusal.stopDecelMin).toBe(4);
+    expect(TUNING.refusal.driftSide).toBeCloseTo(Math.sin(10 * DEG), 12);
+    expect(TUNING.jump.railChoice.firstProbability).toBe(0.5);
+  });
+
+  it('the refusal stop decelerates at least with refusal.stopDecelMin', () => {
+    const stopAlong = (stopDecelMin) => {
+      const v = makeElement('vertical', 0.6);
+      const sim = makeSim([v], {
+        tuning: { ...TUNING, refusal: { ...TUNING.refusal, stopDecelMin } },
+      });
+      placeBefore(sim, v, 6, { speed: 1.2 });
+      drive(sim, { throttle: 0 }, { maxT: 8, until: (s) => s.horse.speed === 0 });
+      return toLocal(v, sim.horse.x, sim.horse.z).along;
+    };
+    // a harder floor brakes earlier, so the horse stands further in front of the obstacle
+    expect(stopAlong(40)).toBeLessThan(stopAlong(4));
+  });
+
+  it('refusal.driftSide decides when the course direction picks the evasion side', () => {
+    const sideAfterEvading = (driftSide) => {
+      const v = makeElement('vertical', 0.6);
+      const sim = makeSim([v], {
+        canRefuse: () => false,
+        tuning: { ...TUNING, refusal: { ...TUNING.refusal, driftSide } },
+      });
+      // course drifts toward +t (15°) but meets the obstacle left of the center (-1 m)
+      placeBefore(sim, v, 8, { speed: S.trotMedium, angle: 15 * DEG, crossing: -1 });
+      drive(sim, TROT, { maxT: 5 });
+      return Math.sign(toLocal(v, sim.horse.x, sim.horse.z).across);
+    };
+    expect(sideAfterEvading(TUNING.refusal.driftSide)).toBe(1);
+    expect(sideAfterEvading(1)).toBe(-1);
+  });
+
+  it('jump.railChoice.firstProbability picks the rail in the middle of the oxer zone', () => {
+    const speed = 4.8; // below the target range: risk > 0 although the horse is in the zone
+    const railFor = (firstProbability, draw) => {
+      const o = makeElement('oxer', 0.85, { id: 'o', spread: 0.7 });
+      let calls = 0;
+      // first draw: the knockdown (always), second draw: the rail choice
+      const rng = () => (calls++ === 0 ? 0 : draw);
+      const sim = makeSim([o], {
+        rng,
+        tuning: { ...TUNING, jump: { ...TUNING.jump, railChoice: { firstProbability } } },
+      });
+      const z = zoneForElement(o, speed, TUNING);
+      const aim = (z.near + z.far) / 2;
+      placeBefore(sim, o, aim + 0.5, { speed, gallop: true });
+      const { events } = drive(sim, pressAt(CANTER, aim), { maxT: 4 });
+      return ofType(events, 'railDown')[0]?.rail;
+    };
+    expect(railFor(0.5, 0.4)).toBe(0);
+    expect(railFor(0.5, 0.6)).toBe(1);
+    expect(railFor(0.9, 0.6)).toBe(0);
+    expect(railFor(0.1, 0.6)).toBe(1);
+  });
+});
+
+describe('Refusal stop and lock details', () => {
+  it('the refusal stop leaves the horse a visible distance in front of the pole', () => {
+    const v = makeElement('vertical', 0.6);
+    const sim = makeSim([v]);
+    placeBefore(sim, v, 6, { speed: 1.2 });
+    drive(sim, TROT, { maxT: 8, until: (s) => s.horse.refusal === null && s.horse.speed === 0 });
+    const distance = -toLocal(v, sim.horse.x, sim.horse.z).along;
+    expect(distance).toBeGreaterThanOrEqual(0.35);
+    expect(distance).toBeLessThan(1);
+  });
+
+  it('the lock is released by the same distance measure as the approach', () => {
+    const v = makeElement('vertical', 0.6);
+    const sim = makeSim([v]);
+    placeBefore(sim, v, 6, { speed: S.trotMedium });
+    drive(sim, TROT, { maxT: 3, until: (s) => s.horse.refusal === null && s.horse.speed === 0 });
+    // back off 5 m, then ride sideways far beyond 12 m from the center, but along the
+    // approach axis always closer than the approach distance
+    turnInPlace(sim, Math.PI);
+    drive(sim, { throttle: 1 }, { until: (s) => s.horse.z < -5, maxT: 20 });
+    brakeToHalt(sim);
+    turnInPlace(sim, Math.PI / 2);
+    drive(sim, { throttle: 1 }, { until: (s) => s.horse.x > 13, maxT: 20 });
+    brakeToHalt(sim);
+    turnInPlace(sim, -Math.PI / 2);
+    drive(sim, { throttle: 1 }, { until: (s) => s.horse.x < 0.2, maxT: 20 });
+    brakeToHalt(sim);
+    turnInPlace(sim, 0);
+    drive(sim, { throttle: 1 }, { until: (s) => s.horse.speed >= S.trotMedium, maxT: 5 });
+    const { events } = drive(sim, TROT, { maxT: 8 });
+    expect(ofType(events, 'refusal')).toHaveLength(0);
+    expect(ofType(events, 'swerve')).toHaveLength(1);
+  });
+});
+
+describe('Space buffer while landing', () => {
+  const center = (el) => {
+    const z = zoneForElement(el, 5.8, TUNING);
+    return (z.near + z.far) / 2;
+  };
+
+  /** Jumps `a` at canter and returns the z of the horse at landing (probe run). */
+  function landingZ(a) {
+    const probe = makeSim([a]);
+    placeBefore(probe, a, center(a), { speed: 5.8, gallop: true });
+    drive(probe, pressAt(CANTER, center(a)), {
+      maxT: 4,
+      until: (s, ev) => ofType(ev, 'landed').length > 0,
+    });
+    return probe.horse.z;
+  }
+
+  /** Space for `a` in its zone, then once more shortly before landing. */
+  function pressTwice(a) {
+    let first = false;
+    let second = false;
+    return (s) => {
+      const jump = s.horse.jump;
+      if (!first) {
+        if (!jump && s.approach?.elementId === 'a' && s.approach.distance <= center(a)) {
+          first = true;
+          return { ...CANTER, jump: true };
+        }
+      } else if (!second && jump?.phase === 'landing' && jump.progress > 0.5) {
+        second = true;
+        return { ...CANTER, jump: true };
+      }
+      return CANTER;
+    };
+  }
+
+  const pair = () => {
+    const a = makeElement('vertical', 0.7, { id: 'a' });
+    const b0 = makeElement('vertical', 0.7, { id: 'b' });
+    // b lies so that it is in the middle of its takeoff zone at the moment of landing
+    const b = { ...b0, z: landingZ(a) + center(b0) };
+    return { a, b };
+  };
+
+  it('a press shortly before landing is carried over and jumps the next obstacle', () => {
+    const { a, b } = pair();
+    const sim = makeSim([a, b]);
+    placeBefore(sim, a, center(a), { speed: 5.8, gallop: true });
+    const { events } = drive(sim, pressTwice(a), { maxT: 3 });
+    const takes = ofType(events, 'takeoff');
+    expect(takes.map((e) => e.elementId)).toEqual(['a', 'b']);
+    expect(takes[1].self).toBe(false);
+  });
+
+  it('a carried press expires without a hop when no obstacle comes within reach', () => {
+    const { a } = pair();
+    const sim = makeSim([a]);
+    placeBefore(sim, a, center(a), { speed: 5.8, gallop: true });
+    const { events } = drive(sim, pressTwice(a), { maxT: 3 });
+    expect(ofType(events, 'takeoff')).toHaveLength(1);
+    expect(ofType(events, 'hop')).toHaveLength(0);
+  });
+
+  it('a press far before landing is not carried over', () => {
+    const { a, b } = pair();
+    const sim = makeSim([a, b]);
+    placeBefore(sim, a, center(a), { speed: 5.8, gallop: true });
+    let first = false;
+    let second = false;
+    const { events } = drive(
+      sim,
+      (s) => {
+        const jump = s.horse.jump;
+        if (!first && !jump && s.approach?.elementId === 'a' && s.approach.distance <= center(a)) {
+          first = true;
+          return { ...CANTER, jump: true };
+        }
+        if (first && !second && jump?.phase === 'takeoff') {
+          second = true;
+          return { ...CANTER, jump: true };
+        }
+        return CANTER;
+      },
+      { maxT: 3 },
+    );
+    // no buffered jump: b is only jumped by itself (self jump) at its last takeoff point
+    const takes = ofType(events, 'takeoff');
+    expect(takes[1].self).toBe(true);
   });
 });
 

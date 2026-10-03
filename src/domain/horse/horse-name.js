@@ -8,7 +8,3 @@ export function cleanName(input) {
   const length = [...name].length;
   return length >= 1 && length <= NAME_MAX ? name : null;
 }
-
-export function displayName(horse, t) {
-  return horse?.name ?? t('horse.defaultName');
-}

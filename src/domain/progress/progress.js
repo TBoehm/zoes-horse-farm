@@ -1,6 +1,7 @@
 // Progress (concept rules 36, 37, 44, 47, 48): pure and immutable, no DOM.
 // All functions return new objects; unknown fields are preserved unchanged.
 import { BADGE_IDS, COURSE_COUNT } from './badges.js';
+import { isBetterResult } from '../course/scoring.js';
 
 export const PROGRESS_DEFAULTS = Object.freeze({
   unlocked: 1,
@@ -27,12 +28,28 @@ function sanitizeCourse(entry) {
   return { ...entry, faults: Math.floor(faults), timeCs: Math.floor(timeCs), stars };
 }
 
+// Own property even for keys like "__proto__" (JSON.parse creates them as plain data).
+function setOwn(target, key, value) {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
+const COURSE_KEYS = Array.from({ length: COURSE_COUNT }, (_, i) => String(i + 1));
+
 function sanitizeCourses(raw) {
   const courses = {};
   if (!isPlainObject(raw)) return courses;
-  for (let i = 1; i <= COURSE_COUNT; i++) {
-    const entry = sanitizeCourse(raw[String(i)]);
-    if (entry) courses[String(i)] = entry;
+  // Unknown keys (later versions) stay untouched (rule 47); courses 1..5 are cleaned
+  for (const [key, value] of Object.entries(raw)) {
+    if (!COURSE_KEYS.includes(key)) setOwn(courses, key, value);
+  }
+  for (const key of COURSE_KEYS) {
+    const entry = sanitizeCourse(raw[key]);
+    if (entry) courses[key] = entry;
   }
   return courses;
 }
@@ -42,12 +59,7 @@ function sanitizeBadges(raw) {
   const badges = {};
   for (const [id, value] of Object.entries(raw)) {
     if (!BADGE_IDS.includes(id)) {
-      Object.defineProperty(badges, id, {
-        value,
-        enumerable: true,
-        writable: true,
-        configurable: true,
-      });
+      setOwn(badges, id, value);
     } else if (typeof value === 'string' && Number.isFinite(Date.parse(value))) {
       badges[id] = value;
     }
@@ -67,13 +79,6 @@ export function sanitizeProgress(raw) {
     finishedRides: toCount(source.finishedRides),
     badges: sanitizeBadges(source.badges),
   };
-}
-
-/** Best result: fewer faults first, on a tie the shorter time (hundredths). */
-export function isBetterResult(candidate, best) {
-  if (!best) return true;
-  if (candidate.faults !== best.faults) return candidate.faults < best.faults;
-  return candidate.timeCs < best.timeCs;
 }
 
 /**

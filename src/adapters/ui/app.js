@@ -8,6 +8,9 @@ import { h, clear } from './dom.js';
  * factory(ctx, params) → { el, music?: bool, rerenderOnLang?: bool, screenClass?: string,
  *   destroy?(), onShow?(), onCover?() }
  * - music: the menu melody should play (rule 51)
+ * - musicDelayMs: start the melody this long after the screen opened (results: after the finish signal)
+ * - redirect: { name, params } instead of showing this screen (guards, e.g. a locked course);
+ *   `el` is not used then
  * - rerenderOnLang (default true): rebuild when the language changes
  */
 export function createApp({ root, store, inputMode, clock }) {
@@ -36,6 +39,7 @@ export function createApp({ root, store, inputMode, clock }) {
 
   function mount(entry) {
     entry.instance = factories.get(entry.name)(ctx, entry.params ?? {});
+    if (entry.instance.redirect) return;
     entry.wrapper = h(
       'div',
       { class: `screen ${entry.instance.screenClass ?? ''}`, dataset: { screen: entry.name } },
@@ -62,6 +66,7 @@ export function createApp({ root, store, inputMode, clock }) {
     emitter.emit('screen', {
       name: current?.name ?? null,
       music: Boolean(current?.instance.music),
+      musicDelayMs: current?.instance.musicDelayMs ?? 0,
       stack: stack.map((e) => e.name),
     });
   }
@@ -82,7 +87,9 @@ export function createApp({ root, store, inputMode, clock }) {
       const entry = { name, params };
       stack.push(entry);
       mount(entry);
-      changed();
+      const redirect = entry.instance.redirect;
+      if (redirect) app.go(redirect.name, redirect.params);
+      else changed();
     },
     /** Puts a screen on top of the current one (e.g. settings from the pause menu). */
     push(name, params) {
@@ -90,7 +97,12 @@ export function createApp({ root, store, inputMode, clock }) {
       const entry = { name, params };
       stack.push(entry);
       mount(entry);
-      changed();
+      const redirect = entry.instance.redirect;
+      if (redirect) {
+        stack.pop();
+        unmount(entry);
+        app.go(redirect.name, redirect.params);
+      } else changed();
     },
     pop() {
       if (stack.length <= 1) return;

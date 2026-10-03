@@ -7,6 +7,8 @@ export const QUALITY_LEVELS = GRAPHICS_LEVELS;
 export const QUALITY_PRESETS = Object.freeze({
   low: Object.freeze({
     pixelRatio: 1,
+    // context attribute: only fixed when the renderer is created (see engine.js)
+    antialias: false,
     shadows: false,
     shadowMapSize: 0,
     material: 'lambert',
@@ -22,6 +24,7 @@ export const QUALITY_PRESETS = Object.freeze({
   }),
   medium: Object.freeze({
     pixelRatio: 1.5,
+    antialias: true,
     shadows: true,
     shadowMapSize: 1024,
     // only horse/obstacles cast shadows
@@ -38,6 +41,7 @@ export const QUALITY_PRESETS = Object.freeze({
   }),
   high: Object.freeze({
     pixelRatio: 2,
+    antialias: true,
     shadows: true,
     shadowMapSize: 2048,
     shadowCasters: 'all',
@@ -94,7 +98,9 @@ export const GOVERNOR_DEFAULTS = Object.freeze({
   minFps: 50,
   graceS: 3, // grace period after an interruption
   cooldownS: 10, // minimum time between adjustments
-  maxFrameS: 0.5, // longer frame = interruption
+  // A longer frame is a real interruption (suspend). Slower frames still count: a very slow
+  // device must be able to step down. Pauses/hidden tabs are reported via measuring=false.
+  maxFrameS: 2,
 });
 
 /**

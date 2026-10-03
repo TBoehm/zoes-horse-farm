@@ -8,17 +8,36 @@ export const NAME_MAX_LENGTH = NAME_MAX;
 
 export const isValidName = (input) => cleanName(input) !== null;
 
-/** True while the first-start name question was neither answered nor skipped (rule 43). */
+/**
+ * True while the first-start name question was neither answered nor skipped (rule 43).
+ * An older save that has a valid name but no answered flag counts as answered.
+ */
 export function needsNamePrompt(store) {
-  return !store.get('horse').nameAnswered;
+  const horse = store.get('horse');
+  return !horse.nameAnswered && cleanName(horse.name) === null;
 }
 
-/** Saves the answer to the name question. @returns {boolean} false if the name is invalid */
-export function answerName(store, input) {
-  const name = cleanName(input);
-  if (name === null) return false;
+/**
+ * One rule for the name prompt and for renaming: typing the language default name does not make a
+ * custom name (name stays null); any other valid name does. Either way the question is answered.
+ * @returns {boolean} false if the input is invalid (nothing is saved)
+ */
+function saveName(store, input, defaultName) {
+  const typed = cleanName(input);
+  if (typed === null) return false;
+  const name = defaultName !== undefined && typed === defaultName ? null : typed;
+  const current = store.get('horse');
+  if (name === current.name && current.nameAnswered) return true;
   store.update('horse', (horse) => ({ ...horse, name, nameAnswered: true }));
   return true;
+}
+
+/**
+ * Saves the answer to the name question. @returns {boolean} false if the name is invalid
+ * @param {{ defaultName?: string }} [options] the language default name (see saveName)
+ */
+export function answerName(store, input, { defaultName } = {}) {
+  return saveName(store, input, defaultName);
 }
 
 /** "Skip": the language default name stays, the question counts as answered. */
@@ -28,18 +47,11 @@ export function skipName(store) {
 
 /**
  * Renames the horse. An invalid name is not saved, the last valid name stays (rule 43).
- * Typing the language default name does not turn it into a custom name.
- * @param {{ defaultName?: string }} [options]
+ * @param {{ defaultName?: string }} [options] the language default name (see saveName)
  * @returns {boolean} false if the input is invalid
  */
 export function rename(store, input, { defaultName } = {}) {
-  const name = cleanName(input);
-  if (name === null) return false;
-  const current = store.get('horse');
-  const isDefault = current.name === null && name === defaultName;
-  if (isDefault || name === current.name) return true;
-  store.update('horse', (horse) => ({ ...horse, name, nameAnswered: true }));
-  return true;
+  return saveName(store, input, defaultName);
 }
 
 /** The selectable coats and markings. */

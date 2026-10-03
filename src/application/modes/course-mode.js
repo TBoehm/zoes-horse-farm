@@ -58,8 +58,14 @@ export function createCourseMode(params = {}) {
     onEvents(events, host) {
       for (const e of events) {
         if (e.type === 'landed') {
+          const riding = run.phase === 'riding';
           const res = run.onLanded(e.elementId, e.dir, e.knocked);
-          if (e.knocked) host.feedback('feedback.knockdown');
+          if (res?.scored) {
+            if (e.knocked) host.feedback('feedback.knockdown');
+          } else if (riding) {
+            // a jump that does not count (wrong obstacle or direction), during the ride only
+            host.feedback('feedback.wrongObstacle');
+          }
           if (res?.rebuildAfterS) host.rebuildIn(e.elementId, res.rebuildAfterS);
         }
         if (e.type === 'refusal') {

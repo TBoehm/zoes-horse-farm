@@ -61,11 +61,22 @@ test.describe('PWA', () => {
     await page.evaluate(() => navigator.serviceWorker.ready);
     await context.setOffline(true);
     await page.reload();
-    await expect(
-      page
-        .locator('[data-screen="menu"], [data-screen="namePrompt"], [data-notice="no3d"]')
-        .first(),
-    ).toBeVisible();
+    const menu = page.locator('[data-screen="menu"]');
+    const namePrompt = page.locator('[data-screen="namePrompt"]');
+    const no3d = page.locator('[data-notice="no3d"]');
+    await expect(menu.or(namePrompt).or(no3d).first()).toBeVisible();
+    if (await namePrompt.isVisible()) {
+      await page.locator('[data-action="skip"]').click();
+      await expect(menu).toBeVisible();
+    }
+    // without WebGL the game shows its notice instead; with WebGL a free ride must start offline
+    if (await menu.isVisible()) {
+      await page.locator('[data-entry="free"]').click();
+      await expect(page.locator('[data-screen="ride"]')).toBeVisible();
+      await page.waitForFunction(
+        () => document.querySelector('canvas.scene-canvas')?.clientWidth > 0,
+      );
+    }
     await context.close();
     server.close();
   });

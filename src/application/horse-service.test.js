@@ -56,6 +56,16 @@ describe('needsNamePrompt', () => {
     answerName(store, 'Blitz');
     expect(needsNamePrompt(store)).toBe(false);
   });
+
+  it('counts an old save with a valid name but no answered flag as answered', () => {
+    const store = fakeStore({ horse: { name: 'Blitz', nameAnswered: false } });
+    expect(needsNamePrompt(store)).toBe(false);
+  });
+
+  it('still asks when the saved name is not valid and the flag is missing', () => {
+    expect(needsNamePrompt(fakeStore({ horse: { name: '', nameAnswered: false } }))).toBe(true);
+    expect(needsNamePrompt(fakeStore({ horse: { name: null, nameAnswered: false } }))).toBe(true);
+  });
 });
 
 describe('isValidName', () => {
@@ -83,7 +93,7 @@ describe('rename', () => {
   it('does not turn the language default name into a custom name', () => {
     const store = fakeStore();
     expect(rename(store, 'Stern', { defaultName: 'Stern' })).toBe(true);
-    expect(store.data.horse).toMatchObject({ name: null, nameAnswered: false });
+    expect(store.data.horse).toMatchObject({ name: null, nameAnswered: true });
   });
 
   it('writes nothing when the name did not change', () => {
@@ -92,6 +102,40 @@ describe('rename', () => {
     store.onChange('horse', () => (changes += 1));
     rename(store, 'Blitz');
     expect(changes).toBe(0);
+  });
+});
+
+describe('typing the language default name (one rule for the name prompt and renaming)', () => {
+  const options = { defaultName: 'Stern' };
+  const flows = {
+    'name prompt': (store, input) => answerName(store, input, options),
+    rename: (store, input) => rename(store, input, options),
+  };
+
+  for (const [flow, save] of Object.entries(flows)) {
+    it(`${flow}: the default name stays "no custom name" but counts as answered`, () => {
+      const store = fakeStore();
+      expect(save(store, ' Stern ')).toBe(true);
+      expect(store.data.horse).toMatchObject({ name: null, nameAnswered: true });
+    });
+
+    it(`${flow}: typing the default name over a custom name removes the custom name`, () => {
+      const store = fakeStore({ horse: { name: 'Blitz', nameAnswered: true } });
+      expect(save(store, 'Stern')).toBe(true);
+      expect(store.data.horse).toMatchObject({ name: null, nameAnswered: true });
+    });
+
+    it(`${flow}: any other name is a custom name`, () => {
+      const store = fakeStore();
+      expect(save(store, 'Blitz')).toBe(true);
+      expect(store.data.horse).toMatchObject({ name: 'Blitz', nameAnswered: true });
+    });
+  }
+
+  it('without a known default name every valid name is a custom name', () => {
+    const store = fakeStore();
+    answerName(store, 'Stern');
+    expect(store.data.horse.name).toBe('Stern');
   });
 });
 

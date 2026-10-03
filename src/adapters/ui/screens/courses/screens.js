@@ -2,9 +2,8 @@
 // open, the stars and the result figures come from the application layer.
 import { getLang } from '../../i18n.js';
 import { toggleRow } from '../../settings-screen.js';
-import { getCourse, listCourses } from '../../../../application/course-catalog.js';
+import { canStart, getCourse, listCourses } from '../../../../application/course-catalog.js';
 import { displayName } from '../../../../application/horse-service.js';
-import { KNOCKDOWN_FAULTS, REFUSAL_FAULTS } from '../../../../domain/course/scoring.js';
 import { summarizeResult } from '../../../../application/result-summary.js';
 import { badgeEmblem } from '../profile/badges-screen.js';
 import { drawCoursePlan } from './plan.js';
@@ -73,6 +72,10 @@ export function createCourseSelectScreen(ctx) {
 
 export function createPrestartScreen(ctx, params) {
   const { t, h, store, app, services } = ctx;
+  // A locked or unknown course cannot be started, not even by a forced screen change (rule 35)
+  if (!canStart(store, params.courseId)) {
+    return { el: h('div'), redirect: { name: 'courseSelect' } };
+  }
   const course = getCourse(params.courseId);
   const canvas = h('canvas', {
     class: 'course-plan',
@@ -123,6 +126,14 @@ export function createPrestartScreen(ctx, params) {
   return { el, music: true, destroy: () => window.removeEventListener('resize', draw) };
 }
 
+// "3 x 4 = 12" from the figures of the result summary; nothing to show for 0
+function pointsText(t, { count, points }) {
+  return count > 0 ? t('results.points', { count, each: points / count, points }) : '0';
+}
+
+// The finish signal plays first; the melody of the results screen starts after it
+const RESULTS_MUSIC_DELAY_MS = 1500;
+
 export function createResultsScreen(ctx, params) {
   const { t, h, store, app } = ctx;
   const summary = summarizeResult(store, params);
@@ -140,36 +151,32 @@ export function createResultsScreen(ctx, params) {
     h(
       'div',
       { class: 'results-body' },
-      h('h2', {}, t('results.title')),
-      h(
-        'p',
-        { class: 'results-horse' },
-        t('results.horse', { name: displayName(store.get('horse'), t('horse.defaultName')) }),
-      ),
-      stars(h, summary.stars, t('courses.starsLabel', { count: summary.stars })),
-      summary.isNewBest
-        ? h('p', { class: 'new-best', dataset: { result: 'newBest' } }, t('results.newBest'))
-        : null,
       h(
         'div',
-        { class: 'result-table' },
-        row(t('results.time'), formatCs(summary.timeCs, getLang()), 'time'),
-        row(
-          t('results.knockdowns'),
-          t('results.points', { ...rows.knockdowns, each: KNOCKDOWN_FAULTS }),
-          'knockdowns',
+        { class: 'results-summary' },
+        h(
+          'div',
+          { class: 'results-head' },
+          h('h2', {}, t('results.title')),
+          h(
+            'p',
+            { class: 'results-horse' },
+            t('results.horse', { name: displayName(store.get('horse'), t('horse.defaultName')) }),
+          ),
         ),
-        row(
-          t('results.refusals'),
-          t('results.points', { ...rows.refusals, each: REFUSAL_FAULTS }),
-          'refusals',
-        ),
-        row(t('results.timeFaults'), String(rows.timeFaults), 'timeFaults'),
-        row(t('results.total'), String(rows.total), 'total'),
+        stars(h, summary.stars, t('courses.starsLabel', { count: summary.stars })),
+        summary.isNewBest
+          ? h('p', { class: 'new-best', dataset: { result: 'newBest' } }, t('results.newBest'))
+          : null,
+        summary.unlockedCourse
+          ? h(
+              'p',
+              { class: 'unlocked-note', dataset: { result: 'unlocked' } },
+              t('results.unlocked', { n: summary.unlockedCourse }),
+            )
+          : null,
       ),
-      summary.unlockedCourse
-        ? h('p', { class: 'unlocked-note' }, t('results.unlocked', { n: summary.unlockedCourse }))
-        : null,
+      // New badges as a compact chip row right under the stars: visible without scrolling
       summary.badges.length
         ? h(
             'div',
@@ -177,18 +184,27 @@ export function createResultsScreen(ctx, params) {
             h('h3', {}, t('results.newBadges')),
             h(
               'ul',
-              { class: 'badge-grid' },
+              { class: 'badge-chips' },
               summary.badges.map((badge) =>
                 h(
                   'li',
-                  { class: 'badge-card is-earned', dataset: { badge: badge.id } },
+                  { class: 'badge-chip', dataset: { badge: badge.id } },
                   badgeEmblem(h, badge.id, true),
-                  h('strong', { class: 'badge-name' }, t(badge.nameKey)),
+                  h('strong', {}, t(badge.nameKey)),
                 ),
               ),
             ),
           )
         : null,
+      h(
+        'div',
+        { class: 'result-table' },
+        row(t('results.time'), formatCs(summary.timeCs, getLang()), 'time'),
+        row(t('results.knockdowns'), pointsText(t, rows.knockdowns), 'knockdowns'),
+        row(t('results.refusals'), pointsText(t, rows.refusals), 'refusals'),
+        row(t('results.timeFaults'), String(rows.timeFaults), 'timeFaults'),
+        row(t('results.total'), String(rows.total), 'total'),
+      ),
     ),
     h(
       'div',
@@ -227,5 +243,5 @@ export function createResultsScreen(ctx, params) {
       ),
     ),
   );
-  return { el, music: true };
+  return { el, music: true, musicDelayMs: RESULTS_MUSIC_DELAY_MS };
 }

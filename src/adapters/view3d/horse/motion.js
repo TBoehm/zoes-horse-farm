@@ -14,6 +14,7 @@ import { clamp, smoothstep } from './math.js';
 import { jumpParam } from './poses.js';
 
 const GAIT_RATE = 5; // gait cross-fade rate (1/s)
+const MOVING_GAITS = ['walk', 'trot', 'canter'];
 
 export function createMotion() {
   return {
@@ -34,15 +35,18 @@ export function createMotion() {
     lean: 0, // lean, + = to the right (rotation.z)
     speed: 0,
     time: 0,
+    falls: [], // reused result of stepMotion (no allocation per frame)
   };
 }
 
 const tmpLeg = {};
 const tmpBody = {};
+const target = { halt: 0, walk: 0, trot: 0, canter: 0 };
 
 /**
  * Advance one time step. state = sim.horse. Returns the leg indices whose hoof touched down
- * during this step (0 LF, 1 RF, 2 LH, 3 RH).
+ * during this step (0 LF, 1 RF, 2 LH, 3 RH). The array is reused by the next call (copy it to
+ * keep it).
  */
 export function stepMotion(m, dt, state) {
   const gait = GAIT_KEYS.includes(state.gait) ? state.gait : 'halt';
@@ -52,7 +56,7 @@ export function stepMotion(m, dt, state) {
   m.speed = v;
 
   // gait weights; turning on the spot: walking steps without forward travel
-  const target = { halt: 0, walk: 0, trot: 0, canter: 0 };
+  target.halt = target.walk = target.trot = target.canter = 0;
   if (gait === 'halt') {
     const step = smoothstep(0.15, 0.6, Math.abs(turn));
     target.walk = step;
@@ -107,7 +111,8 @@ export function stepMotion(m, dt, state) {
   m.lean = approach(m.lean, clamp(Math.atan((v * turn) / 9.81), -0.3, 0.3), 4, dt);
 
   // hoof paths and ground contact per leg
-  const falls = [];
+  const falls = m.falls;
+  falls.length = 0;
   const quiet = gait === 'halt' || m.jumpWeight > 0.3 || m.hopWeight > 0.4;
   for (let leg = 0; leg < 4; leg++) {
     const L = m.legs[leg];
@@ -117,7 +122,7 @@ export function stepMotion(m, dt, state) {
     let past = 0;
     let sink = w.halt * 0.008;
     let c = w.halt;
-    for (const g of ['walk', 'trot', 'canter']) {
+    for (const g of MOVING_GAITS) {
       const wg = w[g];
       if (wg < 1e-4) continue;
       legSample(g, leg, m.phi, v, m.freq, m.lead, tmpLeg);
@@ -145,7 +150,7 @@ export function stepMotion(m, dt, state) {
   B.pitch = 0;
   B.neck = 0;
   B.roll = 0;
-  for (const g of ['walk', 'trot', 'canter']) {
+  for (const g of MOVING_GAITS) {
     const wg = w[g];
     if (wg < 1e-4) continue;
     bodySample(g, m.phi, g === 'walk' && gait === 'halt' ? 0.3 : v, m.lead, tmpBody);

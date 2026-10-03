@@ -96,6 +96,42 @@ describe('course mode', () => {
     expect(mode.hudModel().faults).toBeGreaterThan(0);
   });
 
+  it('gives knockdown feedback only for scored knockdowns', () => {
+    const { mode, host } = setup();
+    startRide(mode);
+    // second obstacle is not due yet: this landing is not scored
+    const wrong = course.obstacles[1].elements[0].id;
+    mode.onEvents([{ type: 'landed', elementId: wrong, dir: 1, knocked: true }], host);
+    expect(host.calls.feedback).not.toContain('feedback.knockdown');
+    expect(mode.hudModel().faults).toBe(0);
+  });
+
+  it('says "wrong obstacle" for an unscored landing during the ride', () => {
+    const { mode, host } = setup();
+    startRide(mode);
+    const wrong = course.obstacles[1].elements[0].id;
+    mode.onEvents([{ type: 'landed', elementId: wrong, dir: 1, knocked: false }], host);
+    expect(host.calls.feedback).toEqual(['feedback.wrongObstacle']);
+    // the right obstacle in the wrong direction is not scored either
+    const due = course.obstacles[0].elements[0].id;
+    mode.onEvents([{ type: 'landed', elementId: due, dir: -1, knocked: false }], host);
+    expect(host.calls.feedback).toEqual(['feedback.wrongObstacle', 'feedback.wrongObstacle']);
+  });
+
+  it('stays quiet for a clean scored jump and for jumps before the start', () => {
+    const quiet = setup();
+    quiet.mode.onEvents(
+      [{ type: 'landed', elementId: course.obstacles[1].elements[0].id, dir: 1, knocked: false }],
+      quiet.host,
+    );
+    expect(quiet.host.calls.feedback).toEqual([]);
+    const { mode, host } = setup();
+    startRide(mode);
+    const id = course.obstacles[0].elements[0].id;
+    mode.onEvents([{ type: 'landed', elementId: id, dir: 1, knocked: false }], host);
+    expect(host.calls.feedback).toEqual([]);
+  });
+
   it('asks for a delayed rebuild of knocked rails that are not scored', () => {
     const { mode, host } = setup();
     // ride not started yet: the knockdown is not scored, rails come back after a delay
@@ -103,6 +139,7 @@ describe('course mode', () => {
     mode.onEvents([{ type: 'landed', elementId: id, dir: 1, knocked: true }], host);
     expect(host.calls.rebuildIn).toHaveLength(1);
     expect(host.calls.rebuildIn[0][0]).toBe(id);
+    expect(host.calls.feedback).toEqual([]);
   });
 
   it('counts a refusal and gives feedback', () => {

@@ -164,19 +164,24 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     environment.setDensity(p.envDensity, p.grassTufts, p.envDetail);
   }
 
+  // The sun never moves: its light-space axes and the scratch vectors are made once
+  const lightFwd = sunDirection.clone().negate();
+  const lightRight = new THREE.Vector3()
+    .crossVectors(lightFwd, THREE.Object3D.DEFAULT_UP)
+    .normalize();
+  const lightUp = new THREE.Vector3().crossVectors(lightRight, lightFwd).normalize();
+  const snapped = new THREE.Vector3();
+
   function updateShadowCamera() {
     // snap to the shadow map texel grid (no shimmering while following)
     const size = sun.shadow.mapSize.x || 1024;
     const texel = (SHADOW_HALF * 2) / size;
-    const fwd = sunDirection.clone().negate();
-    const right = new THREE.Vector3().crossVectors(fwd, THREE.Object3D.DEFAULT_UP).normalize();
-    const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
-    const r = shadowFocus.dot(right);
-    const u = shadowFocus.dot(up);
-    const snapped = shadowFocus
-      .clone()
-      .addScaledVector(right, Math.round(r / texel) * texel - r)
-      .addScaledVector(up, Math.round(u / texel) * texel - u);
+    const r = shadowFocus.dot(lightRight);
+    const u = shadowFocus.dot(lightUp);
+    snapped
+      .copy(shadowFocus)
+      .addScaledVector(lightRight, Math.round(r / texel) * texel - r)
+      .addScaledVector(lightUp, Math.round(u / texel) * texel - u);
     sun.target.position.copy(snapped);
     sun.position.copy(snapped).addScaledVector(sunDirection, SUN_DISTANCE);
     sun.target.updateMatrixWorld();
@@ -184,7 +189,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
 
   // approach direction per element (from setAid) so poles fall in jump direction
   const approachDirs = new Map();
-  const fallDirOf = (id) => approachDirs.get(id) ?? null;
+  let aidShown = null; // aid parameters currently applied to the marker
 
   setQuality(quality);
   updateShadowCamera();
@@ -203,28 +208,47 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       obstacles.setObstacles(list, { flags });
       approachDirs.clear();
       aid.hide();
+      aidShown = null;
       applyMeshes();
     },
     /** rails: Map elementId → boolean[]; fallDirs optional Map elementId → ±1. */
     syncRails(rails, dt = 0, fallDirs = null) {
-      const dirOf = fallDirs ? (id) => fallDirs.get(id) ?? fallDirOf(id) : fallDirOf;
-      obstacles.syncRails(rails, dt, dirOf);
+      obstacles.syncRails(rails, dt, fallDirs, approachDirs);
     },
     highlight(elementIdOrNull, number) {
       obstacles.highlight(elementIdOrNull, number);
     },
     setAid(params) {
       if (!params) {
-        aid.hide();
+        if (aidShown) aid.hide();
+        aidShown = null;
+        return;
+      }
+      // called every frame with an equal value most of the time: skip the placement then
+      const zone = params.zone;
+      if (
+        aidShown &&
+        aidShown.elementId === params.elementId &&
+        aidShown.dir === params.dir &&
+        aidShown.near === zone?.near &&
+        aidShown.far === zone?.far
+      ) {
         return;
       }
       const element = obstacles.getElement(params.elementId);
       if (!element) {
         aid.hide();
+        aidShown = null;
         return;
       }
       approachDirs.set(params.elementId, params.dir < 0 ? -1 : 1);
-      aid.set(element, params.dir, params.zone);
+      aid.set(element, params.dir, zone);
+      aidShown = {
+        elementId: params.elementId,
+        dir: params.dir,
+        near: zone?.near,
+        far: zone?.far,
+      };
     },
     setLines(params) {
       lines.set(params);

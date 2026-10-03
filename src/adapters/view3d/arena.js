@@ -1,7 +1,7 @@
 // Arena: sand footing with track, wooden fence (instanced), gate, start/finish lines.
 import * as THREE from 'three';
 import { ARENA } from '../../domain/sim/tuning.js';
-import { FENCE, GATE, planFence, planLines } from './world-layout.js';
+import { FENCE, GATE, linePosts, planFence, planLines } from './world-layout.js';
 import {
   createSandTextures,
   createGeometryBuilder,
@@ -332,16 +332,16 @@ export function createCourseLines({ materialFactory }) {
     const builder = createGeometryBuilder();
     const signs = createGeometryBuilder();
     for (const e of entries) {
-      const { a, b, cx, cz, length, angle: ang } = e.seg;
+      const { a, cx, cz, length, angle: ang } = e.seg;
       // chalk line on the ground
       const line = new THREE.PlaneGeometry(0.14, length);
       line.rotateX(-Math.PI / 2);
       builder.add(line, 0xffffff, { x: cx, y: 0.012, z: cz, ry: ang });
       const color = e.kind === 'start' ? 0x1f8f46 : 0xc62828;
-      // posts at both ends with flags: red at a, white at b (a = right side in riding direction)
-      [a, b].forEach((p, i) => {
+      // posts at both ends with flags: red on the right, white on the left in riding direction
+      linePosts(e.seg).forEach((p) => {
         builder.add(boxOnGround(0.07, 1.7, 0.07), 0xf2f2f2, { x: p.x, z: p.z });
-        builder.add(new THREE.BoxGeometry(0.02, 0.28, 0.38), i === 0 ? 0xd32f2f : 0xffffff, {
+        builder.add(new THREE.BoxGeometry(0.02, 0.28, 0.38), p.red ? 0xd32f2f : 0xffffff, {
           x: p.x,
           y: 1.52,
           z: p.z,

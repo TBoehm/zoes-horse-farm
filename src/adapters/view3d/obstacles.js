@@ -26,8 +26,8 @@ import {
   flagSides,
   easeOut,
   easeInOut,
-  endProgress,
-  fallPoint,
+  endProgressOf,
+  fallPointInto,
   fallTarget,
 } from './world-layout.js';
 
@@ -225,9 +225,8 @@ const eb = new THREE.Vector3();
 export function stepPole(pole, dt) {
   if (pole.state === 'falling') {
     pole.t = Math.min(1, pole.t + dt / FALL_DURATION);
-    const k = endProgress(pole.t, pole.lead);
-    ea.fromArray(fallPoint(pole.fromA.toArray(), pole.toA.toArray(), k.a));
-    eb.fromArray(fallPoint(pole.fromB.toArray(), pole.toB.toArray(), k.b));
+    fallPointInto(ea, pole.fromA, pole.toA, endProgressOf(pole.t, pole.lead, true));
+    fallPointInto(eb, pole.fromB, pole.toB, endProgressOf(pole.t, pole.lead, false));
     poseFromEnds(ea, eb, pole.roll * easeOut(pole.t), pole.pos, pole.quat);
     if (pole.t >= 1) pole.state = 'down';
     return true;
@@ -414,6 +413,7 @@ export function createObstacles({ materialFactory }) {
   const elements = new Map();
   const highlight = createHighlight();
   group.add(highlight.group);
+  let shownHighlight = null; // key of the highlight that is currently built
 
   const meshes = [
     { mesh: null, mats: staticMats, shadow: 'obstacles' },
@@ -462,6 +462,7 @@ export function createObstacles({ materialFactory }) {
     whitePoles.count = 0;
     colorPoles.count = 0;
     highlight.hide();
+    shownHighlight = null;
   }
 
   function setObstacles(obstacles, { flags = false } = {}) {
@@ -475,7 +476,15 @@ export function createObstacles({ materialFactory }) {
         const label = labelOf(obstacle, ei);
         addElementStatic(builder, element, color, { flags: Boolean(flags), board: Boolean(label) });
         if (label) labels.push({ element, label });
-        const info = { element, obstacle, index: ei, label, color, rails: new Map() };
+        const info = {
+          element,
+          obstacle,
+          index: ei,
+          label,
+          color,
+          rails: new Map(),
+          railLists: [], // same lists, indexed by rail (allocation-free per-frame iteration)
+        };
         const rng = createRng(hashId(element.id));
         for (const def of polesOf(element)) {
           if (poles.length >= MAX_POLES) break;
@@ -485,7 +494,11 @@ export function createObstacles({ materialFactory }) {
           c.set(color);
           colorPoles.setColorAt(pole.index, c);
           if (def.rail >= 0) {
-            if (!info.rails.has(def.rail)) info.rails.set(def.rail, []);
+            if (!info.rails.has(def.rail)) {
+              const list = [];
+              info.rails.set(def.rail, list);
+              info.railLists[def.rail] = list;
+            }
             info.rails.get(def.rail).push(pole);
           }
         }
@@ -533,29 +546,37 @@ export function createObstacles({ materialFactory }) {
   }
 
   /**
-   * rails: Map elementId → boolean[] (true = up). fallDirOf(elementId) → ±1 (side to fall to
-   * along n), optional.
+   * rails: Map elementId → boolean[] (true = up). fallDirs / approachDirs: optional Maps
+   * elementId → ±1 (side to fall to along n; fallDirs wins). Runs every frame: no allocations.
    */
-  function syncRails(rails, dt = 0, fallDirOf = null) {
+  function syncRails(rails, dt = 0, fallDirs = null, approachDirs = null) {
     if (rails) {
       for (const [id, states] of rails) {
         const info = elements.get(id);
         if (!info || !states) continue;
-        info.rails.forEach((list, railIndex) => {
+        const lists = info.railLists;
+        for (let railIndex = 0; railIndex < lists.length; railIndex += 1) {
+          const list = lists[railIndex];
+          if (!list) continue;
           const up = states[railIndex] !== false;
-          for (const pole of list) {
+          for (let i = 0; i < list.length; i += 1) {
+            const pole = list[i];
             const isUp = pole.state === 'up' || pole.state === 'rising';
             if (up && !isUp) startRise(pole);
             else if (!up && isUp) {
-              const side = (fallDirOf && fallDirOf(id)) || (pole.rng() < 0.5 ? -1 : 1);
+              const side =
+                (fallDirs && fallDirs.get(id)) ||
+                (approachDirs && approachDirs.get(id)) ||
+                (pole.rng() < 0.5 ? -1 : 1);
               startFall(pole, Math.sign(side) || 1);
             }
           }
-        });
+        }
       }
     }
     let dirty = false;
-    for (const pole of poles) {
+    for (let i = 0; i < poles.length; i += 1) {
+      const pole = poles[i];
       if (stepPole(pole, dt)) {
         writePole(pole);
         dirty = true;
@@ -584,12 +605,17 @@ export function createObstacles({ materialFactory }) {
       return list ? list[0].state : null;
     },
     highlight(elementId, number) {
+      const key = elementId ? `${elementId}|${number ?? ''}` : null;
+      // called every frame: only rebuild the ring and badge when something changed
+      if (key === shownHighlight) return;
       const info = elementId ? elements.get(elementId) : null;
       if (!info) {
         highlight.hide();
+        shownHighlight = null;
         return;
       }
       highlight.show(info.element, highlightText(info.obstacle, info.index, number));
+      shownHighlight = key;
     },
     update(dt, camera) {
       highlight.update(dt, camera);

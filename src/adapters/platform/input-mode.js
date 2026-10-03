@@ -1,18 +1,9 @@
 // Touch mode (rule 11): touch-only devices always, keyboard-only devices never,
 // devices with both start without it and switch on touch or on a game key.
 import { createEmitter } from '../../shared/events.js';
+import { GAME_KEYS } from './game-keys.js';
 
-export const GAME_KEYS = new Set([
-  'KeyW',
-  'KeyA',
-  'KeyS',
-  'KeyD',
-  'ShiftLeft',
-  'ShiftRight',
-  'Space',
-  'Escape',
-  'KeyC',
-]);
+export { GAME_KEYS };
 
 /** Determines the device class: 'touch' | 'keyboard' | 'hybrid'. */
 export function classifyDevice({

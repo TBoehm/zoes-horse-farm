@@ -7,9 +7,9 @@ import { createWorld } from './world.js';
 import { createHorse } from './horse/index.js';
 import { createCameraRig } from './camera.js';
 
-function rendererString(renderer) {
+function rendererString(gl) {
   try {
-    const gl = renderer.getContext();
+    if (!gl) return '';
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
     return String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
   } catch {
@@ -17,12 +17,28 @@ function rendererString(renderer) {
   }
 }
 
+/** Reads the GPU name from a throw-away context (the real renderer needs the level first). */
+function probeRendererString() {
+  try {
+    const probe = document.createElement('canvas');
+    const gl = probe.getContext('webgl2') ?? probe.getContext('webgl');
+    const name = gl ? rendererString(gl) : '';
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return name;
+  } catch {
+    return '';
+  }
+}
+
+/** `renderer`: a THREE.WebGLRenderer, or the GPU name as a string. */
 export function deviceInfo(renderer, inputMode) {
+  const rendererName =
+    typeof renderer === 'string' ? renderer : rendererString(renderer?.getContext?.());
   return {
     hardwareConcurrency: navigator.hardwareConcurrency,
     deviceMemory: navigator.deviceMemory,
     isTouch: inputMode?.device === 'touch',
-    rendererString: rendererString(renderer),
+    rendererString: rendererName,
     screenPixels: screen.width * screen.height * (window.devicePixelRatio || 1) ** 2,
   };
 }
@@ -32,17 +48,18 @@ export function createEngine({ app, store, inputMode }) {
   canvas.hidden = true;
   app.layers.scene.append(canvas);
 
-  const renderer = createRenderer(canvas, { antialias: true });
-  const camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.1, 900);
-  const cameraRig = createCameraRig(camera);
-
   // Graphics level (rule 4): on first start, or on "Automatic" without a level, pick one that fits the device
   let settings = store.get('settings');
   if (!settings.graphicsLevel) {
-    const level = pickInitialLevel(deviceInfo(renderer, inputMode));
+    const level = pickInitialLevel(deviceInfo(probeRendererString(), inputMode));
     settings = store.update('settings', (s) => ({ ...s, graphicsLevel: level }));
   }
   let level = settings.graphicsLevel;
+
+  // Antialiasing is a context attribute and cannot change later: follow the stored level
+  const renderer = createRenderer(canvas, { antialias: QUALITY_PRESETS[level].antialias });
+  const camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.1, 900);
+  const cameraRig = createCameraRig(camera);
 
   const world = createWorld(renderer, { quality: level });
   const horse = createHorse({ coat: 'bay', marking: 'star', quality: level });

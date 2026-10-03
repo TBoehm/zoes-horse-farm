@@ -5,6 +5,20 @@ export function renderResetSection(ctx, { fromPause }) {
   if (fromPause) return null;
   const { t, h, store } = ctx;
   const status = h('p', { class: 'field-hint', role: 'status' });
+  const cancel = h(
+    'button',
+    {
+      class: 'btn btn-secondary',
+      type: 'button',
+      dataset: { action: 'reset-cancel' },
+      onclick: () => {
+        confirmBox.hidden = true;
+        trigger.hidden = false;
+        trigger.focus({ preventScroll: true });
+      },
+    },
+    t('reset.cancel'),
+  );
   const confirmBox = h(
     'div',
     { class: 'confirm-box', hidden: true, role: 'alertdialog', dataset: { dialog: 'reset' } },
@@ -22,24 +36,13 @@ export function renderResetSection(ctx, { fromPause }) {
             resetProgress(store);
             confirmBox.hidden = true;
             trigger.hidden = false;
+            trigger.focus({ preventScroll: true });
             status.textContent = t('reset.done');
           },
         },
         t('reset.confirm'),
       ),
-      h(
-        'button',
-        {
-          class: 'btn btn-secondary',
-          type: 'button',
-          dataset: { action: 'reset-cancel' },
-          onclick: () => {
-            confirmBox.hidden = true;
-            trigger.hidden = false;
-          },
-        },
-        t('reset.cancel'),
-      ),
+      cancel,
     ),
   );
   const trigger = h(
@@ -52,6 +55,8 @@ export function renderResetSection(ctx, { fromPause }) {
         confirmBox.hidden = false;
         trigger.hidden = true;
         status.textContent = '';
+        // the safe choice has the focus (Enter or Space does not delete by accident)
+        cancel.focus({ preventScroll: true });
       },
     },
     t('reset.button'),
