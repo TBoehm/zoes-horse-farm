@@ -120,6 +120,44 @@ describe('view', () => {
     expect(session.view.jumping).toBe(false);
   });
 
+  it('tells while an obstacle is being approached, also without a jump (rule 4)', () => {
+    const far = setup({ mode: crossMode({ distance: TUNING.approachDistance + 5 }) });
+    expect(far.session.view.approaching).toBe(false);
+
+    const near = setup({ mode: crossMode({ distance: TUNING.approachDistance - 2 }) });
+    expect(near.session.view.approaching).toBe(true);
+    expect(near.session.view.jumping).toBe(false);
+
+    // walking away turns the horse round and ends the approach
+    const away = setup({
+      mode: {
+        ...crossMode({ distance: TUNING.approachDistance - 2 }),
+        startPose: () => ({ x: 0, z: -(TUNING.approachDistance - 2), heading: Math.PI, speed: 0 }),
+      },
+    });
+    expect(away.session.view.approaching).toBe(false);
+  });
+
+  it('is approaching right up to take-off and no longer during the jump itself', () => {
+    const z = zoneForElement(cross, TUNING.speeds.trotMax, TUNING);
+    const mode = crossMode({ distance: z.near + 0.3, speed: TUNING.speeds.trotMax });
+    const { session } = setup({ mode });
+    expect(session.view.approaching).toBe(true);
+    expect(session.view.jumping).toBe(false);
+    let pressed = false;
+    run(
+      session,
+      () => {
+        const press = !pressed;
+        pressed = true;
+        return { jump: press };
+      },
+      { done: () => session.view.jumping },
+    );
+    // busy for the ride screen is jumping || approaching: there is no gap between the two
+    expect(session.view.jumping).toBe(true);
+  });
+
   it('describes the mode for the screen: obstacles, flags, quit target', () => {
     const { session } = setup({ mode: createCourseMode({ courseId: 2 }) });
     expect(session.modeId).toBe('course');

@@ -48,8 +48,9 @@ export function nextUpgradeLevel({ level, blocked = [], left = [], fits = () => 
  * @param {object} [deps.options] overrides of UPGRADE_DEFAULTS
  *
  * frame(dtSeconds, measuring, busy): `measuring` = riding with "Automatic" on and the page
- * visible; `busy` = a jump is in progress (the decision about it is the session's, see
- * `view.jumping`): a step never starts then, the measurement goes on. Returns `{ level, fps }`
+ * visible; `busy` = a jump is in progress or an obstacle is being approached (the decision about
+ * it is the session's, see `view.jumping` and `view.approaching`): a step never starts then (a
+ * stage can stall the frames for seconds), the measurement goes on. Returns `{ level, fps }`
  * when the level has to go up now (cooldown and warm-up start by themselves), else null.
  */
 export function createUpgradeGovernor({ chooseTarget, options = {} }) {

@@ -43,6 +43,9 @@ export function createRideSession({ mode, store, clock, rng }) {
     // a jump is in progress (take-off, flight, landing): the graphics automatic does not start a
     // level step then (rule 4)
     jumping: false,
+    // an obstacle is being approached (closer than the approach distance, on its line): the
+    // automatic does not start a level step then either, a stage can stall the frames for seconds
+    approaching: false,
     lines: null,
     hud: null,
   };
@@ -171,6 +174,7 @@ export function createRideSession({ mode, store, clock, rng }) {
       view.highlight = mode.highlight ?? null;
       view.finishMarked = Boolean(mode.finishMarked);
       view.jumping = Boolean(sim.horse.jump);
+      view.approaching = sim.approach !== null;
       view.lines = mode.lines ?? null;
       view.hud = mode.hudModel ? mode.hudModel() : null;
       return view;

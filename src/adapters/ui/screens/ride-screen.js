@@ -395,8 +395,9 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     world.setAid(view.aid);
     cameraRig.update(dt, view.horse, horse.earAnchor);
     world.update(dt, engine.camera);
-    // the level automatic climbs only between jumps: the session says when one is in progress
-    governor.frame(rawDt, !document.hidden, view.jumping);
+    // the level automatic climbs only between obstacles: the session says when a jump is in
+    // progress or an obstacle is being approached (rule 4)
+    governor.frame(rawDt, !document.hidden, view.jumping || view.approaching);
     if (
       lowFpsHint.frame(
         rawDt,
