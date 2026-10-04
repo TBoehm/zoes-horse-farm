@@ -14,12 +14,31 @@ import {
   table,
   torusData,
 } from './horse/loft.js';
-import { clamp, smoothstep } from './horse/math.js';
-import { riderSeat } from './horse/seat.js';
+import { smoothstep } from './horse/math.js';
+import { createSeatFilter } from './horse/seat.js';
 import { createVertexColorMaterial } from './horse/material.js';
 import { releaseNow } from './resilience.js';
+import {
+  PONY_JOINTS,
+  addChinStrap,
+  addFace,
+  addJacketDetails,
+  addPonytail,
+} from './rider-details.js';
+import { createHeadLook, stepHeadLook } from './rider-look.js';
+import { breathing, createPat, stepPat } from './rider-life.js';
+import { softReach } from './rider-reach.js';
+import { PONY_SEGMENTS, createPonytail, stepPonytail } from './rider-ponytail.js';
 
 const SIDES = [1, -1];
+const PONY_NAMES = ['pony1', 'pony2', 'pony3'];
+// the head takes most of the look, the neck the rest
+const LOOK_SHARE = { neck: 0.4, head: 0.6 };
+// right hand on the horse's neck for the pat after a jump (offsets to the rein position)
+const PAT = { x: 0.04, y: -0.1, z: 0.24, tap: 0.03, lean: 0.5 };
+// the ponytail ignores head jumps above this distance per frame (restart, teleport) in metres
+const TELEPORT_DISTANCE = 3;
+const ACCEL_FILTER = 22; // 1/s, low-pass on the head acceleration
 const boneNames = (p) =>
   Object.fromEntries(
     ['thigh', 'shin', 'foot', 'upperArm', 'forearm', 'hand'].map((n) => [n, `${p}${n}`]),
@@ -43,6 +62,7 @@ const J = {
   knee: [0.27, -0.17, 0.28],
   ankle: [0.36, -0.56, 0.15],
   toe: [0.365, -0.59, 0.31],
+  ...PONY_JOINTS,
 };
 const mir = (a, s) => [a[0] * s, a[1], a[2]];
 const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
@@ -58,6 +78,19 @@ const COLORS = {
   collar: [0.95, 0.95, 0.95],
   steel: [0.72, 0.73, 0.75],
   leather: [0.16, 0.09, 0.05],
+  hairTip: [0.5, 0.33, 0.17],
+  eyeWhite: [0.97, 0.97, 0.95],
+  iris: [0.22, 0.4, 0.62],
+  pupil: [0.02, 0.02, 0.03],
+  brow: [0.24, 0.15, 0.08],
+  nose: [0.86, 0.6, 0.5],
+  lip: [0.66, 0.24, 0.24],
+  blush: [0.96, 0.58, 0.52],
+  strap: [0.05, 0.045, 0.045],
+  bow: [0.93, 0.3, 0.5],
+  bowKnot: [0.8, 0.2, 0.4],
+  button: [0.86, 0.7, 0.28],
+  piping: [0.82, 0.68, 0.3],
 };
 const lin = (c) => {
   const col = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
@@ -93,6 +126,9 @@ function createBones() {
   make('chest', J.chest, 'spine');
   make('neck', J.neck, 'chest');
   make('head', J.head, 'neck');
+  make('pony1', J.pony1, 'head');
+  make('pony2', J.pony2, 'pony1');
+  make('pony3', J.pony3, 'pony2');
   SIDES.forEach((s) => {
     const p = s > 0 ? 'L' : 'R';
     make(`${p}upperArm`, mir(J.shoulder, s), 'chest');
@@ -155,7 +191,7 @@ function buildRiderGeometry(index, level) {
     [1.0, 0.07, 0.05, 0.05],
   ]);
   const ju = [0.27, 0.62, 0.95];
-  new Loft({
+  const torso = new Loft({
     frame: curveFrames(curve),
     section: (u, a) => {
       const [w, back, front] = T(u);
@@ -163,12 +199,14 @@ function buildRiderGeometry(index, level) {
     },
     weights: (u) => chainWeights(u, ju, ['pelvis', 'spine', 'chest', 'neck'], 0.06),
     attrs: (u) => ({ color: u < 0.3 ? C.breeches : u > 0.95 ? C.collar : C.jacket }),
-  }).build(b, {
+  });
+  torso.build(b, {
     uSamples: samples(D.torso[0]),
     radial: D.torso[1],
     capStart: { len: 0.05, rings: 2 },
     capEnd: { len: 0.02, rings: 1 },
   });
+  addJacketDetails(b, torso, level, C);
 
   // Neck, head, ponytail
   limb(
@@ -195,23 +233,7 @@ function buildRiderGeometry(index, level) {
     () => [['head', 1]],
     (v) => ({ color: v.z < -0.02 && v.y > 0.755 ? C.hair : C.skin }),
   );
-  limb(
-    b,
-    [
-      [0, 0.815, -0.09],
-      [0, 0.76, -0.13],
-      [0, 0.66, -0.15],
-    ],
-    [
-      [0, 0.03],
-      [0.5, 0.026],
-      [1, 0.012],
-    ],
-    ['head', 'head'],
-    C.hair,
-    D,
-    { n: 4 },
-  );
+  addPonytail(b, level, C);
   // Helmet (shell) with peak
   const helmet = new THREE.SphereGeometry(
     1,
@@ -239,6 +261,8 @@ function buildRiderGeometry(index, level) {
     () => [['head', 1]],
     () => ({ color: C.helmet }),
   );
+  addFace(b, level, C);
+  addChinStrap(b, level, C);
 
   for (const s of SIDES) {
     const p = s > 0 ? 'L' : 'R';
@@ -383,7 +407,7 @@ export function createRider({ quality = 'medium', release = releaseNow } = {}) {
     const l1 = bMid.position.length();
     const l2 = end.position.length();
     const d = vA.subVectors(target, pRoot);
-    const dist = clamp(d.length(), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-4);
+    const dist = softReach(d.length(), l1, l2);
     d.normalize();
     const x = (l1 * l1 + dist * dist - l2 * l2) / (2 * dist);
     const h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
@@ -394,21 +418,49 @@ export function createRider({ quality = 'medium', release = releaseNow } = {}) {
     aim(bMid, vDir.subVectors(target, pMid));
   }
 
+  const seatFilter = createSeatFilter();
   const seat = {};
+  const look = createHeadLook();
+  const pat = createPat();
+  const breath = { chest: 0, roll: 0 };
+  const pony = createPonytail();
+  const ponyBones = PONY_NAMES.map((n) => bones[n]);
+  const motion = {
+    has: false,
+    pos: new THREE.Vector3(),
+    prev: new THREE.Vector3(),
+    vel: new THREE.Vector3(),
+    prevVel: new THREE.Vector3(),
+    acc: new THREE.Vector3(),
+    quat: new THREE.Quaternion(),
+    input: { ax: 0, ay: 0, az: 0, vx: 0, vy: 0, vz: 0, gy: -1, gz: 0 },
+  };
+  const vL = new THREE.Vector3();
+  const aL = new THREE.Vector3();
+  const gL = new THREE.Vector3();
   const api = {
     object,
     hands: [bones.Lhand, bones.Rhand],
     bones,
     update(dt, state = {}, ctx = null) {
-      riderSeat(state, ctx, seat);
+      seatFilter.step(dt, state, ctx, seat);
+      const halt = ctx?.weights ? ctx.weights.halt || 0 : state.gait === 'halt' ? 1 : 0;
+      stepHeadLook(look, dt, state, halt);
+      stepPat(pat, dt, { jumping: !!state.jump, halted: halt > 0.95 });
+      breathing(look.time, halt, breath);
       const B = bones;
       B.pelvis.position.set(J.pelvis[0], J.pelvis[1] + seat.rise, J.pelvis[2] + seat.forward);
-      const lean = seat.lean;
+      const lean = seat.lean + PAT.lean * pat.reach;
       B.pelvis.rotation.set(lean * 0.4 + seat.sway, 0, seat.roll);
       B.spine.rotation.set(lean * 0.33, 0, 0);
-      B.chest.rotation.set(lean * 0.27, 0, 0);
-      B.neck.rotation.set(-lean * 0.45, 0, 0);
-      B.head.rotation.set(-lean * 0.4 - seat.horsePitch * 0.6, 0, 0);
+      B.chest.rotation.set(lean * 0.27 + breath.chest, 0, breath.roll);
+      const yaw = look.yaw.x;
+      B.neck.rotation.set(-lean * 0.45, yaw * LOOK_SHARE.neck, 0);
+      B.head.rotation.set(
+        -lean * 0.4 - seat.horsePitch * 0.6 + look.pitch.x,
+        yaw * LOOK_SHARE.head,
+        0,
+      );
       B.base.updateMatrixWorld(true);
       invBase.copy(B.base.matrixWorld).invert();
       for (const s of SIDES) {
@@ -420,13 +472,62 @@ export function createRider({ quality = 'medium', release = releaseNow } = {}) {
         frameOf(B[names.shin], vA, qParent);
         B[names.foot].quaternion.copy(qParent).invert();
         B[names.foot].rotateX(-0.1);
-        // arms: hands on the reins above the withers, elbows down/back/outward
-        pTarget.set(seat.handX * s, seat.handY, seat.handZ);
+        // arms: hands on the reins above the withers, elbows down/back/outward; the right hand
+        // goes to the horse's neck for a pat
+        const patS = s < 0 ? pat.reach : 0;
+        pTarget.set(
+          (seat.handX + PAT.x * patS) * s,
+          seat.handY + PAT.y * patS + PAT.tap * pat.tap * patS,
+          seat.handZ + PAT.z * patS,
+        );
         pPole.set(0.5 * s, -0.4, -0.6);
         twoBone(B[names.upperArm], B[names.forearm], B[names.hand], pTarget, pPole);
         frameOf(B[names.forearm], vA, qParent);
         B[names.hand].quaternion.copy(qParent).invert();
         B[names.hand].rotateZ(-0.5 * s);
+      }
+    },
+    /**
+     * Secondary motion that needs the final world matrices of the head (call after the horse has
+     * updated them): the ponytail lags behind the head's bob, acceleration and turns.
+     */
+    lateUpdate(dt) {
+      if (!(dt > 0)) return;
+      const m = motion;
+      bones.head.matrixWorld.decompose(m.pos, m.quat, scl);
+      if (!m.has || m.pos.distanceToSquared(m.prev) > TELEPORT_DISTANCE ** 2) {
+        // first frame or a jump in place (restart): no velocity yet
+        m.has = true;
+        m.prev.copy(m.pos);
+        m.vel.set(0, 0, 0);
+        m.prevVel.set(0, 0, 0);
+        m.acc.set(0, 0, 0);
+        return;
+      }
+      m.vel.subVectors(m.pos, m.prev).divideScalar(dt);
+      m.acc.lerp(
+        vA.subVectors(m.vel, m.prevVel).divideScalar(dt),
+        1 - Math.exp(-ACCEL_FILTER * dt),
+      );
+      m.prev.copy(m.pos);
+      m.prevVel.copy(m.vel);
+      // into the head's own frame (+Z forward, +X left)
+      qTmp.copy(m.quat).invert();
+      vL.copy(m.vel).applyQuaternion(qTmp);
+      aL.copy(m.acc).applyQuaternion(qTmp);
+      gL.set(0, -1, 0).applyQuaternion(qTmp);
+      const input = m.input;
+      input.ax = aL.x;
+      input.ay = aL.y;
+      input.az = aL.z;
+      input.vx = vL.x;
+      input.vy = vL.y;
+      input.vz = vL.z;
+      input.gy = gL.y;
+      input.gz = gL.z;
+      stepPonytail(pony, input, dt);
+      for (let i = 0; i < PONY_SEGMENTS; i++) {
+        ponyBones[i].rotation.set(pony.pitch[i].x, pony.yaw[i].x, 0);
       }
     },
     setQuality(l) {
