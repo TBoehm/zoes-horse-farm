@@ -82,13 +82,14 @@ function boot() {
     clock: systemClock,
     decide: levelAfterContextLoss,
   });
-  crashGuard.checkPreviousRun();
+  const previousRun = crashGuard.checkPreviousRun();
   // "Automatic" selected anew: levels that crashed on this device may be tried again
   settings.onAutoSelected(() => crashGuard.clearBlockedLevels());
   installPageLifecycle(crashGuard);
 
   const app = createApp({ root, store, settings, inputMode, clock: systemClock });
   app.services.crashGuard = crashGuard;
+  app.services.startupCrash = previousRun; // the debug box names it as the reason of the level
   if (debugService) app.services.debug = debugService;
   app.register('menu', createMainMenuScreen);
   app.register('settings', createSettingsScreen);

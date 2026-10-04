@@ -10,7 +10,6 @@ import {
   CONTEXT_LOSS_GRACE_S,
   createLowFpsHint,
   createQualityGovernor,
-  pickInitialLevel,
   lowerLevel,
   QUALITY_PRESETS,
 } from './quality.js';
@@ -22,55 +21,6 @@ function run(gov, seconds, fps, measuring = true) {
   const n = Math.round(seconds * fps);
   for (let i = 0; i < n; i += 1) gov.frame(dt, measuring);
 }
-
-describe('pickInitialLevel', () => {
-  it('picks low for software renderers', () => {
-    for (const r of [
-      'Google SwiftShader',
-      'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)',
-      'llvmpipe (LLVM 15.0.7, 256 bits)',
-      'Microsoft Basic Render Driver',
-    ]) {
-      expect(
-        pickInitialLevel({ hardwareConcurrency: 16, deviceMemory: 8, rendererString: r }),
-      ).toBe('low');
-    }
-  });
-
-  it('picks high for a strong desktop', () => {
-    expect(
-      pickInitialLevel({
-        hardwareConcurrency: 12,
-        deviceMemory: 8,
-        isTouch: false,
-        rendererString: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060)',
-        screenPixels: 2560 * 1440,
-      }),
-    ).toBe('high');
-  });
-
-  it('touch devices get at most medium, weak ones low', () => {
-    expect(
-      pickInitialLevel({
-        hardwareConcurrency: 8,
-        deviceMemory: 8,
-        isTouch: true,
-        rendererString: 'Apple GPU',
-      }),
-    ).toBe('medium');
-    expect(
-      pickInitialLevel({ hardwareConcurrency: 4, isTouch: true, rendererString: 'Mali-G52' }),
-    ).toBe('low');
-  });
-
-  it('weak desktop gets medium or low', () => {
-    expect(
-      pickInitialLevel({ hardwareConcurrency: 4, rendererString: 'Intel(R) UHD Graphics 620' }),
-    ).toBe('medium');
-    expect(pickInitialLevel({ hardwareConcurrency: 2 })).toBe('low');
-    expect(pickInitialLevel({})).toBe('medium');
-  });
-});
 
 describe('lowerLevel', () => {
   it('goes down one level, never below low', () => {
@@ -136,7 +86,7 @@ describe('createQualityGovernor', () => {
     run(gov, 0.2, 40);
     expect(gov.level).toBe('medium');
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange).toHaveBeenCalledWith('medium');
+    expect(onChange).toHaveBeenCalledWith('medium', expect.any(Number));
   });
 
   it('stays at 50 fps or more', () => {
@@ -212,7 +162,7 @@ describe('createQualityGovernor', () => {
     run(gov, 3, 1 / 0.6); // grace period
     run(gov, 6, 1 / 0.6);
     expect(gov.level).toBe('medium');
-    expect(onChange).toHaveBeenCalledWith('medium');
+    expect(onChange).toHaveBeenCalledWith('medium', expect.any(Number));
   });
 
   it('a single long frame does not reset the window of a slow device', () => {
@@ -276,7 +226,7 @@ describe('createQualityGovernor', () => {
       gov.frame(undefined, true);
     }
     expect(gov.level).toBe('low');
-    expect(onChange).toHaveBeenCalledWith('low');
+    expect(onChange).toHaveBeenCalledWith('low', expect.any(Number));
   });
 
   it('reports the moving average', () => {
@@ -398,11 +348,13 @@ describe('levelAfterContextLoss (rule 4)', () => {
       level: 'low',
       persist: true,
       hint: false,
+      counted: true,
     });
     expect(levelAfterContextLoss({ auto: true, level: 'medium' })).toEqual({
       level: 'low',
       persist: true,
       hint: false,
+      counted: true,
     });
   });
 
@@ -411,6 +363,7 @@ describe('levelAfterContextLoss (rule 4)', () => {
       level: 'low',
       persist: false,
       hint: false,
+      counted: true,
     });
   });
 
@@ -420,6 +373,7 @@ describe('levelAfterContextLoss (rule 4)', () => {
         level,
         persist: false,
         hint: true,
+        counted: true,
       });
     }
   });
@@ -429,6 +383,7 @@ describe('levelAfterContextLoss (rule 4)', () => {
       level: 'low',
       persist: false,
       hint: false,
+      counted: true,
     });
   });
 
@@ -439,6 +394,7 @@ describe('levelAfterContextLoss (rule 4)', () => {
           level,
           persist: false,
           hint: false,
+          counted: false,
         });
       }
     }
@@ -450,6 +406,7 @@ describe('levelAfterContextLoss (rule 4)', () => {
       level: 'high',
       persist: false,
       hint: false,
+      counted: false,
     });
     expect(levelAfterContextLoss({ auto: false, level: 'high', ...justBack }).hint).toBe(false);
   });
@@ -460,6 +417,7 @@ describe('levelAfterContextLoss (rule 4)', () => {
       level: 'low',
       persist: true,
       hint: false,
+      counted: true,
     });
     expect(levelAfterContextLoss({ auto: false, level: 'high', ...settled }).hint).toBe(true);
   });

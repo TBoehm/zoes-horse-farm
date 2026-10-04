@@ -124,6 +124,7 @@ describe('a staged level change', () => {
     }
   });
 
+  // nine world builds: slower than the default timeout when the whole suite runs in parallel
   it('ends with exactly what a world that started at the target level holds (nothing leaks)', () => {
     for (const from of LEVELS) {
       for (const to of LEVELS) {
@@ -133,7 +134,7 @@ describe('a staged level change', () => {
         rig.world.dispose();
       }
     }
-  });
+  }, 30_000);
 
   it('survives a round trip high → low → high and comes back to the same counts', () => {
     const rig = createRig('high');

@@ -395,7 +395,8 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     world.setAid(view.aid);
     cameraRig.update(dt, view.horse, horse.earAnchor);
     world.update(dt, engine.camera);
-    governor.frame(rawDt, !document.hidden);
+    // the level automatic climbs only between jumps: the session says when one is in progress
+    governor.frame(rawDt, !document.hidden, view.jumping);
     if (
       lowFpsHint.frame(
         rawDt,

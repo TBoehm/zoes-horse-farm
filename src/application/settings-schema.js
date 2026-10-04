@@ -1,7 +1,7 @@
 // Save-game sections and settings fields for riding, jumping, the horse, progress and sound
 // (SRT-002 to SRT-006). Importing this module registers them with the save schema.
 import { addSettingsFields, field, objectSection, registerSection } from './save-schema.js';
-import { GRAPHICS_LEVELS } from './graphics-levels.js';
+import { AUTO_START_LEVEL, GRAPHICS_LEVELS } from './graphics-levels.js';
 import { COATS, DEFAULT_APPEARANCE, MARKINGS } from '../domain/horse/appearance.js';
 import { cleanName } from '../domain/horse/horse-name.js';
 import { PROGRESS_DEFAULTS, sanitizeProgress } from '../domain/progress/progress.js';
@@ -11,8 +11,9 @@ export const CAMERA_MODES = Object.freeze(['follow', 'rider']);
 
 addSettingsFields({
   graphicsAuto: field.bool(true),
-  // null = not chosen yet; the engine picks a level that fits the device on first start (rule 4)
-  graphicsLevel: field.enum([...GRAPHICS_LEVELS, null], null),
+  // first start: the automatic begins at the lowest level and works its way up (rule 4); the level
+  // it reached is saved and applies at the next start
+  graphicsLevel: field.enum(GRAPHICS_LEVELS, AUTO_START_LEVEL),
   camera: field.enum(CAMERA_MODES, 'follow'),
   aidFree: field.bool(true),
   aidCourse: field.bool(false),

@@ -1,5 +1,5 @@
-// Graphics quality levels (concept rules 3, 4): device pick, downgrade governor and presets.
-// Pure, no three.js.
+// Graphics quality levels (concept rules 3, 4): presets, GPU memory budget and the downgrade
+// governor (the upgrade governor is in quality-upgrade.js). Pure, no three.js.
 import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
 
 export const QUALITY_PRESETS = Object.freeze({
@@ -99,35 +99,8 @@ export function presetFor(levelOrPreset) {
   return levelOrPreset && typeof levelOrPreset === 'object' ? levelOrPreset : undefined;
 }
 
-const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render|mesa offscreen/i;
 const WEAK_GPU =
   /intel.*(hd|uhd)\s*graphics|mali-[gt]?[0-7]\d\b|adreno.*\b[1-5]\d\d\b|powervr|videocore/i;
-const STRONG_GPU = /nvidia|geforce|rtx|radeon\s*(rx|pro)|apple m[1-9]|iris xe|arc\b/i;
-
-/**
- * Initial level for the device (rule 4: "automatic" picks on first start).
- * info: { hardwareConcurrency, deviceMemory, isTouch, rendererString, screenPixels }
- */
-export function pickInitialLevel(info = {}) {
-  const cores = Number(info.hardwareConcurrency) || 4;
-  const memory = Number(info.deviceMemory) || null; // only Chrome/Edge report this
-  const renderer = String(info.rendererString || '');
-  const pixels = Number(info.screenPixels) || 1920 * 1080;
-
-  if (SOFTWARE_RENDERER.test(renderer)) return 'low';
-  if (cores <= 2 || (memory !== null && memory <= 2)) return 'low';
-
-  if (info.isTouch) {
-    // tablets/phones: at most medium; weak devices low
-    if (cores <= 4 || (memory !== null && memory <= 4) || WEAK_GPU.test(renderer)) return 'low';
-    return 'medium';
-  }
-
-  if (WEAK_GPU.test(renderer)) return pixels > 2560 * 1440 ? 'low' : 'medium';
-  if (cores >= 8 && (memory === null || memory >= 8)) return 'high';
-  if (STRONG_GPU.test(renderer) && cores >= 6) return 'high';
-  return 'medium';
-}
 
 // ---------------------------------------------------------------------------------------------
 // GPU memory budget (rule 4). Browsers do not tell how much GPU memory a page may use, so the
@@ -400,11 +373,11 @@ export function lowerLevel(level) {
 }
 
 // Measuring values of the frame-rate checks below. They are no game-play values (those belong to
-// TUNING), so they stay here: the downgrade governor and the "level too high" hint measure the
-// same way (rule 4): only while riding, not in the first 3 s, and a frame longer than
+// TUNING), so they stay here: the downgrade governor, the upgrade governor (quality-upgrade.js) and
+// the "level too high" hint measure the same way (rule 4): only while riding, not in the first 3 s, and a frame longer than
 // maxFrameS is a real interruption (suspend). Slower frames still count: a very slow device must
 // be able to step down. Pauses/hidden tabs are reported via measuring=false.
-const GOVERNOR_DEFAULTS = Object.freeze({
+export const GOVERNOR_DEFAULTS = Object.freeze({
   windowS: 5, // moving average
   minFps: 50,
   graceS: 3, // grace period after an interruption
@@ -419,25 +392,32 @@ const LOW_FPS_HINT_DEFAULTS = Object.freeze({
   maxFps: 30, // a manually chosen level below this average gets a hint
 });
 
-/** Moving average over the last `windowS` seconds of frame durations. */
-function createFrameWindow(windowS) {
+/**
+ * Moving average over the last `windowS` seconds of frame durations. Frames longer than `slowS`
+ * are counted as slow ones (the upgrade governor wants few of them); the default counts none.
+ */
+export function createFrameWindow(windowS, slowS = Infinity) {
   // queue of measured frame durations
   let samples = [];
   let head = 0;
   let sum = 0;
+  let slow = 0;
   const length = () => samples.length - head;
   return {
     clear() {
       samples.length = 0; // in place: this is called every frame while nothing is measured
       head = 0;
       sum = 0;
+      slow = 0;
     },
     push(dt) {
       samples.push(dt);
       sum += dt;
+      if (dt > slowS) slow += 1;
       // drop old frames while the rest still covers the whole window
       while (length() > 1 && sum - samples[head] >= windowS) {
         sum -= samples[head];
+        if (samples[head] > slowS) slow -= 1;
         head += 1;
       }
       if (head > 512) {
@@ -452,6 +432,11 @@ function createFrameWindow(windowS) {
     averageFps() {
       const n = length();
       return n > 0 && sum > 0 ? n / sum : null;
+    },
+    /** Share (0..1) of the frames in the window that were slower than `slowS`. */
+    slowShare() {
+      const n = length();
+      return n > 0 ? slow / n : 0;
     },
   };
 }
@@ -474,6 +459,7 @@ function createFrameClock(now) {
  * frame(dtSeconds, measuring): measuring = the player is riding (pre-start, ride, free mode) and
  * the window is visible. Returns the current level.
  * now: optional clock in ms; only used when frame() is called without dt.
+ * onChange(level, fps): the new level and the average frame rate that made the governor step down.
  */
 export function createQualityGovernor({
   level = 'medium',
@@ -519,7 +505,7 @@ export function createQualityGovernor({
       current = lowerLevel(current);
       cooldown = cfg.cooldownS;
       frames.clear();
-      onChange(current);
+      onChange(current, fps);
     }
     return current;
   }
@@ -570,7 +556,9 @@ export const CONTEXT_LOSS_GRACE_S = 3;
  * hint to pick a lower one. A loss while the page is hidden, or within CONTEXT_LOSS_GRACE_S of a
  * visibility change, says nothing about the device: nothing changes then.
  * `visible`: the page is in the foreground; `sinceVisibilityChangeS`: seconds since it last went
- * to the background or came back (Infinity: never). Returns { level, persist, hint }.
+ * to the background or came back (Infinity: never). Returns { level, persist, hint, counted }:
+ * `counted` tells that the loss shows an overloaded device (then the level it happened at must not
+ * be climbed to again by the automatic, whatever the loss did to the level itself).
  */
 export function levelAfterContextLoss({
   auto,
@@ -579,11 +567,11 @@ export function levelAfterContextLoss({
   sinceVisibilityChangeS = Infinity,
 }) {
   if (!visible || sinceVisibilityChangeS < CONTEXT_LOSS_GRACE_S) {
-    return { level, persist: false, hint: false };
+    return { level, persist: false, hint: false, counted: false };
   }
   const lowered = lowerLevel(level) !== level;
-  if (auto) return { level: 'low', persist: lowered, hint: false };
-  return { level, persist: false, hint: canHintLowerLevel({ auto, level }) };
+  if (auto) return { level: 'low', persist: lowered, hint: false, counted: true };
+  return { level, persist: false, hint: canHintLowerLevel({ auto, level }), counted: true };
 }
 
 /**

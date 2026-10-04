@@ -90,6 +90,36 @@ describe('view', () => {
     expect(hud).toBeNull();
   });
 
+  it('tells while a jump is in progress: from take-off through flight to landing (rule 4)', () => {
+    const z = zoneForElement(cross, TUNING.speeds.trotMax, TUNING);
+    const mode = crossMode({ distance: z.near + 0.3, speed: TUNING.speeds.trotMax });
+    const { session } = setup({ mode });
+    expect(session.view.jumping).toBe(false);
+    const phases = new Set();
+    let pressed = false;
+    let sawJumping = false;
+    run(
+      session,
+      () => {
+        const press = !pressed;
+        pressed = true;
+        return { jump: press };
+      },
+      {
+        done: () => {
+          const { horse, jumping } = session.view;
+          // the flag is exactly "a jump phase is set"
+          expect(jumping).toBe(Boolean(horse.jump));
+          if (horse.jump) phases.add(horse.jump.phase);
+          sawJumping ||= jumping;
+          return sawJumping && !jumping;
+        },
+      },
+    );
+    expect([...phases].sort()).toEqual(['flight', 'landing', 'takeoff']);
+    expect(session.view.jumping).toBe(false);
+  });
+
   it('describes the mode for the screen: obstacles, flags, quit target', () => {
     const { session } = setup({ mode: createCourseMode({ courseId: 2 }) });
     expect(session.modeId).toBe('course');

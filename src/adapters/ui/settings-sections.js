@@ -1,14 +1,12 @@
 // Settings sections for graphics level, fps display and jump aid (SRT-002, SRT-003, SRT-007).
 import { choiceGroup, registerSettingsSection, toggleRow } from './settings-screen.js';
 import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
-import { pickInitialLevel } from '../view3d/quality.js';
-import { deviceInfo } from '../view3d/engine.js';
 
 registerSettingsSection({
   id: 'graphics',
   order: 20,
   render(ctx) {
-    const { t, settings, services, inputMode, h } = ctx;
+    const { t, settings, h } = ctx;
     const s = settings.get();
     const level = choiceGroup({
       name: 'graphics',
@@ -16,14 +14,9 @@ registerSettingsSection({
       value: s.graphicsAuto ? 'auto' : s.graphicsLevel,
       options: ['auto', ...GRAPHICS_LEVELS].map((v) => ({ value: v, label: t(`graphics.${v}`) })),
       onChange: (value) => {
-        if (value === 'auto') {
-          // New pick that fits the device (rule 4)
-          const engine = services.engine;
-          const level = engine ? pickInitialLevel(deviceInfo(engine.renderer, inputMode)) : null;
-          settings.setGraphicsAuto(level);
-        } else {
-          settings.setGraphicsLevel(value);
-        }
+        // "Automatic" starts at low again and climbs from there (rule 4)
+        if (value === 'auto') settings.setGraphicsAuto();
+        else settings.setGraphicsLevel(value);
       },
     });
     // frame-rate display in the ride (rules 4, 44)

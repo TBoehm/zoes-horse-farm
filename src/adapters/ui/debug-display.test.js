@@ -59,6 +59,40 @@ describe('formatDebugText', () => {
     expect(lines(BASE)).toContain('[debug.noCrash]');
   });
 
+  describe('automatic level changes (rule 4)', () => {
+    it('lists the blocked levels with their names, or says there are none', () => {
+      expect(lines({ ...BASE, blockedLevels: ['medium', 'high'] })).toContain(
+        '[debug.blocked levels=[graphics.medium], [graphics.high]]',
+      );
+      expect(lines(BASE)).toContain('[debug.noBlocked]');
+      expect(lines({ ...BASE, blockedLevels: [] })).toContain('[debug.noBlocked]');
+    });
+
+    it('lists the levels left in this session because of a low frame rate, only when there are any', () => {
+      expect(lines({ ...BASE, leftLevels: ['high'] })).toContain(
+        '[debug.left levels=[graphics.high]]',
+      );
+      expect(lines(BASE).some((l) => l.startsWith('[debug.left'))).toBe(false);
+    });
+
+    it('shows the reason of the last automatic change', () => {
+      const reason = (lastChange) => lines({ ...BASE, lastChange });
+      expect(reason({ kind: 'up', fps: 58.4 })).toContain(
+        '[debug.lastChange reason=[debug.reasonUp fps=58]]',
+      );
+      expect(reason({ kind: 'down', fps: 41.6 })).toContain(
+        '[debug.lastChange reason=[debug.reasonDown fps=42]]',
+      );
+      expect(reason({ kind: 'loss' })).toContain('[debug.lastChange reason=[debug.reasonLoss]]');
+      expect(reason({ kind: 'crash' })).toContain('[debug.lastChange reason=[debug.reasonCrash]]');
+    });
+
+    it('says so when there was no automatic change yet', () => {
+      expect(lines(BASE)).toContain('[debug.noChange]');
+      expect(lines({ ...BASE, lastChange: null })).toContain('[debug.noChange]');
+    });
+  });
+
   it('shows the GPU memory estimate against the budget', () => {
     expect(lines(BASE)).toContain('[debug.gpuMemory estimate=123 budget=160]');
   });

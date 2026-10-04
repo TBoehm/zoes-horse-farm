@@ -40,6 +40,9 @@ export function createRideSession({ mode, store, clock, rng }) {
     aid: null,
     highlight: null,
     finishMarked: false,
+    // a jump is in progress (take-off, flight, landing): the graphics automatic does not start a
+    // level step then (rule 4)
+    jumping: false,
     lines: null,
     hud: null,
   };
@@ -167,6 +170,7 @@ export function createRideSession({ mode, store, clock, rng }) {
       }
       view.highlight = mode.highlight ?? null;
       view.finishMarked = Boolean(mode.finishMarked);
+      view.jumping = Boolean(sim.horse.jump);
       view.lines = mode.lines ?? null;
       view.hud = mode.hudModel ? mode.hudModel() : null;
       return view;
