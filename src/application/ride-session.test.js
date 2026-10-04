@@ -337,6 +337,41 @@ describe('refusal feedback', () => {
   });
 });
 
+describe('rein-back at session level (rule 9)', () => {
+  it('shows the back gait in the view and plays no sound for it', () => {
+    const { session } = setup({ mode: crossMode({ distance: 8 }) });
+    const out = run(session, { throttle: -1 }, { maxT: 2 });
+    expect(session.view.horse.gait).toBe('back');
+    expect(session.view.horse.speed).toBeLessThan(0);
+    expect(ofType(out.commands, 'sound')).toEqual([]);
+    expect(session.view.aid).toBeNull();
+  });
+
+  it('Space does not jump a backing horse and no jump is counted', () => {
+    const { session, store } = setup({ mode: crossMode({ distance: 1.5 }) });
+    const out = run(session, { throttle: -1, jump: true }, { maxT: 3 });
+    expect(ofType(out.events, 'takeoff')).toEqual([]);
+    expect(store.data.progress.jumps).toBe(0);
+  });
+
+  it('backing over the start line does not start a course ride', () => {
+    const course = courseById(1);
+    const { session } = setup({ mode: createCourseMode({ courseId: 1 }) });
+    const horse = session.view.horse;
+    const [dx, dz] = course.start.dir;
+    const faces = () => Math.sin(horse.heading) * dx + Math.cos(horse.heading) * dz;
+    // turn around on the spot (facing away from the line), then back toward and over it
+    run(session, { steer: 1 }, { maxT: 10, done: () => faces() < -0.99 });
+    expect(faces()).toBeLessThan(-0.9);
+    const lineA = course.start.a;
+    const along = () => (horse.x - lineA[0]) * dx + (horse.z - lineA[1]) * dz;
+    expect(along()).toBeLessThan(0);
+    run(session, { throttle: -1 }, { maxT: 60, done: () => along() > 0.5 });
+    expect(along()).toBeGreaterThan(0.5);
+    expect(session.view.hud.phase).toBe('prestart');
+  });
+});
+
 describe('jump aid', () => {
   it('is null when the mode shows none', () => {
     const { session } = setup({ mode: crossMode({ distance: 10, aidTarget: () => null }) });

@@ -196,6 +196,8 @@ unbekannte Felder bleiben). Neue Bereiche: neuen Sanitizer registrieren (`regist
 
 `InputState` je Frame: `{ steer: -1..1 (rechts +), throttle: -1..1 (W +), gallop: bool,
 jump: bool (Flanke: in diesem Frame gedrückt), pause: bool (Flanke), camera: bool (Flanke) }`.
+`throttle < 0` kommt von S/Pfeil-runter und vom Joystick nach unten gleichermaßen; im Halt steuert
+es das Rückwärtsrichten (siehe Reit-Simulation), sonst bremst es.
 
 ```js
 const input = createInput({ container, inputMode, isActive });  // isActive: false bei Pause/anderem Bildschirm
@@ -224,7 +226,7 @@ Vertikalkomponente (ganz nach unten = −1).
 const sim = createRidingSim({ obstacles, rules, rng = createRng(1), tuning = TUNING });
 sim.reset({ x, z, heading });           // Halt, kein Galopp
 const events = sim.step(dt, input);     // input = InputState
-sim.horse  // { x, z, heading, speed, gait: 'halt'|'walk'|'trot'|'canter', gallop,
+sim.horse  // { x, z, heading, speed (< 0 = Rückwärtsrichten), gait: 'halt'|'walk'|'trot'|'canter'|'back', gallop,
            //   y, jump: null|{ phase: 'takeoff'|'flight'|'landing', progress 0..1, elementId },
            //   hop: null|{ progress }, refusal: null|{ type: 'stop'|'runout', elementId, progress },
            //   turnRate }
@@ -249,6 +251,38 @@ Der Aufprall auf Ständer/Hindernis ohne Sprung lässt das Pferd seitlich auswei
 **jeder** Geschwindigkeit ab der Halt-Schwelle (`speeds.haltBelow`), also auch im Schritt. Endet der
 Galopp unter `trotMin` (Absprung-Anlauf), beschleunigt das Pferd mit `control.gallopEndTrotUp`
 bis in den Arbeitstrab statt in den Schritt zu fallen; Zaun/Verweigerung halten an.
+**Rückwärtsrichten (Regeln 8, 9, 24; `rein-back.js`).** Modelliert als **negative Geschwindigkeit**
+(`horse.speed < 0`, Gangart `'back'`), nicht als eigener Zustand: `advance`, Lenkung (`updateSteering`
+nutzt `max(0, speed)`, also volle Drehung wie im Halt), Zaun (`keepRearInside` schiebt die Hinterhand
+zurück) und das Ritt-Protokoll arbeiten unverändert, es gibt keinen zweiten Bewegungspfad.
+`gaitForSpeed` liefert bei `speed < 0` `'back'`. `updateReinBack(state, throttle, dt, tuning)` läuft
+vor `updateSpeed` und übernimmt den Schritt nur, wenn es das Tempo setzt: im Halt (Tempo genau 0, kein
+Galopp, nicht in Verweigerung/Ausweichen) mit gehaltenem `throttle < 0` startet das Pferd nach
+`TUNING.reinBack.delayS` (< 0,5 s) und beschleunigt mit `accel` auf `maxSpeed · Auslenkung`; loslassen
+bremst mit `decel` bis 0; `throttle > 0` oder Galopp setzen das Tempo sofort auf 0 und die normale
+Beschleunigung übernimmt. Bremsen aus der Fahrt mit gehaltenem S führt erst in den Halt, die Pause
+beginnt danach. Alle Verbraucher von Tempo/Gangart bleiben dadurch richtig (jeder mit einem
+expliziten Wächter, wo nötig):
+- Sprung/Hop/Puffer: `pressJump` kehrt bei `speed < 0` sofort zurück (Space wirkt nicht, kein Hop,
+  Puffer wird verworfen); `gaitAllows('back')` ist ohnehin `false`.
+- Anreiten/Verweigerung/Ausweichen: `approaches()` liefert rückwärts nichts (kein `sim.approach`, keine
+  Absprung-Hilfe), `checkLastPoints` läuft nur bei `speed >= 0`; der Aufprall-Ausweichbogen
+  (`swerve`) braucht `speed >= haltBelow`.
+- Hindernisse: `holdRearBack` macht einen Rückwärtsschritt rückgängig (Position und Richtung), wenn der
+  Hinterhand-Punkt (`horse.rearLength` hinter dem Bezugspunkt) in einen gesperrten Bereich geriete,
+  auch wenn er schon darin steht (direkt nach einer Landung). Drehen im Halt und Vorwärtsreiten
+  bleiben unberührt.
+- Zaun/Hindernis halten auf: Bleibt die Rückwärtsstrecke eines Schritts unter
+  `reinBack.blockedShare` der beabsichtigten, hält das Pferd an (`speed = 0`, Gangart `halt`, kein
+  `fenceStop`-Ereignis) und bleibt stehen, bis S/Joystick losgelassen wird (`backBlocked`).
+- Start-/Ziellinie: `run.onLineCross(prev, next, timeMs, { backwards })`; der Parcours-Modus setzt
+  `backwards` aus `movedBackwards(prev, next, heading)` (Schritt gegen die Blickrichtung). Rückwärts
+  gekreuzte Linien zählen nie; Kombination (`run.update`) und Wertung kennen keine Geschwindigkeit.
+- Ritt-Klang: `ride-sounds` hängt nur an Ereignissen; Rückwärtsrichten erzeugt keine. Der Hufschlag
+  kommt über `horse.onFootfall('back', leg)` (leiser, langsamer Tritt in `sfx.hoof`).
+Spielwerte stehen im eigenen Block `TUNING.reinBack` (`delayS`, `maxSpeed`, `accel`, `decel`,
+`blockedShare`; kein Messwert veröffentlicht: Fußfolge Zweitakt-Diagonale wie der Trab rückwärts, Tempo
+geschätzt aus den wenigen klaren Tritten der Dressur-Aufgabe).
 Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven, Parcours-Bau `TUNING.course`: Galoppsprung, Landung/Absprung, freie Strecke, Oxer-Tiefen, Wiederaufbau-Verzögerung `rebuildDelayS`,
 Hinweis-Dauer `missingHintS`, `control.stickDeadZone`, `control.stickSteerFull`, Lenkraten `control.turn*`) nur in `src/domain/sim/tuning.js`;
 Regel-Konstanten (Fehlerpunkte, Zeitfehler-Schritt, Sterne, Auszeichnungs-Schwellen) bleiben in
@@ -266,7 +300,7 @@ const run = createCourseRun(course);
 run.phase                    // 'prestart' | 'riding' | 'finished'
 run.current                  // null (→ Ziel) | { obstacleIndex, part, elementId }
 run.rules                    // für die Sim: canRefuse(elementId, dir)
-run.onLineCross(prev, next, timeMs)        // Start-/Ziellinie mit Richtung
+run.onLineCross(prev, next, timeMs, { backwards })  // Start-/Ziellinie mit Richtung; rückwärts zählt nie
 run.onLanded(elementId, dir, knocked)      // → { scored, rebuildAfterS: 3|null }
 run.onRefusal(elementId, dir)
 run.update(horse, timeMs)                  // Kombination-Abwenden, Zeit
@@ -292,7 +326,8 @@ world.update(dt, camera)                            // Himmel, Umgebung, Ringe, 
 world.dispose()
 const horse = createHorse({ coat, marking, quality });  // → { object, earAnchor, ... }
 horse.object                                         // THREE.Group, schaut nach +Z
-horse.update(dt, sim.horse)                          // Gangart-/Sprung-Animation
+horse.update(dt, sim.horse)                          // Gangart-/Sprung-Animation (Gangart 'back':
+                                                     // Zweitakt-Diagonale rückwärts, Huf läuft im Stand nach vorn)
 horse.setAppearance({ coat, marking })
 horse.setQuality(level)
 horse.earAnchor                                      // Object3D für Reiter-Sicht

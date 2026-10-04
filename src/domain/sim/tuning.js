@@ -69,6 +69,24 @@ export const TUNING = {
     gallopEndTrotUp: 2.5,
   },
 
+  // Rein-back (concept rule 9). A horse reins back in a slow two-beat diagonal gait (same footfall
+  // as the trot, reversed; Mad Barn "Guide to Horse Gaits", USDF "We Got Rhythm"). No published
+  // speed exists, so the values are estimated from the dressage test requirement of a few clear,
+  // calm steps: ≈ 0.5 m per diagonal step at about one stride per second, well below the walk.
+  reinBack: {
+    // standing with S (or the stick down) held: pause before the horse starts to step back (< 0.5 s)
+    delayS: 0.35,
+    // backing speed (m/s) at full deflection; the stick deflection scales it
+    maxSpeed: 0.5,
+    // speed up from the first step to the target speed (m/s²)
+    accel: 1.5,
+    // slow down to a stop when S is released or the deflection is reduced (m/s²)
+    decel: 3.0,
+    // when fence or obstacle hold the hindquarters back, the backward travel of a step falls
+    // below this share of the intended distance: the horse stops (until S is released)
+    blockedShare: 0.98,
+  },
+
   fence: {
     // angle to the wall normal below which an impact counts as frontal
     frontalAngle: 35 * DEG,

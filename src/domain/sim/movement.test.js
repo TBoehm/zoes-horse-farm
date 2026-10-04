@@ -20,6 +20,11 @@ describe('Gait from speed (rule 9)', () => {
     expect(gaitForSpeed(S.trotMax, false, S)).toBe('trot');
     expect(gaitForSpeed(0, true, S)).toBe('canter');
   });
+
+  it('negative speed is the rein-back gait (rule 9)', () => {
+    expect(gaitForSpeed(-0.01, false, S)).toBe('back');
+    expect(gaitForSpeed(-TUNING.reinBack.maxSpeed, false, S)).toBe('back');
+  });
 });
 
 describe('Speed (rules 8–10)', () => {
@@ -34,7 +39,8 @@ describe('Speed (rules 8–10)', () => {
   it('S brakes to a halt (speed 0)', () => {
     const sim = makeSim([]);
     sim.reset({ x: 0, z: 0, heading: 0, speed: 3 });
-    drive(sim, { throttle: -1 }, { maxT: 3 });
+    // S held on: it brakes to a halt first (the rein-back only follows after its pause)
+    drive(sim, { throttle: -1 }, { maxT: 3, until: (s) => s.horse.speed === 0 });
     expect(sim.horse.speed).toBe(0);
     expect(sim.horse.gait).toBe('halt');
   });
@@ -129,7 +135,8 @@ describe('Speed (rules 8–10)', () => {
     sim.reset({ x: 0, z: -30, heading: 0 });
     sim.step(DT, { gallop: false });
     drive(sim, { gallop: true }, { maxT: 0.3 });
-    drive(sim, { throttle: -1 }, { maxT: 2 });
+    // S held on: it brakes to a halt first (the rein-back only follows after its pause)
+    drive(sim, { throttle: -1 }, { maxT: 2, until: (s) => s.horse.speed === 0 });
     expect(sim.horse.speed).toBe(0);
     expect(sim.horse.gait).toBe('halt');
   });

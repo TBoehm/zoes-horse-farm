@@ -7,6 +7,8 @@ import { midiToFreq } from './logic.js';
 // The clop is what small speakers (phones, tablets) can actually play: they reproduce next to
 // nothing below about 350 Hz.
 const GAITS = {
+  // rein-back: slow, soft steps
+  back: { vol: 0.58, freq: 100, noiseFreq: 480, noiseDecay: 0.07, clopFreq: 1250 },
   walk: { vol: 0.62, freq: 105, noiseFreq: 520, noiseDecay: 0.07, clopFreq: 1300 },
   trot: { vol: 0.8, freq: 122, noiseFreq: 700, noiseDecay: 0.06, clopFreq: 1500 },
   canter: { vol: 0.98, freq: 138, noiseFreq: 860, noiseDecay: 0.085, clopFreq: 1700 },
