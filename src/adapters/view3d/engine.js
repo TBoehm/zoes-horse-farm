@@ -3,7 +3,10 @@ import * as THREE from 'three';
 import { h } from '../ui/dom.js';
 import { createRenderer, resizeRenderer, setMaxPixelRatio } from './renderer.js';
 import {
+  chooseAntialias,
   createQualityGovernor,
+  fitPresetToBudget,
+  gpuBudgetMB,
   levelAfterContextLoss,
   pickInitialLevel,
   QUALITY_PRESETS,
@@ -69,24 +72,55 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
 
   // Graphics level (rule 4): on first start, or on "Automatic" without a level, pick one that
   // fits the device
+  const gpuName = probeRendererString();
   if (!settingsService.get().graphicsLevel) {
-    settingsService.setGraphicsAuto(pickInitialLevel(deviceInfo(probeRendererString(), inputMode)));
+    settingsService.setGraphicsAuto(pickInitialLevel(deviceInfo(gpuName, inputMode)));
   }
   const settings = settingsService.get();
   let level = settings.graphicsLevel;
 
-  // Antialiasing is a context attribute and cannot change later: follow the stored level
-  const renderer = createRenderer(canvas, { antialias: QUALITY_PRESETS[level].antialias });
+  // GPU memory budget: browsers do not tell how much the GPU may use, so what a level needs is
+  // estimated (quality.js) and a level that does not fit gets a lower resolution, smaller shadow
+  // map and less scenery instead of risking the context. `?testhooks&gpubudget=MB` overrides it for
+  // browser tests (set by main.js, never without the test hooks).
+  const budgetMB = app.services.gpuBudgetOverrideMB ?? gpuBudgetMB(deviceInfo(gpuName, inputMode));
+  const worldInfo = { textures: undefined }; // texture sizes once the world exists (default until)
+  let fitInfo = null; // the fit of the level that was applied last, for the debug box
+  const viewSize = () => ({
+    cssWidth: canvas.clientWidth || window.innerWidth,
+    cssHeight: canvas.clientHeight || window.innerHeight,
+    devicePixelRatio: window.devicePixelRatio || 1,
+  });
+  /** The preset of a level, fitted to the budget for the real context and the current size. */
+  function effectivePreset(forLevel, antialias) {
+    fitInfo = fitPresetToBudget(
+      QUALITY_PRESETS[forLevel],
+      { ...viewSize(), antialias, textures: worldInfo.textures },
+      budgetMB,
+    );
+    return fitInfo.preset;
+  }
+
+  // Antialiasing is a context attribute and cannot change later: follow the stored level, unless
+  // the multisampled buffers alone would not fit the budget
+  const antialiasWanted = QUALITY_PRESETS[level].antialias;
+  const renderer = createRenderer(canvas, {
+    antialias: chooseAntialias(QUALITY_PRESETS[level], viewSize(), budgetMB),
+  });
+  const contextAntialias = Boolean(renderer.getContextAttributes()?.antialias);
+  const fitFor = (forLevel) => effectivePreset(forLevel, contextAntialias);
   const camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.1, 900);
   const cameraRig = createCameraRig(camera);
 
   // The first picture is not there yet, so the level's pixel ratio can be applied right away. Later
   // changes wait for the render gate (see applyQuality).
-  setMaxPixelRatio(renderer, QUALITY_PRESETS[level].pixelRatio);
+  const firstPreset = fitFor(level);
+  setMaxPixelRatio(renderer, firstPreset.pixelRatio);
   let pendingPixelRatio = null;
 
-  const world = createWorld(renderer, { quality: level });
-  const horse = createHorse({ ...DEFAULT_APPEARANCE, quality: level });
+  const world = createWorld(renderer, { quality: firstPreset });
+  worldInfo.textures = world.textureSizes();
+  const horse = createHorse({ ...DEFAULT_APPEARANCE, quality: firstPreset.characterDetail });
   world.scene.add(horse.object);
 
   const emitter = createEmitter();
@@ -115,7 +149,8 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
 
   // Level changes are applied stage by stage (quality-stages.js): `applied` is the level each
   // stage has reached, the queue paces the remaining ones, one per few drawn frames.
-  const applied = Object.fromEntries(QUALITY_STAGE_IDS.map((id) => [id, level]));
+  const applied = Object.fromEntries(QUALITY_STAGE_IDS.map((id) => [id, firstPreset]));
+  let targetPreset = firstPreset; // the level's preset fitted to the budget
   const stageQueue = createStageQueue();
 
   /**
@@ -128,8 +163,8 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
    */
   function applyStage(id, target) {
     guarded(`quality stage ${id}`, () => {
-      if (id === 'pixelRatio') pendingPixelRatio = QUALITY_PRESETS[target].pixelRatio;
-      else if (id === 'characters') horse.setQuality(QUALITY_PRESETS[target].characterDetail);
+      if (id === 'pixelRatio') pendingPixelRatio = target.pixelRatio;
+      else if (id === 'characters') horse.setQuality(target.characterDetail);
       else world.applyQualityStage(id, target);
     });
     applied[id] = target;
@@ -138,12 +173,13 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   /** Everything at once: for a switch nobody sees or that nothing is drawn for (see applyQuality). */
   function applyAllNow({ gpu = true } = {}) {
     stageQueue.clear();
+    targetPreset = fitFor(level);
     guarded('quality switch', () => {
-      pendingPixelRatio = QUALITY_PRESETS[level].pixelRatio;
-      world.setQuality(level, { gpu });
-      horse.setQuality(QUALITY_PRESETS[level].characterDetail);
+      pendingPixelRatio = targetPreset.pixelRatio;
+      world.setQuality(targetPreset, { gpu });
+      horse.setQuality(targetPreset.characterDetail);
     });
-    for (const id of QUALITY_STAGE_IDS) applied[id] = level;
+    for (const id of QUALITY_STAGE_IDS) applied[id] = targetPreset;
     governor.interrupt(); // the switch is no measurement
   }
 
@@ -160,7 +196,8 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
       if (!contextWatch.lost) precompile();
       return;
     }
-    stageQueue.plan(planQualityStagesFromState(applied, next));
+    targetPreset = fitFor(next); // every switch, also a manual "high", is checked against the budget
+    stageQueue.plan(planQualityStagesFromState(applied, targetPreset));
   }
 
   /** Called after every drawn frame: starts the next stage when its time has come. */
@@ -168,7 +205,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     const stage = stageQueue.tick();
     if (!stage) return;
     // the target is read now: a switch during the staging changes where the remaining stages go
-    applyStage(stage.id, level);
+    applyStage(stage.id, targetPreset);
     governor.interrupt(); // frames around a stage are slower: not a measurement
     if (stage.compile) precompile();
   }
@@ -298,6 +335,13 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     lostAtS: null,
     restoredAtS: null,
     stagesPending: 0,
+    gpuEstimateMB: 0,
+    gpuBudgetMB: 0,
+    ratioCap: null,
+    shadowCap: null,
+    sceneryCapped: false,
+    antialias: false,
+    antialiasDropped: false,
   };
   function diagnostics() {
     if (!diag.gpu && !contextWatch.lost) diag.gpu = rendererString(renderer.getContext());
@@ -313,6 +357,13 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     diag.lostAtS = contextStats.lostAtS;
     diag.restoredAtS = contextStats.restoredAtS;
     diag.stagesPending = stageQueue.pending;
+    diag.gpuEstimateMB = fitInfo?.estimateMB ?? 0;
+    diag.gpuBudgetMB = budgetMB;
+    diag.ratioCap = fitInfo?.capped.pixelRatio ?? null;
+    diag.shadowCap = fitInfo?.capped.shadowMapSize ?? null;
+    diag.sceneryCapped = fitInfo?.capped.scenery ?? false;
+    diag.antialias = contextAntialias;
+    diag.antialiasDropped = antialiasWanted && !contextAntialias;
     return diag;
   }
 
@@ -332,9 +383,9 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     },
     /** Events: 'contextLost', 'contextRestored'. Returns the unsubscribe function. */
     on: emitter.on,
-    /** true while a level change is still being applied (stages pending or shaders compiling). */
+    /** true while a level change is still being applied (stages, pixel ratio, shaders compiling). */
     get settling() {
-      return stageQueue.pending > 0 || gate.blocked;
+      return stageQueue.pending > 0 || pendingPixelRatio !== null || gate.blocked;
     },
     /**
      * true once after a context loss with a manual level above low: the ride screen shows the
@@ -354,13 +405,14 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
       canvas.hidden = !fn;
       if (fn) {
         // Nothing of the ride is on screen yet: the time to finish a switch that was still in
-        // stages and to give the textures the anisotropy of the level (an upload, never done in
+        // stages, to fit the level to the window and to give the textures the anisotropy of the level (an upload, never done in
         // the middle of a ride, see world.syncAnisotropy)
-        if (stageQueue.pending > 0) {
+        // (the size of the window may have changed since the level was applied: fit again)
+        if (planQualityStagesFromState(applied, fitFor(level)).length > 0) {
           applyAllNow();
           precompile();
         }
-        guarded('anisotropy', () => world.syncAnisotropy(level));
+        guarded('anisotropy', () => world.syncAnisotropy(targetPreset));
       }
       renderer.setAnimationLoop(fn ? loop : null);
       if (fn) resize(true);

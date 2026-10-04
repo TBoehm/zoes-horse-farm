@@ -131,7 +131,10 @@ Der Test-Hook bietet außer Lesefunktionen `go(name, params)`, `setAutoLevel(lev
 Stufe wie der Governor: Automatik bleibt an) sowie `loseContext()` / `restoreContext()`
 (simulierter WebGL-Kontextverlust über `WEBGL_lose_context`, Rückgabe `false` ohne Engine oder
 Erweiterung); der Schnappschuss enthält `contextLost` und `graphicsSettling` (ein Stufenwechsel
-läuft noch: Schritte ausstehend oder Shader werden kompiliert).
+läuft noch: Schritte ausstehend, Pixel-Ratio vorgemerkt oder Shader werden kompiliert) und
+`graphicsPixelRatio` (Pixel-Ratio des Renderers). `?testhooks&gpubudget=<MB>` ersetzt das
+GPU-Speicher-Budget der Engine (`gpuBudgetOverride` in `test-hooks.js`; `main.js` legt es als
+`app.services.gpuBudgetOverrideMB` ab; ohne `?testhooks` wirkungslos).
 
 ### Einstellungs-Dienst (application/settings-service.js)
 
@@ -339,17 +342,19 @@ world.setAid(null | { elementId, dir, zone })       // Absprung-Hilfe
 world.setLines(null | { start, finish, labels: { start, finish } })  // Start-/Ziellinie; Texte vom Aufrufer übersetzt
 world.setFinishMarked(bool)
 world.setShadowFocus(x, z)                          // Schatten folgt dem Pferd
-world.setQuality('low'|'medium'|'high', { gpu })     // alles auf einmal (Erstellung, Wechsel ohne laufenden
+world.setQuality(level | preset, { gpu })     // alles auf einmal (Erstellung, Wechsel ohne laufenden
                                                     // Ritt, Kontextverlust; gpu:false = kein PMREM-Render);
                                                     // fasst nur an, was sich wirklich ändert; gibt
                                                     // Schatten-Map und PMREM-Ziel frei, wenn die Stufe
                                                     // sie nicht braucht (baut sie später neu); ändert
                                                     // NICHT die Pixel-Ratio (Sache der Engine)
-world.applyQualityStage('shadows'|'materials'|'density', level)
+world.applyQualityStage('shadows'|'materials'|'density', level | preset)
                                                     // ein Schritt des gestuften Wechsels (siehe
                                                     // „Gestufter Stufenwechsel“); jeder Schritt liest den
                                                     // echten Zustand und ist wiederholbar
-world.syncAnisotropy(level)                         // Anisotropie der Texturen; NUR aufrufen, solange nichts
+world.textureSizes()                                // [{ width, height, normal }] der hochgeladenen Texturen
+                                                    // (für die GPU-Speicher-Schätzung)
+world.syncAnisotropy(level | preset)                // Anisotropie der Texturen; NUR aufrufen, solange nichts
                                                     // gezeichnet wird (Textur-Neuupload)
 world.restoreAfterContextLoss()                     // nach wiederhergestelltem WebGL-Kontext: PMREM-
                                                     // Umgebungslicht neu rendern (altes Ziel nur
@@ -411,7 +416,7 @@ audio.dispose()
 `low`: pixelRatio 1, keine Schatten, Lambert-Materialien, wenig Umgebung.
 `medium`: pixelRatio ≤ 1,5, Schatten 1024 (nur Pferd/Hindernisse), Standard-Materialien.
 `high`: pixelRatio ≤ 2, Schatten 2048, mehr Umgebung (Bäume, Gras-Instanzen), Nebel.
-Jede Stufe steht in `QUALITY_PRESETS` (`view3d/quality.js`); `characterDetail` (`low|medium|high`)
+Jede Stufe steht in `QUALITY_PRESETS` (`view3d/quality.js`, mit `level`-Name); `characterDetail` (`low|medium|high`)
 bestimmt Geometrie und Material von Pferd und Reiter.
 Automatik: `src/adapters/view3d/quality.js` (`createQualityGovernor`), misst nur beim Reiten.
 Bei **manueller** Stufe über `low` (`canHintLowerLevel`) meldet `createLowFpsHint` (gleiche
@@ -490,6 +495,45 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
   Handler läuft in `try/catch`; Fehler werden begrenzt geloggt (`createErrorReporter`, einmal je
   Stelle und 5 s), die Schleife läuft weiter.
 
+### GPU-Speicher-Budget (`view3d/quality.js`, `engine.js`)
+
+Browser nennen den GPU-Speicher nicht; ein Absturz des Grafikprozesses (Chrome: Kontextverlust,
+Firefox Android: Tab-Absturz) kam bisher erst bei „Hoch“ auf dem Tablet. Darum wird vor dem
+Anwenden einer Stufe der Bedarf **geschätzt** und mit einem vorsichtigen Budget verglichen. Alle
+Werte sind technische Konstanten, benannt und gruppiert in `quality.js` (nicht in `tuning.js`), und
+bewusst auf der sicheren Seite; die Debug-Box zeigt Schätzung und Budget, damit man sie am Gerät
+nachstellen kann.
+
+- `estimateGpuMemoryMB(preset, { cssWidth, cssHeight, devicePixelRatio, pixelRatio, antialias,
+  textures })` (MiB): Zeichenpuffer (RGBA8 Farbe × 2 Puffer + 24-Bit-Tiefe = 12 B/Pixel; mit MSAA
+  4 Samples Farbe + Tiefe + Auflösung = 40 B/Pixel; Pixel = CSS-Größe × min(DPR, Pixel-Ratio)²),
+  Schatten-Map (three r186 `WebGLShadowMap`, PCF: RGBA8 + 32-Bit-Tiefen-Textur = 8 B/Texel, also
+  2048² = 32 MiB), PMREM-Umgebungskarte (r186 `PMREMGenerator`, 256er Würfel im cubeUV-Layout
+  768 × 1024 in Half-Float-RGBA ≈ 6 MiB), Texturen mit Mipmaps (× 4/3; Normal-Maps nur wenn die Stufe
+  sie nutzt), Szenerie (Instanzen/LOD) und eine Grundlast (Geometrie, Programme, Pferd,
+  Compositor). `antialias` ist das Attribut des **echten** Kontexts.
+- `gpuBudgetMB({ deviceMemory, isTouch, rendererString })` (MiB): Touch 40 MiB je GiB
+  `deviceMemory`, begrenzt auf 96…320, ohne Angabe 160; Desktop 64 je GiB, 256…1024, ohne Angabe
+  512; schwache GPU (`WEAK_GPU`) × 0,75. `navigator.deviceMemory` ist auf 0,25…8 GiB gerundet und
+  nur in Chrome/Edge vorhanden (MDN), sagt also über starke Desktops und Firefox/Safari wenig;
+  darum die vorsichtigen Standardwerte.
+- `fitPresetToBudget(preset, ctx, budgetMB)` (rein) passt eine Stufe an, solange die Schätzung das
+  Budget übersteigt, in dieser Reihenfolge: 1. Pixel-Ratio (größte noch passende, in 0,05-Schritten,
+  nicht unter 1), 2. Schatten-Map 2048 → 1024, 3. Gras-Büschel aus, dann Umgebungsdichte auf 0,55.
+  Der Look der Stufe bleibt sonst („Hoch“ behält seine Effekte bei kleinerer Auflösung). Ergebnis:
+  `{ preset (dasselbe Objekt, wenn nichts zu ändern ist; sonst eingefrorene Kopie mit `level`),
+  estimateMB, requestedMB, budgetMB, fits, capped }`; passt auch nach allen Stufen nichts, läuft
+  die Stufe trotzdem (`fits: false`).
+- `chooseAntialias(preset, ctx, budgetMB)`: Antialiasing ist ein Kontext-Attribut und steht beim
+  Erstellen des Renderers fest. Es bleibt nur, wenn die Stufe es will und das Budget die
+  MSAA-Puffer trägt, auch wenn alle anderen Hebel schon benutzt sind; sonst entsteht der Kontext
+  ohne (z. B. gespeichertes „Hoch“ auf einem schwachen Tablet). Die Debug-Box zeigt das.
+- Die Engine prüft **jede** Stufe: beim Start, bei jedem Wechsel (Governor und manuell, auch
+  „Hoch“) und beim Start jedes Ritts (die Fenstergröße kann sich geändert haben). Sie arbeitet
+  überall mit dem angepassten Preset (`fitFor(level)`); der gestufte Wechsel plant gegen dieses
+  Preset (eine gekappte Pixel-Ratio ist ein eigener `pixelRatio`-Schritt). `engine.level` bleibt
+  der Name der Stufe. `?testhooks&gpubudget=<MB>` erzwingt in Tests ein kleines Budget.
+
 ### Diagnose-Box (`?debug`)
 
 Nur mit `?debug` in der Adresse (Erkennung `debugRequested` in `adapters/platform/debug-info.js`,
@@ -504,7 +548,9 @@ im Ritt), auch im Pausenmenü und bei verlorenem Kontext. Der Text kommt aus der
 eingesetzt werden nur Zahlen und technische Zeichenketten (GPU-Name, Fehlertexte). Die Zahlen
 liefert `engine.diagnostics()` (immer dasselbe Objekt): GPU (`WEBGL_debug_renderer_info`, sonst
 `RENDERER`), Stufe und Automatik, `devicePixelRatio`, Pixel-Ratio des Renderers, Zeichenpuffer,
-größte Textur, Anzahl Kontextverluste/-wiederherstellungen mit Sekunden seit Seitenstart und
+größte Textur, Antialiasing (an/aus, oder „aus: zu wenig Grafikspeicher“), GPU-Speicher-Schätzung
+gegen Budget (z. B. „GPU est. 180 / 256 MB, ratio capped 2 → 1.25“, plus Zeilen für gekappte
+Schatten-Map und verringerte Szenerie), Anzahl Kontextverluste/-wiederherstellungen mit Sekunden seit Seitenstart und
 ausstehende Stufenwechsel-Schritte.
 
 ### fps-Anzeige (`ui/fps-display.js`)

@@ -7,7 +7,7 @@
 // the GPU too long and the browser or the OS decides to reset the GPU to get control back").
 // Pure, no three.js: the planner and the pacing are tested; world.js and engine.js apply the steps.
 import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
-import { QUALITY_PRESETS } from './quality.js';
+import { presetFor } from './quality.js';
 
 // Frames between two stages. A technical value (no game play): a few frames give the GPU process
 // time to finish the work of the last stage (uploads, shader links) before the next one starts.
@@ -71,14 +71,12 @@ const DESCRIPTORS = Object.freeze(
 // A downgrade steps down the resolution first; a climb ends with it (the most expensive step last)
 const UP_ORDER = Object.freeze([...QUALITY_STAGE_IDS].reverse());
 
-/** A preset object from a level name (or the object itself); undefined for anything else. */
-function resolvePreset(levelOrPreset) {
-  if (typeof levelOrPreset === 'string') return QUALITY_PRESETS[levelOrPreset];
-  return levelOrPreset && typeof levelOrPreset === 'object' ? levelOrPreset : undefined;
-}
+// A preset object from a level name, or the object itself (a preset fitted to the GPU budget is a
+// copy that keeps its `level`)
+const resolvePreset = presetFor;
 
 function rankOf(preset) {
-  return GRAPHICS_LEVELS.findIndex((level) => QUALITY_PRESETS[level] === preset);
+  return GRAPHICS_LEVELS.indexOf(preset?.level);
 }
 
 /**

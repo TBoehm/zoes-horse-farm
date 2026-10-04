@@ -10,6 +10,16 @@ export function testHooksRequested(search = globalThis.location?.search ?? '') {
   return new URLSearchParams(search).has('testhooks');
 }
 
+/**
+ * `?testhooks&gpubudget=MB` replaces the GPU memory budget of the engine, so that browser tests can
+ * force the "level does not fit" case. null without the test hooks or without a valid number.
+ */
+export function gpuBudgetOverride(search = globalThis.location?.search ?? '') {
+  if (!testHooksRequested(search)) return null;
+  const value = Number(new URLSearchParams(search).get('gpubudget'));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 function snapshotObstacles(obstacles) {
   return obstacles.map((o) => ({
     number: o.number,
@@ -38,6 +48,7 @@ function snapshotRide(ride, app) {
     contextLost: ride.engine.contextLost,
     // a level change is still being applied in stages / shaders are compiling
     graphicsSettling: ride.engine.settling,
+    graphicsPixelRatio: ride.engine.renderer?.getPixelRatio?.(),
     horse: {
       x: round(horse.x),
       z: round(horse.z),

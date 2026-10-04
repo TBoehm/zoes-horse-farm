@@ -445,6 +445,116 @@ test.describe('staged downgrade during a ride (rule 4)', () => {
   });
 });
 
+test.describe('GPU memory budget (rule 4)', () => {
+  // a device pixel ratio of 2 gives the level's pixel ratio something to cap
+  test.use({ deviceScaleFactor: 2 });
+
+  const MANUAL_HIGH = { ...NAMED, settings: { graphicsAuto: false, graphicsLevel: 'high' } };
+  const debugBox = (page) => page.locator('[data-hud="debug"]');
+
+  /** Opens a free ride at "high" with a forced budget (MiB) and the debug box. */
+  async function rideWithBudget(page, test, browserName, budget, extra = {}) {
+    await openGameMenu(page, test, browserName, {
+      save: MANUAL_HIGH,
+      lang: 'en',
+      query: `&debug&gpubudget=${budget}`,
+      ...extra,
+    });
+    await startFreeRide(page);
+  }
+
+  const steerAndDraw = async (page) => {
+    expect(await rideForward(page)).toBeGreaterThan(0.5);
+    await expect
+      .poll(() => canvasScreenshotSize(page), { timeout: 30_000 })
+      .toBeGreaterThan(30_000);
+  };
+
+  test('without a small budget "high" keeps its full pixel ratio', async ({
+    page,
+    browserName,
+  }) => {
+    await openGameMenu(page, test, browserName, {
+      save: MANUAL_HIGH,
+      lang: 'en',
+      query: '&debug',
+    });
+    await startFreeRide(page);
+    expect((await rideState(page)).graphicsPixelRatio).toBe(2);
+    await expect(debugBox(page)).toContainText(/GPU est\. \d+ \/ \d+ MB/);
+    await expect(debugBox(page)).not.toContainText('capped');
+  });
+
+  test('a budget that "high" does not fit caps the pixel ratio and the ride still renders', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await rideWithBudget(page, test, browserName, 90);
+    const ratio = (await rideState(page)).graphicsPixelRatio;
+    expect(ratio).toBeGreaterThanOrEqual(1);
+    expect(ratio).toBeLessThan(2);
+    expect((await rideState(page)).graphicsLevel).toBe('high'); // the level stays
+    await expect(debugBox(page)).toContainText(
+      new RegExp(`GPU est\\. \\d+ / 90 MB, ratio capped 2 → ${ratio}`),
+    );
+    await steerAndDraw(page);
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a smaller budget goes down to ratio 1, then halves the shadow map', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await rideWithBudget(page, test, browserName, 60);
+    expect((await rideState(page)).graphicsPixelRatio).toBe(1);
+    await expect(debugBox(page)).toContainText('ratio capped 2 → 1');
+    await expect(debugBox(page)).toContainText('Shadow map capped 2048 → 1024');
+    await steerAndDraw(page);
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a budget that not even the multisampled buffers fit creates the context without antialiasing', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await rideWithBudget(page, test, browserName, 12);
+    await expect(debugBox(page)).toContainText('Antialiasing: off (not enough graphics memory)');
+    expect((await rideState(page)).graphicsPixelRatio).toBe(1);
+    await steerAndDraw(page);
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a manual switch to "high" is checked against the budget too', async ({
+    page,
+    browserName,
+  }) => {
+    test.setTimeout(120_000);
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: MANUAL_LOW,
+      lang: 'en',
+      // the context was made for "low", without multisampling: that is cheaper than the "high"
+      // contexts of the tests above, so the budget has to be smaller to cap anything
+      query: '&debug&gpubudget=65',
+    });
+    await startFreeRide(page);
+    expect((await rideState(page)).graphicsPixelRatio).toBe(1);
+    await switchLevelInPause(page, 'high');
+    await page.waitForFunction(() => !window.__zhfTest.ride().graphicsSettling, null, {
+      timeout: 60_000,
+    });
+    const ride = await rideState(page);
+    expect(ride.graphicsLevel).toBe('high');
+    expect(ride.graphicsPixelRatio).toBeGreaterThan(1);
+    expect(ride.graphicsPixelRatio).toBeLessThan(2);
+    await steerAndDraw(page);
+    expect(watch.errors).toEqual([]);
+  });
+});
+
 test.describe('debug box (?debug)', () => {
   const debugBox = (page) => page.locator('[data-hud="debug"]');
 
@@ -466,6 +576,8 @@ test.describe('debug box (?debug)', () => {
     await expect(box).toContainText(/Pixel ratio: device [\d.]+, drawing [\d.]+/);
     await expect(box).toContainText(/Canvas: \d+ × \d+/);
     await expect(box).toContainText(/Largest texture: \d+/);
+    await expect(box).toContainText(/Antialiasing: (on|off)/);
+    await expect(box).toContainText(/GPU est\. \d+ \/ \d+ MB/);
     await expect(box).toContainText('Graphics lost: 0× (–), back: 0× (–)');
     await expect(box).toContainText('Errors: none');
 

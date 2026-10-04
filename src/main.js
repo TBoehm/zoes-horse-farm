@@ -8,7 +8,11 @@ import { detectLang, getLang, setLang } from './adapters/ui/i18n.js';
 import { createStore, requestPersistentStorage } from './adapters/storage/local-store.js';
 import { hasWebGL } from './adapters/platform/webgl.js';
 import { createInputMode, detectDevice } from './adapters/platform/input-mode.js';
-import { installTestHooks, testHooksRequested } from './adapters/platform/test-hooks.js';
+import {
+  gpuBudgetOverride,
+  installTestHooks,
+  testHooksRequested,
+} from './adapters/platform/test-hooks.js';
 import { systemClock } from './adapters/platform/clock.js';
 import {
   createErrorLog,
@@ -98,7 +102,10 @@ function boot() {
 
   app.go(firstScreen(store));
   // Read-only helpers for browser tests; only with `?testhooks` in the URL
-  if (testHooksRequested()) installTestHooks({ app, store, inputMode });
+  if (testHooksRequested()) {
+    installTestHooks({ app, store, inputMode });
+    app.services.gpuBudgetOverrideMB = gpuBudgetOverride(); // forces a small budget in tests
+  }
 }
 
 try {

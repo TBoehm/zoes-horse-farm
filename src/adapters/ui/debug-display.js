@@ -25,6 +25,21 @@ export function formatDebugText(info, errors, t) {
     }),
     t('debug.buffer', { width: info.bufferWidth, height: info.bufferHeight }),
     t('debug.maxTexture', { size: info.maxTextureSize }),
+    info.antialiasDropped
+      ? t('debug.antialiasDropped')
+      : t('debug.antialias', { state: t(info.antialias ? 'debug.on' : 'debug.off') }),
+    // GPU memory estimate against the budget; a capped pixel ratio belongs to the same line
+    info.ratioCap
+      ? t('debug.gpuMemoryCapped', {
+          estimate: Math.round(info.gpuEstimateMB),
+          budget: Math.round(info.gpuBudgetMB),
+          from: round(info.ratioCap.from),
+          to: round(info.ratioCap.to),
+        })
+      : t('debug.gpuMemory', {
+          estimate: Math.round(info.gpuEstimateMB),
+          budget: Math.round(info.gpuBudgetMB),
+        }),
     t('debug.context', {
       lost: info.contextLost ?? 0,
       restored: info.contextRestored ?? 0,
@@ -32,6 +47,10 @@ export function formatDebugText(info, errors, t) {
       restoredAt: at(info.restoredAtS),
     }),
   ];
+  if (info.shadowCap) {
+    lines.push(t('debug.capShadow', { from: info.shadowCap.from, to: info.shadowCap.to }));
+  }
+  if (info.sceneryCapped) lines.push(t('debug.capScenery'));
   if (info.stagesPending > 0) lines.push(t('debug.stages', { count: info.stagesPending }));
   const list = errors ?? [];
   if (list.length === 0) {

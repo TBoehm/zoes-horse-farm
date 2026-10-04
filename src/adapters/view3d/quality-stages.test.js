@@ -52,6 +52,18 @@ describe('planQualityStages', () => {
     );
   });
 
+  it('plans a preset fitted to the budget like its level: the copy keeps the direction', () => {
+    const capped = { ...QUALITY_PRESETS.high, pixelRatio: 1.25, shadowMapSize: 1024 };
+    expect(ids(planQualityStages('low', capped))).toEqual(ids(planQualityStages('low', 'high')));
+    expect(ids(planQualityStages(capped, 'low'))).toEqual(ids(planQualityStages('high', 'low')));
+  });
+
+  it('a capped pixel ratio is a stage of its own, also at the same level', () => {
+    const capped = { ...QUALITY_PRESETS.high, pixelRatio: 1.25 };
+    expect(ids(planQualityStages('high', capped))).toEqual(['pixelRatio']);
+    expect(ids(planQualityStages(capped, 'high'))).toEqual(['pixelRatio']);
+  });
+
   it('marks the stages that change shaders for a precompile', () => {
     const byId = Object.fromEntries(planQualityStages('medium', 'low').map((s) => [s.id, s]));
     expect(byId.pixelRatio.compile).toBe(false);

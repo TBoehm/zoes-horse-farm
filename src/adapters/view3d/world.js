@@ -1,7 +1,7 @@
 // The 3D world: lights, sky, arena, environment, obstacles and markings.
 // Quality levels can be switched at runtime (the governor downgrades), stage by stage.
 import * as THREE from 'three';
-import { QUALITY_PRESETS } from './quality.js';
+import { presetFor, QUALITY_PRESETS } from './quality.js';
 import { createSky, SKY_COLORS } from './sky.js';
 import { createArena, createCourseLines } from './arena.js';
 import { createEnvironment, SITE } from './environment.js';
@@ -26,7 +26,7 @@ function createMaterialPair(params) {
 }
 
 /**
- * createWorld(renderer, { quality }) → world API (see architecture.md, section View).
+ * createWorld(renderer, { quality }) → world API (`quality`: a level name or a preset object) (see architecture.md, section View).
  */
 export function createWorld(renderer, { quality = 'medium' } = {}) {
   const scene = new THREE.Scene();
@@ -206,7 +206,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
    * whose value already fits are not touched.
    */
   function syncAnisotropy(level) {
-    const p = QUALITY_PRESETS[level];
+    const p = presetFor(level);
     if (!p) return;
     const anisotropy = Math.min(p.anisotropy, renderer.capabilities.getMaxAnisotropy());
     for (const t of [...arena.textures, ...environment.textures]) {
@@ -224,7 +224,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
    * engine's, too.
    */
   function applyQualityStage(id, level) {
-    const p = QUALITY_PRESETS[level];
+    const p = presetFor(level);
     if (!p) return;
     if (id === 'shadows') applyShadowStage(p);
     else if (id === 'materials') applyMaterialStage(p, true);
@@ -236,7 +236,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
    * context): every stage and the anisotropy. Only what really differs is touched.
    */
   function setQuality(next, { gpu = true } = {}) {
-    const p = QUALITY_PRESETS[next];
+    const p = presetFor(next);
     if (!p) return;
     applyShadowStage(p);
     applyMaterialStage(p, gpu);
@@ -347,6 +347,25 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       lines.setFinishMarked(on);
     },
     setQuality,
+    /** Size and kind of the textures the world uploads, for the GPU memory estimate. */
+    textureSizes() {
+      const sizes = new Map();
+      for (const pair of pairs) {
+        for (const [texture, normal] of [
+          [pair.standard.map, false],
+          [pair.normalMap, true],
+        ]) {
+          if (texture?.image) {
+            sizes.set(texture, {
+              width: texture.image.width,
+              height: texture.image.height,
+              normal,
+            });
+          }
+        }
+      }
+      return [...sizes.values()];
+    },
     applyQualityStage,
     syncAnisotropy,
     restoreAfterContextLoss,

@@ -21,6 +21,13 @@ const BASE = {
   lostAtS: null,
   restoredAtS: null,
   stagesPending: 0,
+  gpuEstimateMB: 123.4,
+  gpuBudgetMB: 160,
+  ratioCap: null,
+  shadowCap: null,
+  sceneryCapped: false,
+  antialias: true,
+  antialiasDropped: false,
 };
 
 const lines = (info, errors = []) => formatDebugText(info, errors, t).split('\n');
@@ -33,6 +40,31 @@ describe('formatDebugText', () => {
     expect(out[2]).toBe('[debug.pixels device=2.63 renderer=1.5]');
     expect(out[3]).toBe('[debug.buffer width=1200 height=750]');
     expect(out[4]).toBe('[debug.maxTexture size=4096]');
+  });
+
+  it('shows the GPU memory estimate against the budget', () => {
+    expect(lines(BASE)).toContain('[debug.gpuMemory estimate=123 budget=160]');
+  });
+
+  it('puts a capped pixel ratio on the memory line', () => {
+    const out = lines({ ...BASE, ratioCap: { from: 2, to: 1.25 } });
+    expect(out).toContain('[debug.gpuMemoryCapped estimate=123 budget=160 from=2 to=1.25]');
+    expect(out.some((l) => l.startsWith('[debug.gpuMemory '))).toBe(false);
+  });
+
+  it('lists a capped shadow map and reduced scenery on their own lines', () => {
+    const out = lines({ ...BASE, shadowCap: { from: 2048, to: 1024 }, sceneryCapped: true });
+    expect(out).toContain('[debug.capShadow from=2048 to=1024]');
+    expect(out).toContain('[debug.capScenery]');
+    expect(lines(BASE).some((l) => l.includes('debug.cap'))).toBe(false);
+  });
+
+  it('says whether antialiasing is on, and when it was dropped for the budget', () => {
+    expect(lines(BASE)).toContain('[debug.antialias state=[debug.on]]');
+    expect(lines({ ...BASE, antialias: false })).toContain('[debug.antialias state=[debug.off]]');
+    expect(lines({ ...BASE, antialias: false, antialiasDropped: true })).toContain(
+      '[debug.antialiasDropped]',
+    );
   });
 
   it('leaves out the automatic flag for a manual level', () => {
