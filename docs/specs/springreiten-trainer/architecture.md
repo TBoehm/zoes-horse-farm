@@ -232,8 +232,8 @@ Länge: `control.stickAxialThrottle` (≈ ±11,5° um die Waagerechte: keine Tem
 der Stelle bleibt Drehen und startet kein Rückwärtsrichten) und `control.stickAxialSteer` (≈ ±7°
 um die Senkrechte: keine Lenkung, Fingerwackeln beim geraden Anreiten dreht das Pferd nicht). So
 laufen Lenken und Tempo nicht ineinander. Dazu Lenk-Verstärkung: volle Lenkung ab
-`TUNING.control.stickSteerFull` (≤ 2/3 seitlicher Auslenkung), schräg nach vorn gehalten lenkt damit
-deutlich. Tempo = umgerechnete Vertikalkomponente (ganz nach unten = −1).
+`TUNING.control.stickSteerFull` (derzeit 0,5 der seitlichen Auslenkung, Obergrenze 2/3; vorher
+0,6, SRT-009), schräg nach vorn gehalten lenkt damit deutlich (45° nach vorn = volle Lenkung). Tempo = umgerechnete Vertikalkomponente (ganz nach unten = −1).
 
 ### Reit-Simulation (`src/domain/sim/`, rein, deterministisch mit injiziertem RNG)
 
@@ -297,6 +297,34 @@ expliziten Wächter, wo nötig):
   gekreuzte Linien zählen nie; Kombination (`run.update`) und Wertung kennen keine Geschwindigkeit.
 - Ritt-Klang: `ride-sounds` hängt nur an Ereignissen; Rückwärtsrichten erzeugt keine. Der Hufschlag
   kommt über `horse.onFootfall('back', leg)` (leiser, langsamer Tritt in `sfx.hoof`).
+
+**Lenkung (SRT-009, Kinder-Feedback „Kurven viel zu schwer, ca. 50 % besser“):** Drehrate
+`ω(v) = control.turnInPlace / (1 + v / control.turnSpeedRef)`, Wenderadius `r = v / ω`. Das Pferd
+lenkt bewusst **deutlich agiler als in der Realität** (Spielspaß vor Realismus; Referenz echte
+Pferde: 10-m-Volte r = 5 m im Schritt/Trab, 20-m-Zirkel r = 10 m im Galopp, Sprung-Wendungen
+r ≈ 6–8 m, Seitenbeschleunigung v·ω ≈ 2,5 m/s² auf dem Zirkel, 6–8 m/s² in engen Wendungen).
+Alle Radien liegen bei 1/1,5 der Werte vor SRT-009:
+
+| Gangart (Tempo) | Radius vorher | Radius jetzt |
+| --- | --- | --- |
+| Schritt (1,5 m/s) | 1,0 m | 0,7 m |
+| Arbeitstrab (3,2 m/s) | 2,7 m | 1,8 m |
+| Sprunggalopp (5,8 m/s) | 6,3 m | 4,2 m |
+| voller Galopp (8 m/s) | 10,4 m | 6,9 m |
+
+`turnInPlace` 1,8 → 2,7 rad/s (Drehen auf der Stelle ≈ 155°/s), `turnSpeedRef` unverändert 6,0,
+`turnResponse` 12 → 18 (Drehrate erreicht 90 % des Ziels in ≈ 0,13 s statt 0,19 s; Filter erster
+Ordnung, daher kein Überschwingen; nach dem Loslassen ist die Drehung in < 0,3 s ausgelaufen).
+Die Seitenbeschleunigung v·ω erreicht ≈ 9,3 m/s² (voller Galopp) und bleibt bewusst unter 1 g.
+Beherrschbar bleibt das über die hybride Stick-Totzone (Fingerwackeln ≈ ±7° um die Senkrechte
+lenkt nicht). Folgen: Pferdeneigung/-biegung (`view3d/horse/motion.js`, `turnLean`/`turnBend`) sind
+auf die engeren Kurven abgestimmt (Neigung ≈ ⅓ der physikalischen, max. 0,3 rad; Biegung gedeckelt
+bei 0,35 rad), und die Verfolgerkamera (`view3d/camera.js`, reine Hilfe `camera-math.js`) folgt der
+Pferderichtung geglättet (`FOLLOW.headingStiffness`, Nachlauf ≈ 35° bei der schnellsten Drehung),
+damit der Blick bei schnellen Kurven ruhig bleibt; die Reiteransicht schaut nur leicht verzögert.
+Ausweich-/Zaunrichtungen (`refusal.maneuverTurnRate` 5,0, `fence.slideTurnRate` 6,0 rad/s) sind
+unverändert und bleiben schneller als jede Spielerlenkung.
+
 Spielwerte stehen im eigenen Block `TUNING.reinBack` (`delayS`, `maxSpeed`, `accel`, `decel`,
 `blockedShare`, `rearClearance`; kein Messwert veröffentlicht: Fußfolge Zweitakt-Diagonale wie der
 Trab rückwärts, Tempo geschätzt aus den wenigen klaren Tritten der Dressur-Aufgabe).

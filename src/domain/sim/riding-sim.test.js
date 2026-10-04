@@ -351,7 +351,9 @@ describe('Jump sequence (rule 24)', () => {
     const phases = [];
     let maxY = 0;
     let headingAtTakeoff = null;
-    drive(sim, pressAt({ gallop: true, steer: 1 }, atCenter), {
+    // straight run-in; full lock is held only once the jump has started (steering is locked)
+    const press = pressAt({ gallop: true }, atCenter);
+    drive(sim, (s, t) => ({ ...press(s, t), steer: s.horse.jump ? 1 : 0 }), {
       maxT: 3,
       onStep: (s, ev) => {
         if (ofType(ev, 'takeoff').length) headingAtTakeoff = s.horse.heading;

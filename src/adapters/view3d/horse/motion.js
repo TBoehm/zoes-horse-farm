@@ -16,6 +16,24 @@ import { jumpParam } from './poses.js';
 const GAIT_RATE = 5; // gait cross-fade rate (1/s)
 const MOVING_GAITS = ['walk', 'trot', 'canter', 'back'];
 
+/**
+ * Body bend (rad) for a turn rate (rad/s, + = right): bends towards the inside, so + = to the
+ * left (+X) is negative for a right turn. Gain tuned for the agile steering (SRT-009) so that
+ * it is still graded at trot/canter and only saturates at the fastest turns on the spot.
+ */
+export function turnBend(turn) {
+  return clamp(-turn * 0.15, -0.35, 0.35);
+}
+
+/**
+ * Lean (rad, + = to the right) into a turn: the centripetal acceleration v·ω gives the physical
+ * lean atan(v·ω / g); the game takes about a third of it (at most 0.3 rad ≈ 17°) because turns are
+ * much tighter than in reality (SRT-009) and the full physical lean would look like falling over.
+ */
+export function turnLean(speed, turn) {
+  return clamp(0.35 * Math.atan((speed * turn) / 9.81), -0.3, 0.3);
+}
+
 export function createMotion() {
   return {
     weights: { halt: 1, walk: 0, trot: 0, canter: 0, back: 0 },
@@ -108,8 +126,8 @@ export function stepMotion(m, dt, state) {
   }
 
   // turns: bend into the turn, lean inwards (centripetal)
-  m.bend = approach(m.bend, clamp(-turn * 0.28, -0.35, 0.35), 4, dt);
-  m.lean = approach(m.lean, clamp(Math.atan(((state.speed || 0) * turn) / 9.81), -0.3, 0.3), 4, dt);
+  m.bend = approach(m.bend, turnBend(turn), 4, dt);
+  m.lean = approach(m.lean, turnLean(state.speed || 0, turn), 4, dt);
 
   // hoof paths and ground contact per leg
   const falls = m.falls;
