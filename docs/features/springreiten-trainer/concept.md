@@ -73,8 +73,8 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
    gewählten Stufe MÜSSEN im Mittel mindestens 50 fps erreicht werden. Zielgeräte sind PC, Tablet und
    Handy mit aktuellen Versionen von Chrome, Safari (inklusive iPad/iPhone), Firefox und Edge.
    Detailreichtum (Spieltest 2026-10-04: „viel zu wenig Details"), gestuft nach Grafikstufe; „Niedrig"
-   DARF dafür nicht langsamer werden als bisher, und die Speicher-Abschätzung (Regel 4) MUSS die
-   neuen Details mitzählen:
+   DARF dafür nicht langsamer werden als bisher, „Mittel" nur geringfügig (Regel 4), und die
+   Speicher-Abschätzung (Regel 4) MUSS die neuen Details mitzählen:
    - Umgebung: Blumen auf den Wiesen, Bäume, Büsche und Gras bewegen sich leicht im Wind, Vögel am
      Himmel, Schmetterlinge über den Blumen, Schmuck am Reitplatz (Blumenkästen an den Hindernissen,
      Wimpelketten), eine Koppel mit grasenden Pferden; Sand staubt unter den Hufen.
@@ -103,7 +103,18 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
      Hintergrund ist oder kurz nach der Rückkehr, zählt nicht als Überlastung (Stufe und Hinweis
      bleiben unverändert). Ein automatisches Herunterstufen
      während des Ritts DARF die Darstellung nicht verlieren lassen: es MUSS in kleinen, für das Gerät
-     verkraftbaren Schritten geschehen.
+     verkraftbaren Schritten geschehen und dabei zuerst Grafikspeicher freigeben, bevor Neues
+     aufgebaut wird.
+   - WENN das Spiel beim letzten Mal während der 3D-Darstellung unerwartet beendet wurde (z. B. der
+     Browser hat den Tab wegen Überlastung geschlossen oder neu geladen), MUSS das beim nächsten
+     Start wie ein Verlust der 3D-Darstellung zählen: bei „Automatisch" Stufe Niedrig (gespeichert),
+     bei manuell gewählter Stufe über Niedrig ein Hinweis, die Grafik niedriger zu stellen. Ein
+     normales Schließen, Wechseln in eine andere App oder ein Beenden im Hintergrund zählt nicht.
+   - „Mittel" MUSS auf Geräten, die vor den zusätzlichen Details (Regel 3, SRT-011) „Mittel"
+     flüssig darstellten, weiterhin flüssig laufen: die zusätzlichen Umgebungsdetails auf „Mittel"
+     DÜRFEN die Grafikspeicher-Abschätzung, die Zahl der Shader-Programme und der Draw Calls
+     gegenüber dem Stand davor nur geringfügig erhöhen; aufwendige Details (z. B. Wind, Blumen,
+     grasende Pferde, Vögel) gibt es nur auf „Hoch".
    - Bevor eine Stufe angewendet wird (Start und jeder Wechsel, auch manuell „Hoch"), MUSS das Spiel
      den Grafikspeicher dieser Stufe abschätzen und mit einer vorsichtigen Grenze für das Gerät
      vergleichen; passt sie nicht, MUSS es zuerst die Auflösung, dann die Schattenqualität, dann die

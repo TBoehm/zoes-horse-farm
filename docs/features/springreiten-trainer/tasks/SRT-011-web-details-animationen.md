@@ -42,7 +42,8 @@ Hof, Pferd und Reiter wirken lebendig und detailreich, und alle Bewegungen laufe
 
 ## Design (SSoT)
 Kein UI. Stufung: „Niedrig" erhält nur Details ohne Mehrkosten pro Bild (z. B. Gesicht,
-Bandagen, Blinzeln); „Mittel" und „Hoch" zusätzlich Blumen, Wind, Vögel, Koppel, Staub; „Hoch"
+Bandagen, Blinzeln); „Mittel" und „Hoch" zusätzlich Blumen, Wind, Vögel, Koppel, Staub (seit
+SRT-013: aufwendige Details nur auf „Hoch"); „Hoch"
 die größte Dichte und Schmetterlinge.
 
 ## Akzeptanzkriterien
