@@ -43,6 +43,18 @@ describe('createFpsMeter', () => {
     expect(feed(meter, 0.5, 1 / 40)).toEqual([40]);
   });
 
+  it('treats a frame longer than maxFrameS as an interruption and starts over', () => {
+    const meter = createFpsMeter({ intervalS: 0.5, maxFrameS: 1 });
+    feed(meter, 0.3, 1 / 30);
+    expect(meter.frame(5)).toBeNull(); // suspended tab: not a slow game
+    expect(feed(meter, 0.5, 1 / 60)).toEqual([60]);
+  });
+
+  it('counts a frame of exactly maxFrameS as a slow frame', () => {
+    const meter = createFpsMeter({ intervalS: 0.5, maxFrameS: 1 });
+    expect(meter.frame(1)).toBe(1);
+  });
+
   it('starts a fresh interval after reset', () => {
     const meter = createFpsMeter({ intervalS: 0.5 });
     feed(meter, 0.3, 1 / 30);
@@ -52,28 +64,40 @@ describe('createFpsMeter', () => {
 });
 
 describe('formatFpsText', () => {
+  const TEXTS = {
+    'ride.fps': '{fps} fps',
+    'ride.fpsLevel': '{fps} fps | {level}',
+    'ride.fpsLevelAuto': '{fps} fps | {level} (auto)',
+    'ride.fpsNone': '?',
+    'graphics.low': 'Low',
+    'graphics.medium': 'Medium',
+    'graphics.high': 'High',
+  };
+  // Minimal translate function with {param} substitution, like the real one
   const t = (key, params = {}) =>
-    ({
-      'ride.fps': `${params.fps} fps`,
-      'ride.fpsAuto': '(auto)',
-      'graphics.low': 'Low',
-      'graphics.medium': 'Medium',
-      'graphics.high': 'High',
-    })[key];
+    TEXTS[key].replace(/\{(\w+)\}/g, (_, name) => String(params[name]));
 
   it('shows fps and the level of a manual choice', () => {
-    expect(formatFpsText({ fps: 58, level: 'medium', auto: false }, t)).toBe('58 fps · Medium');
+    expect(formatFpsText({ fps: 58, level: 'medium', auto: false }, t)).toBe('58 fps | Medium');
   });
 
   it('marks an automatically chosen level', () => {
-    expect(formatFpsText({ fps: 41, level: 'low', auto: true }, t)).toBe('41 fps · Low (auto)');
+    expect(formatFpsText({ fps: 41, level: 'low', auto: true }, t)).toBe('41 fps | Low (auto)');
   });
 
-  it('shows a dash until the first measurement is there', () => {
-    expect(formatFpsText({ fps: null, level: 'high', auto: false }, t)).toBe('– fps · High');
+  it('shows the placeholder text until the first measurement is there', () => {
+    expect(formatFpsText({ fps: null, level: 'high', auto: false }, t)).toBe('? fps | High');
+    expect(formatFpsText({ fps: undefined, level: null, auto: false }, t)).toBe('? fps');
   });
 
   it('leaves out the level when it is not known', () => {
     expect(formatFpsText({ fps: 60, level: null, auto: true }, t)).toBe('60 fps');
+  });
+
+  it('builds no text of its own: every visible character comes from a translation', () => {
+    const marked = (key, params = {}) => `[${key}${JSON.stringify(params)}]`;
+    expect(formatFpsText({ fps: 58, level: 'low', auto: true }, marked)).toBe(
+      '[ride.fpsLevelAuto{"fps":58,"level":"[graphics.low{}]"}]',
+    );
   });
 });

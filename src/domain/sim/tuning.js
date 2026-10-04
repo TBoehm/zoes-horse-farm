@@ -53,7 +53,6 @@ export const TUNING = {
     // audience): full lock gives r ≈ 1.0 m at walk (1.5 m/s), 2.7 m at medium trot (3.2 m/s),
     // 6.3 m at jumping canter (5.8 m/s) and 10.4 m at full gallop (8 m/s); lateral acceleration
     // v·ω stays ≤ 6.3 m/s² (real: 2.5 m/s² on a 20 m canter circle, ≈ 6–8 m/s² in tight turns).
-    // Before SRT-007: 1.6 / 5.0 / 10 (r = 1.2 / 3.3 / 7.8 / 13 m).
     turnInPlace: 1.8,
     turnSpeedRef: 6.0,
     // steering responsiveness (1/s): the turn rate reaches 90 % of its target in ~0.19 s

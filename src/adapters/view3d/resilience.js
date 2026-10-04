@@ -3,7 +3,7 @@
 
 // How long the ride screen waits for `webglcontextrestored` before it asks to reload the page
 // (some browsers stop restoring after repeated losses). A technical value, not a game value.
-export const CONTEXT_RESTORE_TIMEOUT_MS = 8000;
+const CONTEXT_RESTORE_TIMEOUT_MS = 8000;
 
 /**
  * Watches the canvas for a lost and restored WebGL context.

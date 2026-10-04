@@ -7,6 +7,7 @@ import {
   createKeys,
   NAMED,
   openGameMenu,
+  rideCourseOne,
   rideState,
   startFreeRide,
   storeSection,
@@ -327,6 +328,42 @@ test.describe('fps display (rules 4, 44)', () => {
   });
 });
 
+test.describe('hint for a level that is too high (rule 4)', () => {
+  test('a slow device at a manual level gets the hint once, the level stays', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CPU throttling needs the Chromium DevTools protocol');
+    test.setTimeout(120_000);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: false, graphicsLevel: 'medium' } },
+      lang: 'en',
+    });
+    await startFreeRide(page);
+    // a slow device: the average over the measuring window falls below 30 fps
+    const client = await page.context().newCDPSession(page);
+    await client.send('Emulation.setCPUThrottlingRate', { rate: 40 });
+
+    const toast = page.locator('.ride-feedback.is-visible');
+    await expect(toast).toHaveText(
+      'The graphics are too high for this device. Pick a lower level.',
+      {
+        timeout: 90_000,
+      },
+    );
+    await client.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+    expect((await storeSection(page, 'settings')).graphicsLevel).toBe('medium');
+
+    // once per ride: the toast goes away after a few seconds and does not come back
+    await expect(toast).toBeHidden({ timeout: 15_000 });
+    await client.send('Emulation.setCPUThrottlingRate', { rate: 40 });
+    await page.waitForTimeout(12_000);
+    await expect(toast).toBeHidden();
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+  });
+});
+
 test.describe('fps display layout (touch)', () => {
   test.use({ viewport: { width: 900, height: 420 }, hasTouch: true, isMobile: true });
 
@@ -380,6 +417,13 @@ test.describe('fps display layout (touch)', () => {
     await page.locator('[data-course="1"]').tap();
     await page.locator('[data-action="go"]').tap();
     await waitForRide(page, 'course');
+    await expect(fpsHud(page)).toBeVisible();
+    expect((await rideState(page)).hud.phase).toBe('prestart');
+    await expectFpsFree(page);
+
+    // cross the start line: the timer runs and the HUD shows the ride chips
+    await rideCourseOne(page, { stopWhen: (ride) => ride.hud.phase === 'riding' });
+    expect((await rideState(page)).hud.phase).toBe('riding');
     await expect(fpsHud(page)).toBeVisible();
     await expectFpsFree(page);
   });

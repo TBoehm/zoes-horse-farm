@@ -148,7 +148,7 @@ export function bodySample(gait, phi, v, lead = 1, out = {}) {
     out.roll = 0.006 * Math.sin(TAU * phi);
   } else if (gait === 'back') {
     // calm: small bob once per beat, the head follows the diagonal steps a little
-    const a = clamp(v / 0.5, 0, 1);
+    const a = clamp(v / BACK_REF_SPEED, 0, 1);
     out.bob = -0.012 * a * (0.5 + 0.5 * Math.cos(2 * TAU * (phi - 0.1)));
     out.neck = 0.03 * a * Math.cos(2 * TAU * (phi - 0.1));
     out.roll = 0.008 * a * Math.sin(TAU * phi);

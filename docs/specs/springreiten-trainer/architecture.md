@@ -437,12 +437,15 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
 
 ### fps-Anzeige (`ui/fps-display.js`)
 
-`createFpsMeter({ intervalS: 0.5 })` mittelt die Bildrate und meldet etwa zweimal pro Sekunde einen
-gerundeten Wert; `formatFpsText({ fps, level, auto }, t)` liefert „58 fps · Mittel (Auto)“ (ohne
-„(Auto)“ bei manueller Stufe). Das Element `[data-hud="fps"]` ist die erste Zeile der HUD-Spalte
+`createFpsMeter({ intervalS: 0.5, maxFrameS: 1 })` mittelt die Bildrate und meldet etwa zweimal pro
+Sekunde einen gerundeten Wert; ein Frame länger als `maxFrameS` (ausgesetzter Tab) beginnt ein neues
+Intervall. `formatFpsText({ fps, level, auto }, t)` wählt nur den i18n-Schlüssel und übergibt
+Parameter: `ride.fpsLevelAuto` („58 fps · Mittel (Auto)“), `ride.fpsLevel` („58 fps · Mittel“, bei
+manueller Stufe) oder `ride.fps` („58 fps“, ohne Stufe); Trennzeichen, Wortstellung und der Platzhalter
+`ride.fpsNone` („–“, bis der erste Mittelwert da ist) stehen in den Sprachdateien. Das Element `[data-hud="fps"]` ist die erste Zeile der HUD-Spalte
 oben links (`.ride-hud`), kann also keine Parcours-Chips verdecken; es folgt live der Einstellung
 `showFps` und der Stufe (Governor, Einstellungen). Beim Ein-/Ausschalten wird der angezeigte Wert
-zurückgesetzt („– fps“, bis der nächste Mittelwert da ist).
+zurückgesetzt (Platzhalter, bis der nächste Mittelwert da ist).
 
 ## Arbeitsweise
 

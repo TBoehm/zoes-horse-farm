@@ -147,6 +147,8 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   const offLang = onLangChange(renderTexts);
 
   let paused = false;
+  // WebGL context state (rule 4): see the loss handlers below
+  let contextLost = false;
   let restoreOverdue = false; // the lost context did not come back in time: ask for a reload
 
   // --- Input and world ---
@@ -224,7 +226,6 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   // WebGL context lost (rule 4): the ride pauses and cannot go on before the picture is back. If
   // the browser never restores it (e.g. after repeated losses), the watchdog turns the note into a
   // reload request.
-  let contextLost = false;
   const restoreWatchdog = createRestoreWatchdog({
     onTimeout() {
       restoreOverdue = true;
@@ -302,15 +303,10 @@ export function createRideScreen(ctx, params = {}, { rng }) {
 
   function frame(dt, rawDt) {
     if (showFps) {
-      // a long frame is a suspended tab, not a slow game
-      if (rawDt > 1) {
-        fpsMeter.reset();
-      } else {
-        const value = fpsMeter.frame(rawDt);
-        if (value !== null) {
-          fps = value;
-          renderFps();
-        }
+      const value = fpsMeter.frame(rawDt); // restarts itself after a suspended tab
+      if (value !== null) {
+        fps = value;
+        renderFps();
       }
     }
     if (paused || app.current !== 'ride') {

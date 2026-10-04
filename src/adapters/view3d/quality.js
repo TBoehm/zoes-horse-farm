@@ -105,10 +105,10 @@ const GOVERNOR_DEFAULTS = Object.freeze({
 });
 
 const LOW_FPS_HINT_DEFAULTS = Object.freeze({
-  windowS: 5,
+  windowS: GOVERNOR_DEFAULTS.windowS,
+  graceS: GOVERNOR_DEFAULTS.graceS,
+  maxFrameS: GOVERNOR_DEFAULTS.maxFrameS,
   maxFps: 30, // a manually chosen level below this average gets a hint
-  graceS: 3,
-  maxFrameS: 2,
 });
 
 /** Moving average over the last `windowS` seconds of frame durations. */
@@ -292,9 +292,6 @@ export function createLowFpsHint({ options = {} } = {}) {
     reset() {
       shown = false;
       interrupt();
-    },
-    get shown() {
-      return shown;
     },
   };
 }

@@ -10,10 +10,10 @@ export default {
     'badge.clean.condition': 'Reite einen Parcours ohne Fehler.',
     'badge.oxerPro.name': 'Oxer-Profi',
     'badge.oxerPro.condition':
-      'Springe im Parcours einen Oxer, ohne dass eine Stange fällt und ohne Verweigerung, und komm ins Ziel.',
+      'Springe im Parcours einen Oxer ohne gefallene Stange und ohne Verweigerung. Komm ins Ziel.',
     'badge.comboPro.name': 'Kombi-Könner',
     'badge.comboPro.condition':
-      'Springe im Parcours eine Kombination, ohne dass eine Stange fällt und ohne Verweigerung, und komm ins Ziel.',
+      'Springe im Parcours eine Kombination ohne gefallene Stange und ohne Verweigerung. Komm ins Ziel.',
     'badge.allOpen.name': 'Alles offen',
     'badge.allOpen.condition': 'Schalte alle 5 Parcours frei.',
     'badge.starRider.name': 'Sternenreiter',

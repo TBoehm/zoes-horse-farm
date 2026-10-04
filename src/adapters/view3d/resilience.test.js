@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  CONTEXT_RESTORE_TIMEOUT_MS,
   createErrorReporter,
   createRenderGate,
   createRestoreWatchdog,
@@ -143,7 +142,13 @@ describe('createRestoreWatchdog', () => {
   });
 
   it('waits about 8 s by default', () => {
-    expect(CONTEXT_RESTORE_TIMEOUT_MS).toBe(8000);
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    createRestoreWatchdog({ onTimeout }).start();
+    vi.advanceTimersByTime(7999);
+    expect(onTimeout).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(2);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
   });
 });
 

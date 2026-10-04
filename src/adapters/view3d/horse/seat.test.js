@@ -14,7 +14,7 @@ const ctx = (g, extra = {}) => ({
 });
 
 describe('rider seat per gait', () => {
-  it('halt/walk: upright sitting seat in the saddle', () => {
+  it('halt/walk/back: upright sitting seat in the saddle', () => {
     for (const g of ['halt', 'walk', 'back']) {
       const s = riderSeat({ gait: g }, ctx(g));
       expect(s.lean).toBeLessThan(0.2);

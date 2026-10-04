@@ -271,7 +271,6 @@ describe('createLowFpsHint (rule 4: manual level too high for the device)', () =
     expect(runHint(hint, 3, 20)).toBe(0); // grace period
     expect(runHint(hint, 4.9, 20)).toBe(0);
     expect(runHint(hint, 0.2, 20)).toBe(1);
-    expect(hint.shown).toBe(true);
   });
 
   it('fires only once, however long the frame rate stays low', () => {
@@ -283,7 +282,6 @@ describe('createLowFpsHint (rule 4: manual level too high for the device)', () =
     const hint = createLowFpsHint();
     expect(runHint(hint, 60, 30)).toBe(0);
     expect(runHint(hint, 60, 60)).toBe(0);
-    expect(hint.shown).toBe(false);
   });
 
   it('averages short drops over 5 s', () => {
@@ -318,7 +316,6 @@ describe('createLowFpsHint (rule 4: manual level too high for the device)', () =
     expect(runHint(hint, 60, 10)).toBe(1);
     expect(runHint(hint, 60, 10)).toBe(0);
     hint.reset();
-    expect(hint.shown).toBe(false);
     expect(runHint(hint, 7.9, 10)).toBe(0);
     expect(runHint(hint, 0.2, 10)).toBe(1);
   });
