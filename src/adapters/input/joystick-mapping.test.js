@@ -78,10 +78,42 @@ describe('mapStick (nipplejs force/angle to steer/throttle)', () => {
     expect(mapStick(1, deg(135)).steer).toBeLessThanOrEqual(-0.9);
   });
 
-  it('a nearly straight forward hold only steers a little (finger wobble)', () => {
+  it('a nearly straight forward hold gives steer 0 (finger wobble) and full throttle', () => {
     const nearlyUp = mapStick(1, deg(86));
-    expect(nearlyUp.steer).toBeLessThan(0.2);
-    expect(nearlyUp.throttle).toBeGreaterThan(0.9);
+    expect(nearlyUp.steer).toBe(0);
+    expect(nearlyUp.throttle).toBeCloseTo(0.997, 2);
+  });
+
+  it('a nearly straight down hold gives steer 0 and reins back', () => {
+    const nearlyDown = mapStick(1, deg(266));
+    expect(nearlyDown.steer).toBe(0);
+    expect(nearlyDown.throttle).toBeCloseTo(-0.997, 2);
+  });
+
+  it('a near-horizontal hold gives throttle 0 (turning on the spot stays a turn)', () => {
+    for (const angle of [0, 10, -10, 180, 170, 190]) {
+      const out = mapStick(1, deg(angle));
+      expect(out.throttle).toBe(0);
+      expect(Math.abs(out.steer)).toBe(1);
+    }
+    expect(mapStick(STEER_FULL, deg(10)).throttle).toBe(0);
+  });
+
+  it('above the axial throttle zone the throttle starts without a jump', () => {
+    // 15 degrees above horizontal: only a little throttle
+    expect(mapStick(1, deg(15)).throttle).toBeCloseTo(0.074, 2);
+    const edge = Math.asin(TUNING.control.stickAxialThrottle);
+    expect(mapStick(1, edge - 0.001).throttle).toBe(0);
+    expect(mapStick(1, edge + 0.01).throttle).toBeLessThan(0.02);
+  });
+
+  it('diagonal holds keep both components (hybrid dead zone values)', () => {
+    const full = mapStick(1, deg(45));
+    expect(full.steer).toBe(1);
+    expect(full.throttle).toBeCloseTo(0.634, 2);
+    const light = mapStick(0.6, deg(45));
+    expect(light.steer).toBeCloseTo(0.667, 2);
+    expect(light.throttle).toBeCloseTo(0.346, 2);
   });
 
   it('clamps forces above 1 and ignores invalid values', () => {

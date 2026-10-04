@@ -35,6 +35,7 @@ describe('rein-back tuning (rule 9)', () => {
     expect(R.decel).toBeGreaterThan(0);
     expect(R.blockedShare).toBeGreaterThan(0);
     expect(R.blockedShare).toBeLessThan(1);
+    expect(R.rearClearance).toBeGreaterThan(0);
   });
 });
 

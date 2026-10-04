@@ -64,6 +64,12 @@ export const TUNING = {
     // stick: sideways deflection (share of the stick radius) that already gives full steering
     // lock; must stay ≤ 2/3 so the tightest turn is reached before the stop (rule 10)
     stickSteerFull: 0.6,
+    // stick: axial dead zones on the unit direction components (hybrid dead zone), so the two
+    // controls do not bleed into each other. A hold within ±asin(0.2) ≈ ±11.5° of horizontal
+    // changes no speed (turning on the spot stays a turn, no rein-back or walk-off); a hold
+    // within ±asin(0.12) ≈ ±7° of vertical does not steer (straight approach, thumb wobble).
+    stickAxialThrottle: 0.2,
+    stickAxialSteer: 0.12,
     // ending the gallop below trotMin (strike-off): acceleration (m/s²) up to the working trot
     // instead of dropping to a walk
     gallopEndTrotUp: 2.5,
@@ -74,8 +80,9 @@ export const TUNING = {
   // speed exists, so the values are estimated from the dressage test requirement of a few clear,
   // calm steps: ≈ 0.5 m per diagonal step at about one stride per second, well below the walk.
   reinBack: {
-    // standing with S (or the stick down) held: pause before the horse starts to step back (< 0.5 s)
-    delayS: 0.35,
+    // standing with S (or the stick down) held: pause before the horse starts to step back (< 0.5 s);
+    // long enough that a child who is still braking has time to release before it reverses
+    delayS: 0.45,
     // backing speed (m/s) at full deflection; the stick deflection scales it
     maxSpeed: 0.5,
     // speed up from the first step to the target speed (m/s²)
@@ -85,6 +92,9 @@ export const TUNING = {
     // when fence or obstacle hold the hindquarters back, the backward travel of a step falls
     // below this share of the intended distance: the horse stops (until S is released)
     blockedShare: 0.98,
+    // clearance (m) the rear point keeps from an obstacle's pole line while backing: the tail and
+    // buttocks reach ≈ 0.27 m behind the rear point (the fence uses horse.rearMargin = 0.3)
+    rearClearance: 0.35,
   },
 
   fence: {

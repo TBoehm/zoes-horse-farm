@@ -218,11 +218,16 @@ input.touch.setGallop(bool) // Galopp-Umschalter setzen (Touch)
 ```
 Tastatur: `gallop = shiftHeld && !shiftLatched`. Ein fokussiertes Bedienelement (Button, Eingabefeld,
 Schieberegler) **behält seine Tasten** (Leertaste/Enter/Pfeile): die Tastatur ignoriert Ereignisse,
-deren Ziel ein solches Element ist. Touch: Galopp-Umschalter. Joystick (`joystick-mapping.js`, rein): skalierte
-**radiale** Totzone (`TUNING.control.stickDeadZone`; Länge des Stick-Vektors, Richtung bleibt, Rest auf
-0..1 umgerechnet) und Lenk-Verstärkung: volle Lenkung ab `TUNING.control.stickSteerFull` (≤ 2/3
-seitlicher Auslenkung), schräg nach vorn gehalten lenkt damit deutlich. Tempo = umgerechnete
-Vertikalkomponente (ganz nach unten = −1).
+deren Ziel ein solches Element ist. Touch: Galopp-Umschalter. Joystick (`joystick-mapping.js`, rein): **hybride Totzone**
+(„scaled radial followed by sloped scaled axial“, minimuino.github.io/thumbstick-deadzones). Erst
+eine skalierte **radiale** Totzone (`TUNING.control.stickDeadZone`; Länge des Stick-Vektors, Rest
+auf 0..1 umgerechnet), dann axiale Totzonen auf den Einheits-Richtungskomponenten, danach mal
+Länge: `control.stickAxialThrottle` (≈ ±11,5° um die Waagerechte: keine Tempoänderung, Drehen auf
+der Stelle bleibt Drehen und startet kein Rückwärtsrichten) und `control.stickAxialSteer` (≈ ±7°
+um die Senkrechte: keine Lenkung, Fingerwackeln beim geraden Anreiten dreht das Pferd nicht). So
+laufen Lenken und Tempo nicht ineinander. Dazu Lenk-Verstärkung: volle Lenkung ab
+`TUNING.control.stickSteerFull` (≤ 2/3 seitlicher Auslenkung), schräg nach vorn gehalten lenkt damit
+deutlich. Tempo = umgerechnete Vertikalkomponente (ganz nach unten = −1).
 
 ### Reit-Simulation (`src/domain/sim/`, rein, deterministisch mit injiziertem RNG)
 
@@ -273,7 +278,9 @@ expliziten Wächter, wo nötig):
   Absprung-Hilfe), `checkLastPoints` läuft nur bei `speed >= 0`; der Aufprall-Ausweichbogen
   (`swerve`) braucht `speed >= haltBelow`.
 - Hindernisse: `holdRearBack` macht einen Rückwärtsschritt rückgängig (Position und Richtung), wenn der
-  Hinterhand-Punkt (`horse.rearLength` hinter dem Bezugspunkt) in einen gesperrten Bereich geriete,
+  Hinterhand-Punkt (`horse.rearLength` hinter dem Bezugspunkt) in einen gesperrten Bereich geriete
+  (längs der Stangen mit `reinBack.rearClearance` statt `horse.frontMargin`, denn Schweif und Kruppe
+  reichen ≈ 0,27 m hinter den Punkt),
   auch wenn er schon darin steht (direkt nach einer Landung). Drehen im Halt und Vorwärtsreiten
   bleiben unberührt.
 - Zaun/Hindernis halten auf: Bleibt die Rückwärtsstrecke eines Schritts unter
@@ -285,10 +292,10 @@ expliziten Wächter, wo nötig):
 - Ritt-Klang: `ride-sounds` hängt nur an Ereignissen; Rückwärtsrichten erzeugt keine. Der Hufschlag
   kommt über `horse.onFootfall('back', leg)` (leiser, langsamer Tritt in `sfx.hoof`).
 Spielwerte stehen im eigenen Block `TUNING.reinBack` (`delayS`, `maxSpeed`, `accel`, `decel`,
-`blockedShare`; kein Messwert veröffentlicht: Fußfolge Zweitakt-Diagonale wie der Trab rückwärts, Tempo
+`blockedShare`, `rearClearance`; kein Messwert veröffentlicht: Fußfolge Zweitakt-Diagonale wie der Trab rückwärts, Tempo
 geschätzt aus den wenigen klaren Tritten der Dressur-Aufgabe).
 Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven, Parcours-Bau `TUNING.course`: Galoppsprung, Landung/Absprung, freie Strecke, Oxer-Tiefen, Wiederaufbau-Verzögerung `rebuildDelayS`,
-Hinweis-Dauer `missingHintS`, `control.stickDeadZone`, `control.stickSteerFull`, Lenkraten `control.turn*`) nur in `src/domain/sim/tuning.js`;
+Hinweis-Dauer `missingHintS`, `control.stickDeadZone`, `control.stickSteerFull`, `control.stickAxial*`, Lenkraten `control.turn*`) nur in `src/domain/sim/tuning.js`;
 Regel-Konstanten (Fehlerpunkte, Zeitfehler-Schritt, Sterne, Auszeichnungs-Schwellen) bleiben in
 ihren Domain-Modulen. Die Governor-Defaults (`GOVERNOR_DEFAULTS` in `view3d/quality.js`) sind
 Regel-4-Werte und bleiben dort; ebenso die Werte des Hinweises „Stufe zu hoch“

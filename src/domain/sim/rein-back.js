@@ -27,7 +27,7 @@ export function updateReinBack(state, throttle, dt, tuning) {
       state.speed = 0;
       return false;
     }
-    const target = -c.maxSpeed * -th;
+    const target = c.maxSpeed * th; // th <= 0 here: a negative target speed
     const rate = state.speed > target ? c.accel : c.decel;
     const step = clamp(target - state.speed, -rate * dt, rate * dt);
     state.speed += step;

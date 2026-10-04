@@ -2,8 +2,9 @@
 // Leg index: 0 = LF (left fore), 1 = RF, 2 = LH, 3 = RH.
 // Cadence (riding theory): walk ≈ 55/min, trot ≈ 80/min, canter ≈ 100/min; speed rises mainly
 // through stride length. The rein-back is a slow two-beat diagonal gait (the trot's footfall,
-// backwards), here ≈ 33–57/min at the backing speeds of TUNING.reinBack. No foot sliding: hoof travel during stance L = duty · speed / frequency
-// (the hoof rests relative to the ground).
+// backwards), here ≈ 33–57/min at the backing speeds of TUNING.reinBack.
+// No foot sliding: hoof travel during stance L = duty · speed / frequency (the hoof rests
+// relative to the ground).
 import { TUNING } from '../../../domain/sim/tuning.js';
 import { clamp, lerp, smoothstep } from './math.js';
 

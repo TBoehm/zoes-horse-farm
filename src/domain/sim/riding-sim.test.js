@@ -1127,6 +1127,7 @@ describe('Rein-back (rules 8, 9, 24)', () => {
     x: h.x - Math.sin(h.heading) * TUNING.horse.rearLength,
     z: h.z - Math.cos(h.heading) * TUNING.horse.rearLength,
   });
+  const ext = (el) => blockExtents(el, TUNING);
   const NO_TROUBLE = ['takeoff', 'landed', 'refusal', 'swerve', 'hop', 'fenceStop', 'gallopEnded'];
   const noTrouble = (events) => {
     for (const type of NO_TROUBLE) expect(ofType(events, type)).toEqual([]);
@@ -1335,12 +1336,35 @@ describe('Rein-back (rules 8, 9, 24)', () => {
     expect(sim.horse.speed).toBe(0);
     expect(sim.horse.gait).toBe('halt');
     const rear = rearOf(sim.horse);
-    expect(toLocal(v, rear.x, rear.z).along).toBeGreaterThan(-ext.along - 0.1);
+    expect(Math.abs(toLocal(v, rear.x, rear.z).along)).toBeLessThan(
+      (v.spread || 0) / 2 + R.rearClearance + 0.1,
+    );
     noTrouble(events);
     // and it stays there while S is held
     const z = sim.horse.z;
     drive(sim, BACK, { maxT: 2 });
     expect(sim.horse.z).toBe(z);
+  });
+
+  it('while backing the rear point keeps the rear clearance from the pole (tail does not clip)', () => {
+    const v = makeElement('vertical', 0.6, { id: 'v' });
+    const sim = makeSim([v]);
+    sim.reset({ x: 0, z: -6, heading: Math.PI });
+    const minAlong = (v.spread || 0) / 2 + R.rearClearance;
+    drive(sim, BACK, {
+      maxT: 30,
+      onStep: (s) => {
+        const rear = rearOf(s.horse);
+        const p = toLocal(v, rear.x, rear.z);
+        const inside = Math.abs(p.along) < minAlong - 1e-6 && Math.abs(p.across) < ext(v).across;
+        expect(inside).toBe(false);
+      },
+    });
+    expect(sim.horse.speed).toBe(0);
+    const rear = rearOf(sim.horse);
+    expect(Math.abs(toLocal(v, rear.x, rear.z).along)).toBeGreaterThanOrEqual(minAlong - 1e-6);
+    // the clearance exceeds the front margin: the tail reaches further back than the front
+    expect(R.rearClearance).toBeGreaterThan(TUNING.horse.frontMargin);
   });
 
   it('an obstacle behind a turning horse also holds the hindquarters back', () => {

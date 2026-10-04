@@ -526,7 +526,8 @@ export function createRidingSim({
   }
 
   function rearInside(el, rx, rz) {
-    const ext = blockExtents(el, T);
+    // the tail reaches further back than the front margin: use the rear clearance along the poles
+    const ext = blockExtents(el, T, T.reinBack.rearClearance);
     const p = toLocal(el, rx, rz);
     return Math.abs(p.along) < ext.along && Math.abs(p.across) < ext.across;
   }
