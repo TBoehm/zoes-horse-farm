@@ -4,6 +4,8 @@
 import { onLangChange, t } from '../i18n.js';
 import { h } from '../dom.js';
 import { getEngine } from '../../view3d/engine.js';
+import { createLowFpsHint } from '../../view3d/quality.js';
+import { createFpsMeter, formatFpsText } from '../fps-display.js';
 import { createInput } from '../../input/input.js';
 import { trapTab } from '../../input/focus-trap.js';
 import { createRideMode } from '../../../application/modes/index.js';
@@ -13,6 +15,7 @@ import { showBadgeToast } from './profile/badge-toast.js';
 
 const HUDS = {};
 const FEEDBACK_VISIBLE_S = 2;
+const HINT_VISIBLE_S = 5; // the "graphics too high" hint is longer than a jump message
 
 /**
  * A mode with a HUD registers a view per mode id:
@@ -42,8 +45,20 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   const hud = h('div', { class: 'ride-hud' });
   const feedbackEl = h('div', { class: 'ride-feedback', role: 'status', 'aria-live': 'polite' });
   const hint = h('div', { class: 'ride-hint' });
+  // Frame rate and graphics level (rule 4), top left above the course HUD; shown on demand
+  const fpsEl = h('div', {
+    class: 'ride-fps',
+    hidden: true,
+    dataset: { hud: 'fps' },
+  });
   const controls = h('div', { class: 'ride-controls' });
   const pauseTitle = h('h2', { id: 'ride-pause-title' });
+  const lostNote = h('p', {
+    class: 'pause-note',
+    hidden: true,
+    role: 'status',
+    dataset: { note: 'graphics-lost' },
+  });
   const btn = (action, cls = '') =>
     h('button', { class: `btn ${cls}`, type: 'button', dataset: { action } });
   const resumeBtn = btn('resume', 'btn-menu');
@@ -64,12 +79,32 @@ export function createRideScreen(ctx, params = {}, { rng }) {
       'section',
       { class: 'panel panel-pause' },
       pauseTitle,
+      lostNote,
       h('div', { class: 'menu-list' }, resumeBtn, restartBtn, quitBtn, settingsBtn),
     ),
   );
   const el = h('section', { class: 'ride-screen' }, hud, feedbackEl, hint, controls, pauseMenu);
+  hud.append(fpsEl);
   if (hudView) hud.append(hudView.el);
   const renderHud = (model = session.view.hud) => hudView?.render(model);
+
+  // --- fps display (rule 4): setting, averaged value, level text ---
+  const fpsMeter = createFpsMeter();
+  let showFps = settings.get().showFps;
+  let autoGraphics = settings.get().graphicsAuto;
+  let fps = null;
+  function renderFps() {
+    fpsEl.hidden = !showFps;
+    if (!showFps) return;
+    fpsEl.textContent = formatFpsText({ fps, level: engine.level, auto: autoGraphics }, t);
+  }
+  // live: the level can change by the governor or in the settings, the toggle in the settings
+  const offSettings = settings.onChange((s) => {
+    if (s.showFps !== showFps) fpsMeter.reset();
+    showFps = s.showFps;
+    autoGraphics = s.graphicsAuto;
+    renderFps();
+  });
 
   // Session lines carry label keys; translate them here (the language may have changed)
   function applyLines(lines) {
@@ -90,6 +125,8 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     quitBtn.textContent = t(session.quitLabelKey);
     settingsBtn.textContent = t('pause.settings');
     hint.textContent = t('ride.pauseHint');
+    lostNote.textContent = t('pause.graphicsLost');
+    renderFps();
     hudView?.renderTexts();
     renderHud();
     applyLines(session.view.lines); // the line labels are translated texts too
@@ -117,11 +154,15 @@ export function createRideScreen(ctx, params = {}, { rng }) {
 
   let feedbackTimer = 0;
 
-  function showFeedback(key) {
+  function showFeedback(key, { long = false } = {}) {
     feedbackEl.textContent = t(key);
+    feedbackEl.classList.toggle('is-hint', long);
     feedbackEl.classList.add('is-visible');
-    feedbackTimer = FEEDBACK_VISIBLE_S;
+    feedbackTimer = long ? HINT_VISIBLE_S : FEEDBACK_VISIBLE_S;
   }
+
+  // Manual level that is too high for the device: one hint per ride, the level stays (rule 4)
+  const lowFpsHint = createLowFpsHint();
 
   /** Executes the commands of the session; returns true if the screen is being left. */
   function execute(commands) {
@@ -156,15 +197,37 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     placeHorse(view.horse);
     cameraRig.snap();
     governor.interrupt();
+    lowFpsHint.interrupt();
   }
+
+  // WebGL context lost (rule 4): the ride pauses and cannot go on before the picture is back
+  let contextLost = false;
+  function onContextLost() {
+    contextLost = true;
+    lostNote.hidden = false;
+    resumeBtn.disabled = true;
+    setPaused(true);
+  }
+  function onContextRestored() {
+    contextLost = false;
+    lostNote.hidden = true;
+    resumeBtn.disabled = false;
+    governor.interrupt();
+    lowFpsHint.interrupt();
+    if (paused && app.current === 'ride') resumeBtn.focus({ preventScroll: true });
+  }
+  const offContextLost = engine.on('contextLost', onContextLost);
+  const offContextRestored = engine.on('contextRestored', onContextRestored);
 
   function setPaused(next) {
     if (paused === next) return;
+    if (!next && contextLost) return;
     paused = next;
     pauseMenu.hidden = !paused;
     el.classList.toggle('is-paused', paused);
     input.clearEdges();
     governor.interrupt();
+    lowFpsHint.interrupt();
     services.audio?.setPaused(paused);
     if (paused) resumeBtn.focus({ preventScroll: true });
     // a focused menu button must not keep Space/Enter once the ride goes on
@@ -200,6 +263,14 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   horse.onFootfall = (gait) => !paused && services.audio?.sfx.hoof(gait);
 
   function frame(dt, rawDt) {
+    if (showFps) {
+      // a long frame is a suspended tab, not a slow game
+      const value = rawDt > 1 ? (fpsMeter.reset(), null) : fpsMeter.frame(rawDt);
+      if (value !== null) {
+        fps = value;
+        renderFps();
+      }
+    }
     if (paused || app.current !== 'ride') {
       governor.frame(rawDt, false);
       return;
@@ -232,10 +303,15 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     cameraRig.update(dt, view.horse, horse.earAnchor);
     world.update(dt, engine.camera);
     governor.frame(rawDt, !document.hidden);
+    if (lowFpsHint.frame(rawDt, !document.hidden && !autoGraphics)) {
+      showFeedback('ride.graphicsTooHigh', { long: true });
+    }
   }
 
   cameraRig.setMode(settings.get().camera);
   restart();
+  // The context may have been lost while no ride was running: start paused then
+  if (engine.contextLost) onContextLost();
   engine.run(frame);
 
   const instance = {
@@ -252,6 +328,9 @@ export function createRideScreen(ctx, params = {}, { rng }) {
       offLang();
       offMode();
       offRotate();
+      offSettings();
+      offContextLost();
+      offContextRestored();
       horse.onFootfall = null;
       document.removeEventListener('visibilitychange', onHidden);
       window.removeEventListener('blur', onBlur);

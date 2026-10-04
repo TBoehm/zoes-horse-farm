@@ -77,3 +77,25 @@ describe('sound settings fields', () => {
     expect(store.data.progress).toMatchObject({ jumps: 0, finishedRides: 0, unlocked: 1 });
   });
 });
+
+describe('fps display setting field', () => {
+  it('defaults to off', () => {
+    expect(settings.defaults({}).showFps).toBe(false);
+  });
+
+  it('is filled in for an old save without it (backward compatible, rule 47)', () => {
+    expect(settings.sanitize({ lang: 'de', camera: 'rider' }, {})).toMatchObject({
+      showFps: false,
+      camera: 'rider',
+    });
+  });
+
+  it('keeps a valid value', () => {
+    expect(settings.sanitize({ showFps: true }, {}).showFps).toBe(true);
+    expect(settings.sanitize({ showFps: false }, {}).showFps).toBe(false);
+  });
+
+  it.each(['true', 1, 0, null, undefined, {}, []])('falls back to off for the value %s', (bad) => {
+    expect(settings.sanitize({ showFps: bad }, {}).showFps).toBe(false);
+  });
+});

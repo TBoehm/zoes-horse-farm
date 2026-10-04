@@ -71,7 +71,8 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
   const aid = createAidMarker();
   scene.add(aid.mesh);
 
-  // image-based light from the sky (PMREM, once)
+  // image-based light from the sky (PMREM, once; rebuilt after a lost WebGL context)
+  let envTarget = null;
   let envTexture = null;
   function buildEnvironmentMap() {
     if (envTexture) return envTexture;
@@ -86,12 +87,19 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     );
     floor.position.y = -2;
     envScene.add(floor);
-    envTexture = pmrem.fromScene(envScene, 0.04, 0.1, 1000).texture;
+    envTarget = pmrem.fromScene(envScene, 0.04, 0.1, 1000);
+    envTexture = envTarget.texture;
     envSky.dispose();
     floor.geometry.dispose();
     floor.material.dispose();
     pmrem.dispose();
     return envTexture;
+  }
+
+  function disposeEnvironmentMap() {
+    envTarget?.dispose();
+    envTarget = null;
+    envTexture = null;
   }
 
   /** All meshes with material pair and shadow role. */
@@ -115,9 +123,16 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     }
   }
 
+  /**
+   * Switches the quality level. Only what really differs between the levels is touched: a
+   * material needs a new shader only when its normal map is switched on/off (three.js rebuilds
+   * the programs for fog, environment map and shadow changes by itself), and a texture is only
+   * uploaded again when its anisotropy changes.
+   */
   function setQuality(next) {
     const p = QUALITY_PRESETS[next];
     if (!p) return;
+    const before = preset;
     preset = p;
     setMaxPixelRatio(renderer, p.pixelRatio);
 
@@ -132,15 +147,17 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       }
     }
 
-    // materials
-    for (const pair of pairs) {
-      pair.standard.normalMap = p.normalMaps ? pair.normalMap : null;
-      pair.standard.needsUpdate = true;
-      pair.lambert.needsUpdate = true;
+    // materials: the Lambert variant has no normal map, so only the standard one is rebuilt
+    if (before.normalMaps !== p.normalMaps) {
+      for (const pair of pairs) {
+        pair.standard.normalMap = p.normalMaps ? pair.normalMap : null;
+        pair.standard.needsUpdate = true;
+      }
     }
+    const anisotropy = Math.min(p.anisotropy, renderer.capabilities.getMaxAnisotropy());
     for (const t of [...arena.textures, ...environment.textures]) {
-      if (t && t.anisotropy !== p.anisotropy) {
-        t.anisotropy = Math.min(p.anisotropy, renderer.capabilities.getMaxAnisotropy());
+      if (t && t.anisotropy !== anisotropy) {
+        t.anisotropy = anisotropy;
         t.needsUpdate = true;
       }
     }
@@ -156,10 +173,33 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       hemi.intensity = 1.5;
     }
 
-    // fog
-    scene.fog = p.fog ? new THREE.Fog(SKY_COLORS.horizon, p.fog.near, p.fog.far) : null;
+    // fog: a new Fog object makes three.js rebuild every material, so keep the old one if the
+    // values are the same
+    if (before.fog !== p.fog || (p.fog && !scene.fog)) {
+      scene.fog = p.fog ? new THREE.Fog(SKY_COLORS.horizon, p.fog.near, p.fog.far) : null;
+    }
 
     environment.setDensity(p.envDensity, p.grassTufts, p.envDetail);
+  }
+
+  /**
+   * After a lost and restored WebGL context. three.js recreates its own GPU state (programs,
+   * textures, buffers of geometries, instanced meshes and the shadow-map target) from the CPU
+   * data on the next render. Not restorable is what only lived on the GPU: the PMREM environment
+   * map is the result of a render pass, so it comes back empty and must be rendered again.
+   * Source: onContextRestore in three r186 src/renderers/WebGLRenderer.js (calls initGLContext,
+   * which resets properties, textures, geometries, programs and the shadow map object).
+   */
+  function restoreAfterContextLoss() {
+    if (envTexture) {
+      disposeEnvironmentMap();
+      if (preset.envMap) scene.environment = buildEnvironmentMap();
+    }
+    if (sun.shadow.map) {
+      sun.shadow.map.dispose();
+      sun.shadow.map = null;
+    }
+    renderer.shadowMap.needsUpdate = true;
   }
 
   // The sun never moves: its light-space axes and the scratch vectors are made once
@@ -248,6 +288,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       lines.setFinishMarked(on);
     },
     setQuality,
+    restoreAfterContextLoss,
     setShadowFocus(x, z) {
       shadowFocus.set(x, 0, z);
       updateShadowCamera();
@@ -276,7 +317,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
         }
       }
       textures.forEach((t) => t.dispose());
-      if (envTexture) envTexture.dispose();
+      disposeEnvironmentMap();
       if (sun.shadow.map) sun.shadow.map.dispose();
     },
   };

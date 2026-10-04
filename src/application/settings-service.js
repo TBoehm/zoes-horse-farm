@@ -51,6 +51,11 @@ export function createSettingsService(store) {
       if (key && typeof on === 'boolean') patch({ [key]: on });
     },
 
+    /** Frame-rate display in the ride (rule 4). */
+    setShowFps(on) {
+      if (typeof on === 'boolean') patch({ showFps: on });
+    },
+
     /** @param {'music'|'sfx'} channel @param {number} value 0..1 */
     setVolume(channel, value) {
       const prefix = SOUND_PREFIX[channel];

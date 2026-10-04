@@ -16,6 +16,8 @@ addSettingsFields({
   camera: field.enum(CAMERA_MODES, 'follow'),
   aidFree: field.bool(true),
   aidCourse: field.bool(false),
+  // fps counter in the ride (rule 4): off by default
+  showFps: field.bool(false),
 });
 
 addSettingsFields({

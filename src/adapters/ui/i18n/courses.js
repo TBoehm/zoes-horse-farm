@@ -28,7 +28,7 @@ export default {
     'results.title': 'Geschafft!',
     'results.horse': '{name} und du',
     'results.time': 'Zeit',
-    'results.knockdowns': 'Abwürfe',
+    'results.knockdowns': 'Gefallene Stangen',
     'results.refusals': 'Verweigerungen',
     'results.timeFaults': 'Zeitfehler',
     'results.total': 'Fehler gesamt',

@@ -127,6 +127,9 @@ ausstehenden unbewerteten 3-s-Wiederaufbau desselben Elements ab. Das HUD-Modell
 `services.ride` (`{ session, engine, screen }`, gesetzt vom Ritt-Bildschirm, beim Verlassen entfernt)
 ist **nur für den Test-Hook** (`adapters/platform/test-hooks.js`, nur mit `?testhooks`): er liest
 daraus einen Schnappschuss. Produktionscode liest es nicht.
+Der Test-Hook bietet außer Lesefunktionen `go(name, params)` sowie `loseContext()` /
+`restoreContext()` (simulierter WebGL-Kontextverlust über `WEBGL_lose_context`, Rückgabe `false`
+ohne Engine oder Erweiterung); der Schnappschuss enthält `contextLost`.
 
 ### Einstellungs-Dienst (application/settings-service.js)
 
@@ -139,6 +142,7 @@ settings.setGraphicsLevel(level)            // manuelle Wahl, Automatik aus
 settings.setAutoLevel(level)                // Governor senkt die Stufe, Automatik bleibt an
 settings.setCamera('follow'|'rider')        // CAMERA_MODES in settings-schema.js
 settings.setAid('free'|'course', on)
+settings.setShowFps(on)                     // fps-Anzeige im Ritt (Regel 4, 44); Standard aus
 settings.setVolume('music'|'sfx', v) ; settings.setMuted('music'|'sfx', m)
 settings.onChange(fn) → unsubscribe
 ```
@@ -166,7 +170,7 @@ Ein JSON-Objekt unter `localStorage['zoes-horse-farm.save']`:
 ```js
 {
   version: 1,
-  settings: { lang, graphicsAuto, graphicsLevel, camera, aidFree, aidCourse,
+  settings: { lang, graphicsAuto, graphicsLevel, camera, aidFree, aidCourse, showFps,
               musicVolume, musicMuted, sfxVolume, sfxMuted },
   horse:    { name: null|string, nameAnswered: bool, coat, marking },
   progress: { unlocked: 1..5, courses: { '1': { faults, timeCs, stars } }, jumps,
@@ -287,7 +291,8 @@ Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven, Parcours-Bau `TUNING.co
 Hinweis-Dauer `missingHintS`, `control.stickDeadZone`, `control.stickSteerFull`, Lenkraten `control.turn*`) nur in `src/domain/sim/tuning.js`;
 Regel-Konstanten (Fehlerpunkte, Zeitfehler-Schritt, Sterne, Auszeichnungs-Schwellen) bleiben in
 ihren Domain-Modulen. Die Governor-Defaults (`GOVERNOR_DEFAULTS` in `view3d/quality.js`) sind
-Regel-4-Werte und bleiben dort.
+Regel-4-Werte und bleiben dort; ebenso die Werte des Hinweises „Stufe zu hoch“
+(`LOW_FPS_HINT_DEFAULTS`: 5 s Fenster, 3 s Schonzeit, Grenze 30 fps).
 
 ### Parcours (`src/domain/course/`, rein)
 
@@ -321,7 +326,10 @@ world.setAid(null | { elementId, dir, zone })       // Absprung-Hilfe
 world.setLines(null | { start, finish, labels: { start, finish } })  // Start-/Ziellinie; Texte vom Aufrufer übersetzt
 world.setFinishMarked(bool)
 world.setShadowFocus(x, z)                          // Schatten folgt dem Pferd
-world.setQuality('low'|'medium'|'high')
+world.setQuality('low'|'medium'|'high')            // fasst nur an, was sich wirklich ändert (Normal-
+                                                    // Maps, Anisotropie, Nebel nur bei Wertwechsel)
+world.restoreAfterContextLoss()                     // nach wiederhergestelltem WebGL-Kontext: PMREM-
+                                                    // Umgebungslicht und Schatten-Map neu erzeugen
 world.update(dt, camera)                            // Himmel, Umgebung, Ringe, Linien (je Frame)
 world.dispose()
 const horse = createHorse({ coat, marking, quality });  // → { object, earAnchor, ... }
@@ -379,6 +387,37 @@ audio.dispose()
 `medium`: pixelRatio ≤ 1,5, Schatten 1024 (nur Pferd/Hindernisse), Standard-Materialien.
 `high`: pixelRatio ≤ 2, Schatten 2048, mehr Umgebung (Bäume, Gras-Instanzen), Nebel.
 Automatik: `src/adapters/view3d/quality.js` (`createQualityGovernor`), misst nur beim Reiten.
+Bei **manueller** Stufe meldet `createLowFpsHint` (gleiche Messregeln, eine Instanz je Ritt bzw.
+freiem Modus) einmal „Grafik zu hoch“ (< 30 fps im 5-s-Mittel); der Ritt-Bildschirm zeigt das als
+Toast (`feedback`-Element, 5 s), die Stufe bleibt.
+
+### Engine, Stufenwechsel und Kontextverlust (`view3d/engine.js`, `view3d/resilience.js`)
+
+```js
+engine.contextLost                    // true, solange der WebGL-Kontext weg ist
+engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
+```
+- **Kontextverlust:** `watchContextLoss` verhindert das Standardverhalten (sonst gäbe es nie eine
+  Wiederherstellung) und meldet Verlust/Wiederherstellung. Der Ritt-Bildschirm abonniert beides:
+  bei Verlust pausiert er, „Weiter“ ist gesperrt und ein Hinweis steht im Pausenmenü; nach der
+  Wiederherstellung (Engine: three.js hat seinen Zustand selbst neu aufgebaut, dann
+  `world.restoreAfterContextLoss()`, Resize, Shader-Vorkompilierung) wird „Weiter“ wieder frei,
+  der Ritt bleibt pausiert, bis das Kind fortsetzt. Beginnt ein Ritt bei verlorenem Kontext, startet
+  er pausiert.
+- **Stufenwechsel:** `applyQuality` ändert Pixel-Ratio, Welt und Pferd und startet danach
+  `renderer.compileAsync` (KHR_parallel_shader_compile). Währenddessen hält ein `RenderGate`
+  (höchstens 2,5 s) Simulation und Zeichnen an, das letzte Bild bleibt stehen.
+- **Robustheit:** Jeder Schritt der Schleife (Resize, Ritt-Frame, Render) und der Einstellungs-
+  Handler läuft in `try/catch`; Fehler werden begrenzt geloggt (`createErrorReporter`, einmal je
+  Stelle und 5 s), die Schleife läuft weiter.
+
+### fps-Anzeige (`ui/fps-display.js`)
+
+`createFpsMeter({ intervalS: 0.5 })` mittelt die Bildrate und meldet etwa zweimal pro Sekunde einen
+gerundeten Wert; `formatFpsText({ fps, level, auto }, t)` liefert „58 fps · Mittel (Auto)“ (ohne
+„(Auto)“ bei manueller Stufe). Das Element `[data-hud="fps"]` ist die erste Zeile der HUD-Spalte
+oben links (`.ride-hud`), kann also keine Parcours-Chips verdecken; es folgt live der Einstellung
+`showFps` und der Stufe (Governor, Einstellungen).
 
 ## Arbeitsweise
 
