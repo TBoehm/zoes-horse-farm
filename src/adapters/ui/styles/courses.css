@@ -43,7 +43,7 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--c-primary);
+  background: var(--c-brand);
   color: #fff;
   font-weight: 900;
   font-size: 1.4rem;
@@ -150,7 +150,7 @@
 
 .unlocked-note {
   font-weight: 800;
-  color: var(--c-secondary);
+  color: var(--c-positive);
 }
 
 .result-table {

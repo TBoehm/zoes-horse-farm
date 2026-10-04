@@ -67,7 +67,7 @@
   margin: 8px 0 0;
   font-weight: 700;
   font-size: 1.1rem;
-  color: var(--c-secondary);
+  color: var(--c-positive);
 }
 
 .screen.screen-horse {
@@ -231,9 +231,11 @@
   }
 }
 
+/* Only for buttons that delete something (rule 57) */
 .btn-danger {
-  background: #b33a2b;
-  box-shadow: 0 4px 0 #7f2419;
+  --btn-edge: var(--c-danger-dark);
+  color: var(--c-danger-ink);
+  background: var(--c-danger);
 }
 
 .setting-reset {

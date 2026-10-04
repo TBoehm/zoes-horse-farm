@@ -193,7 +193,7 @@
 .touch-btn {
   font: inherit;
   font-weight: 800;
-  color: #fff;
+  color: var(--c-touch-ink);
   border: 3px solid rgba(255, 255, 255, 0.85);
   background: rgba(40, 30, 20, 0.45);
   border-radius: 50%;
@@ -218,12 +218,12 @@
 .touch-jump {
   width: 112px;
   height: 112px;
-  background: rgba(200, 80, 46, 0.6);
+  background: color-mix(in srgb, var(--c-touch-jump) 80%, transparent);
   font-size: 1.1rem;
 }
 
 .touch-gallop.is-on {
-  background: rgba(91, 140, 58, 0.85);
+  background: color-mix(in srgb, var(--c-positive) 88%, transparent);
 }
 
 .touch-gallop-light {
