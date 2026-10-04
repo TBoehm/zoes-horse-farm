@@ -1,6 +1,6 @@
 # Springreiten-Trainer – Architektur-Vertrag (technische Spec)
 
-Gilt für SRT-001 bis SRT-012. Fachliches „Was": `docs/features/springreiten-trainer/concept.md`
+Gilt für SRT-001 bis SRT-014. Fachliches „Was": `docs/features/springreiten-trainer/concept.md`
 (Regeln Rn) und die Tickets in `docs/features/springreiten-trainer/tasks/`. Dieses Dokument regelt
 das „Wie": Module, Schnittstellen, Koordinaten, Datei-Ownership. Abweichungen erst hier ändern.
 
@@ -72,7 +72,8 @@ erzwingt die Grenzen.
 | `src/domain/horse/` | Pferdename, Fellfarben, Abzeichen (Werte und Regeln) | `domain`, `shared` |
 | `src/application/save-schema.js` | Spielstand-Bereiche mit Bereinigung (Regel 47), Einstellungsfelder | `domain`, `shared`, `application/languages.js` |
 | `src/application/languages.js` | `LANGS` – die angebotenen Sprachen (einzige Quelle für Schema und UI) | – |
-| `src/application/graphics-levels.js` | `GRAPHICS_LEVELS` – die wählbaren Grafikstufen (einzige Quelle für Schema, Einstellungs-Dienst, Grafik-Presets und Pferd) | – |
+| `src/application/graphics-levels.js` | `GRAPHICS_LEVELS` – die wählbaren Grafikstufen (einzige Quelle für Schema, Einstellungs-Dienst, Grafik-Presets und Pferd); `AUTO_START_LEVEL` (`'low'`) – die Stufe, bei der „Automatisch“ beginnt | – |
+| `src/application/crash-guard.js` | Absturzwächter (SRT-013): Bereich `crashGuard` im Spielstand, Leases, Herzschlag, gesperrte Stufen (siehe „Absturzwächter“) | `application`, `shared` |
 | `src/application/settings-service.js` | Anwendungsfälle für Einstellungen: der **einzige Schreiber** des Bereichs `settings` (siehe „Einstellungs-Dienst“) | `domain`, `application`, `shared` |
 | `src/application/settings-schema.js` | Registriert Einstellungsfelder (Grafik, Kamera, Hilfe, Klang, `controlsHelpSeen`) und die Bereiche `horse`/`progress` im Spielstand-Schema | `domain`, `application`, `shared` |
 | `src/application/start-flow.js` | Startablauf: welche Bildschirme vor dem Hauptmenü kommen (`startSequence`, `nextStartScreen`; siehe „Startablauf und Bedienungs-Tipps“) | `application` |
@@ -80,19 +81,20 @@ erzwingt die Grenzen.
 | `src/application/modes/` | Modus-Strategien `free-mode.js`, `course-mode.js` (Uhr, HUD-Modell, Rittende-Ergebnis). **Modi speichern nichts**: nur die Ritt-Sitzung schreibt, und zwar über den Fortschritts-Dienst | `domain`, `application`, `shared` |
 | `src/application/progress-service.js` | Sprung zählen, Ritt abschließen, Fortschritt löschen (über Port `store`) | `domain`, `shared` |
 | `src/adapters/storage/` | localStorage-Store (implementiert Port `store`) | innen |
-| `src/adapters/platform/` | WebGL-Prüfung, Touch-Modus, Hochformat, PWA | innen |
+| `src/adapters/platform/` | WebGL-Prüfung, Touch-Modus, Hochformat, PWA, Seiten-Lebenszyklus für den Absturzwächter (`page-lifecycle.js`) | innen |
 | `src/adapters/input/` | Tastatur, Touch-Bedienung (nipplejs) → `InputState` | innen |
 | `src/adapters/view3d/` | Renderer, Grafikstufen, Welt, Hindernisse, Pferd/Reiter, Kamera, Engine | innen |
 | `src/adapters/audio/` | WebAudio-Synthese | innen |
 | `src/adapters/ui/` | App-Rahmen, Bildschirme (`screens/`, z. B. `screens/ride-screen.js`), Einstellungs-Abschnitte (`settings-sections.js`, `audio-wiring.js`), Bedienungs-Tipps (`screens/controls-help.js`, `screens/help-content.js`), i18n + Texte, Styles (`styles/main.css` mit den Design-Tokens, `help.css`) | innen |
-| `src/main.js` | Composition Root (verdrahtet Store, Einstellungs-Dienst, App, Bildschirme; Startfehler → allgemeine Fehlermeldung) | alles |
-| `tests/support/` | Test-Hilfen, die nie in den Produktions-Build gelangen: `sim-utils.js`, `test-ports.js` (Fake-Store/-Uhr), `test-host.js`, `autopilot.js` (+ Fahrbarkeits-Test), `layout-check.js` (+ Test; Layout-Orakel für `courses.test.js`), `color.js` (+ Test; WCAG-Kontrast), `scene-stats.js` (+ Test; Draw Calls und Dreiecke einer three.js-Szene ohne GL), `fake-canvas.js` (Canvas-Attrappe für Texturen in Node), `sequence-helper.js` (geskriptete Ritte für die Kontinuitätstests). Vitest-Include und ESLint-Override sind dafür eingerichtet | alles |
+| `src/main.js` | Composition Root (verdrahtet Store, Einstellungs-Dienst, Absturzwächter, App, Bildschirme; Startfehler → allgemeine Fehlermeldung) | alles |
+| `tests/support/` | Test-Hilfen, die nie in den Produktions-Build gelangen: `sim-utils.js`, `test-ports.js` (Fake-Store/-Uhr), `test-host.js`, `autopilot.js` (+ Fahrbarkeits-Test), `layout-check.js` (+ Test; Layout-Orakel für `courses.test.js`), `color.js` (+ Test; WCAG-Kontrast), `scene-stats.js` (+ Test; Draw Calls und Dreiecke einer three.js-Szene ohne GL), `gpu-tracker.js` (+ Test; Stellvertreter für das, was three.js auf der GPU hält: Shader-Programme, Geometrien, Instanz-Puffer samt Spitzenwert, siehe „Gestufter Stufenwechsel“), `fake-canvas.js` (Canvas-Attrappe für Texturen in Node), `sequence-helper.js` (geskriptete Ritte für die Kontinuitätstests). Vitest-Include und ESLint-Override sind dafür eingerichtet | alles |
 
 ### Ports (als Parameter injiziert)
 
 - `store`: `{ get(section), update(section, fn), onChange(section, fn) }` – Adapter: `adapters/storage`.
   `update` gibt den **bereinigten** neuen Bereich zurück (nicht, was die Funktion geliefert hat).
-- `clock`: `{ nowIso() }` für Auszeichnungs-Datum; Zeit im Spiel kommt als `dt`.
+- `clock`: `{ nowIso(), nowMs() }` für Auszeichnungs-Datum und Zeitspannen (Absturzwächter); Zeit im Spiel
+  kommt als `dt`.
 - `rng`: `() => number` in [0, 1) – Domain nutzt nie `Math.random()` direkt.
 - Die Ritt-Sitzung liefert Ereignisse/Kommandos (`endGallop`, `badges`, `feedback`,
   `finished`, Klang-Ereignisse); der UI-Adapter setzt sie um (Eingabe, Toasts, Klang, Bildschirmwechsel).
@@ -110,6 +112,7 @@ const out = session.step(dt, input);     // input = InputState ohne pause/camera
 // the ride screen plays no finish sound of its own. At most one railDown sound per element per jump.
 session.dispose()                        // stops the store listener (settings cache)
 session.view  // { horse, rails, fallDirs (Map elementId → ±1, last fall direction), aid: null|{elementId, dir, zone}, highlight, finishMarked,
+              //   jumping (bool: ein Sprung läuft: Absprung, Flug, Landung; die Grafik-Automatik steigt dann nicht),
               //   lines, hud: mode-spezifisches Modell (reine Daten) }
 ```
 Weitere Application-Dienste: `progress-service.js` (recordJump, finishRide, resetProgress),
@@ -133,7 +136,12 @@ Stufe wie der Governor: Automatik bleibt an) sowie `loseContext()` / `restoreCon
 (simulierter WebGL-Kontextverlust über `WEBGL_lose_context`, Rückgabe `false` ohne Engine oder
 Erweiterung); der Schnappschuss enthält `contextLost` und `graphicsSettling` (ein Stufenwechsel
 läuft noch: Schritte ausstehend, Pixel-Ratio vorgemerkt oder Shader werden kompiliert) und
-`graphicsPixelRatio` (Pixel-Ratio des Renderers). `?testhooks&gpubudget=<MB>` ersetzt das
+`graphicsPixelRatio` (Pixel-Ratio des Renderers). `setFrameFeed({ dt, repeat })` ersetzt die Bildzeiten,
+die die Grafik-Automatik misst (jedes echte Bild zählt als `repeat` Bilder zu je `dt` Sekunden; `null`:
+wieder die echten), damit Browser-Tests nicht durch Schonzeit und Fenster (3 s, 10 s, 20 s) des
+langsamen Software-Renderers warten müssen; `frameFeed()` liefert `{ dt, repeat, fedSeconds }` (die
+Engine zählt die gemessene Reitzeit in `fedSeconds`; Ablage `app.services.frameFeed`, ohne `?testhooks`
+nie gesetzt). `?testhooks&gpubudget=<MB>` ersetzt das
 GPU-Speicher-Budget der Engine (`gpuBudgetOverride` in `test-hooks.js`; `main.js` legt es als
 `app.services.gpuBudgetOverrideMB` ab; ohne `?testhooks` wirkungslos).
 Die Smoke-Hilfen (`tests/smoke/helpers.js`) kennen den Startablauf: `openMenu(page)` überspringt
@@ -148,9 +156,10 @@ App von vorn). Lokal braucht der Smoke-Test ein Chromium (`PW_CHROMIUM_PATH`, si
 const settings = createSettingsService(store);   // in main.js einmal erzeugt, als ctx.settings verteilt
 settings.get()                    // gespeicherter Stand (bereinigte Kopie)
 settings.setLang('de'|'en')
-settings.setGraphicsAuto(deviceLevel|null)  // „Automatisch“ an, Stufe passend zum Gerät
+settings.setGraphicsAuto()                  // „Automatisch“ an, Stufe = AUTO_START_LEVEL (low), ruft onAutoSelected
+settings.onAutoSelected(fn) → unsubscribe   // nach „Automatisch“ neu gewählt (Absturzwächter, Engine)
 settings.setGraphicsLevel(level)            // manuelle Wahl, Automatik aus
-settings.setAutoLevel(level)                // Governor senkt die Stufe, Automatik bleibt an
+settings.setAutoLevel(level)                // Governor ändert die Stufe (runter oder hoch), Automatik bleibt an
 settings.setCamera('follow'|'rider')        // CAMERA_MODES in settings-schema.js
 settings.setAid('free'|'course', on)
 settings.setShowFps(on)                     // fps-Anzeige im Ritt (Regel 4, 44); Standard aus
@@ -159,7 +168,9 @@ settings.setVolume('music'|'sfx', v) ; settings.setMuted('music'|'sfx', m)
 settings.onChange(fn) → unsubscribe
 ```
 Kein Adapter ruft `store.update('settings', …)` direkt auf (Einstellungs-Bildschirm, Audio-
-Verdrahtung, Ritt-Bildschirm/Kamera, Vorstart-Hilfe-Schalter, Bedienungs-Tipps, Engine/Grafik-Governor).
+Verdrahtung, Ritt-Bildschirm/Kamera, Vorstart-Hilfe-Schalter, Bedienungs-Tipps, Engine/Grafik-Governor,
+Absturzwächter). Eine Geräte-Wahl der Startstufe gibt es nicht: „Automatisch“ beginnt immer bei
+`AUTO_START_LEVEL`.
 
 ### Startablauf und Bedienungs-Tipps (SRT-012, Regeln 43, 53, 56)
 
@@ -232,11 +243,12 @@ Ein JSON-Objekt unter `localStorage['zoes-horse-farm.save']`:
 ```js
 {
   version: 1,
-  settings: { lang, graphicsAuto, graphicsLevel, camera, aidFree, aidCourse, showFps,
-              controlsHelpSeen, musicVolume, musicMuted, sfxVolume, sfxMuted },
+  settings: { lang, graphicsAuto, graphicsLevel (low|medium|high, Standard low), camera, aidFree,
+              aidCourse, showFps, controlsHelpSeen, musicVolume, musicMuted, sfxVolume, sfxMuted },
   horse:    { name: null|string, nameAnswered: bool, coat, marking },
   progress: { unlocked: 1..5, courses: { '1': { faults, timeCs, stars } }, jumps,
               finishedRides, badges: { [badgeId]: ISO-Datum } },
+  crashGuard: { rendering, level, auto, since, lastSeen, hintPending, blockedLevels, lastCrash },
   // unbekannte Schlüssel (spätere Bereiche/Versionen) bleiben unverändert erhalten
 }
 ```
@@ -392,11 +404,13 @@ Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven, Parcours-Bau `TUNING.co
 Hinweis-Dauer `missingHintS`, `control.stickDeadZone`, `control.stickSteerFull`,
 `control.stickAxial*`, Lenkraten `control.turn*`) nur in `src/domain/sim/tuning.js`;
 Regel-Konstanten (Fehlerpunkte, Zeitfehler-Schritt, Sterne, Auszeichnungs-Schwellen) bleiben in
-ihren Domain-Modulen. Die Governor-Defaults (`GOVERNOR_DEFAULTS` in `view3d/quality.js`) sind
-Regel-4-Werte und bleiben dort; ebenso die Werte des Hinweises „Stufe zu hoch“
-(`LOW_FPS_HINT_DEFAULTS`: 5 s Fenster, 3 s Schonzeit, Grenze 30 fps). Technische Werte der Grafik
-stehen im Adapter-Modul, nicht in `tuning.js`: `STAGE_GAP_FRAMES` (`view3d/quality-stages.js`),
-`COMPILE_HOLD_MAX_MS` (`engine.js`), `CONTEXT_RESTORE_TIMEOUT_MS` (`resilience.js`).
+ihren Domain-Modulen. Die Governor-Defaults (`GOVERNOR_DEFAULTS` in `view3d/quality.js`, exportiert, weil
+das Hochstufen dieselbe Schonzeit und Frame-Grenze nutzt) und `UPGRADE_DEFAULTS`
+(`view3d/quality-upgrade.js`) sind Regel-4-Werte und bleiben dort; ebenso die Werte des Hinweises
+„Stufe zu hoch“ (`LOW_FPS_HINT_DEFAULTS`: 5 s Fenster, 3 s Schonzeit, Grenze 30 fps). Technische Werte
+der Grafik stehen im Adapter-Modul, nicht in `tuning.js`: `STAGE_GAP_FRAMES`
+(`view3d/quality-stages.js`), `COMPILE_HOLD_MAX_MS` (`engine.js`), `CONTEXT_RESTORE_TIMEOUT_MS`
+(`resilience.js`); `HEARTBEAT_INTERVAL_MS` (`application/crash-guard.js`).
 
 ### Parcours (`src/domain/course/`, rein)
 
@@ -433,13 +447,18 @@ world.setShadowFocus(x, z)                          // Schatten folgt dem Pferd
 world.setQuality(level | preset, { gpu })     // alles auf einmal (Erstellung, Wechsel ohne laufenden
                                                     // Ritt, Kontextverlust; gpu:false = kein PMREM-Render);
                                                     // fasst nur an, was sich wirklich ändert; gibt
-                                                    // Schatten-Map und PMREM-Ziel frei, wenn die Stufe
-                                                    // sie nicht braucht (baut sie später neu); ändert
+                                                    // Schatten-Map, PMREM-Ziel und die Shader-Programme der
+                                                    // Materialien frei, bevor Neues gebaut wird (baut
+                                                    // sie später neu); ändert
                                                     // NICHT die Pixel-Ratio (Sache der Engine)
-world.applyQualityStage('shadows'|'materials'|'density', level | preset)
+world.applyQualityStage('shadows'|'materials'|'shadowsAndMaterials'|'density', level | preset)
                                                     // ein Schritt des gestuften Wechsels (siehe
                                                     // „Gestufter Stufenwechsel“); jeder Schritt liest den
-                                                    // echten Zustand und ist wiederholbar
+                                                    // echten Zustand und ist wiederholbar;
+                                                    // 'shadowsAndMaterials' = MERGED_STAGE_ID, beides in einem
+world.compileRoot                                   // was die Engine vorkompiliert: nur die SICHTBAREN Objekte
+                                                    // (plus der Hufstaub, falls die Stufe ihn hat):
+                                                    // renderer.compileAsync(world.compileRoot, camera, world.scene)
 world.textureSizes()                                // [{ width, height, normal }] der hochgeladenen Texturen
                                                     // (für die GPU-Speicher-Schätzung)
 world.syncAnisotropy(level | preset)                // Anisotropie der Texturen; NUR aufrufen, solange nichts
@@ -523,30 +542,87 @@ audio.dispose()
 ## Grafikstufen
 
 `low`: pixelRatio 1, keine Schatten, Lambert-Materialien, wenig Umgebung.
-`medium`: pixelRatio ≤ 1,5, Schatten 1024 (nur Pferd/Hindernisse), Standard-Materialien.
-`high`: pixelRatio ≤ 2, Schatten 2048, mehr Umgebung (Bäume, Gras-Büschel), Nebel.
+`medium`: pixelRatio ≤ 1,5, Schatten 1024 (nur Pferd/Hindernisse), Standard-Materialien, nur die
+billigen Details (siehe Tabelle: kein Wind, keine Blumen, Tiere und kein Staub).
+`high`: pixelRatio ≤ 2, Schatten 2048, mehr Umgebung (Bäume, Gras-Büschel), Nebel, alle Details.
 Jede Stufe steht in `QUALITY_PRESETS` (`view3d/quality.js`, mit `level`-Name); `characterDetail` (`low|medium|high`)
 bestimmt Geometrie und Material von Pferd und Reiter.
-Die Details von SRT-011 (Regel 3) sind eigene Preset-Schlüssel, die Stufen unterscheiden sich so:
+Die Details von SRT-011 (Regel 3) sind eigene Preset-Schlüssel, die Stufen unterscheiden sich so
+(SRT-013: „Mittel“ bekommt nur, was billig ist und kein eigenes Shader-Programm mitbringt; mit dem
+vollen Satz verlor das Tablet seinen Kontext):
 
 | Schlüssel | low | medium | high |
 | --- | --- | --- | --- |
 | `grassTufts` (Anteil der 11 000 Büschel; der größte Dreieckskosten-Posten) | 0 | 0 | 1 |
-| `flowers` (Anteil der Wiesenblumen) | 0 | 0,45 | 1 |
-| `decor` (Wimpelkette, Blumenkübel, Blumenkästen an den Ständern, Koppelzaun und -Requisiten; < 1: jeder zweite Wimpel) | 0 | 0,5 | 1 |
-| `grazingHorses` (Pferde auf der Koppel) | 0 | 2 | 2 |
-| `hoofDust` | aus | an | an |
-| `birds` / `butterflies` (Anteil) | 0 / 0 | 0,5 / 0 | 1 / 1 |
-| `wind` (Bäume, Büsche, Gras, Blumen wiegen sich) | aus | an | an |
+| `flowers` (Anteil der Wiesenblumen) | 0 | 0 | 1 |
+| `decor` (Wimpelkette, Blumenkübel am Tor, Koppelzaun und -Requisiten; < 1: jeder zweite Wimpel) | 0 | 0,5 | 1 |
+| `planters` (Blumenkästen an den Hindernisständern; eigenes Shader-Programm) | aus | aus | an |
+| `grazingHorses` (Pferde auf der Koppel) | 0 | 0 | 2 |
+| `hoofDust` | aus | aus | an |
+| `birds` / `butterflies` (Anteil) | 0 / 0 | 0 / 0 | 1 / 1 |
+| `wind` (Bäume, Büsche, Gras, Blumen wiegen sich; Wind-Code im Shader) | aus | aus | an |
 
-`low` behält Draw Calls und Dreiecke von vor SRT-011 (nichts Neues wird gezeichnet oder hochgeladen).
+`low` behält Draw Calls und Dreiecke von vor SRT-011 (nichts Neues wird gezeichnet oder hochgeladen),
+`medium` nur geringfügig mehr als vor SRT-011 (Commit `5e240fc`): ein paar Draw Calls, ein
+Shader-Programm (die Wimpel sind doppelseitig), wenige Prozent Dreiecke, unter 1 MB Speicher.
 `windyGrass` entfällt, `wind` ersetzt es. Die Zahlen prüft `view3d/world-budget.test.js`.
-Automatik: `src/adapters/view3d/quality.js` (`createQualityGovernor`), misst nur beim Reiten.
+
+**Grafik-Automatik (Regel 4, SRT-013, SRT-014):** Beim ersten Start ist „Automatisch“ an und beginnt bei
+`AUTO_START_LEVEL` (`low`, `application/graphics-levels.js`); `graphicsLevel` hat im Schema den Standard
+`low`, es gibt keine Geräte-Wahl der Startstufe mehr (`pickInitialLevel` ist entfernt, die Engine
+liest nur noch die gespeicherte Stufe). Die Automatik arbeitet sich hoch und geht bei Last wieder
+herunter; die erreichte Stufe wird über `settings.setAutoLevel` gespeichert und gilt beim nächsten Start.
+„Automatisch“ neu zu wählen (`settings.setGraphicsAuto()`) beginnt wieder bei `low` und gibt gesperrte und
+verlassene Stufen frei (`onAutoSelected`). Eine manuell gewählte Stufe wird nie angehoben.
+- **Runter** (`createQualityGovernor` in `view3d/quality.js`, `GOVERNOR_DEFAULTS`: 5 s Mittel unter
+  50 fps, 3 s Schonzeit, 10 s Pause zwischen zwei Anpassungen): misst nur beim Reiten. Eine Stufe, von
+  der er wegen niedriger Bildrate herunterging, merkt sich die Engine für die laufende Sitzung
+  (`leftByFps`) und steigt nicht zurück.
+- **Hoch** (`view3d/quality-upgrade.js`, siehe „Hochstufen der Automatik“).
+- Die Engine fasst beides hinter einer Fassade zusammen (`governor = { frame, interrupt }`, vom
+  Ritt-Bildschirm genutzt): `governor.frame(rawDt, measuring, busy)` füttert erst den Herunterstufer und,
+  wenn der in diesem Frame nichts geändert hat, den Hochstufer; `measuring` heißt Ritt, Vorstart oder
+  freier Modus bei sichtbarer Seite, `busy` ist `view.jumping`. Mit einem Test-Feed (`setFrameFeed`) ersetzen
+  die eingespeisten Bildzeiten die echten.
+
 Bei **manueller** Stufe über `low` (`canHintLowerLevel`) meldet `createLowFpsHint` (gleiche
 Messregeln, eine Instanz je Ritt bzw. freiem Modus) einmal „Grafik zu hoch“ (< 30 fps im 5-s-Mittel);
 auf `low` wird weder gemessen noch gezeigt (es gibt nichts Niedrigeres). „Neu starten“ im Parcours
 ist ein neuer Ritt (Konzept-Regel 39): `reset()` erlaubt den Hinweis erneut. Der Ritt-Bildschirm
 zeigt ihn als Toast (`feedback`-Element, 5 s Echtzeit, auch bei wenigen fps), die Stufe bleibt.
+
+### Hochstufen der Automatik (SRT-014, `view3d/quality-upgrade.js`)
+
+Gegenstück des Herunterstufers: gleiche Messweise (nur beim Reiten, nicht in den ersten 3 s nach einer
+Unterbrechung, ein Frame über `maxFrameS` ist eine Unterbrechung), reine Logik ohne three.js. Technische
+Werte in `UPGRADE_DEFAULTS` (nicht in `tuning.js`): Fenster 10 s (`windowS`), Mittel mindestens 57 fps
+(`minFps`), ein Frame über 25 ms (`slowFrameS`) ist ein Ruckler, höchstens 2 % Ruckler im Fenster
+(`maxSlowShare`), Schonzeit und `maxFrameS` wie `GOVERNOR_DEFAULTS`, mindestens 20 s Reitzeit nach
+**jeder** Stufenänderung (`cooldownS`, hoch wie runter; Pause und Menü verkürzen sie nicht).
+
+```js
+const upgrade = createUpgradeGovernor({ chooseTarget, options });  // options überschreibt UPGRADE_DEFAULTS
+upgrade.frame(dt, measuring, busy)  // → { level, fps } wenn jetzt hochgestuft werden soll, sonst null
+upgrade.interrupt()                 // Messung verwerfen (Stufenschritt, Pause, Menü)
+upgrade.noteChange()                // Stufe hat sich geändert (runter, hoch, Verlust): Cooldown neu
+nextUpgradeLevel({ level, blocked, left, fits })  // die Stufe darüber oder null
+```
+- `frame` läuft nur, wenn das Fenster voll ist, der Cooldown vorbei ist, der Mittelwert ≥ `minFps` und der
+  Ruckler-Anteil ≤ `maxSlowShare` ist. `busy` (ein Sprung läuft, `view.jumping`) hält den Schritt an,
+  das Fenster bleibt: der Schritt folgt gleich nach dem Sprung. Erst dann ruft er `chooseTarget()`; gibt
+  das null, beginnt das Fenster neu (nächster Versuch nach vollen 10 s).
+- `nextUpgradeLevel` kennt nur die **nächste** Stufe (nie über `high`, eine gesperrte wird nicht
+  übersprungen) und lässt sie aus, wenn sie in `blocked` steht (Absturzwächter: dort ging die 3D-Darstellung
+  verloren oder das Spiel stürzte ab), in `left` (die Automatik hat im laufenden Spiel wegen zu niedriger
+  Bildrate von dort heruntergestuft) oder `fits(level)` falsch ist.
+- Die Engine übergibt `fitsBudget(level)`: die **ungekürzte** Speicher-Schätzung der Stufe
+  (`estimateGpuMemoryMB(QUALITY_PRESETS[level], …)`, mit dem echten Antialiasing des Kontexts) ist
+  höchstens das Budget des Geräts (siehe „GPU-Speicher-Budget“). Eine Stufe, die nur mit gekappter Auflösung
+  oder Szenerie passen würde, wird nicht angestrebt.
+- Hochgestuft wird über `applyQuality` (der gestufte, speicherschonende Wechsel, siehe unten) und
+  `settings.setAutoLevel`; die Engine hält den Herunterstufer mit `downgrade.setLevel` im Gleichschritt.
+  Das Diagnose-Feld `lastChange` (`{ kind: 'up'|'down'|'loss'|'crash', fps? }`) nennt den Grund der
+  letzten automatischen Änderung (`'crash'` schon beim Start, wenn der Absturzwächter die Stufe senkte).
 
 ### Umgebung, Tiere und Details (SRT-011, Regel 3)
 
@@ -556,7 +632,12 @@ seedbaren `rng` (`createRng` aus `textures.js`), also bleibt das Bild bei jedem 
 - **Wind** (`plant-shaders.js`): `createWind()` → `{ time, strength }` (Uniforms `windTime`,
   `windStrength`). `createWorld` erzeugt **einen** Wind und reicht ihn an Umgebung, Arena und Hindernisse;
   `environment.update` zählt `wind.time`, `environment.setDensity(…, { wind })` setzt `strength` auf 1 oder 0.
-  Die Patches erweitern three.js-Materialien per `onBeforeCompile` im Vertex-Shader (keine CPU-Arbeit):
+  Wind gibt es nur auf `high` (Preset `wind`). Die Patches erweitern three.js-Materialien per
+  `onBeforeCompile` im Vertex-Shader (keine CPU-Arbeit) und merken sich ihren Code in
+  `material.userData.windPatch`; `setWindPatch(material, on)` schaltet ihn ab (zurück auf das schlichte
+  three.js-Programm, das andere schlichte Materialien mitbenutzen) oder wieder an, `hasWindPatch(material)`
+  fragt ihn ab. Ändert sich das Programm, gibt `setWindPatch` `true` zurück und die Welt gibt das Material
+  frei (`dispose`), damit das alte Programm vor dem neuen weg ist (siehe „Gestufter Stufenwechsel“):
   `patchTreeWind`, `patchBushWind` (nur die Standard-Materialien; das Lambert-Material von `low` bleibt
   frei vom Wind-Code), `patchTuftWind`, `patchBlossoms(material, wind, { base })` (Blumen biegen sich
   oberhalb von `base`, der Kübel nicht), `patchBunting`, `patchWings(material, wind, { rate, amplitude, glide })`.
@@ -573,7 +654,8 @@ seedbaren `rng` (`createRng` aus `textures.js`), also bleibt das Bild bei jedem 
   `arena-decor.js` `createArenaDecor` mit zwei Meshes; `arena.js`: `createArena({ …, wind })`,
   `setDetail(decor)`): Wimpelkette am Reitplatzzaun, Blumenkübel am Tor, Koppelzaun (Stil `paddock`) und
   Requisiten der Koppel (Unterstand, Tränke, Raufe). Blumenkästen an den Hindernisständern liegen in
-  `obstacles.js` (`setDecor(on)`, ein `InstancedMesh` `planters`, je Hindernis eine Blütenfarbe).
+  `obstacles.js` (`setDecor(on)`, ein `InstancedMesh` `planters`, je Hindernis eine Blütenfarbe); sie hängen
+  am eigenen Preset-Schlüssel `planters` (nur `high`, eigenes Shader-Programm), nicht mehr an `decor`.
 - **Koppel** (`world-layout.js`): `PADDOCK` (Mitte, `width`, `depth`, `rotation`) westlich des Reitplatzes,
   `paddockPoint(u, v)` (Anteile der halben Breite/Tiefe → Weltpunkt), `paddockContains(x, z, margin)`,
   `planPaddockFence()`; der Bereich steht in `BLOCKED`, damit dort keine Pflanzen wachsen.
@@ -584,23 +666,37 @@ seedbaren `rng` (`createRng` aus `textures.js`), also bleibt das Bild bei jedem 
   normale Gangart-Animation. Geplant wird die **Körpermitte**: das ganze Pferd liegt in jeder Pose
   innerhalb `GRAZING.bodyRadius` darum (`HORSE_EXTENT` ist am Modell gemessen und in `grazing.test.js`
   gegengeprüft), also bleibt es im Zaun und aus den Requisiten (`area.avoid`, Kreise aus
-  `planPaddockKeepOut`); der Objekt-Ursprung liegt `GRAZING.bodyOffset` vor der Mitte. `low`/`medium`
-  nutzen das Pferdemodell `low`, `high` das Modell `medium`. `world.update` bewegt sie nur, solange die
-  Koppel im Blickfeld ist.
+  `planPaddockKeepOut`); der Objekt-Ursprung liegt `GRAZING.bodyOffset` vor der Mitte. Die Koppelpferde
+  gibt es nur auf `high` (Modell `medium`; die Stufen darunter haben `grazingHorses: 0`). `world.update`
+  bewegt sie nur, solange die Koppel im Blickfeld ist.
 - **Hufstaub** (`dust.js`): `createDust({ quality, release, rng })` → ein `THREE.Points` (ein Draw Call),
-  Pool als einfache Arrays (`createDustPool`, rein getestet), Größe nach Stufe (`low` 0, `medium` 36,
-  `high` 90 Teilchen). Verdrahtung: `engine.emitHoofDust()` → `world.emitHoofDust` (siehe View).
-- **Details zurückhalten** (`detail-hold.js` `createDetailHold`, `quality-stages.js` `sameMaterialStage`):
+  Pool als einfache Arrays (`createDustPool`, rein getestet), Größe nach Stufe (`low` 0, `high` 90 Teilchen;
+  `medium` hat seit SRT-013 keinen Staub, `hoofDust: false`). Verdrahtung: `engine.emitHoofDust()` → `world.emitHoofDust` (siehe View).
+- **Details zurückhalten** (`detail-hold.js` `createDetailHold` → `{ sync, restore, has, size }`,
+  `quality-stages.js` `sameMaterialStage`):
   Zwischen dem Schritt `materials` und dem Schritt `density` eines Stufenwechsels ändern sich die
   Shader aller sichtbaren Meshes. Die optionalen Detail-Meshes (Eintrag `detail: true` in
   `environment`/`obstacles`) werden dann ausgeblendet (`sync(meshes, ready)`), damit nichts mit Shadern
   kompiliert wird, die der nächste Schritt wegwirft; `restore()` zeigt sie wieder und läuft vor Code,
-  der die Sichtbarkeit selbst bestimmt (`density`-Schritt, `setObstacles`).
-- **Budget** (`world-budget.test.js`, `tests/support/scene-stats.js`): baut die Welt je Stufe ohne WebGL
-  (`tests/support/fake-canvas.js` für die Texturen) und prüft Draw Calls und Dreiecke: `low` höchstens so
-  viel wie vor SRT-011, nur eine Handvoll Draw Calls mehr je Stufe, Budgets je Stufe (low 60 Calls /
-  60 000 Dreiecke, medium 100 / 90 000, high 150 / 250 000), Details erscheinen und verschwinden
-  sauber, `dispose()` und der Kontextverlust-Pfad (`gpuObjects`) kennen alle neuen Objekte.
+  der die Sichtbarkeit selbst bestimmt (`density`-Schritt, `setObstacles`); `has(mesh)` fragt, ob ein Mesh
+  gerade nur kurz zurückgehalten wird.
+- **Dauerhaft versteckte Details freigeben** (`world.js` `freeHiddenDetails`, nach jedem `applyMeshes`):
+  Ein ausgeblendetes Mesh behält seine GPU-Puffer (Geometrie, bei `InstancedMesh` auch die Instanz-
+  Puffer). Detail-Meshes, die die Stufe nicht zeigt und die nicht nur zurückgehalten werden, gibt die
+  Welt darum über `release` frei (Blumen, Vögel, Büschel, Blumenkästen ...); zeigt eine höhere Stufe sie
+  wieder, lädt three.js sie neu hoch. Dasselbe tut `environment.setDensity` mit der Geometrie der verlassenen
+  Detailstufe der Bäume (`release(m.geometry)`).
+- **Budget** (`world-budget.test.js`, `tests/support/scene-stats.js`, `tests/support/gpu-tracker.js`):
+  baut die Welt je Stufe ohne WebGL (`tests/support/fake-canvas.js` für die Texturen) und prüft Draw
+  Calls, Dreiecke und Shader-Programme (der Tracker kompiliert `world.compileRoot`): `low` höchstens so
+  viel wie vor SRT-011, **gepinnt an den Stand vor SRT-011 (Commit `5e240fc`)** in `BEFORE` (Calls,
+  Dreiecke, `programs`, `memoryMB` = `estimateGpuMemoryMB` auf dem Tablet von `quality.test.js`); `medium`
+  höchstens `MEDIUM_EXTRA` darüber (2 Draw Calls, 1 Programm, 10 % Dreiecke, 1 MB); `high` bleibt unter
+  dem Budget, kostet aber mehr Programme und Speicher als `medium`; nur eine Handvoll Draw Calls mehr auf
+  `high`, Budgets je Stufe (low 60 Calls / 60 000 Dreiecke, medium 100 / 90 000, high 150 / 250 000),
+  Details erscheinen und verschwinden sauber (`medium` zeigt nur Wimpel und Koppel-Requisiten), Wind nur auf
+  `high` (die Materialien von Bäumen und Büschen haben auf `medium` kein `wind-`-Programm), `dispose()` und
+  der Kontextverlust-Pfad (`gpuObjects`) kennen alle neuen Objekte.
 
 ### Weiche Bewegung von Pferd und Reiter (SRT-011, Regel 24)
 
@@ -681,9 +777,14 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
   nutzbare Knopf (bei Verlust ist „Weiter“ gesperrt).
 - **Kontextverlust als Hinweis auf ein überlastetes Gerät (Regel 4):** Beim Verlust entscheidet die
   reine Funktion `levelAfterContextLoss({ auto, level, visible, sinceVisibilityChangeS })`
-  (`view3d/quality.js`) → `{ level, persist, hint }`: Mit Automatik geht die Stufe auf `low` und
+  (`view3d/quality.js`) → `{ level, persist, hint, counted }`: Mit Automatik geht die Stufe auf `low` und
   wird über `settings.setAutoLevel` gespeichert (Automatik bleibt an); bei manueller Stufe über
-  `low` bleibt die Stufe und `hint` ist wahr. Ein Verlust im Hintergrund (`visible` falsch, die
+  `low` bleibt die Stufe und `hint` ist wahr. `counted` sagt, dass der Verlust ein überlastetes Gerät
+  zeigt (Vordergrund, nicht kurz nach einem Sichtbarkeitswechsel), unabhängig davon, was er mit der Stufe
+  macht: Die Engine sperrt dann die Stufe, auf der er geschah, über `crashGuard.blockLevel(level)`
+  (gespeichert), damit die Automatik nicht wieder dorthin steigt, und merkt sich `lastChange = { kind: 'loss' }`,
+  wenn sich die Stufe änderte. Derselbe Entscheider (`decide: levelAfterContextLoss`) wird dem
+  Absturzwächter in `main.js` übergeben (siehe „Absturzwächter“). Ein Verlust im Hintergrund (`visible` falsch, die
   Engine liest `document.visibilityState`) oder weniger als `CONTEXT_LOSS_GRACE_S` (3 s, technische
   Konstante) nach dem letzten Sichtbarkeitswechsel (`visibilitychange`) sagt nichts über die Last
   des Spiels (Android verwirft Kontexte oft beim App-Wechsel): dann bleibt alles, wie es ist
@@ -729,24 +830,60 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
   zurück) die noch nötigen geordneten Schritte `{ id, compile }`, jeder nur, wenn sich seine Werte
   unterscheiden:
   `pixelRatio` (zuerst: Auflösung ist der größte Hebel und braucht keinen Shader) → `shadows`
-  (Schattenpass und -Map) → `materials` (Material-Typ, Normal-Maps, Nebel an/aus, Umgebungskarte:
-  alles Shader-Änderungen, ein Schritt mit einem Kompilieren) → `characters` (Pferd und Reiter) →
-  `density` (Instanzen, Geometrie-Detail der Umgebung, die Details der Stufe (Blumen, Wimpel, Kübel
-  und Kästen, Koppelpferde, Staub, Vögel, Schmetterlinge, Wind) und Nebel-Distanzen als Uniforms;
-  `compile: true`, weil neu erscheinende Details eigene Shader mitbringen). Beim
-  Hochstufen gilt die umgekehrte Reihenfolge (Auflösung zuletzt).
+  (Schattenpass und -Map) → `materials` (Material-Typ, Normal-Maps, Nebel an/aus, Umgebungskarte und der
+  Wind-Code der Szenerie: alles Shader-Änderungen, ein Schritt mit einem Kompilieren) → `characters`
+  (Pferd und Reiter) → `density` (Instanzen, Geometrie-Detail der Umgebung, die Details der Stufe
+  (Blumen, Wimpel, Kübel, Blumenkästen `planters`, Koppelpferde, Staub, Vögel, Schmetterlinge) und
+  Nebel-Distanzen als Uniforms; `compile: true`, weil neu erscheinende Details eigene Shader mitbringen;
+  der Wind steckt im Schritt `materials`). Beim Hochstufen gilt die umgekehrte Reihenfolge (Auflösung
+  zuletzt). **Sind `shadows` und `materials` beide nötig, ersetzt sie ein einziger Schritt
+  `shadowsAndMaterials`** (`MERGED_STAGE_ID`, steht an der Stelle des ersten von beiden): beide ändern
+  die Programme von allem Sichtbaren, zwei Schritte würden Programme kompilieren, die der zweite sofort
+  wegwirft, und das auf dem Höhepunkt des GPU-Speichers. Jeder Schritt hat `covers` (die Schritt-Ids, für
+  die die Engine die angewandte Stufe in `applied` einträgt; beim zusammengelegten `['shadows',
+  'materials']`), sodass ein unterbrochener Wechsel richtig weiterplant.
   `planQualityStagesFromState(applied, to)` plant ab dem Stand je Schritt (ein unterbrochener
   Wechsel setzt fort; ein neues Ziel mitten im Wechsel erreicht nur die fehlenden Schritte).
   `createStageQueue({ gapFrames: STAGE_GAP_FRAMES = 6 })` taktet: `tick()` je gezeichnetem Frame
   liefert den nächsten Schritt frühestens nach 6 Frames (technischer Wert, nicht in `tuning.js`).
-  Die Engine wendet einen Schritt an (`applyStage`: `pixelRatio` → vorgemerkt, `characters` →
-  `horse.setQuality`, sonst `world.applyQualityStage`), startet bei `compile: true` die
-  Vorkompilierung (`renderer.compileAsync`, KHR_parallel_shader_compile) und wartet danach wieder
-  die Lücke ab; währenddessen hält der `RenderGate` (höchstens 2,5 s) Simulation und Zeichnen an,
+  Die Engine wendet einen Schritt an (`applyStage(stage, target)`: `pixelRatio` → vorgemerkt, `characters` →
+  `horse.setQuality`, sonst `world.applyQualityStage(stage.id, …)`), startet bei `compile: true` die
+  Vorkompilierung (`precompile()`: `renderer.compileAsync(world.compileRoot, camera, world.scene)`,
+  KHR_parallel_shader_compile, nur das Sichtbare, siehe unten) und wartet danach wieder die Lücke ab; währenddessen hält der `RenderGate` (höchstens 2,5 s) Simulation und Zeichnen an,
   das letzte Bild bleibt stehen. Jeder Schritt unterbricht die Governor-Messung. Ohne laufende
   Schleife (Menü, Einstellungen vor dem Ritt) oder bei verlorenem Kontext wird alles auf einmal
   angewendet (`applyAllNow`): es ist nichts sichtbar. `engine.settling` ist wahr, solange Schritte
-  ausstehen, eine Pixel-Ratio auf das Anwenden wartet oder das Gate zu ist.
+  ausstehen, eine Pixel-Ratio auf das Anwenden wartet oder das Gate zu ist. Jede Stufenänderung, ob
+  hoch oder runter, startet über `upgrade.noteChange()` den Cooldown des Hochstufers.
+- **Speicher zuerst (SRT-013, Regel 4):** Ein Wechsel darf auf der GPU nie mehr halten als die größere der
+  beiden Stufen; was die Zielstufe nicht mehr braucht, wird freigegeben, **bevor** etwas Neues kompiliert
+  oder hochgeladen wird. three.js behält jedes Programm, mit dem ein Material je gezeichnet wurde, bis das
+  Material `dispose`d wird (ein bloßes `needsUpdate` hielte altes und neues zugleich). Darum gilt in der
+  Welt (`world.js`, jeder Schritt liest den echten Zustand): `freePrograms(materials)` gibt Materialien
+  über `release` frei (ein freigegebenes Material baut sein Programm beim nächsten Kompilieren neu);
+  `applyShadowStage` gibt vor einer Änderung des Schattenpasses die Programme der ganzen Szene
+  (`sceneMaterials()`: auch Pferd, Reiter, Staub) frei und die Schatten-Map, wenn sie nicht mehr gebraucht
+  wird oder ihre Größe wechselt; `applyMaterialStage` sammelt zuerst, was sich ändert (Material-Typ, Nebel,
+  Umgebungskarte, Wind-Code via `setWindPatch`, Normal-Maps), hängt die Umgebungskarte ab und gibt ihr
+  PMREM-Ziel frei (`disposeEnvironmentMap`), gibt die betroffenen Materialien frei und baut erst dann den
+  neuen Zustand (neues `Fog`, neue Umgebungskarte); danach geben `freeHiddenDetails` und
+  `environment.setDensity` die GPU-Puffer der nicht mehr gezeigten Details und Baummodelle frei.
+  Der Beweis ist `view3d/world-stages.test.js` (Node, mit `tests/support/gpu-tracker.js`, der die
+  Buchführung von three.js nachbildet: Programme je Programm-Schlüssel mit Zähler, Materialien behalten
+  alle bis `dispose`, Geometrien und Instanz-Puffer; `peak` seit `resetPeak()`): Abstieg und Aufstieg
+  halten nie mehr als vor dem Wechsel bzw. als die Zielstufe braucht, das Ende gleicht einer von Anfang
+  an auf der Zielstufe gebauten Welt (nichts leckt, auch nicht nach `high → low → high`), der Schritt
+  mit den neuen Materialien gibt die alten Programme frei, versteckte Details geben ihre Puffer zurück
+  und die Kompilier-Wurzel liefert keine versteckten Meshes. Im Browser zählt `graphics.spec.js` die
+  lebenden Programme und Puffer jedes WebGL2-Kontexts (create minus delete) und prüft denselben Spitzenwert.
+- **Nur Sichtbares kompilieren (`world.compileRoot`):** `renderer.compileAsync(scene)` durchläuft den
+  ganzen Graphen (r186 `WebGLRenderer.compile`), also auch die versteckten Meshes (Blumen, Vögel, Kästen
+  einer Stufe, die sie nicht zeigt), und baute so Programme, die nie gezeichnet werden. `compileRoot` ist
+  ein Objekt, dessen `traverse` nur `scene.traverseVisible` liefert (plus die Staub-Punkte der Stufe, damit
+  die erste Wolke keinen Ruckler macht); sein `traverseVisible` ist leer, denn `compile` sammelt sonst die
+  Lichter ein zweites Mal ein, wenn die Wurzel nicht die Ziel-Szene ist, und baute Programme für zwei
+  Lichtsätze, die das echte Rendern nie nutzt. Aufruf: `renderer.compileAsync(world.compileRoot, camera,
+  world.scene)`.
 - **Keine Texturen neu hochladen:** Ein Stufenwechsel ändert nie `texture.anisotropy`. three.js liest
   den Wert nur beim Hochladen (r186 `WebGLTextures.js`, `uploadTexture` → `setTextureParameters`),
   eine Änderung hieße `needsUpdate`, also `texImage2D` plus Mipmaps für jede Boden-, Sand- und
@@ -795,7 +932,8 @@ nachstellen kann.
   Budget übersteigt, in dieser Reihenfolge: 1. Pixel-Ratio (größte noch passende, in 0,05-Schritten,
   nicht unter 1), 2. Schatten-Map 2048 → 1024, 3. „Gras und Umgebung“ (`SCENERY_STEPS`) in dieser Reihenfolge, je
   Schritt nur wenn die Schätzung noch zu hoch ist: Gras-Büschel aus, Blumen (mit den Schmetterlingen
-  darüber) aus, Koppelpferde aus, Vögel aus, Dekoration (`decor`) aus, dann Umgebungsdichte auf 0,55.
+  darüber) aus, Koppelpferde aus, Vögel aus, Dekoration (`decor`, mit den Blumenkästen `planters`) aus,
+  dann Umgebungsdichte auf 0,55.
   Der Look der Stufe bleibt sonst („Hoch“ behält seine Effekte bei kleinerer Auflösung). Ergebnis:
   `{ preset (dasselbe Objekt, wenn nichts zu ändern ist; sonst eingefrorene Kopie mit `level`),
   estimateMB, requestedMB, budgetMB, fits, capped }`; passt auch nach allen Stufen nichts, läuft
@@ -804,11 +942,81 @@ nachstellen kann.
   Erstellen des Renderers fest. Es bleibt nur, wenn die Stufe es will und das Budget die
   MSAA-Puffer trägt, auch wenn alle anderen Hebel schon benutzt sind; sonst entsteht der Kontext
   ohne (z. B. gespeichertes „Hoch“ auf einem schwachen Tablet). Die Debug-Box zeigt das.
+- Auch das Hochstufen fragt das Budget (`fitsBudget`, ungekürzt, siehe „Hochstufen der Automatik“): die
+  Automatik steigt nur auf Stufen, die ohne Kappen passen.
 - Die Engine prüft **jede** Stufe: beim Start, bei jedem Wechsel (Governor und manuell, auch
   „Hoch“) und beim Start jedes Ritts (die Fenstergröße kann sich geändert haben). Sie arbeitet
   überall mit dem angepassten Preset (`fitFor(level)`); der gestufte Wechsel plant gegen dieses
   Preset (eine gekappte Pixel-Ratio ist ein eigener `pixelRatio`-Schritt). `engine.level` bleibt
   der Name der Stufe. `?testhooks&gpubudget=<MB>` erzwingt in Tests ein kleines Budget.
+
+### Absturzwächter (SRT-013, Regel 4: `application/crash-guard.js`, `adapters/platform/page-lifecycle.js`)
+
+Schließt der Browser einen überlasteten Tab, läuft die Behandlung eines Kontextverlusts nie, denn die
+ganze Seite ist weg. Der Absturzwächter merkt sich darum im Spielstand, dass gerade die 3D-Darstellung
+gezeichnet wird, und wertet eine übrig gebliebene Markierung beim nächsten Start wie einen Verlust im
+Vordergrund. Er ist reine Anwendungslogik über den Ports `store` und `clock` (`nowMs`, `nowIso`) und
+dem Einstellungs-Dienst; die Entscheidung über die Stufe bekommt er als Parameter.
+
+```js
+const guard = createCrashGuard({ store, settings, clock, decide });  // decide = levelAfterContextLoss
+const previous = guard.checkPreviousRun();   // beim Start, VOR dem ersten Bildschirm und der Engine
+// → { crashed: false } | { crashed: true, level: string|null, auto: bool, seconds }
+const lease = guard.markRendering({ level, auto });  // ein Bildschirm beginnt, die Szene zu zeichnen
+lease.frame({ level, auto })       // jeden Frame (billig, schreibt nur bei Bedarf), auch in der Pause
+lease.release()                    // der Bildschirm zeichnet nicht mehr
+guard.markIdle()                   // alle Leases beenden
+guard.markBackground() / guard.resume()   // Seite versteckt oder schließt / wieder sichtbar
+guard.takeHint()                   // true genau einmal nach einem Absturz mit manueller Stufe über low
+guard.blockedLevels()              // Stufen, auf denen die 3D-Darstellung verloren ging oder das Spiel abstürzte
+guard.blockLevel(level)            // z. B. nach einem regulären Kontextverlust (Engine)
+guard.clearBlockedLevels()         // „Automatisch“ neu gewählt
+guard.lastCrash()                  // { level, auto, seconds, at } oder null (Diagnose-Box)
+addBlockedLevel(blocked, level)    // rein: eindeutig, von low nach high geordnet, ungültiges ignoriert
+```
+- **Spielstand-Bereich `crashGuard`** (registriert in `crash-guard.js` über `registerSection`, mit Bereinigung
+  Feld für Feld; ein alter Spielstand ohne Bereich zählt als „kein Absturz“): `rendering` (bool, Markierung),
+  `level` (`low|medium|high|null`) und `auto` (bool) zur Zeit der Markierung, `since` und `lastSeen`
+  (ms; Beginn und letzter Herzschlag, daraus die Dauer der Sitzung), `hintPending` (bool: bei der nächsten
+  Fahrt einmal „Grafik niedriger stellen“ zeigen), `blockedLevels` (Stufen ohne Duplikate, die die Automatik
+  nicht mehr anstrebt, bis „Automatisch“ neu gewählt wird) und `lastCrash` (`null` oder alle Felder
+  `{ level, auto, seconds, at }`).
+- **Leases:** Bildschirme, die die Szene zeichnen, halten einen Lease (`markRendering` → `frame` /
+  `release`): Ritt-Bildschirm (Vorstart, Parcours, freier Modus; `ride-screen.js` ruft `lease.frame` in
+  jedem Frame, auch in der Pause, `release` in `destroy`) und der Pferde-Vorschau-Bildschirm
+  (`my-horse-screen.js`). Bildschirme dürfen sich überlappen (ein neuer wird vor dem Abbau des alten
+  erzeugt): die Markierung bleibt, bis **alle** Leases frei sind. Der Pferde-Vorschau-Bildschirm liest
+  `settings.graphicsAuto` über `settings.onChange`.
+- **Markierung:** `rendering` ist wahr, solange ein Lease besteht und die Seite nicht im Hintergrund ist
+  (`sync()`). Geschrieben wird nur bei Übergängen (an/aus), bei einer Änderung von Stufe oder Automatik und
+  als langsamer **Herzschlag** (`lastSeen` alle `HEARTBEAT_INTERVAL_MS` = 5 s, technischer Wert), nie pro Frame.
+  Ein im Hintergrund beendeter Tab zählt nie als Absturz.
+- **Seiten-Lebenszyklus** (`installPageLifecycle(guard, { doc, win })` → entfernt die Listener):
+  `visibilitychange` (versteckt → `markBackground`, sichtbar → `resume`), `pagehide` (auch bei Neuladen und
+  normalem Schließen → `markBackground`) und `pageshow` (sichtbar → `resume`).
+- **Start** (`checkPreviousRun`, in `main.js` vor `createApp`): Eine übrig gebliebene Markierung ist ein
+  Absturz. Mit Stufe wird `decide({ auto, level })` angewandt (dieselbe Regel wie beim Kontextverlust:
+  Automatik → `settings.setAutoLevel('low')`; manuell über `low` → `hintPending`); jede abgestürzte Stufe
+  kommt in `blockedLevels` (auch auf `low`, auch bei manueller Wahl), `lastCrash` wird mit `clock.nowIso()`
+  gesetzt. `takeHint()` löscht den Hinweis; der Ritt-Bildschirm zeigt ihn (`showCrashHint`) als
+  `ride.graphicsContextLost`-Toast nur, wenn die Stufe dann immer noch manuell über `low` steht
+  (`canHintLowerLevel`). `main.js` legt `app.services.crashGuard` und `app.services.startupCrash` ab (die
+  Engine nimmt daraus `lastChange = { kind: 'crash' }` für die Diagnose).
+- **Verdrahtung in `main.js`:** `createCrashGuard({ store, settings, clock: systemClock, decide:
+  levelAfterContextLoss })`, `settings.onAutoSelected(() => crashGuard.clearBlockedLevels())` und
+  `installPageLifecycle(crashGuard)`. Die Engine fragt `crashGuard.blockedLevels()` für das Hochstufen und
+  ruft `crashGuard.blockLevel(level)` bei einem gezählten Kontextverlust; ohne Wächter (nacktes Test-Setup)
+  läuft sie wie zuvor.
+- **Tests:** `crash-guard.test.js`, `page-lifecycle.test.js`, `test-hooks.test.js` (Frame-Feed),
+  `tests/smoke/graphics-crash.spec.js` (Absturz bei Automatik → `low` und Automatik bleibt; manuell über `low` →
+  Hinweis einmal; manuell `low` → nichts; sauberer Stand und alter Spielstand ändern nichts; die Markierung
+  folgt dem Ritt, dem Verstecken und dem Beenden; ein normales Neuladen im Ritt ist kein Absturz;
+  Diagnose-Box zeigt den letzten Absturz) und `tests/smoke/graphics-upgrade.spec.js` (erster Start bei `low`,
+  gespeicherte Stufe gilt, „Automatisch“ neu beginnt bei `low`; mit schnellen Frames `low → medium` (und
+  `high`), gespeichert, die Diagnose-Box nennt den Grund; langsame Frames: bleibt `low`; manuelle Stufe
+  nie angehoben; Stufe über dem Budget, gesperrte, nach Kontextverlust gesperrte und wegen Ruckelns
+  verlassene Stufe werden nicht angestrebt; „Automatisch“ neu gibt die Sperren frei). Beide Specs treiben die
+  Messung über `__zhfTest.setFrameFeed` statt über echte Wartezeiten.
 
 ### Diagnose-Box (`?debug`)
 
@@ -829,8 +1037,17 @@ das Budget-Urteil „nein“ gespeichert hat; fehlt MSAA nur, weil der Browser e
 „aus“), GPU-Name des Budgets (eigene Zeile, nur wenn der Probe-Kontext einen anderen Namen als der
 Renderer lieferte; bei verlorenem Kontext ersatzweise in der GPU-Zeile), GPU-Speicher-Schätzung
 gegen Budget (z. B. „GPU est. 180 / 256 MB, ratio capped 2 → 1.25“, plus Zeilen für gekappte
-Schatten-Map und verringerte Szenerie), Anzahl Kontextverluste/-wiederherstellungen mit Sekunden seit Seitenstart und
-ausstehende Stufenwechsel-Schritte.
+Schatten-Map und verringerte Szenerie), Anzahl Kontextverluste/-wiederherstellungen mit Sekunden seit Seitenstart, die Zeilen der
+Grafik-Automatik und ausstehende Stufenwechsel-Schritte. Die Automatik-Zeilen (SRT-013, SRT-014):
+- „Letzter Absturz“: Stufe, Auto/manuell, Sekunden bis zum Absturz und Zeit (UTC) aus dem `lastCrash`
+  des Absturzwächters, den der Ritt-Bildschirm beim Erzeugen der Box übergibt
+  (`createDebugBox({ …, lastCrash })`, `formatDebugText(info, errors, t, lastCrash)`), sonst „keiner“;
+- „Gesperrte Stufen“: `blockedLevels` (Absturzwächter), sonst „keine“;
+- „Wegen Ruckeln verlassen“: `leftLevels` (`leftByFps`), nur wenn nicht leer;
+- „Letzter Stufenwechsel (Auto)“: `lastChange` als Grund: `hoch bei {fps} fps`, `runter bei {fps} fps`,
+  `Grafik verloren` oder `Absturz`, sonst „keiner“.
+`engine.diagnostics()` liefert dafür `blockedLevels`, `leftLevels` und `lastChange`; alle Wörter stehen
+in `ui/i18n/debug.js` (`debug.crash`, `debug.blocked`, `debug.left`, `debug.lastChange`, `debug.reason*`).
 
 ### fps-Anzeige (`ui/fps-display.js`)
 
