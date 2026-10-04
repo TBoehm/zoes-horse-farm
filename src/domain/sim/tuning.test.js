@@ -5,6 +5,7 @@ describe('tuning values the other layers read', () => {
   it('has the control, timing and guard values as finite positive numbers', () => {
     const values = [
       TUNING.control.stickDeadZone,
+      TUNING.control.stickSteerFull,
       TUNING.control.gallopEndTrotUp,
       TUNING.rebuildDelayS,
       TUNING.missingHintS,
@@ -22,6 +23,11 @@ describe('tuning values the other layers read', () => {
   it('keeps the stick dead zone small and the near-edge share below 1', () => {
     expect(TUNING.control.stickDeadZone).toBeLessThan(0.5);
     expect(TUNING.jump.lastPoint.maxShareOfNear).toBeLessThanOrEqual(1);
+  });
+
+  it('reaches full steering lock before the stick stop (at most 2/3, above the dead zone)', () => {
+    expect(TUNING.control.stickSteerFull).toBeLessThanOrEqual(2 / 3);
+    expect(TUNING.control.stickSteerFull).toBeGreaterThan(TUNING.control.stickDeadZone);
   });
 
   it('has the course-building values as positive numbers', () => {

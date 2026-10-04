@@ -46,14 +46,24 @@ export const TUNING = {
     canterDepart: 3.0,
     // gentle deceleration after the gallop ends down to trotMedium
     settleDecel: 2.5,
-    // turn rate on the spot (rad/s); it drops with speed,
-    // so the turn radius v / ω grows with speed
-    turnInPlace: 1.6,
-    turnSpeedRef: 5.0,
-    // steering responsiveness (1/s)
-    turnResponse: 10,
-    // gamepad/touch stick deflection below this value counts as centered
+    // turn rate on the spot (rad/s); it drops with speed as ω = turnInPlace / (1 + v / turnSpeedRef),
+    // so the turn radius v / ω grows with speed. Reference values (real horses): 10 m volte
+    // (r = 5 m) at walk/trot, 20 m circle (r = 10 m) at canter, jump-off turns at jumping canter
+    // r ≈ 6–8 m, turn on the haunches ≈ on the spot. The game is a bit more agile (child
+    // audience): full lock gives r ≈ 1.0 m at walk (1.5 m/s), 2.7 m at medium trot (3.2 m/s),
+    // 6.3 m at jumping canter (5.8 m/s) and 10.4 m at full gallop (8 m/s); lateral acceleration
+    // v·ω stays ≤ 6.3 m/s² (real: 2.5 m/s² on a 20 m canter circle, ≈ 6–8 m/s² in tight turns).
+    // Before SRT-007: 1.6 / 5.0 / 10 (r = 1.2 / 3.3 / 7.8 / 13 m).
+    turnInPlace: 1.8,
+    turnSpeedRef: 6.0,
+    // steering responsiveness (1/s): the turn rate reaches 90 % of its target in ~0.19 s
+    turnResponse: 12,
+    // gamepad/touch stick: deflection (share of the stick radius) below this value counts as
+    // centered; scaled radial dead zone, see joystick-mapping.js
     stickDeadZone: 0.12,
+    // stick: sideways deflection (share of the stick radius) that already gives full steering
+    // lock; must stay ≤ 2/3 so the tightest turn is reached before the stop (rule 10)
+    stickSteerFull: 0.6,
     // ending the gallop below trotMin (strike-off): acceleration (m/s²) up to the working trot
     // instead of dropping to a walk
     gallopEndTrotUp: 2.5,

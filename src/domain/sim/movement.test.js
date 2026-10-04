@@ -193,6 +193,38 @@ describe('Steering (rules 8, 10, 22)', () => {
   });
 });
 
+describe('Turn agility (rule 10: direct steering, plausible radii)', () => {
+  // Real horses: 10 m volte (r = 5 m) at trot/walk, 20 m circle (r = 10 m) at canter, jump-off
+  // turns at jumping canter about r = 6-8 m; the game may be somewhat more agile (child audience).
+  it('walk: tight turn, at most 1.5 m radius (turn on the haunches)', () => {
+    expect(turnRadius(1.5, TUNING)).toBeLessThanOrEqual(1.5);
+  });
+
+  it('working trot: tighter than a 10 m volte but not tighter than 2 m', () => {
+    const r = turnRadius(S.trotMedium, TUNING);
+    expect(r).toBeLessThanOrEqual(3);
+    expect(r).toBeGreaterThanOrEqual(2);
+  });
+
+  it('jumping canter: jump-off turn radius between 4 and 6.5 m', () => {
+    const r = turnRadius(S.canterMedium, TUNING);
+    expect(r).toBeLessThanOrEqual(6.5);
+    expect(r).toBeGreaterThanOrEqual(4);
+  });
+
+  it('lateral acceleration stays plausible at every speed (at most 7 m/s²)', () => {
+    for (let v = 0.5; v <= S.canterMax; v += 0.5) {
+      expect(v * maxTurnRate(v, TUNING)).toBeLessThanOrEqual(7);
+    }
+  });
+
+  it('the turn rate follows the stick quickly (90 % of the target within 0.2 s)', () => {
+    const sim = makeSim([]);
+    drive(sim, { steer: 1 }, { maxT: 0.2 });
+    expect(Math.abs(sim.horse.turnRate)).toBeGreaterThanOrEqual(0.9 * maxTurnRate(0, TUNING));
+  });
+});
+
 describe('Fencing (rule 24)', () => {
   it('frontal: stop, halt, gallop off with events', () => {
     const sim = makeSim([]);
@@ -286,7 +318,9 @@ describe('Fencing (rule 24)', () => {
       sim,
       { steer: 1 },
       {
-        maxT: 6,
+        maxT: 10,
+        // stop as soon as it faces away (independent of the turn rate tuning)
+        until: (s) => Math.abs(wrapAngle(s.horse.heading - 270 * DEG)) < 0.1,
         onStep: (s) => {
           const rear = s.horse.x - Math.sin(s.horse.heading) * TUNING.horse.rearLength;
           expect(rear).toBeLessThanOrEqual(limit);
