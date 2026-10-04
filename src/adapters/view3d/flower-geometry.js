@@ -118,9 +118,12 @@ export function buildFlowerGeometry() {
   return b.build({ upNormals: true });
 }
 
+/** Height (m) of the wooden box of a flower box: it stays rigid, the plants above it sway. */
+export const PLANTER_BOX_HEIGHT = 0.2;
+
 const PLANTER = Object.freeze({
   width: 0.27, // across the jump (x)
-  height: 0.2,
+  height: PLANTER_BOX_HEIGHT,
   length: 1.0, // along the jump (z)
   wood: 0x6f4a2e,
   soil: 0x3b2c20,

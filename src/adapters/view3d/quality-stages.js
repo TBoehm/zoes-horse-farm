@@ -14,6 +14,7 @@ import { presetFor } from './quality.js';
 const STAGE_GAP_FRAMES = 6;
 
 const fogKey = (p) => (p.fog ? `${p.fog.near}/${p.fog.far}` : 'none');
+const materialsKey = (p) => `${p.material}|${p.normalMaps}|${p.fog !== null}|${p.envMap}`;
 
 /**
  * The stages in the order of a downgrade (cheapest lever for the GPU first). `key` reduces a
@@ -40,7 +41,7 @@ const STAGES = Object.freeze([
   Object.freeze({
     id: 'materials',
     compile: true,
-    key: (p) => `${p.material}|${p.normalMaps}|${p.fog !== null}|${p.envMap}`,
+    key: materialsKey,
   }),
   // geometry and material of horse and rider
   Object.freeze({
@@ -77,6 +78,15 @@ const STAGES = Object.freeze([
 // WebGLTextures.js), so changing it means `needsUpdate` and a full texImage2D + mipmap generation
 // of every ground, sand and wood texture. The world applies the anisotropy of the level when a
 // ride starts (world.syncAnisotropy) and never in the middle of one.
+
+/**
+ * Do two presets agree on everything the materials stage is responsible for? While they do not
+ * (a level change between its materials and its density stage), the shader programs of the visible
+ * meshes are about to change, so nothing optional should be shown (see detail-hold.js).
+ */
+export function sameMaterialStage(a, b) {
+  return materialsKey(a) === materialsKey(b);
+}
 
 /** Ids of all stages, in the order of a downgrade. */
 export const QUALITY_STAGE_IDS = Object.freeze(STAGES.map((s) => s.id));

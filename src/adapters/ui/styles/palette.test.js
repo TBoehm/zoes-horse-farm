@@ -2,7 +2,7 @@
 // WCAG contrast of 4.5:1, and the meaning of the roles must stay distinct.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { contrastRatio } from '../../../shared/color.js';
+import { contrastRatio } from '../../../../tests/support/color.js';
 
 const MIN_TEXT_CONTRAST = 4.5;
 const MIN_NON_TEXT_CONTRAST = 3;
@@ -34,6 +34,7 @@ const TEXT_PAIRS = [
   ['option button, selected', '--c-choice-on-ink', '--c-choice-on'],
   ['touch jump button label', '--c-touch-ink', '--c-touch-jump'],
   ['title on the panel cream', '--c-brand', '--c-neutral-bg'],
+  ['help symbol of a small touch button', '--c-touch-ink', '--c-touch-small'],
 ];
 
 describe('button palette', () => {
@@ -66,7 +67,7 @@ describe('button palette', () => {
   });
 
   it('every color token used in the style sheets is defined', () => {
-    const files = ['main.css', 'ride.css', 'profile.css', 'courses.css'];
+    const files = ['main.css', 'ride.css', 'profile.css', 'courses.css', 'help.css'];
     for (const file of files) {
       const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
       for (const m of source.matchAll(/var\((--c-[\w-]+)\)/g)) {

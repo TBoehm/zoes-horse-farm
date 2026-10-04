@@ -7,7 +7,7 @@
   --c-panel: rgba(255, 251, 243, 0.94);
   --c-ink: #2b1d12;
   --c-ink-soft: #6b5442;
-  /* Heading / brand color: titles and number badges only, never a button (rule 57) */
+  /* Heading / brand color: titles only, never a button or anything inside one (rule 57) */
   --c-brand: #9c3a1f;
   --c-accent: #f2b632;
   /* Button roles (rule 57). Each fill/ink pair is checked by palette.test.js (WCAG >= 4.5:1). */
@@ -29,6 +29,9 @@
   /* Touch buttons in the ride (label color is white on a darkened glass look) */
   --c-touch-jump: #1e6fb5;
   --c-touch-ink: #ffffff;
+  --c-touch-gallop-led: #b6ff6b; /* light of the gallop button while it is on */
+  /* Small touch buttons (pause, ...) as a solid color, for the help symbols that copy them */
+  --c-touch-small: #4b3a2b;
   --c-focus: #1f6feb;
   --radius: 18px;
   --shadow: 0 10px 30px rgba(40, 25, 10, 0.25);
@@ -221,7 +224,8 @@ body {
 }
 
 .btn-small {
-  padding: 8px 14px;
+  /* 3px less than before on each side: the border of .btn takes them (same size as ever) */
+  padding: 5px 11px;
   font-size: 1rem;
 }
 
@@ -279,6 +283,8 @@ body {
   width: 72px;
   height: 44px;
   padding: 0;
+  /* no border: the knob is positioned from the padding box and must sit in the middle */
+  border: 0;
   background: #cdbfa9;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }

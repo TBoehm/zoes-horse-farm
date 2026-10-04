@@ -13,7 +13,7 @@ import {
 } from './textures.js';
 import { makeSignQuad } from './arena.js';
 import { releaseNow } from './resilience.js';
-import { buildPlanterGeometry } from './flower-geometry.js';
+import { buildPlanterGeometry, PLANTER_BOX_HEIGHT } from './flower-geometry.js';
 import { createWind, patchBlossoms } from './plant-shaders.js';
 import {
   POLE_RADIUS,
@@ -420,8 +420,9 @@ export function createObstacles({ materialFactory, release = releaseNow, wind = 
     roughness: 0.85,
     side: THREE.DoubleSide,
   });
-  patchBlossoms(planterMats.standard, wind);
-  patchBlossoms(planterMats.lambert, wind);
+  // the wooden box does not bend, only the plants above it
+  patchBlossoms(planterMats.standard, wind, { base: PLANTER_BOX_HEIGHT });
+  patchBlossoms(planterMats.lambert, wind, { base: PLANTER_BOX_HEIGHT });
   const planterGeometry = buildPlanterGeometry();
   const planters = new THREE.InstancedMesh(planterGeometry, planterMats.standard, MAX_PLANTERS);
   planters.name = 'planters';
@@ -447,7 +448,7 @@ export function createObstacles({ materialFactory, release = releaseNow, wind = 
     { mesh: whitePoles, mats: poleMats, shadow: 'obstacles' },
     { mesh: colorPoles, mats: poleMats, shadow: 'obstacles' },
     { mesh: null, mats: boardMats, shadow: 'none' },
-    { mesh: planters, mats: planterMats, shadow: 'none' },
+    { mesh: planters, mats: planterMats, shadow: 'none', detail: true },
   ];
 
   const mat = new THREE.Matrix4();

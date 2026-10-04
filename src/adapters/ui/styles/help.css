@@ -45,8 +45,10 @@
 }
 
 .help-visual {
-  flex: 0 0 auto;
-  width: 200px;
+  /* up to 200px, but never more than 42% of the row: the text keeps its room in a narrow window */
+  flex: 0 1 200px;
+  min-width: 104px;
+  max-width: 42%;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -110,7 +112,7 @@
   padding: 0;
   border-radius: 50%;
   border-color: var(--c-neutral-ink);
-  background: rgba(107, 68, 35, 0.15);
+  background: color-mix(in srgb, var(--c-neutral-ink) 15%, transparent);
   color: var(--c-neutral-ink);
   font-size: 1.6rem;
   box-shadow: none;
@@ -125,7 +127,7 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #b6ff6b;
+  background: var(--c-touch-gallop-led);
   border: 2px solid #fff;
 }
 
@@ -137,7 +139,7 @@
   min-width: 48px;
   padding: 0;
   border-radius: 14px;
-  background: #4b3a2b;
+  background: var(--c-touch-small);
   font-size: 1.1rem;
 }
 
@@ -178,7 +180,8 @@
     min-height: 44px;
   }
   .help-visual {
-    width: auto;
+    flex: 0 0 auto;
+    max-width: none;
     min-width: 92px;
     flex-wrap: nowrap;
     gap: 4px;

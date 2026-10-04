@@ -115,7 +115,7 @@ test.describe('content and switch', () => {
     await expect(help(page).locator('kbd.keycap').first()).toHaveText('W');
   });
 
-  test('the language changes the texts and keeps the chosen input type', async ({
+  test('shows the texts of the chosen language, for the key caps and the touch symbols', async ({
     page,
     browserName,
   }) => {

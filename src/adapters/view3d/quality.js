@@ -19,7 +19,8 @@ export const QUALITY_PRESETS = Object.freeze({
     // geometry detail and material type of horse and rider
     characterDetail: 'low',
     // share of the grass tufts, of the meadow flowers and of the bunting (SRT-011); low gets none
-    // of these: it keeps the draw calls and triangles it had before
+    // of these: it keeps the draw calls and triangles it had before. The tufts are the biggest
+    // triangle cost of all details (11 000 instances), so only high has them.
     grassTufts: 0,
     flowers: 0,
     decor: 0,
@@ -48,7 +49,7 @@ export const QUALITY_PRESETS = Object.freeze({
     envDensity: 0.55,
     envDetail: 'high',
     characterDetail: 'medium',
-    grassTufts: 0.5,
+    grassTufts: 0,
     flowers: 0.45,
     decor: 0.5,
     grazingHorses: 2,
@@ -162,7 +163,7 @@ const GPU_MEMORY_MODEL = Object.freeze({
   wildlifeMB: 0.1,
   // one grazing horse (skinned body, no rider or tack) per character detail of the preset: the low
   // model (≈ 167 KB) on low and medium, the medium model (≈ 430 KB) on high
-  grazingHorseMB: Object.freeze({ low: 0.167, medium: 0.167, high: 0.43 }),
+  grazingHorseMB: Object.freeze({ low: 167 / 1024, medium: 167 / 1024, high: 430 / 1024 }),
   // hoof dust: a pool of points, a few KB (none on low)
   dustMB: 0.01,
   // vertices of rider (+16 / +80 / +150 KB) and horse (+0 / +36 / +80 KB) beyond what the
@@ -229,11 +230,14 @@ export function estimateGpuMemoryMB(
     if (t.normal && !preset.normalMaps) continue; // only uploaded when a material uses it
     bytes += t.width * t.height * m.textureBytesPerTexel * m.textureMipFactor;
   }
-  return bytes / MIB + m.baselineMB + sceneryMB(preset);
+  return bytes / MIB + m.baselineMB + sceneContentMB(preset);
 }
 
-/** Instance buffers and extra geometry of the scenery details of a preset (MiB). */
-function sceneryMB(preset) {
+/**
+ * Instance buffers and extra geometry of everything the preset adds to the base world (MiB): the
+ * scenery and its details, the grazing horses, the hoof dust and the vertices of horse and rider.
+ */
+function sceneContentMB(preset) {
   const m = GPU_MEMORY_MODEL;
   const wildlife = Math.max(preset.birds ?? 0, preset.butterflies ?? 0);
   const detail = preset.characterDetail;
@@ -265,13 +269,46 @@ export function gpuBudgetMB({ deviceMemory, isTouch, rendererString } = {}) {
   return Math.round(budget);
 }
 
+/**
+ * The levers of the "grass and surroundings" group of fitPresetToBudget, in the order they are
+ * used. `drop(preset, model)` changes the (copied) preset and tells whether anything was left to
+ * take away.
+ */
+const SCENERY_STEPS = Object.freeze([
+  { drop: (p) => zero(p, 'grassTufts') },
+  { drop: (p) => zero(p, 'flowers', 'butterflies') },
+  { drop: (p) => zero(p, 'grazingHorses') },
+  { drop: (p) => zero(p, 'birds') },
+  { drop: (p) => zero(p, 'decor') },
+  {
+    drop(p, m) {
+      if (!(p.envDensity > m.envDensityFloor)) return false;
+      p.envDensity = m.envDensityFloor;
+      return true;
+    },
+  },
+]);
+
+/** Sets the named values of a preset to 0; true if one of them was above 0 before. */
+function zero(preset, ...keys) {
+  let changed = false;
+  for (const key of keys) {
+    if (preset[key] > 0) {
+      preset[key] = 0;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 const roundDownTo = (value, step) => Number((Math.floor(value / step + 1e-9) * step).toFixed(2));
 
 /**
  * Fits a preset into the budget. When the estimate is too high, the levers are used in this order
- * until it fits: pixel ratio (down to 1), shadow map size (down to 1024), then grass tufts, flowers,
- * the grazing horses and the density of the scenery. (Rule 4 puts the resolution first, so the
- * grazing horses are part of the last group, "grass and surroundings".) The level's look otherwise stays ("high" keeps its effects at a lower
+ * until it fits: pixel ratio (down to 1), shadow map size (down to 1024), then the grass and
+ * surroundings: grass tufts, flowers (with the butterflies over them), grazing horses, birds,
+ * decoration and the density of trees and bushes. (Rule 4 puts the resolution first, so all of
+ * these are the last group.) The level's look otherwise stays ("high" keeps its effects at a lower
  * resolution).
  * Returns { preset (the same object when nothing changes), estimateMB, requestedMB, budgetMB,
  * fits, capped: { pixelRatio: { from, to } | null, shadowMapSize: { from, to } | null,
@@ -313,22 +350,12 @@ export function fitPresetToBudget(preset, ctx, budgetMB) {
     fitted.shadowMapSize = m.shadowMapFloor;
   }
 
-  // 3. scenery: tufts, flowers and grazing horses first, then the density of trees and bushes
-  if (estimate(fitted) > budgetMB && fitted.grassTufts > 0) {
-    fitted.grassTufts = 0;
-    capped.scenery = true;
-  }
-  if (estimate(fitted) > budgetMB && fitted.flowers > 0) {
-    fitted.flowers = 0;
-    capped.scenery = true;
-  }
-  if (estimate(fitted) > budgetMB && fitted.grazingHorses > 0) {
-    fitted.grazingHorses = 0;
-    capped.scenery = true;
-  }
-  if (estimate(fitted) > budgetMB && fitted.envDensity > m.envDensityFloor) {
-    fitted.envDensity = m.envDensityFloor;
-    capped.scenery = true;
+  // 3. grass and surroundings (rule 4), the cheapest loss to the picture first: tufts, flowers
+  // (the butterflies hover over them, so they go with them), grazing horses, birds, the
+  // decoration, then the density of trees and bushes
+  for (const step of SCENERY_STEPS) {
+    if (estimate(fitted) <= budgetMB) break;
+    if (step.drop(fitted, m)) capped.scenery = true;
   }
 
   const estimateMB = estimate(fitted);
