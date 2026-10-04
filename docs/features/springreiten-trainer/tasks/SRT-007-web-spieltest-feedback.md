@@ -82,9 +82,10 @@ Sprung-Meldungen.
   and tracks the state / createRestoreWatchdog › fires once when the restore does not arrive in
   time)
 - [x] Manuelle Stufe < 30 fps über 5 s → einmal je Ritt ein Hinweis; Stufe bleibt (Regel 4).
-  (Nachweis: src/adapters/view3d/quality.test.js › createLowFpsHint / canHintLowerLevel;
-  createLowFpsHint › fires only once, however long the frame rate stays low; quality.test.js ›
-  levelAfterContextLoss › a manual level above low stays and the player gets a hint)
+  (Nachweis: src/adapters/view3d/quality.test.js › createLowFpsHint (rule 4: manual level too high
+  for the device) › fires after 3 s grace + 5 s below 30 fps / fires only once, however long the
+  frame rate stays low; quality.test.js › canHintLowerLevel › is true only for a manual level
+  above low)
 - [x] Einstellungen: fps-Anzeige ein/aus (Standard aus), gespeichert; an = fps beim Reiten
   sichtbar, ~2×/s aktualisiert, verdeckt keine Bedienelemente (Regeln 4, 44). (Nachweis:
   src/application/settings-schema.test.js, settings-service.test.js › fps display;

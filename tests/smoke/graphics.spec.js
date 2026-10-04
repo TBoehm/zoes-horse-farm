@@ -22,7 +22,8 @@ import {
 // A small window keeps the software renderer of the CI browser fast enough
 test.use({ viewport: { width: 640, height: 400 } });
 
-// MB: too little for "high" at a pixel ratio of 2, enough at 1 (46 MB at 480 × 300)
+// MB: "high" needs ~86 MB at a pixel ratio of 2 and still ~70 MB at 1 (480 × 300), so the fit has to
+// cut the pixel ratio 2 → 1 and the shadow map 2048 → 1024; it ends at ~46 MB
 const BUDGET_HIGH_DOES_NOT_FIT = 50;
 
 const MANUAL_LOW = { ...NAMED, settings: { graphicsAuto: false, graphicsLevel: 'low' } };

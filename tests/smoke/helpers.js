@@ -227,7 +227,10 @@ export async function expectPicture(page, timeout = 30_000) {
   }
 }
 
-/** Runs `work` in the page and gives up after `ms`: a stalled page must not hide the answer. */
+// Each diagnostic read gives up after this long; they run in parallel, so the total stays small
+const DIAGNOSTIC_READ_MS = 3_000;
+
+/** Resolves with the promise's value, or with 'timeout' after `ms`: a stalled page must not hide the answer. */
 const within = (promise, ms) =>
   Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve('timeout'), ms))]);
 
@@ -236,10 +239,11 @@ async function pictureDiagnostics(page) {
   const read = (work) =>
     within(
       page.evaluate(work).catch((e) => `error: ${e.message}`),
-      10_000,
+      DIAGNOSTIC_READ_MS,
     );
-  return {
-    ride: await read(() => {
+  // In parallel: with sequential reads a stalled page would eat the whole test timeout
+  const [ride, debugBox, canvas, frameIntervalsMs] = await Promise.all([
+    read(() => {
       const ride = window.__zhfTest?.ride();
       return (
         ride && {
@@ -252,8 +256,8 @@ async function pictureDiagnostics(page) {
         }
       );
     }),
-    debugBox: await read(() => document.querySelector('[data-hud="debug"]')?.innerText ?? null),
-    canvas: await read(() => {
+    read(() => document.querySelector('[data-hud="debug"]')?.innerText ?? null),
+    read(() => {
       const canvas = document.querySelector('canvas.scene-canvas');
       return {
         width: canvas?.width,
@@ -262,7 +266,7 @@ async function pictureDiagnostics(page) {
         visibility: document.visibilityState,
       };
     }),
-    frameIntervalsMs: await read(
+    read(
       () =>
         new Promise((resolve) => {
           const intervals = [];
@@ -276,7 +280,8 @@ async function pictureDiagnostics(page) {
           requestAnimationFrame(tick);
         }),
     ),
-  };
+  ]);
+  return { ride, debugBox, canvas, frameIntervalsMs };
 }
 
 /** Touch input through the Chrome DevTools Protocol (real touch events, like a finger). */
