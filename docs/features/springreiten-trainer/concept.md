@@ -309,9 +309,10 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 38. WENN das Kind Pause wählt (Esc/Button), das Spiel den Fokus verliert (Tab/App gewechselt,
     Fenster minimiert) oder ein Touch-Gerät ins Hochformat gedreht wird, MUSS das Spiel pausieren
     (Zeit steht, Pferd steht). Pausemenü: „Weiter", „Neu starten", „Zur Auswahl" bzw. „Zum Menü",
-    Einstellungen. Nach Fokusverlust geht es erst mit „Weiter" weiter. Nach „Weiter" MUSS das Pferd
-    mit vorherigem Tempo und vorheriger Gangart weiterlaufen; Galopp per Tastatur bleibt nur, wenn
-    Shift noch gehalten wird, der Touch-Umschalter behält seinen Zustand.
+    Einstellungen, Bedienungs-Tipps (Regel 56). Nach Fokusverlust geht es erst mit „Weiter" weiter.
+    Nach „Weiter" MUSS das Pferd mit vorherigem Tempo und vorheriger Gangart weiterlaufen; Galopp
+    per Tastatur bleibt nur, wenn Shift noch gehalten wird, der Touch-Umschalter behält seinen
+    Zustand.
     Der Touch-Galopp-Umschalter MUSS bei „Los", „Neu starten" und Rittende auf aus stehen.
 39. Im Parcours führt „Neu starten" zurück in den Vorstart desselben Parcours. Im freien Modus setzt
     „Neu starten" das Pferd an den Startpunkt und baut alle Stangen auf. Beim Betreten des freien
@@ -410,7 +411,7 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     fallende Stange, Startsignal (bei „Los") und Zielsignal. Eine einfache synthetisierte Melodie
     läuft in Hauptmenü und Untermenüs, auf der Vorstart-Karte und in der Ergebnisanzeige. Keine Musik
     im Vorstart, während eines Ritts, im freien Modus und im Pausemenü (auch nicht in den
-    Einstellungen, wenn sie aus dem Pausemenü geöffnet wurden). Ist die App im Hintergrund (Tab
+    Einstellungen und Bedienungs-Tipps, wenn sie aus dem Pausemenü geöffnet wurden). Ist die App im Hintergrund (Tab
     gewechselt, minimiert), MUSS jeder Ton verstummen.
 52. Musik und Effekte MÜSSEN getrennt in der Lautstärke regelbar und stumm schaltbar sein. Ton
     startet erst nach der ersten Interaktion des Kindes (Browser-Vorgabe). Beim ersten Start sind
@@ -433,7 +434,7 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     Erklärung; Touch: Joystick und Buttons) und sich auf die andere Eingabeart umschalten lassen.
     Texte kurz, mit Symbolen, für eine 3. Klasse lesbar. WENN sie mit „Verstanden" geschlossen
     wird, MUSS das gespeichert werden (Regel 44) und sie erscheint nicht mehr von selbst. Über
-    „Bedienungs-Tipps" im Hauptmenü und im Pausenmenü MUSS sie jederzeit wieder geöffnet werden
+    „Bedienungs-Tipps" im Hauptmenü und im Pausemenü MUSS sie jederzeit wieder geöffnet werden
     können; aus der Pause geöffnet, führt „Verstanden" zurück in die Pause.
 57. Farbsprache der Buttons: Buttons für das Weitermachen (z. B. Menü-Einträge, „Los", „Weiter",
     „Nochmal", „Verstanden") MÜSSEN grün sein, zurückhaltende Buttons (z. B. „Zurück",

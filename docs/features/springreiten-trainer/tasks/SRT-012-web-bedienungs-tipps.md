@@ -25,7 +25,7 @@ Tastenkappen, für Kinder kurz und mit Symbolen.
 Jedes Kind weiß von Anfang an, wie es das Pferd steuert, und kann es jederzeit nachschauen.
 
 ## Scope
-- In: Regel 56, Regel 53 (neuer Menü-Eintrag), Regel 44 (gespeichert), Pausenmenü-Button.
+- In: Regel 56, Regel 53 (neuer Menü-Eintrag), Regel 44 (gespeichert), Pausemenü-Button.
 - Out: interaktives Tutorial; Änderungen der Bedienung selbst.
 
 ## Design (SSoT)
@@ -63,7 +63,7 @@ Kein Design-Werkzeug. Ein Bildschirm „Bedienungs-Tipps" im Stil der bestehende
   Galopp, Springen, Kamera, Pause (Regel 56).
 - [ ] „Bedienungs-Tipps" im Hauptmenü öffnet die Übersicht, „Verstanden" führt zurück ins Menü
   (Regeln 53, 56).
-- [ ] „Bedienungs-Tipps" im Pausenmenü öffnet die Übersicht, „Verstanden" führt zurück in die
+- [ ] „Bedienungs-Tipps" im Pausemenü öffnet die Übersicht, „Verstanden" führt zurück in die
   Pause; der Ritt läuft nicht weiter (Regel 56).
 - [ ] Alle Texte auf Deutsch und Englisch, kurz (Regel 6).
 - [ ] Bedienbar mit Tastatur (Fokus, Enter) und Touch (Ziele ≥ 44 px) (Regel 10).
