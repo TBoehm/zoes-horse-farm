@@ -119,7 +119,8 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
      Browser hat den Tab wegen Überlastung geschlossen oder neu geladen), MUSS das beim nächsten
      Start wie ein Verlust der 3D-Darstellung zählen: bei „Automatisch" Stufe Niedrig (gespeichert),
      bei manuell gewählter Stufe über Niedrig ein Hinweis, die Grafik niedriger zu stellen. Ein
-     normales Schließen, Wechseln in eine andere App oder ein Beenden im Hintergrund zählt nicht.
+     normales Schließen, Wechseln in eine andere App, ein Beenden im Hintergrund oder in den ersten
+     3 Sekunden nach der Rückkehr zählt nicht.
    - „Mittel" MUSS auf Geräten, die vor den zusätzlichen Details (Regel 3, SRT-011) „Mittel"
      flüssig darstellten, weiterhin flüssig laufen: die zusätzlichen Umgebungsdetails auf „Mittel"
      DÜRFEN die Grafikspeicher-Abschätzung, die Zahl der Shader-Programme und der Draw Calls
@@ -492,6 +493,13 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
   Hinweis (Regel 4).
 - **Grafikstufe im Ritt gewechselt / 3D-Darstellung kurz verloren:** weiter spielbar bzw. Pause
   (Regel 4).
+- **Tab vom Browser beendet (Absturz) während der 3D-Darstellung:** beim nächsten Start wie ein
+  Kontextverlust; die Stufe wird gesperrt (Regel 4). Ein Ende im Hintergrund oder in den ersten
+  3 Sekunden nach der Rückkehr zählt nicht.
+- **Zwei Tabs gleichzeitig mit 3D-Darstellung:** ein noch laufender anderer Tab gilt nicht als
+  Absturz; die Absturz-Erkennung überschreibt keinen Spielstand des anderen Tabs (Regel 4).
+- **Automatik stuft hoch und wieder herunter:** eine Stufe, von der wegen Ruckelns
+  heruntergestuft wurde, wird im laufenden Spiel nicht wieder versucht (Regel 4).
 - **Rückwärts gegen Hindernis, Zaun oder über Start-/Ziellinie:** Pferd hält an, Linien zählen
   nicht (Regel 9).
 
