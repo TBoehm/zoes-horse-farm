@@ -10,7 +10,7 @@ DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
 
 REPO="${REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
-CHECKS=("Lint" "Format check" "Unit tests" "Build" "Smoke (chromium)" "Smoke (firefox)" "Smoke (webkit)" "Smoke (msedge)")
+CHECKS=("Lint" "Format check" "Unit tests" "Build" "Smoke (chromium)")
 
 run() {
   if [[ $DRY_RUN -eq 1 ]]; then

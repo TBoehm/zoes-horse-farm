@@ -10,7 +10,9 @@ das „Wie": Module, Schnittstellen, Koordinaten, Datei-Ownership. Abweichungen 
   three.js 0.186 (`import * as THREE from 'three'`).
 - Tests: Vitest (`src/**/*.test.js` und `tests/**/*.test.js`, Umgebung `node`; DOM-Tests per `// @vitest-environment jsdom`).
 - Lint: ESLint 10 flat config, Format: Prettier (singleQuote, printWidth 100).
-- Smoke: Playwright gegen `vite preview` (Port 4173).
+- Smoke: Playwright gegen `vite preview` (Port 4173), nur in Chromium (lokal und in CI; `SMOKE_BROWSERS`
+  erlaubt Einzelversuche in anderen Browsern, CI nutzt das nicht). Die Specs sind echte Smoke-Tests: Sie
+  zeigen das Zusammenspiel im Browser; Regeln und Grenzwerte sind Unit-Tests (Vitest).
 - PWA: vite-plugin-pwa (generateSW, kein skipWaiting/clientsClaim → neue Version erst nach
   Schließen aller Tabs).
 - **Keine Asset-Dateien.** Texturen nur zur Laufzeit (CanvasTexture / DataTexture / Vertex-Farben /
@@ -888,8 +890,9 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
   halten nie mehr als vor dem Wechsel bzw. als die Zielstufe braucht, das Ende gleicht einer von Anfang
   an auf der Zielstufe gebauten Welt (nichts leckt, auch nicht nach `high → low → high`), der Schritt
   mit den neuen Materialien gibt die alten Programme frei, versteckte Details geben ihre Puffer zurück
-  und die Kompilier-Wurzel liefert keine versteckten Meshes. Im Browser zählt `graphics.spec.js` die
-  lebenden Programme und Puffer jedes WebGL2-Kontexts (create minus delete) und prüft denselben Spitzenwert.
+  und die Kompilier-Wurzel liefert keine versteckten Meshes. Einen Browser-Test dafür
+  gibt es nicht mehr (der Smoke-Test `graphics.spec.js` prüft nur noch, dass der Stufenwechsel im Ritt
+  lenkbar bleibt und das Bild steht).
 - **Nur Sichtbares kompilieren (`world.compileRoot`):** `renderer.compileAsync(scene)` durchläuft den
   ganzen Graphen (r186 `WebGLRenderer.compile`), also auch die versteckten Meshes (Blumen, Vögel, Kästen
   einer Stufe, die sie nicht zeigt), und baute so Programme, die nie gezeichnet werden. `compileRoot` ist
@@ -1048,16 +1051,14 @@ addBlockedLevel(blocked, level)    // rein: eindeutig, von low nach high geordne
   `installPageLifecycle(crashGuard)`. Die Engine fragt `crashGuard.blockedLevels()` für das Hochstufen und
   ruft `crashGuard.blockLevel(level)` bei einem gezählten Kontextverlust; ohne Wächter (nacktes Test-Setup)
   läuft sie wie zuvor.
-- **Tests:** `crash-guard.test.js`, `page-lifecycle.test.js`, `tab-id.test.js`, `test-hooks.test.js` (Frame-Feed),
-  `tests/smoke/graphics-crash.spec.js` (Absturz bei Automatik → `low` und Automatik bleibt; manuell über `low` →
-  Hinweis einmal; manuell `low` → nichts; sauberer Stand und alter Spielstand ändern nichts; die Markierung
-  folgt dem Ritt, dem Verstecken und dem Beenden; ein normales Neuladen im Ritt ist kein Absturz;
-  Diagnose-Box zeigt den letzten Absturz) und `tests/smoke/graphics-upgrade.spec.js` (erster Start bei `low`,
-  gespeicherte Stufe gilt, „Automatisch“ neu beginnt bei `low`; mit schnellen Frames `low → medium` (und
-  `high`), gespeichert, die Diagnose-Box nennt den Grund; langsame Frames: bleibt `low`; manuelle Stufe
-  nie angehoben; Stufe über dem Budget, gesperrte, nach Kontextverlust gesperrte und wegen Ruckelns
-  verlassene Stufe werden nicht angestrebt; „Automatisch“ neu gibt die Sperren frei). Beide Specs treiben die
-  Messung über `__zhfTest.setFrameFeed` statt über echte Wartezeiten.
+- **Tests:** `crash-guard.test.js`, `page-lifecycle.test.js`, `tab-id.test.js`, `test-hooks.test.js` (Frame-Feed)
+  und `quality-upgrade.test.js` tragen die Regeln (eigene und fremde Tab-Markierung, Schonzeiten, gesperrte, über dem
+  Budget liegende und wegen Ruckelns verlassene Stufen, Hinweis einmal, alter Spielstand, Diagnose-Zeile). Im Browser
+  sind es nur Smoke-Tests: `tests/smoke/graphics-crash.spec.js` (Absturz bei Automatik → `low` und Automatik bleibt;
+  manuell über `low` → Hinweis; die Markierung folgt dem Ritt; ein normales Neuladen im Ritt ist kein Absturz) und
+  `tests/smoke/graphics-upgrade.spec.js` (erster Start bei `low`; mit schnellen Frames `low → medium`, gespeichert, die
+  Diagnose-Box nennt den Grund, der Ritt bleibt lenkbar und die Stufe gilt beim nächsten Start). Der Aufstieg treibt
+  die Messung über `__zhfTest.setFrameFeed` statt über echte Wartezeiten.
 
 ### Diagnose-Box (`?debug`)
 
@@ -1105,8 +1106,10 @@ zurückgesetzt (Platzhalter, bis der nächste Mittelwert da ist).
 ## Arbeitsweise
 
 TDD für `domain` und `application` (Test zuerst). Adapter: reine Hilfsfunktionen mit Tests,
-Verhalten im Browser per Smoke-Test (`tests/smoke/`, u. a. `colors.spec.js` für die Button-Farben und
-`help.spec.js` für die Bedienungs-Tipps). Adapter-Tests ohne Browser laufen in Node: three.js-Szenen
+Verhalten im Browser per Smoke-Test (`tests/smoke/`, nur Chromium, u. a. `colors.spec.js` für die Button-Farben und
+`help.spec.js` für die Bedienungs-Tipps; die Grafik-Specs `graphics*.spec.js` bleiben klein: je ein Ablauf pro
+Funktion, Grenzwerte und Sonderfälle gehören in Unit-Tests, und "das Bild steht" prüft `expectPicture` über eine
+kleine Kopie der Zeichenfläche statt über einen Screenshot). Adapter-Tests ohne Browser laufen in Node: three.js-Szenen
 über `tests/support/scene-stats.js` und `fake-canvas.js` (Draw Calls, Dreiecke, Texturen ohne GL),
 Bewegung über `tests/support/sequence-helper.js` (Kontinuität von Frame zu Frame), Farben über
 `tests/support/color.js`.

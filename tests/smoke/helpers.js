@@ -1,4 +1,6 @@
 // Shared checks for smoke tests: console errors and forbidden files (rule 2).
+import { expect } from '@playwright/test';
+
 const ALLOWED_FILES = [/\/icon\.svg$/, /\/generated\/[\w-]+\.png$/];
 const FORBIDDEN_EXT =
   /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg|mp3|wav|ogg|m4a|aac|flac|webm|mp4|glb|gltf|obj|fbx|ktx2?|basis|hdr|exr|woff2?|ttf|otf|eot)(\?|$)/i;
@@ -125,31 +127,6 @@ export const setTabHidden = (page, hidden) =>
     document.dispatchEvent(new Event('visibilitychange'));
   }, hidden);
 
-/**
- * The WebGL context is lost right as the tab comes back to the foreground. Returns what
- * loseContext() returns.
- */
-export const showTabAndLoseContext = (page) =>
-  page.evaluate(() => {
-    // The browser fires `webglcontextlost` asynchronously; with the slow software renderer a whole
-    // frame (seconds) can run before it. So the tab comes back from a capturing window listener,
-    // which runs right before the engine's canvas listener: the loss is exactly "just after
-    // returning", however slow the frames are.
-    window.addEventListener(
-      'webglcontextlost',
-      () => {
-        Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
-        Object.defineProperty(document, 'visibilityState', {
-          configurable: true,
-          get: () => 'visible',
-        });
-        document.dispatchEvent(new Event('visibilitychange'));
-      },
-      { capture: true, once: true },
-    );
-    return window.__zhfTest.loseContext();
-  });
-
 /** Waits until a ride is running (optionally in a given mode) and returns its state. */
 export async function waitForRide(page, mode) {
   await page.waitForFunction((m) => {
@@ -178,6 +155,45 @@ export async function canvasScreenshotSize(page) {
   });
   return buffer.length;
 }
+
+/**
+ * Number of distinct colours in a small copy of the 3D canvas as it was drawn in the next frame (a
+ * blank or flat canvas gives 1). It reads the drawing buffer inside an animation frame callback,
+ * which runs after the engine's own callback of the same frame, while the buffer is still valid. A
+ * screenshot of the canvas costs seconds on the software renderer of the CI browser (a PNG of the
+ * full device-pixel picture), this costs a few milliseconds. Colours are quantised to 4 bits per
+ * channel, so a smooth gradient does not count as a picture.
+ */
+export function canvasColorCount(page) {
+  return page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          const canvas = document.querySelector('canvas.scene-canvas');
+          const probe = document.createElement('canvas');
+          probe.width = 64;
+          probe.height = 40;
+          const context = probe.getContext('2d', { willReadFrequently: true });
+          context.drawImage(canvas, 0, 0, probe.width, probe.height);
+          const { data } = context.getImageData(0, 0, probe.width, probe.height);
+          const colors = new Set();
+          for (let i = 0; i < data.length; i += 4) {
+            colors.add(((data[i] >> 4) << 8) | ((data[i + 1] >> 4) << 4) | (data[i + 2] >> 4));
+          }
+          resolve(colors.size);
+        });
+      }),
+  );
+}
+
+// A drawn ride scene has about 120 of these colours at 640 × 400; a blank canvas has 1
+const MIN_PICTURE_COLORS = 12;
+
+/** Waits until the 3D canvas shows a real picture (not blank, not one flat colour). */
+export const expectPicture = (page, timeout = 30_000) =>
+  expect
+    .poll(() => canvasColorCount(page), { timeout, message: 'the 3D canvas shows a picture' })
+    .toBeGreaterThanOrEqual(MIN_PICTURE_COLORS);
 
 /** Touch input through the Chrome DevTools Protocol (real touch events, like a finger). */
 export async function createFinger(page) {
