@@ -379,25 +379,31 @@ test.describe('context loss fallback (rule 4)', () => {
     browserName,
   }) => {
     test.setTimeout(90_000);
+    // a manual level: no governor can change the level in between on the slow CI renderer, and
+    // the hint shows whether the loss counted (same decision as the automatic fallback)
     await openGameMenu(page, test, browserName, {
-      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'medium' } },
+      save: { ...NAMED, settings: { graphicsAuto: false, graphicsLevel: 'medium' } },
       lang: 'en',
     });
     await startFreeRide(page);
 
     await setTabHidden(page, true);
-    // back and lost in one task: the grace time cannot run out in between (slow CI frames)
+    // back in the foreground right as the context is lost
     expect(await showTabAndLoseContext(page)).toBe(true);
     await page.waitForFunction(() => window.__zhfTest.ride().contextLost);
-    expect((await rideState(page)).graphicsLevel).toBe('medium');
     expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);
     await page.waitForFunction(() => !window.__zhfTest.ride().contextLost);
+    await page.locator('[data-action="resume"]').click();
+    await page.waitForFunction(() => !window.__zhfTest.ride().paused);
+    // only the context-loss hint matters here (a slow renderer may show the low-fps hint)
+    const lossHint = lostToasts(page).filter({ hasText: /too much for this device/ });
+    await expect(lossHint).toHaveCount(0);
 
     // settled in the foreground (the grace time is 3 s): a loss now counts
     await page.waitForTimeout(3500);
-    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
-    await page.waitForFunction(() => window.__zhfTest.ride().contextLost);
-    expect((await rideState(page)).graphicsLevel).toBe('low');
+    await loseRestoreResume(page);
+    await expect(lossHint).toHaveCount(1);
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
   });
 
   test('a manual low level gets no hint', async ({ page, browserName }) => {

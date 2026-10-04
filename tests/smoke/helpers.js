@@ -115,18 +115,27 @@ export const setTabHidden = (page, hidden) =>
   }, hidden);
 
 /**
- * The tab comes back to the foreground and the WebGL context is lost in the same task, so that no
- * frame (seconds long with a software renderer) can pass in between. Returns what loseContext()
- * returns.
+ * The WebGL context is lost right as the tab comes back to the foreground. Returns what
+ * loseContext() returns.
  */
 export const showTabAndLoseContext = (page) =>
   page.evaluate(() => {
-    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
-    Object.defineProperty(document, 'visibilityState', {
-      configurable: true,
-      get: () => 'visible',
-    });
-    document.dispatchEvent(new Event('visibilitychange'));
+    // The browser fires `webglcontextlost` asynchronously; with the slow software renderer a whole
+    // frame (seconds) can run before it. So the tab comes back from a capturing window listener,
+    // which runs right before the engine's canvas listener: the loss is exactly "just after
+    // returning", however slow the frames are.
+    window.addEventListener(
+      'webglcontextlost',
+      () => {
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+        Object.defineProperty(document, 'visibilityState', {
+          configurable: true,
+          get: () => 'visible',
+        });
+        document.dispatchEvent(new Event('visibilitychange'));
+      },
+      { capture: true, once: true },
+    );
     return window.__zhfTest.loseContext();
   });
 
