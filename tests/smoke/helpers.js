@@ -202,16 +202,82 @@ const MIN_LOWER_HALF_COLORS = 12;
  * or the sky gradient alone). A ride scene (arena, horse, scenery) has far more colours than the
  * sky shader, in the lower half of the picture too (the ground, which the sky never covers).
  */
-export const expectPicture = (page, timeout = 30_000) =>
-  expect
-    .poll(
-      async () => {
-        const { total, lower } = await canvasColorStats(page);
-        return total >= MIN_PICTURE_COLORS && lower >= MIN_LOWER_HALF_COLORS;
-      },
-      { timeout, message: 'the 3D canvas shows a drawn scene, not only the sky' },
-    )
-    .toBe(true);
+export async function expectPicture(page, timeout = 30_000) {
+  const samples = [];
+  const started = Date.now();
+  try {
+    await expect
+      .poll(
+        async () => {
+          const begin = Date.now();
+          const { total, lower } = await canvasColorStats(page);
+          samples.push({ total, lower, probeMs: Date.now() - begin });
+          return total >= MIN_PICTURE_COLORS && lower >= MIN_LOWER_HALF_COLORS;
+        },
+        { timeout, message: 'the 3D canvas shows a drawn scene, not only the sky' },
+      )
+      .toBe(true);
+  } catch (error) {
+    // On a slow runner a missing picture is either slow frames or a real stall: say which
+    error.message +=
+      `\n\nPicture check after ${Date.now() - started} ms (limits ${MIN_PICTURE_COLORS}` +
+      ` / ${MIN_LOWER_HALF_COLORS}), samples: ${JSON.stringify(samples)}\n` +
+      JSON.stringify(await pictureDiagnostics(page), null, 1);
+    throw error;
+  }
+}
+
+/** Runs `work` in the page and gives up after `ms`: a stalled page must not hide the answer. */
+const within = (promise, ms) =>
+  Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve('timeout'), ms))]);
+
+/** State for a failed picture check: ride, debug box, canvas and the real frame intervals. */
+async function pictureDiagnostics(page) {
+  const read = (work) =>
+    within(
+      page.evaluate(work).catch((e) => `error: ${e.message}`),
+      10_000,
+    );
+  return {
+    ride: await read(() => {
+      const ride = window.__zhfTest?.ride();
+      return (
+        ride && {
+          paused: ride.paused,
+          contextLost: ride.contextLost,
+          graphicsLevel: ride.graphicsLevel,
+          graphicsSettling: ride.graphicsSettling,
+          graphicsPixelRatio: ride.graphicsPixelRatio,
+          horse: { z: ride.horse.z, speed: ride.horse.speed },
+        }
+      );
+    }),
+    debugBox: await read(() => document.querySelector('[data-hud="debug"]')?.innerText ?? null),
+    canvas: await read(() => {
+      const canvas = document.querySelector('canvas.scene-canvas');
+      return {
+        width: canvas?.width,
+        height: canvas?.height,
+        hidden: document.hidden,
+        visibility: document.visibilityState,
+      };
+    }),
+    frameIntervalsMs: await read(
+      () =>
+        new Promise((resolve) => {
+          const intervals = [];
+          let last = performance.now();
+          const tick = (now) => {
+            intervals.push(Math.round(now - last));
+            last = now;
+            if (intervals.length < 6) requestAnimationFrame(tick);
+            else resolve(intervals);
+          };
+          requestAnimationFrame(tick);
+        }),
+    ),
+  };
+}
 
 /** Touch input through the Chrome DevTools Protocol (real touch events, like a finger). */
 export async function createFinger(page) {

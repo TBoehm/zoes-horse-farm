@@ -22,6 +22,9 @@ import {
 // A small window keeps the software renderer of the CI browser fast enough
 test.use({ viewport: { width: 640, height: 400 } });
 
+// MB: too little for "high" at a pixel ratio of 2, enough at 1 (46 MB at 480 × 300)
+const BUDGET_HIGH_DOES_NOT_FIT = 50;
+
 const MANUAL_LOW = { ...NAMED, settings: { graphicsAuto: false, graphicsLevel: 'low' } };
 
 const fpsHud = (page) => page.locator('[data-hud="fps"]');
@@ -186,19 +189,21 @@ test.describe('WebGL context loss (rule 4)', () => {
 });
 
 test.describe('GPU memory budget (rule 4)', () => {
-  // a device pixel ratio of 2 gives the level's pixel ratio something to cap
-  test.use({ deviceScaleFactor: 2 });
+  // A device pixel ratio of 2 gives the level's pixel ratio something to cap. A small window
+  // keeps the frames of the software renderer short: a frame of "high" takes more than a second
+  // there (the first one several), and several times that on a busy CI runner.
+  test.use({ viewport: { width: 480, height: 300 }, deviceScaleFactor: 2 });
 
   test('a budget that "high" does not fit caps the pixel ratio and the ride still renders', async ({
     page,
     browserName,
   }) => {
-    test.setTimeout(120_000); // software rendering at "high" is slow on a busy runner
+    test.setTimeout(180_000); // software rendering at "high" is slow on a busy runner
     const watch = watchPage(page);
     await openGameMenu(page, test, browserName, {
       save: { ...NAMED, settings: { graphicsAuto: false, graphicsLevel: 'high' } },
       lang: 'en',
-      query: '&debug&gpubudget=90',
+      query: `&debug&gpubudget=${BUDGET_HIGH_DOES_NOT_FIT}`,
     });
     await startFreeRide(page);
     const ratio = (await rideState(page)).graphicsPixelRatio;
@@ -206,10 +211,10 @@ test.describe('GPU memory budget (rule 4)', () => {
     expect(ratio).toBeLessThan(2);
     expect((await rideState(page)).graphicsLevel).toBe('high'); // the level stays
     await expect(page.locator('[data-hud="debug"]')).toContainText(
-      new RegExp(`GPU est\\. \\d+ / 90 MB, ratio capped 2 → ${ratio}`),
+      new RegExp(`GPU est\\. \\d+ / ${BUDGET_HIGH_DOES_NOT_FIT} MB, ratio capped 2 → ${ratio}`),
     );
     expect(await rideForward(page)).toBeGreaterThan(0.5);
-    await expectPicture(page);
+    await expectPicture(page, 60_000); // "high" is slow on a busy runner
     expect(watch.errors).toEqual([]);
   });
 });
