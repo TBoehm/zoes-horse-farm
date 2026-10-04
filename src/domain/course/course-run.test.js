@@ -138,6 +138,22 @@ describe('Start and finish line (rules 26, 27)', () => {
     expect(run.timeMs).toBe(1234);
   });
 
+  it('crossing the start line backwards (rein-back) does not count', () => {
+    const run = createCourseRun(testCourse());
+    expect(run.onLineCross(START_PREV, START_NEXT, 1000, { backwards: true })).toBeNull();
+    expect(run.phase).toBe('prestart');
+    // the next forward crossing still starts the ride
+    expect(run.onLineCross(START_PREV, START_NEXT, 2000, { backwards: false })).toBe('start');
+  });
+
+  it('crossing the finish line backwards (rein-back) does not count', () => {
+    const run = createCourseRun(testCourse({ obstacles: [] }));
+    crossStart(run, 1000);
+    expect(run.onLineCross(FINISH_PREV, FINISH_NEXT, 5000, { backwards: true })).toBeNull();
+    expect(run.phase).toBe('riding');
+    expect(run.missingHint).toBeNull();
+  });
+
   it('start line against the riding direction does not count', () => {
     const run = createCourseRun(testCourse());
     expect(run.onLineCross(START_NEXT, START_PREV, 1000)).toBeNull();

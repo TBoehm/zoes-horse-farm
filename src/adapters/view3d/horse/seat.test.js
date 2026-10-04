@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { riderSeat } from './seat.js';
 
-const W = (g) => ({ halt: 0, walk: 0, trot: 0, canter: 0, [g]: 1 });
+const W = (g) => ({ halt: 0, walk: 0, trot: 0, canter: 0, back: 0, [g]: 1 });
 const ctx = (g, extra = {}) => ({
   weights: W(g),
   phi: 0,
@@ -14,8 +14,8 @@ const ctx = (g, extra = {}) => ({
 });
 
 describe('rider seat per gait', () => {
-  it('halt/walk: upright sitting seat in the saddle', () => {
-    for (const g of ['halt', 'walk']) {
+  it('halt/walk/back: upright sitting seat in the saddle', () => {
+    for (const g of ['halt', 'walk', 'back']) {
       const s = riderSeat({ gait: g }, ctx(g));
       expect(s.lean).toBeLessThan(0.2);
       expect(s.rise).toBeCloseTo(0, 3);

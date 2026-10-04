@@ -206,7 +206,7 @@ test.describe('badges overview', () => {
     for (const id of ['oxerPro', 'comboPro']) {
       const condition = page.locator(`[data-badge="${id}"] .badge-condition`);
       await expect(condition).toContainText('im Parcours');
-      await expect(condition).toContainText('komm ins Ziel');
+      await expect(condition).toContainText('Komm ins Ziel');
     }
   });
 });

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { COMBI_DISTANCE, TUNING } from './tuning.js';
-import { approachInfo, toLocal } from './geometry.js';
-import { speedBand, zoneForElement } from './jump.js';
+import { ARENA, COMBI_DISTANCE, TUNING } from './tuning.js';
+import { approachInfo, toLocal, wrapAngle } from './geometry.js';
+import { blockExtents, speedBand, zoneForElement } from './jump.js';
 import { createRidingSim } from './riding-sim.js';
 import { createRng } from './rng.js';
 import {
   DEG,
+  DT,
   brakeToHalt,
   countingRng,
   drive,
@@ -1104,7 +1105,8 @@ describe('Robustness', () => {
               expect(insideBlock(s, el)).toBe(false);
             }
             expect(Number.isFinite(s.horse.heading)).toBe(true);
-            expect(s.horse.speed).toBeGreaterThanOrEqual(0);
+            // the random throttle can also rein the horse back (slowly)
+            expect(s.horse.speed).toBeGreaterThanOrEqual(-TUNING.reinBack.maxSpeed - 1e-9);
             expect(s.horse.speed).toBeLessThanOrEqual(S.canterMax);
           },
         },
@@ -1112,5 +1114,333 @@ describe('Robustness', () => {
       expect(landed).toBeGreaterThanOrEqual(takeoffs - 1);
       expect(landed).toBeLessThanOrEqual(takeoffs);
     }
+  });
+});
+
+describe('Rein-back (rules 8, 9, 24)', () => {
+  const R = TUNING.reinBack;
+  const BACK = { throttle: -1 };
+  const ARENA_HALF_LENGTH = ARENA.length / 2;
+
+  /** Rear point (hindquarters) of the horse. */
+  const rearOf = (h) => ({
+    x: h.x - Math.sin(h.heading) * TUNING.horse.rearLength,
+    z: h.z - Math.cos(h.heading) * TUNING.horse.rearLength,
+  });
+  const ext = (el) => blockExtents(el, TUNING);
+  const NO_TROUBLE = ['takeoff', 'landed', 'refusal', 'swerve', 'hop', 'fenceStop', 'gallopEnded'];
+  const noTrouble = (events) => {
+    for (const type of NO_TROUBLE) expect(ofType(events, type)).toEqual([]);
+  };
+
+  it('waits a short pause in halt, then walks backwards with gait back', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: 0, heading: 0 });
+    drive(sim, BACK, { maxT: R.delayS - 0.05 });
+    expect(sim.horse.speed).toBe(0);
+    expect(sim.horse.gait).toBe('halt');
+    drive(sim, BACK, { maxT: 0.2 });
+    expect(sim.horse.speed).toBeLessThan(0);
+    expect(sim.horse.gait).toBe('back');
+    expect(sim.horse.z).toBeLessThan(0);
+    expect(sim.horse.x).toBeCloseTo(0, 9);
+  });
+
+  it('backs along the reverse of the heading, slower than the walk', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: 0, heading: 90 * DEG });
+    drive(sim, BACK, { maxT: 4 });
+    expect(sim.horse.speed).toBeCloseTo(-R.maxSpeed, 9);
+    expect(sim.horse.x).toBeLessThan(-1);
+    expect(sim.horse.z).toBeCloseTo(0, 6);
+    expect(R.maxSpeed).toBeLessThan(S.walkMax);
+  });
+
+  it('stops when S is released', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: 0, heading: 0 });
+    drive(sim, BACK, { maxT: 2 });
+    expect(sim.horse.gait).toBe('back');
+    drive(sim, {}, { maxT: 1 });
+    expect(sim.horse.speed).toBe(0);
+    expect(sim.horse.gait).toBe('halt');
+    const z = sim.horse.z;
+    drive(sim, {}, { maxT: 1 });
+    expect(sim.horse.z).toBe(z);
+  });
+
+  it('W ends it and the horse walks off forwards', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: 0, heading: 0 });
+    drive(sim, BACK, { maxT: 2 });
+    sim.step(DT, { throttle: 1 });
+    expect(sim.horse.speed).toBeGreaterThanOrEqual(0);
+    expect(sim.horse.gait).not.toBe('back');
+    const zBack = sim.horse.z;
+    drive(sim, { throttle: 1 }, { maxT: 2 });
+    expect(sim.horse.z).toBeGreaterThan(zBack);
+  });
+
+  it('gallop ends it', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: 0, heading: 0 });
+    drive(sim, BACK, { maxT: 2 });
+    sim.step(DT, { throttle: -1, gallop: true });
+    expect(sim.horse.gait).toBe('canter');
+    expect(sim.horse.speed).toBeGreaterThanOrEqual(0);
+  });
+
+  it('can be steered while backing, the horse still moves backwards', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: 0, heading: 0 });
+    drive(sim, BACK, { maxT: 1 });
+    const heading = sim.horse.heading;
+    drive(sim, { throttle: -1, steer: 1 }, { maxT: 1 });
+    expect(Math.abs(wrapAngle(sim.horse.heading - heading))).toBeGreaterThan(0.3);
+    expect(sim.horse.gait).toBe('back');
+    expect(sim.horse.z).toBeLessThan(0);
+    expect(Math.abs(sim.horse.x)).toBeGreaterThan(0.01);
+  });
+
+  it('braking from a walk with S stops first; backing starts only after the pause', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: 0, heading: 0, speed: 1.2 });
+    let backedWhileMoving = false;
+    drive(sim, BACK, {
+      maxT: 2,
+      onStep: (s) => {
+        if (s.horse.gait === 'back' && s.horse.z > 0.001 && s.horse.speed > 0) {
+          backedWhileMoving = true;
+        }
+      },
+    });
+    expect(backedWhileMoving).toBe(false);
+    expect(sim.horse.gait).toBe('back');
+  });
+
+  it('Space does not jump or hop while backing', () => {
+    const cross = makeElement('cross', 0.45, { id: 'c' });
+    const sim = makeSim([cross]);
+    placeBefore(sim, cross, 1.5);
+    expect(sim.zoneFor('c', 1, 2).reach).toBeGreaterThan(1.5);
+    const { events } = drive(
+      sim,
+      { throttle: -1, jump: true },
+      {
+        maxT: 4,
+        onStep: (s) => {
+          expect(s.horse.jump).toBeNull();
+          expect(s.horse.hop).toBeNull();
+          expect(s.horse.y).toBe(0);
+        },
+      },
+    );
+    expect(sim.horse.gait).toBe('back');
+    noTrouble(events);
+  });
+
+  it('a Space pressed just before the backing starts is not carried into it', () => {
+    const cross = makeElement('cross', 0.45, { id: 'c' });
+    const sim = makeSim([cross]);
+    placeBefore(sim, cross, 1.5);
+    sim.step(DT, { throttle: -1, jump: true });
+    const { events } = drive(sim, BACK, { maxT: 2 });
+    noTrouble(events);
+  });
+
+  it('backing away from an obstacle triggers no refusal, swerve or takeoff', () => {
+    const cross = makeElement('cross', 0.45, { id: 'c' });
+    const sim = makeSim([cross]);
+    // Walk up to it, brake (the obstacle is armed) and keep S held
+    placeBefore(sim, cross, 3, { speed: 1 });
+    const { events } = drive(sim, BACK, { maxT: 6 });
+    noTrouble(events);
+    expect(sim.horse.gait).toBe('back');
+    expect(sim.approach).toBeNull();
+  });
+
+  it('backing very close to an obstacle front causes no events either', () => {
+    const cross = makeElement('cross', 0.45, { id: 'c' });
+    const sim = makeSim([cross]);
+    placeBefore(sim, cross, 0.4);
+    const { events } = drive(sim, BACK, { maxT: 4 });
+    noTrouble(events);
+    expect(toLocal(cross, sim.horse.x, sim.horse.z).along).toBeLessThan(-0.4);
+  });
+
+  it('riding forward at the obstacle works as before after backing off', () => {
+    const cross = makeElement('cross', 0.45, { id: 'c' });
+    const sim = makeSim([cross]);
+    placeBefore(sim, cross, 1);
+    drive(sim, BACK, { maxT: 3 });
+    drive(sim, {}, { maxT: 1 });
+    expect(sim.horse.gait).toBe('halt');
+    const { events } = drive(sim, { throttle: 1 }, { until: (s) => s.horse.refusal, maxT: 10 });
+    // a walking horse is not allowed to jump: a normal refusal, not a stuck state
+    expect(ofType(events, 'refusal').length + ofType(events, 'takeoff').length).toBeGreaterThan(0);
+  });
+
+  it('the fence holds the hindquarters: no rear point outside, no fence stop, stays stopped', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: 30, heading: Math.PI });
+    const { events } = drive(sim, BACK, {
+      maxT: 20,
+      onStep: (s) => {
+        expect(rearOf(s.horse).z).toBeLessThanOrEqual(
+          ARENA_HALF_LENGTH - TUNING.horse.rearMargin + 1e-9,
+        );
+      },
+    });
+    expect(sim.horse.speed).toBe(0);
+    expect(sim.horse.gait).toBe('halt');
+    expect(rearOf(sim.horse).z).toBeGreaterThan(ARENA_HALF_LENGTH - TUNING.horse.rearMargin - 0.1);
+    noTrouble(events);
+    // S still held: it keeps standing instead of jittering against the fence
+    const z = sim.horse.z;
+    drive(sim, BACK, { maxT: 2 });
+    expect(sim.horse.z).toBe(z);
+    expect(sim.horse.speed).toBe(0);
+  });
+
+  it('can back away from the fence again after releasing S and pressing it anew', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: 30, heading: Math.PI });
+    drive(sim, BACK, { maxT: 20 });
+    expect(sim.horse.speed).toBe(0);
+    drive(sim, {}, { maxT: 0.1 });
+    turnInPlace(sim, 0);
+    const z = sim.horse.z;
+    drive(sim, BACK, { maxT: 2 });
+    expect(sim.horse.z).toBeLessThan(z - 0.2);
+    expect(rearOf(sim.horse).z).toBeLessThanOrEqual(
+      ARENA_HALF_LENGTH - TUNING.horse.rearMargin + 1e-9,
+    );
+  });
+
+  it('an obstacle behind the horse stops it before the hindquarters reach it', () => {
+    const v = makeElement('vertical', 0.6, { id: 'v' });
+    const sim = makeSim([v]);
+    // facing −z, obstacle in the back (+z side)
+    sim.reset({ x: 0, z: -6, heading: Math.PI });
+    const ext = blockExtents(v, TUNING);
+    const { events } = drive(sim, BACK, {
+      maxT: 30,
+      onStep: (s) => {
+        const rear = rearOf(s.horse);
+        const p = toLocal(v, rear.x, rear.z);
+        const inside =
+          Math.abs(p.along) < ext.along - 1e-6 && Math.abs(p.across) < ext.across - 1e-6;
+        expect(inside).toBe(false);
+      },
+    });
+    expect(sim.horse.speed).toBe(0);
+    expect(sim.horse.gait).toBe('halt');
+    const rear = rearOf(sim.horse);
+    expect(Math.abs(toLocal(v, rear.x, rear.z).along)).toBeLessThan(
+      (v.spread || 0) / 2 + R.rearClearance + 0.1,
+    );
+    noTrouble(events);
+    // and it stays there while S is held
+    const z = sim.horse.z;
+    drive(sim, BACK, { maxT: 2 });
+    expect(sim.horse.z).toBe(z);
+  });
+
+  it('while backing the rear point keeps the rear clearance from the pole (tail does not clip)', () => {
+    const v = makeElement('vertical', 0.6, { id: 'v' });
+    const sim = makeSim([v]);
+    sim.reset({ x: 0, z: -6, heading: Math.PI });
+    const minAlong = (v.spread || 0) / 2 + R.rearClearance;
+    drive(sim, BACK, {
+      maxT: 30,
+      onStep: (s) => {
+        const rear = rearOf(s.horse);
+        const p = toLocal(v, rear.x, rear.z);
+        const inside = Math.abs(p.along) < minAlong - 1e-6 && Math.abs(p.across) < ext(v).across;
+        expect(inside).toBe(false);
+      },
+    });
+    expect(sim.horse.speed).toBe(0);
+    const rear = rearOf(sim.horse);
+    expect(Math.abs(toLocal(v, rear.x, rear.z).along)).toBeGreaterThanOrEqual(minAlong - 1e-6);
+    // the clearance exceeds the front margin: the tail reaches further back than the front
+    expect(R.rearClearance).toBeGreaterThan(TUNING.horse.frontMargin);
+  });
+
+  it('an obstacle behind a turning horse also holds the hindquarters back', () => {
+    const v = makeElement('vertical', 0.6, { id: 'v' });
+    const sim = makeSim([v]);
+    sim.reset({ x: 0, z: -4, heading: Math.PI });
+    const ext = blockExtents(v, TUNING);
+    drive(
+      sim,
+      { throttle: -1, steer: 1 },
+      {
+        maxT: 30,
+        onStep: (s) => {
+          if (s.horse.speed >= 0) return;
+          const rear = rearOf(s.horse);
+          const p = toLocal(v, rear.x, rear.z);
+          const inside =
+            Math.abs(p.along) < ext.along - 1e-6 && Math.abs(p.across) < ext.across - 1e-6;
+          expect(inside).toBe(false);
+        },
+      },
+    );
+  });
+
+  it('right after a landing the hindquarters may still be over the obstacle: no backing through it', () => {
+    const v = makeElement('vertical', 0.6, { id: 'v' });
+    const sim = makeSim([v]);
+    // facing +z, the reference point 1.5 m behind the obstacle: the rear point is inside it
+    sim.reset({ x: 0, z: TUNING.horse.rearLength, heading: 0 });
+    const { events } = drive(sim, BACK, { maxT: 2 });
+    expect(sim.horse.speed).toBe(0);
+    expect(sim.horse.z).toBeCloseTo(TUNING.horse.rearLength, 6);
+    noTrouble(events);
+    // turned around, backing away from the obstacle works
+    sim.reset({ x: 0, z: TUNING.horse.rearLength, heading: Math.PI });
+    drive(sim, BACK, { maxT: 2 });
+    expect(sim.horse.z).toBeGreaterThan(TUNING.horse.rearLength + 0.2);
+  });
+
+  it('reset into a negative speed gives the back gait', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: 0, heading: 0, speed: -0.3 });
+    expect(sim.horse.gait).toBe('back');
+  });
+
+  it('never moves the horse into an obstacle while backing at random (stress)', () => {
+    const els = [
+      makeElement('cross', 0.45, { id: 'k', x: -3, z: -3 }),
+      makeElement('oxer', 0.85, { id: 'o', x: 3, z: 3, rot: 0.6 }),
+    ];
+    const sim = makeSim(els);
+    const rng = createRng(77);
+    sim.reset({ x: 0, z: 0, heading: 0 });
+    let input = BACK;
+    drive(
+      sim,
+      (_s, t) => {
+        if (Math.round(t * 60) % 40 === 0) input = { throttle: -1, steer: rng() * 2 - 1 };
+        return input;
+      },
+      {
+        maxT: 120,
+        onStep: (s) => {
+          for (const el of els) {
+            expect(insideBlock(s, el)).toBe(false);
+            // a standing horse turning on the spot may swing its rear past an obstacle
+            if (s.horse.speed >= 0) continue;
+            const rear = rearOf(s.horse);
+            const ext = blockExtents(el, TUNING);
+            const p = toLocal(el, rear.x, rear.z);
+            const rearInside =
+              Math.abs(p.along) < ext.along - 1e-6 && Math.abs(p.across) < ext.across - 1e-6;
+            expect(rearInside).toBe(false);
+          }
+        },
+      },
+    );
   });
 });

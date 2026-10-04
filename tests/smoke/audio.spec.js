@@ -230,8 +230,14 @@ test.describe('start signal and effects', () => {
     await expect.poll(async () => (await audioState(page)).musicPlaying).toBe(false);
     expect(await audioState(page)).toMatchObject({ hidden: true, musicWanted: true });
     await setTabHidden(page, false);
-    await expect.poll(async () => (await audioState(page)).musicPlaying).toBe(true);
-    expect(await audioState(page)).toMatchObject({ hidden: false, running: true });
+    // resuming the AudioContext is asynchronous: the music is scheduled before the state reads
+    // "running", so wait for both together
+    await expect
+      .poll(async () => {
+        const { musicPlaying, hidden, running } = await audioState(page);
+        return { musicPlaying, hidden, running };
+      })
+      .toEqual({ musicPlaying: true, hidden: false, running: true });
   });
 });
 

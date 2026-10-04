@@ -91,15 +91,75 @@ export function lowerLevel(level) {
   return GRAPHICS_LEVELS[Math.max(0, i - 1)];
 }
 
+// Measuring values of the frame-rate checks below. They are no game-play values (those belong to
+// TUNING), so they stay here: the downgrade governor and the "level too high" hint measure the
+// same way (rule 4): only while riding, not in the first 3 s, and a frame longer than
+// maxFrameS is a real interruption (suspend). Slower frames still count: a very slow device must
+// be able to step down. Pauses/hidden tabs are reported via measuring=false.
 const GOVERNOR_DEFAULTS = Object.freeze({
   windowS: 5, // moving average
   minFps: 50,
   graceS: 3, // grace period after an interruption
   cooldownS: 10, // minimum time between adjustments
-  // A longer frame is a real interruption (suspend). Slower frames still count: a very slow
-  // device must be able to step down. Pauses/hidden tabs are reported via measuring=false.
   maxFrameS: 2,
 });
+
+const LOW_FPS_HINT_DEFAULTS = Object.freeze({
+  windowS: GOVERNOR_DEFAULTS.windowS,
+  graceS: GOVERNOR_DEFAULTS.graceS,
+  maxFrameS: GOVERNOR_DEFAULTS.maxFrameS,
+  maxFps: 30, // a manually chosen level below this average gets a hint
+});
+
+/** Moving average over the last `windowS` seconds of frame durations. */
+function createFrameWindow(windowS) {
+  // queue of measured frame durations
+  let samples = [];
+  let head = 0;
+  let sum = 0;
+  const length = () => samples.length - head;
+  return {
+    clear() {
+      samples.length = 0; // in place: this is called every frame while nothing is measured
+      head = 0;
+      sum = 0;
+    },
+    push(dt) {
+      samples.push(dt);
+      sum += dt;
+      // drop old frames while the rest still covers the whole window
+      while (length() > 1 && sum - samples[head] >= windowS) {
+        sum -= samples[head];
+        head += 1;
+      }
+      if (head > 512) {
+        samples = samples.slice(head);
+        head = 0;
+      }
+    },
+    /** Does the collected time cover the whole window? */
+    get full() {
+      return sum >= windowS - 1e-9;
+    },
+    averageFps() {
+      const n = length();
+      return n > 0 && sum > 0 ? n / sum : null;
+    },
+  };
+}
+
+/** Frame duration from the argument or from the clock; null if it cannot be determined. */
+function createFrameClock(now) {
+  let lastNow = null;
+  return (dtSeconds) => {
+    if (dtSeconds !== undefined && dtSeconds !== null) return dtSeconds;
+    if (typeof now !== 'function') return null;
+    const t = now();
+    const dt = lastNow === null ? 0 : (t - lastNow) / 1000;
+    lastNow = t;
+    return dt;
+  };
+}
 
 /**
  * Downgrade governor according to rule 4.
@@ -119,54 +179,17 @@ export function createQualityGovernor({
   let isAuto = Boolean(auto);
   let grace = cfg.graceS;
   let cooldown = 0;
-  let lastNow = null;
-  // queue of measured frame durations
-  let samples = [];
-  let head = 0;
-  let sum = 0;
-
-  function clearWindow() {
-    samples = [];
-    head = 0;
-    sum = 0;
-  }
+  const frames = createFrameWindow(cfg.windowS);
+  const frameSeconds = createFrameClock(now);
 
   function interrupt() {
-    clearWindow();
+    frames.clear();
     grace = cfg.graceS;
   }
 
-  function windowLength() {
-    return samples.length - head;
-  }
-
-  function push(dt) {
-    samples.push(dt);
-    sum += dt;
-    // drop old frames while the rest still covers the whole window
-    while (windowLength() > 1 && sum - samples[head] >= cfg.windowS) {
-      sum -= samples[head];
-      head += 1;
-    }
-    if (head > 512) {
-      samples = samples.slice(head);
-      head = 0;
-    }
-  }
-
-  function averageFps() {
-    const n = windowLength();
-    return n > 0 && sum > 0 ? n / sum : null;
-  }
-
   function frame(dtSeconds, measuring = true) {
-    let dt = dtSeconds;
-    if (dt === undefined || dt === null) {
-      if (typeof now !== 'function') return current;
-      const t = now();
-      dt = lastNow === null ? 0 : (t - lastNow) / 1000;
-      lastNow = t;
-    }
+    const dt = frameSeconds(dtSeconds);
+    if (dt === null) return current;
     if (!(dt >= 0)) return current;
     if (cooldown > 0) cooldown = Math.max(0, cooldown - dt);
     if (!isAuto) return current;
@@ -179,15 +202,15 @@ export function createQualityGovernor({
       grace -= dt;
       return current;
     }
-    push(dt);
-    if (sum < cfg.windowS - 1e-9) return current;
+    frames.push(dt);
+    if (!frames.full) return current;
     if (cooldown > 0 || current === 'low') return current;
 
-    const fps = averageFps();
+    const fps = frames.averageFps();
     if (fps !== null && fps < cfg.minFps) {
       current = lowerLevel(current);
       cooldown = cfg.cooldownS;
-      clearWindow();
+      frames.clear();
       onChange(current);
     }
     return current;
@@ -213,7 +236,63 @@ export function createQualityGovernor({
       return isAuto;
     },
     get averageFps() {
-      return averageFps();
+      return frames.averageFps();
+    },
+  };
+}
+
+/**
+ * Does the "level too high" hint make sense? Only for a manual level that has a lower one to pick:
+ * with "Automatic" on the governor steps down by itself, and at "low" the hint would send the
+ * player to a level that does not exist.
+ */
+export function canHintLowerLevel({ auto, level }) {
+  return !auto && lowerLevel(level) !== level;
+}
+
+/**
+ * Hint for a manually chosen level that is too high for the device (rule 4): the level stays, the
+ * player only gets told. Create one instance per ride or free-mode session: it fires at most once
+ * (until reset()).
+ * frame(dtSeconds, measuring) returns true exactly once, when the average over the window is below
+ * the limit. Pass measuring=false while paused, hidden, in menus or with "Automatic" on (the
+ * governor takes care of that case).
+ */
+export function createLowFpsHint({ options = {} } = {}) {
+  const cfg = { ...LOW_FPS_HINT_DEFAULTS, ...options };
+  let grace = cfg.graceS;
+  let shown = false;
+  const frames = createFrameWindow(cfg.windowS);
+
+  function interrupt() {
+    frames.clear();
+    grace = cfg.graceS;
+  }
+
+  return {
+    frame(dtSeconds, measuring = true) {
+      if (shown || !(dtSeconds >= 0)) return false;
+      if (!measuring || dtSeconds > cfg.maxFrameS) {
+        interrupt();
+        return false;
+      }
+      if (grace > 0) {
+        grace -= dtSeconds;
+        return false;
+      }
+      frames.push(dtSeconds);
+      if (!frames.full) return false;
+      const fps = frames.averageFps();
+      if (fps === null || fps >= cfg.maxFps) return false;
+      shown = true;
+      return true;
+    },
+    /** Report an interruption (pause, menu, hidden tab, level change). */
+    interrupt,
+    /** A new ride begins (e.g. "Start again"): the hint may show once more. */
+    reset() {
+      shown = false;
+      interrupt();
     },
   };
 }

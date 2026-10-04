@@ -73,6 +73,38 @@ describe('footfall', () => {
     }
   });
 
+  it('rein-back: diagonal pairs land together, once per leg and cycle, and it is quiet at halt', () => {
+    const v = -0.5;
+    const f = GAITS.back.freq(0.5);
+    const cycles = 4;
+    const { events } = run('back', v, cycles / f - 1e-3);
+    for (const n of countPerLeg(events)) expect(Math.abs(n - cycles)).toBeLessThanOrEqual(1);
+    const byTime = new Map();
+    for (const e of events) {
+      const k = Math.round(e.t * 100);
+      byTime.set(k, [...(byTime.get(k) || []), e.leg].sort());
+    }
+    const pairs = [...byTime.values()].filter((p) => p.length === 2);
+    expect(pairs.length).toBeGreaterThan(3);
+    for (const p of pairs) {
+      expect([[LF, RH].sort().join(), [RF, LH].sort().join()]).toContain(p.join());
+    }
+  });
+
+  it('rein-back: the horse blends back to halt with at most a step or two', () => {
+    const m = createMotion();
+    const st = { gait: 'back', speed: -0.5, turnRate: 0, jump: null, hop: null, refusal: null };
+    for (let t = 0; t < 2; t += 1 / 120) stepMotion(m, 1 / 120, st);
+    expect(m.weights.back).toBeGreaterThan(0.99);
+    st.gait = 'halt';
+    st.speed = 0;
+    let n = 0;
+    for (let t = 0; t < 3; t += 1 / 120) n += stepMotion(m, 1 / 120, st).length;
+    expect(m.weights.halt).toBeGreaterThan(0.99);
+    expect(m.weights.back).toBeLessThan(0.01);
+    expect(n).toBeLessThanOrEqual(2);
+  });
+
   it('canter (left lead): RH → LH+RF → LF, then suspension', () => {
     const { m, events } = run('canter', 6, 2, { turnRate: -0.5 });
     expect(m.lead).toBe(1);
@@ -142,6 +174,25 @@ describe('motion blending', () => {
       }
       expect(checked).toBeGreaterThan(50);
     }
+  });
+
+  it('rein-back: hooves do not slide during stance (they move forward relative to the body)', () => {
+    const m = createMotion();
+    const st = { gait: 'back', speed: -0.5, turnRate: 0, jump: null, hop: null, refusal: null };
+    for (let t = 0; t < 3; t += 1 / 240) stepMotion(m, 1 / 240, st);
+    const dt = 1 / 240;
+    let checked = 0;
+    for (let i = 0; i < 480; i++) {
+      const before = m.legs.map((l) => ({ ...l }));
+      stepMotion(m, dt, st);
+      m.legs.forEach((l, k) => {
+        if (l.stance && before[k].stance && l.y === 0) {
+          expect((l.dz - before[k].dz) / dt).toBeCloseTo(0.5, 0);
+          checked++;
+        }
+      });
+    }
+    expect(checked).toBeGreaterThan(50);
   });
 
   it('jump: weight rises quickly to ≈ 1 on take-off', () => {

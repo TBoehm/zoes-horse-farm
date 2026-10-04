@@ -19,4 +19,10 @@ describe('texts (rule 6)', () => {
     const keys = STRING_AREAS.flatMap((a) => Object.keys(a.de));
     expect(new Set(keys).size).toBe(keys.length);
   });
+  it('say "fallen pole" instead of "Abwurf" (rule 23: a child reads "Abwurf" as a fall of the rider)', () => {
+    expect(de['feedback.knockdown']).toBe('Stange gefallen!');
+    expect(de['results.knockdowns']).toBe('Gefallene Stangen');
+    expect(en['feedback.knockdown']).toBe('Pole down!');
+    for (const text of Object.values(de)) expect(text).not.toMatch(/Abwurf|Abwürfe/);
+  });
 });

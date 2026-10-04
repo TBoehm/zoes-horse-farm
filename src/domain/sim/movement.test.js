@@ -20,6 +20,11 @@ describe('Gait from speed (rule 9)', () => {
     expect(gaitForSpeed(S.trotMax, false, S)).toBe('trot');
     expect(gaitForSpeed(0, true, S)).toBe('canter');
   });
+
+  it('negative speed is the rein-back gait (rule 9)', () => {
+    expect(gaitForSpeed(-0.01, false, S)).toBe('back');
+    expect(gaitForSpeed(-TUNING.reinBack.maxSpeed, false, S)).toBe('back');
+  });
 });
 
 describe('Speed (rules 8–10)', () => {
@@ -34,7 +39,8 @@ describe('Speed (rules 8–10)', () => {
   it('S brakes to a halt (speed 0)', () => {
     const sim = makeSim([]);
     sim.reset({ x: 0, z: 0, heading: 0, speed: 3 });
-    drive(sim, { throttle: -1 }, { maxT: 3 });
+    // S held on: it brakes to a halt first (the rein-back only follows after its pause)
+    drive(sim, { throttle: -1 }, { maxT: 3, until: (s) => s.horse.speed === 0 });
     expect(sim.horse.speed).toBe(0);
     expect(sim.horse.gait).toBe('halt');
   });
@@ -129,7 +135,8 @@ describe('Speed (rules 8–10)', () => {
     sim.reset({ x: 0, z: -30, heading: 0 });
     sim.step(DT, { gallop: false });
     drive(sim, { gallop: true }, { maxT: 0.3 });
-    drive(sim, { throttle: -1 }, { maxT: 2 });
+    // S held on: it brakes to a halt first (the rein-back only follows after its pause)
+    drive(sim, { throttle: -1 }, { maxT: 2, until: (s) => s.horse.speed === 0 });
     expect(sim.horse.speed).toBe(0);
     expect(sim.horse.gait).toBe('halt');
   });
@@ -190,6 +197,38 @@ describe('Steering (rules 8, 10, 22)', () => {
       return speed / Math.abs(sim.horse.turnRate);
     };
     expect(measure(3.2, false)).toBeLessThan(measure(6, true));
+  });
+});
+
+describe('Turn agility (rule 10: direct steering, plausible radii)', () => {
+  // Real horses: 10 m volte (r = 5 m) at trot/walk, 20 m circle (r = 10 m) at canter, jump-off
+  // turns at jumping canter about r = 6-8 m; the game may be somewhat more agile (child audience).
+  it('walk: tight turn, at most 1.5 m radius (turn on the haunches)', () => {
+    expect(turnRadius(1.5, TUNING)).toBeLessThanOrEqual(1.5);
+  });
+
+  it('working trot: tighter than a 10 m volte but not tighter than 2 m', () => {
+    const r = turnRadius(S.trotMedium, TUNING);
+    expect(r).toBeLessThanOrEqual(3);
+    expect(r).toBeGreaterThanOrEqual(2);
+  });
+
+  it('jumping canter: jump-off turn radius between 4 and 6.5 m', () => {
+    const r = turnRadius(S.canterMedium, TUNING);
+    expect(r).toBeLessThanOrEqual(6.5);
+    expect(r).toBeGreaterThanOrEqual(4);
+  });
+
+  it('lateral acceleration stays plausible at every speed (at most 7 m/s²)', () => {
+    for (let v = 0.5; v <= S.canterMax; v += 0.5) {
+      expect(v * maxTurnRate(v, TUNING)).toBeLessThanOrEqual(7);
+    }
+  });
+
+  it('the turn rate follows the stick quickly (90 % of the target within 0.2 s)', () => {
+    const sim = makeSim([]);
+    drive(sim, { steer: 1 }, { maxT: 0.2 });
+    expect(Math.abs(sim.horse.turnRate)).toBeGreaterThanOrEqual(0.9 * maxTurnRate(0, TUNING));
   });
 });
 
@@ -286,7 +325,9 @@ describe('Fencing (rule 24)', () => {
       sim,
       { steer: 1 },
       {
-        maxT: 6,
+        maxT: 10,
+        // stop as soon as it faces away (independent of the turn rate tuning)
+        until: (s) => Math.abs(wrapAngle(s.horse.heading - 270 * DEG)) < 0.1,
         onStep: (s) => {
           const rear = s.horse.x - Math.sin(s.horse.heading) * TUNING.horse.rearLength;
           expect(rear).toBeLessThanOrEqual(limit);

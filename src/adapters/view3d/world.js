@@ -2,7 +2,6 @@
 // Quality levels can be switched at runtime (the governor downgrades).
 import * as THREE from 'three';
 import { QUALITY_PRESETS } from './quality.js';
-import { setMaxPixelRatio } from './renderer.js';
 import { createSky, SKY_COLORS } from './sky.js';
 import { createArena, createCourseLines } from './arena.js';
 import { createEnvironment, SITE } from './environment.js';
@@ -71,7 +70,9 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
   const aid = createAidMarker();
   scene.add(aid.mesh);
 
-  // image-based light from the sky (PMREM, once)
+  // image-based light from the sky (PMREM; built lazily, freed on "low", rebuilt after a lost
+  // WebGL context)
+  let envTarget = null;
   let envTexture = null;
   function buildEnvironmentMap() {
     if (envTexture) return envTexture;
@@ -86,12 +87,25 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     );
     floor.position.y = -2;
     envScene.add(floor);
-    envTexture = pmrem.fromScene(envScene, 0.04, 0.1, 1000).texture;
+    envTarget = pmrem.fromScene(envScene, 0.04, 0.1, 1000);
+    envTexture = envTarget.texture;
     envSky.dispose();
     floor.geometry.dispose();
     floor.material.dispose();
     pmrem.dispose();
     return envTexture;
+  }
+
+  function disposeEnvironmentMap() {
+    envTarget?.dispose();
+    envTarget = null;
+    envTexture = null;
+  }
+
+  function disposeShadowMap() {
+    if (!sun.shadow.map) return;
+    sun.shadow.map.dispose();
+    sun.shadow.map = null;
   }
 
   /** All meshes with material pair and shadow role. */
@@ -115,32 +129,42 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     }
   }
 
+  /**
+   * Switches the quality level. Only what really differs between the levels is touched: a
+   * material needs a new shader only when its normal map is switched on/off (three.js rebuilds
+   * the programs for fog, environment map and shadow changes by itself), and a texture is only
+   * uploaded again when its anisotropy changes.
+   */
   function setQuality(next) {
     const p = QUALITY_PRESETS[next];
     if (!p) return;
+    const before = preset;
     preset = p;
-    setMaxPixelRatio(renderer, p.pixelRatio);
+    // The pixel ratio is the engine's business: changing it clears the drawing buffer, which must
+    // not happen before the new shaders are ready (see engine.js)
 
-    // shadows
+    // shadows: the map is freed when it is not used (2048² depth target on "high") and made again
+    // by three.js on the first shadow pass, or when its size changes
     renderer.shadowMap.enabled = p.shadows;
     sun.castShadow = p.shadows;
-    if (p.shadows && sun.shadow.mapSize.x !== p.shadowMapSize) {
+    if (!p.shadows) {
+      disposeShadowMap();
+    } else if (sun.shadow.mapSize.x !== p.shadowMapSize) {
       sun.shadow.mapSize.set(p.shadowMapSize, p.shadowMapSize);
-      if (sun.shadow.map) {
-        sun.shadow.map.dispose();
-        sun.shadow.map = null;
-      }
+      disposeShadowMap();
     }
 
-    // materials
-    for (const pair of pairs) {
-      pair.standard.normalMap = p.normalMaps ? pair.normalMap : null;
-      pair.standard.needsUpdate = true;
-      pair.lambert.needsUpdate = true;
+    // materials: the Lambert variant has no normal map, so only the standard one is rebuilt
+    if (before.normalMaps !== p.normalMaps) {
+      for (const pair of pairs) {
+        pair.standard.normalMap = p.normalMaps ? pair.normalMap : null;
+        pair.standard.needsUpdate = true;
+      }
     }
+    const anisotropy = Math.min(p.anisotropy, renderer.capabilities.getMaxAnisotropy());
     for (const t of [...arena.textures, ...environment.textures]) {
-      if (t && t.anisotropy !== p.anisotropy) {
-        t.anisotropy = Math.min(p.anisotropy, renderer.capabilities.getMaxAnisotropy());
+      if (t && t.anisotropy !== anisotropy) {
+        t.anisotropy = anisotropy;
         t.needsUpdate = true;
       }
     }
@@ -153,13 +177,34 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       hemi.intensity = 0.6;
     } else {
       scene.environment = null;
+      disposeEnvironmentMap(); // after it is detached; built again when going back up
       hemi.intensity = 1.5;
     }
 
-    // fog
-    scene.fog = p.fog ? new THREE.Fog(SKY_COLORS.horizon, p.fog.near, p.fog.far) : null;
+    // fog: a new Fog object makes three.js rebuild every material, so keep the old one if the
+    // values are the same
+    if (before.fog !== p.fog || (p.fog && !scene.fog)) {
+      scene.fog = p.fog ? new THREE.Fog(SKY_COLORS.horizon, p.fog.near, p.fog.far) : null;
+    }
 
     environment.setDensity(p.envDensity, p.grassTufts, p.envDetail);
+  }
+
+  /**
+   * After a lost and restored WebGL context. three.js recreates its own GPU state (programs,
+   * textures, buffers of geometries, instanced meshes and the shadow-map target) from the CPU
+   * data on the next render. Not restorable is what only lived on the GPU: the PMREM environment
+   * map is the result of a render pass, so it comes back empty and must be rendered again. The
+   * old target is only forgotten, not disposed: disposing it would run dispose listeners of the
+   * pre-restore textures and delete handles that belong to the lost context. The shadow map stays
+   * as it is (three.js rebuilds its framebuffer lazily).
+   * Source: onContextRestore in three r186 src/renderers/WebGLRenderer.js (calls initGLContext,
+   * which resets properties, textures, geometries, programs and the shadow map object).
+   */
+  function restoreAfterContextLoss() {
+    envTarget = null;
+    envTexture = null;
+    if (preset.envMap) scene.environment = buildEnvironmentMap();
   }
 
   // The sun never moves: its light-space axes and the scratch vectors are made once
@@ -248,6 +293,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       lines.setFinishMarked(on);
     },
     setQuality,
+    restoreAfterContextLoss,
     setShadowFocus(x, z) {
       shadowFocus.set(x, 0, z);
       updateShadowCamera();
@@ -276,8 +322,8 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
         }
       }
       textures.forEach((t) => t.dispose());
-      if (envTexture) envTexture.dispose();
-      if (sun.shadow.map) sun.shadow.map.dispose();
+      disposeEnvironmentMap();
+      disposeShadowMap();
     },
   };
 }

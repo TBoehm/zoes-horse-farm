@@ -84,6 +84,18 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
      Automatik stuft nie hoch.
    - WENN das Kind eine Stufe manuell wählt, MUSS diese gelten und die Automatik aus sein, bis
      wieder „Automatisch" gewählt wird (dann neue Wahl passend zum Gerät).
+   - Ein Wechsel der Grafikstufe MUSS ohne Neustart wirken; danach MUSS das Spiel weiter steuerbar
+     und spielbar sein. FALLS die 3D-Darstellung verloren geht (Grafikspeicher vom Gerät
+     zurückgesetzt), DANN MUSS das Spiel pausieren und nach der Wiederherstellung weiterspielbar sein.
+   - WENN eine manuell gewählte Stufe über 5 Sekunden im Mittel unter 30 fps läuft (gemessen wie
+     oben), MUSS das Spiel einmal je Ritt bzw. freiem Modus einen kurzen Hinweis zeigen, dass die
+     Grafik für das Gerät zu hoch ist; die Stufe bleibt.
+   - In den Einstellungen MUSS sich eine Bildraten-Anzeige ein- und ausschalten lassen (Standard:
+     aus). SOLANGE sie an ist, MUSS beim Reiten (Vorstart, Ritt, freier Modus) die aktuelle Bildrate
+     in fps (etwa zweimal pro Sekunde aktualisiert) zusammen mit der aktuellen Grafikstufe in einer
+     Ecke stehen, ohne Bedienelemente zu verdecken; bei automatisch gewählter Stufe MUSS das
+     erkennbar sein (z. B. „58 fps · Mittel (Auto)"). Wechselt die Stufe (Automatik oder
+     Einstellungen), MUSS die Anzeige sofort folgen.
 5. Das Spiel MUSS nach dem ersten vollständigen Laden ohne Internetverbindung startbar und spielbar
    sein und auf Tablet/Handy zum Startbildschirm hinzugefügt werden können. Eine neue Spielversion
    MUSS im Hintergrund geladen werden und ab dem nächsten Start gelten, ohne Hinweis und ohne
@@ -100,7 +112,7 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 ### Steuerung
 
 8. Tastatur: A/D lenken links/rechts; W erhöht, S verringert das Tempo stufenlos, solange gedrückt;
-   Space springt; Shift (gehalten) = Galopp; Esc = Pause; C = Kamera umschalten.
+   aus dem Halt geht das Pferd mit gehaltenem S rückwärts (Regel 9); Space springt; Shift (gehalten) = Galopp; Esc = Pause; C = Kamera umschalten.
 9. SOLANGE kein Galopp aktiv ist, MUSS das Tempo stufenlos zwischen Halt, Schritt und Trab liegen;
    die Gangart ergibt sich aus dem Tempo. SOLANGE Galopp aktiv ist, MUSS das Pferd galoppieren und
    W/S (bzw. Joystick) regeln das Galopptempo stufenlos. WENN Galopp beendet wird, MUSS das Pferd
@@ -108,11 +120,19 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
    vom Spiel beendet (Verweigerung, Regel 22; frontaler Stopp am Zaun, Regel 24), MUSS Shift erst
    losgelassen und neu gedrückt werden. WENN der Touch-Modus an- oder ausgeht (Regel 11), MUSS ein
    aktiver Galopp enden (Trab) und der Touch-Umschalter auf aus stehen.
+   Rückwärtsrichten: WENN das Pferd steht und S (bzw. Joystick nach unten) weiter gehalten wird, MUSS
+   es nach einer kurzen Pause (unter einer halben Sekunde) langsam rückwärts gehen (langsamer als
+   Schritt) und dabei lenkbar sein; WENN losgelassen wird, MUSS es anhalten. W, Galopp oder Joystick
+   nach oben beenden das Rückwärtsgehen. Rückwärts wird nicht gesprungen (Space wirkt nicht),
+   Hindernisse und Umzäunung halten das Pferd auf, und Start- oder Ziellinie zählen rückwärts nicht.
 10. Touch (Tablet/Handy): links ein virtueller Joystick, rechts große Buttons „Galopp" und
     „Springen" (wie Space), dazu Buttons für Pause und Kamera.
     - Joystick hoch/runter ändert das Tempo, solange ausgelenkt, wie W/S; je weiter ausgelenkt,
-      desto schneller die Änderung.
-    - Joystick links/rechts lenkt stufenlos: je weiter ausgelenkt, desto enger die Kurve.
+      desto schneller die Änderung. Aus dem Halt nach unten gehalten geht das Pferd rückwärts wie
+      mit S (Regel 9).
+    - Joystick links/rechts lenkt stufenlos: je weiter ausgelenkt, desto enger die Kurve. Die engste
+      Kurve MUSS schon vor dem Anschlag erreicht sein (spätestens bei etwa zwei Dritteln der
+      seitlichen Auslenkung), und auch schräg nach vorn gehalten MUSS das Pferd deutlich lenken.
     - „Galopp" ist ein Umschalter: einmal tippen = Galopp an, nochmal tippen = Galopp aus. Der Button
       MUSS sichtbar zeigen, ob Galopp an ist.
     - Alle Touch-Bedienelemente MÜSSEN mindestens 44×44 px groß sein.
@@ -181,9 +201,11 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
       das Pferd läuft vorbei und fällt danach in den Trab. In beiden Fällen ist Galopp danach aus
       (auch der Touch-Umschalter; Tastatur siehe Regel 9). Treffen Gangart bzw. Tempo und Winkel
       zusammen, gilt das Verhalten für Gangart/Tempo (stehen bleiben, Halt).
-23. Bei einem Abwurf MUSS die Stange sichtbar fallen. Wann sie wieder aufgebaut wird, regeln die
-    Regeln 26, 27, 29, 31 und 41.
-24. Das Pferd MUSS je Gangart und beim Sprung (Absprung, Flug, Landung) erkennbar animiert sein.
+23. Bei einem Abwurf MUSS die Stange sichtbar fallen; die Meldung im Spiel sagt es kindgerecht
+    („Stange gefallen!"), damit sie nicht mit einem Sturz verwechselt wird. Wann sie wieder aufgebaut
+    wird, regeln die Regeln 26, 27, 29, 31 und 41.
+24. Das Pferd MUSS je Gangart, beim Rückwärtsrichten und beim Sprung (Absprung, Flug, Landung)
+    erkennbar animiert sein.
     Das Pferd kann den Platz nicht verlassen. Trifft es frontal auf die Umzäunung, MUSS es stoppen
     und ist danach im Halt (Galopp aus, wie Regel 22); trifft es schräg auf, MUSS es mit
     unverändertem Tempo daran entlanggleiten. Ab wann „frontal" gilt, ist ein Spielwert.
@@ -308,8 +330,8 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 44. Im Browser gespeichert werden MÜSSEN: freigeschaltete Parcours, Bestleistung (Fehler und Zeit)
     und beste Sternzahl je Parcours, erhaltene Auszeichnungen mit Datum, Zähler (beendete
     Parcours-Ritte, Sprünge), Pferd (Name, Fellfarbe, Kopfabzeichen) und Einstellungen (Sprache,
-    Lautstärke und Stumm je Kanal (Musik, Effekte), Grafikstufe und ob „Automatisch", Absprung-Hilfe je Modus,
-    Kamera). Wo der Browser es anbietet, MUSS dauerhafter Speicher angefordert werden. Bekannte
+    Lautstärke und Stumm je Kanal (Musik, Effekte), Grafikstufe und ob „Automatisch",
+    Bildraten-Anzeige, Absprung-Hilfe je Modus, Kamera). Wo der Browser es anbietet, MUSS dauerhafter Speicher angefordert werden. Bekannte
     Grenze: Safari kann Daten einer Website nach längerer Nichtnutzung löschen (nicht bei Nutzung
     über den Startbildschirm).
 45. Gespeichert wird sofort bei jeder Änderung: beim Ende eines Ritts, bei jedem gezählten Sprung,
@@ -400,7 +422,12 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 - **Sehr viele Verweigerungen:** kein Ausschluss, Fehler steigen weiter; der Ritt kann jederzeit abgebrochen werden.
 - **Offline:** Spiel startet und läuft vollständig (Regel 5).
 - **Neue Spielversion:** gilt ab dem nächsten Start, Spielstand bleibt erhalten (Regeln 5, 47).
-- **Schwaches Gerät:** Grafikstufe sinkt automatisch (Regel 4).
+- **Schwaches Gerät:** Grafikstufe sinkt automatisch (Regel 4); bei manuell zu hoher Stufe ein
+  Hinweis (Regel 4).
+- **Grafikstufe im Ritt gewechselt / 3D-Darstellung kurz verloren:** weiter spielbar bzw. Pause
+  (Regel 4).
+- **Rückwärts gegen Hindernis, Zaun oder über Start-/Ziellinie:** Pferd hält an, Linien zählen
+  nicht (Regel 9).
 
 ## Plattform-Ausprägungen
 

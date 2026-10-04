@@ -127,6 +127,9 @@ ausstehenden unbewerteten 3-s-Wiederaufbau desselben Elements ab. Das HUD-Modell
 `services.ride` (`{ session, engine, screen }`, gesetzt vom Ritt-Bildschirm, beim Verlassen entfernt)
 ist **nur für den Test-Hook** (`adapters/platform/test-hooks.js`, nur mit `?testhooks`): er liest
 daraus einen Schnappschuss. Produktionscode liest es nicht.
+Der Test-Hook bietet außer Lesefunktionen `go(name, params)` sowie `loseContext()` /
+`restoreContext()` (simulierter WebGL-Kontextverlust über `WEBGL_lose_context`, Rückgabe `false`
+ohne Engine oder Erweiterung); der Schnappschuss enthält `contextLost`.
 
 ### Einstellungs-Dienst (application/settings-service.js)
 
@@ -139,6 +142,7 @@ settings.setGraphicsLevel(level)            // manuelle Wahl, Automatik aus
 settings.setAutoLevel(level)                // Governor senkt die Stufe, Automatik bleibt an
 settings.setCamera('follow'|'rider')        // CAMERA_MODES in settings-schema.js
 settings.setAid('free'|'course', on)
+settings.setShowFps(on)                     // fps-Anzeige im Ritt (Regel 4, 44); Standard aus
 settings.setVolume('music'|'sfx', v) ; settings.setMuted('music'|'sfx', m)
 settings.onChange(fn) → unsubscribe
 ```
@@ -166,7 +170,7 @@ Ein JSON-Objekt unter `localStorage['zoes-horse-farm.save']`:
 ```js
 {
   version: 1,
-  settings: { lang, graphicsAuto, graphicsLevel, camera, aidFree, aidCourse,
+  settings: { lang, graphicsAuto, graphicsLevel, camera, aidFree, aidCourse, showFps,
               musicVolume, musicMuted, sfxVolume, sfxMuted },
   horse:    { name: null|string, nameAnswered: bool, coat, marking },
   progress: { unlocked: 1..5, courses: { '1': { faults, timeCs, stars } }, jumps,
@@ -196,6 +200,8 @@ unbekannte Felder bleiben). Neue Bereiche: neuen Sanitizer registrieren (`regist
 
 `InputState` je Frame: `{ steer: -1..1 (rechts +), throttle: -1..1 (W +), gallop: bool,
 jump: bool (Flanke: in diesem Frame gedrückt), pause: bool (Flanke), camera: bool (Flanke) }`.
+`throttle < 0` kommt von S/Pfeil-runter und vom Joystick nach unten gleichermaßen; im Halt steuert
+es das Rückwärtsrichten (siehe Reit-Simulation), sonst bremst es.
 
 ```js
 const input = createInput({ container, inputMode, isActive });  // isActive: false bei Pause/anderem Bildschirm
@@ -212,8 +218,17 @@ input.touch.setGallop(bool) // Galopp-Umschalter setzen (Touch)
 ```
 Tastatur: `gallop = shiftHeld && !shiftLatched`. Ein fokussiertes Bedienelement (Button, Eingabefeld,
 Schieberegler) **behält seine Tasten** (Leertaste/Enter/Pfeile): die Tastatur ignoriert Ereignisse,
-deren Ziel ein solches Element ist. Touch: Galopp-Umschalter; Joystick-Totzone aus
-`TUNING.control.stickDeadZone`.
+deren Ziel ein solches Element ist. Touch: Galopp-Umschalter. Joystick (`joystick-mapping.js`,
+rein): **hybride Totzone**
+(„scaled radial followed by sloped scaled axial“, minimuino.github.io/thumbstick-deadzones). Erst
+eine skalierte **radiale** Totzone (`TUNING.control.stickDeadZone`; Länge des Stick-Vektors, Rest
+auf 0..1 umgerechnet), dann axiale Totzonen auf den Einheits-Richtungskomponenten, danach mal
+Länge: `control.stickAxialThrottle` (≈ ±11,5° um die Waagerechte: keine Tempoänderung, Drehen auf
+der Stelle bleibt Drehen und startet kein Rückwärtsrichten) und `control.stickAxialSteer` (≈ ±7°
+um die Senkrechte: keine Lenkung, Fingerwackeln beim geraden Anreiten dreht das Pferd nicht). So
+laufen Lenken und Tempo nicht ineinander. Dazu Lenk-Verstärkung: volle Lenkung ab
+`TUNING.control.stickSteerFull` (≤ 2/3 seitlicher Auslenkung), schräg nach vorn gehalten lenkt damit
+deutlich. Tempo = umgerechnete Vertikalkomponente (ganz nach unten = −1).
 
 ### Reit-Simulation (`src/domain/sim/`, rein, deterministisch mit injiziertem RNG)
 
@@ -221,7 +236,7 @@ deren Ziel ein solches Element ist. Touch: Galopp-Umschalter; Joystick-Totzone a
 const sim = createRidingSim({ obstacles, rules, rng = createRng(1), tuning = TUNING });
 sim.reset({ x, z, heading });           // Halt, kein Galopp
 const events = sim.step(dt, input);     // input = InputState
-sim.horse  // { x, z, heading, speed, gait: 'halt'|'walk'|'trot'|'canter', gallop,
+sim.horse  // { x, z, heading, speed (< 0 = Rückwärtsrichten), gait: 'halt'|'walk'|'trot'|'canter'|'back', gallop,
            //   y, jump: null|{ phase: 'takeoff'|'flight'|'landing', progress 0..1, elementId },
            //   hop: null|{ progress }, refusal: null|{ type: 'stop'|'runout', elementId, progress },
            //   turnRate }
@@ -246,11 +261,47 @@ Der Aufprall auf Ständer/Hindernis ohne Sprung lässt das Pferd seitlich auswei
 **jeder** Geschwindigkeit ab der Halt-Schwelle (`speeds.haltBelow`), also auch im Schritt. Endet der
 Galopp unter `trotMin` (Absprung-Anlauf), beschleunigt das Pferd mit `control.gallopEndTrotUp`
 bis in den Arbeitstrab statt in den Schritt zu fallen; Zaun/Verweigerung halten an.
+**Rückwärtsrichten (Regeln 8, 9, 24; `rein-back.js`).** Modelliert als **negative Geschwindigkeit**
+(`horse.speed < 0`, Gangart `'back'`), nicht als eigener Zustand: `advance`, Lenkung (`updateSteering`
+nutzt `max(0, speed)`, also volle Drehung wie im Halt), Zaun (`keepRearInside` schiebt die Hinterhand
+zurück) und das Ritt-Protokoll arbeiten unverändert, es gibt keinen zweiten Bewegungspfad.
+`gaitForSpeed` liefert bei `speed < 0` `'back'`. `updateReinBack(state, throttle, dt, tuning)` läuft
+vor `updateSpeed` und übernimmt den Schritt nur, wenn es das Tempo setzt: im Halt (Tempo genau 0, kein
+Galopp, nicht in Verweigerung/Ausweichen) mit gehaltenem `throttle < 0` startet das Pferd nach
+`TUNING.reinBack.delayS` (< 0,5 s) und beschleunigt mit `accel` auf `maxSpeed · Auslenkung`; loslassen
+bremst mit `decel` bis 0; `throttle > 0` oder Galopp setzen das Tempo sofort auf 0 und die normale
+Beschleunigung übernimmt. Bremsen aus der Fahrt mit gehaltenem S führt erst in den Halt, die Pause
+beginnt danach. Alle Verbraucher von Tempo/Gangart bleiben dadurch richtig (jeder mit einem
+expliziten Wächter, wo nötig):
+- Sprung/Hop/Puffer: `pressJump` kehrt bei `speed < 0` sofort zurück (Space wirkt nicht, kein Hop,
+  Puffer wird verworfen); `gaitAllows('back')` ist ohnehin `false`.
+- Anreiten/Verweigerung/Ausweichen: `approaches()` liefert rückwärts nichts (kein `sim.approach`, keine
+  Absprung-Hilfe), `checkLastPoints` läuft nur bei `speed >= 0`; der Aufprall-Ausweichbogen
+  (`swerve`) braucht `speed >= haltBelow`.
+- Hindernisse: `holdRearBack` macht einen Rückwärtsschritt rückgängig (Position und Richtung), wenn der
+  Hinterhand-Punkt (`horse.rearLength` hinter dem Bezugspunkt) in einen gesperrten Bereich geriete
+  (längs der Stangen mit `reinBack.rearClearance` statt `horse.frontMargin`, denn Schweif und Kruppe
+  reichen ≈ 0,27 m hinter den Punkt),
+  auch wenn er schon darin steht (direkt nach einer Landung). Drehen im Halt und Vorwärtsreiten
+  bleiben unberührt.
+- Zaun/Hindernis halten auf: Bleibt die Rückwärtsstrecke eines Schritts unter
+  `reinBack.blockedShare` der beabsichtigten, hält das Pferd an (`speed = 0`, Gangart `halt`, kein
+  `fenceStop`-Ereignis) und bleibt stehen, bis S/Joystick losgelassen wird (`backBlocked`).
+- Start-/Ziellinie: `run.onLineCross(prev, next, timeMs, { backwards })`; der Parcours-Modus setzt
+  `backwards` aus `movedBackwards(prev, next, heading)` (Schritt gegen die Blickrichtung). Rückwärts
+  gekreuzte Linien zählen nie; Kombination (`run.update`) und Wertung kennen keine Geschwindigkeit.
+- Ritt-Klang: `ride-sounds` hängt nur an Ereignissen; Rückwärtsrichten erzeugt keine. Der Hufschlag
+  kommt über `horse.onFootfall('back', leg)` (leiser, langsamer Tritt in `sfx.hoof`).
+Spielwerte stehen im eigenen Block `TUNING.reinBack` (`delayS`, `maxSpeed`, `accel`, `decel`,
+`blockedShare`, `rearClearance`; kein Messwert veröffentlicht: Fußfolge Zweitakt-Diagonale wie der
+Trab rückwärts, Tempo geschätzt aus den wenigen klaren Tritten der Dressur-Aufgabe).
 Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven, Parcours-Bau `TUNING.course`: Galoppsprung, Landung/Absprung, freie Strecke, Oxer-Tiefen, Wiederaufbau-Verzögerung `rebuildDelayS`,
-Hinweis-Dauer `missingHintS`, `control.stickDeadZone`) nur in `src/domain/sim/tuning.js`;
+Hinweis-Dauer `missingHintS`, `control.stickDeadZone`, `control.stickSteerFull`,
+`control.stickAxial*`, Lenkraten `control.turn*`) nur in `src/domain/sim/tuning.js`;
 Regel-Konstanten (Fehlerpunkte, Zeitfehler-Schritt, Sterne, Auszeichnungs-Schwellen) bleiben in
 ihren Domain-Modulen. Die Governor-Defaults (`GOVERNOR_DEFAULTS` in `view3d/quality.js`) sind
-Regel-4-Werte und bleiben dort.
+Regel-4-Werte und bleiben dort; ebenso die Werte des Hinweises „Stufe zu hoch“
+(`LOW_FPS_HINT_DEFAULTS`: 5 s Fenster, 3 s Schonzeit, Grenze 30 fps).
 
 ### Parcours (`src/domain/course/`, rein)
 
@@ -263,7 +314,7 @@ const run = createCourseRun(course);
 run.phase                    // 'prestart' | 'riding' | 'finished'
 run.current                  // null (→ Ziel) | { obstacleIndex, part, elementId }
 run.rules                    // für die Sim: canRefuse(elementId, dir)
-run.onLineCross(prev, next, timeMs)        // Start-/Ziellinie mit Richtung
+run.onLineCross(prev, next, timeMs, { backwards })  // Start-/Ziellinie mit Richtung; rückwärts zählt nie
 run.onLanded(elementId, dir, knocked)      // → { scored, rebuildAfterS: 3|null }
 run.onRefusal(elementId, dir)
 run.update(horse, timeMs)                  // Kombination-Abwenden, Zeit
@@ -284,12 +335,21 @@ world.setAid(null | { elementId, dir, zone })       // Absprung-Hilfe
 world.setLines(null | { start, finish, labels: { start, finish } })  // Start-/Ziellinie; Texte vom Aufrufer übersetzt
 world.setFinishMarked(bool)
 world.setShadowFocus(x, z)                          // Schatten folgt dem Pferd
-world.setQuality('low'|'medium'|'high')
+world.setQuality('low'|'medium'|'high')            // fasst nur an, was sich wirklich ändert (Normal-
+                                                    // Maps, Anisotropie, Nebel nur bei Wertwechsel);
+                                                    // gibt Schatten-Map und PMREM-Ziel frei, wenn die
+                                                    // Stufe sie nicht braucht (baut sie später neu);
+                                                    // ändert NICHT die Pixel-Ratio (Sache der Engine)
+world.restoreAfterContextLoss()                     // nach wiederhergestelltem WebGL-Kontext: PMREM-
+                                                    // Umgebungslicht neu rendern (altes Ziel nur
+                                                    // vergessen, nicht disposen); Schatten-Map baut
+                                                    // three.js selbst neu
 world.update(dt, camera)                            // Himmel, Umgebung, Ringe, Linien (je Frame)
 world.dispose()
 const horse = createHorse({ coat, marking, quality });  // → { object, earAnchor, ... }
 horse.object                                         // THREE.Group, schaut nach +Z
-horse.update(dt, sim.horse)                          // Gangart-/Sprung-Animation
+horse.update(dt, sim.horse)                          // Gangart-/Sprung-Animation (Gangart 'back':
+                                                     // Zweitakt-Diagonale rückwärts, Huf läuft im Stand nach vorn)
 horse.setAppearance({ coat, marking })
 horse.setQuality(level)
 horse.earAnchor                                      // Object3D für Reiter-Sicht
@@ -341,6 +401,53 @@ audio.dispose()
 `medium`: pixelRatio ≤ 1,5, Schatten 1024 (nur Pferd/Hindernisse), Standard-Materialien.
 `high`: pixelRatio ≤ 2, Schatten 2048, mehr Umgebung (Bäume, Gras-Instanzen), Nebel.
 Automatik: `src/adapters/view3d/quality.js` (`createQualityGovernor`), misst nur beim Reiten.
+Bei **manueller** Stufe über `low` (`canHintLowerLevel`) meldet `createLowFpsHint` (gleiche
+Messregeln, eine Instanz je Ritt bzw. freiem Modus) einmal „Grafik zu hoch“ (< 30 fps im 5-s-Mittel);
+auf `low` wird weder gemessen noch gezeigt (es gibt nichts Niedrigeres). „Neu starten“ im Parcours
+ist ein neuer Ritt (Konzept-Regel 39): `reset()` erlaubt den Hinweis erneut. Der Ritt-Bildschirm
+zeigt ihn als Toast (`feedback`-Element, 5 s Echtzeit, auch bei wenigen fps), die Stufe bleibt.
+
+### Engine, Stufenwechsel und Kontextverlust (`view3d/engine.js`, `view3d/resilience.js`)
+
+```js
+engine.contextLost                    // true, solange der WebGL-Kontext weg ist
+engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
+```
+- **Kontextverlust:** `watchContextLoss` meldet Verlust/Wiederherstellung und ruft zur Sicherheit
+  `preventDefault` auf (ohne das gäbe es nie eine Wiederherstellung; three.js r186 tut es in
+  `onContextLost` bereits selbst, wir verlassen uns nicht darauf). Der Ritt-Bildschirm abonniert beides:
+  bei Verlust pausiert er, „Weiter“ ist gesperrt und ein Hinweis steht im Pausenmenü; nach der
+  Wiederherstellung (Engine: three.js hat seinen Zustand selbst neu aufgebaut, dann
+  `world.restoreAfterContextLoss()`, Resize, Shader-Vorkompilierung) wird „Weiter“ wieder frei,
+  der Ritt bleibt pausiert, bis das Kind fortsetzt. Beginnt ein Ritt bei verlorenem Kontext, startet
+  er pausiert.
+- **Kommt der Kontext nicht zurück:** Ein Wächter (`createRestoreWatchdog`, Konstante
+  `CONTEXT_RESTORE_TIMEOUT_MS` = 8 s, technischer Wert, nicht in `tuning.js`) startet beim Verlust.
+  Läuft er ab, wechselt der Hinweis im Pausenmenü zu „Bitte lade die Seite neu.“ und ein Knopf
+  „Neu laden“ (`[data-action="reload"]`, `location.reload()`) erscheint und bekommt den Fokus. Kommt
+  der Kontext doch noch, verschwinden beide wieder. Den Fokus im Pausenmenü bekommt immer der erste
+  nutzbare Knopf (bei Verlust ist „Weiter“ gesperrt).
+- **Stufenwechsel:** `applyQuality` ändert Welt und Pferd (die Pixel-Ratio wird nur **vorgemerkt**)
+  und startet danach `renderer.compileAsync` (KHR_parallel_shader_compile). Währenddessen hält ein
+  `RenderGate` (höchstens 2,5 s) Simulation und Zeichnen an, das letzte Bild bleibt stehen. Die
+  Pixel-Ratio samt `resize` wendet erst die Schleife an, wenn das Gate offen ist, im selben Frame,
+  der wieder zeichnet: Ein Resize leert den Zeichenpuffer, bei geschlossenem Gate wäre der
+  Bildschirm sonst bis zu 2,5 s schwarz.
+- **Robustheit:** Jeder Schritt der Schleife (Resize, Ritt-Frame, Render) und der Einstellungs-
+  Handler läuft in `try/catch`; Fehler werden begrenzt geloggt (`createErrorReporter`, einmal je
+  Stelle und 5 s), die Schleife läuft weiter.
+
+### fps-Anzeige (`ui/fps-display.js`)
+
+`createFpsMeter({ intervalS: 0.5, maxFrameS: 1 })` mittelt die Bildrate und meldet etwa zweimal pro
+Sekunde einen gerundeten Wert; ein Frame länger als `maxFrameS` (ausgesetzter Tab) beginnt ein neues
+Intervall. `formatFpsText({ fps, level, auto }, t)` wählt nur den i18n-Schlüssel und übergibt
+Parameter: `ride.fpsLevelAuto` („58 fps · Mittel (Auto)“), `ride.fpsLevel` („58 fps · Mittel“, bei
+manueller Stufe) oder `ride.fps` („58 fps“, ohne Stufe); Trennzeichen, Wortstellung und der Platzhalter
+`ride.fpsNone` („–“, bis der erste Mittelwert da ist) stehen in den Sprachdateien. Das Element
+`[data-hud="fps"]` ist die erste Zeile der HUD-Spalte oben links (`.ride-hud`), kann also keine Parcours-Chips verdecken; es folgt live der Einstellung
+`showFps` und der Stufe (Governor, Einstellungen). Beim Ein-/Ausschalten wird der angezeigte Wert
+zurückgesetzt (Platzhalter, bis der nächste Mittelwert da ist).
 
 ## Arbeitsweise
 

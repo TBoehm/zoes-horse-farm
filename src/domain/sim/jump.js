@@ -118,10 +118,13 @@ export function railLayout(element) {
   return [{ rail: 0, along: 0 }];
 }
 
-/** Half extent of the blocked area (local) that the horse may not enter without jumping. */
-export function blockExtents(element, tuning) {
+/**
+ * Half extent of the blocked area (local) that the horse may not enter without jumping.
+ * `alongMargin` is the distance kept before/behind the poles (front margin by default).
+ */
+export function blockExtents(element, tuning, alongMargin = tuning.horse.frontMargin) {
   return {
-    along: (element.spread || 0) / 2 + tuning.horse.frontMargin,
+    along: (element.spread || 0) / 2 + alongMargin,
     across: POLE_LENGTH / 2 + STAND_WIDTH + tuning.horse.halfWidth,
   };
 }

@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createQualityGovernor, pickInitialLevel, lowerLevel, QUALITY_PRESETS } from './quality.js';
+import {
+  canHintLowerLevel,
+  createLowFpsHint,
+  createQualityGovernor,
+  pickInitialLevel,
+  lowerLevel,
+  QUALITY_PRESETS,
+} from './quality.js';
 import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
 
 /** Runs the governor for `seconds` at a constant frame rate. */
@@ -245,5 +252,109 @@ describe('createQualityGovernor', () => {
     expect(gov.averageFps).toBeNull();
     run(gov, 5, 60);
     expect(gov.averageFps).toBeCloseTo(60, 0);
+  });
+});
+
+describe('createLowFpsHint (rule 4: manual level too high for the device)', () => {
+  /** Runs for `seconds`; returns how often the hint fired. */
+  function runHint(hint, seconds, fps, measuring = true) {
+    const dt = 1 / fps;
+    let fired = 0;
+    for (let i = 0; i < Math.round(seconds * fps); i += 1) {
+      if (hint.frame(dt, measuring)) fired += 1;
+    }
+    return fired;
+  }
+
+  it('fires after 3 s grace + 5 s below 30 fps', () => {
+    const hint = createLowFpsHint();
+    expect(runHint(hint, 3, 20)).toBe(0); // grace period
+    expect(runHint(hint, 4.9, 20)).toBe(0);
+    expect(runHint(hint, 0.2, 20)).toBe(1);
+  });
+
+  it('fires only once, however long the frame rate stays low', () => {
+    const hint = createLowFpsHint();
+    expect(runHint(hint, 60, 10)).toBe(1);
+  });
+
+  it('does not fire at 30 fps or more', () => {
+    const hint = createLowFpsHint();
+    expect(runHint(hint, 60, 30)).toBe(0);
+    expect(runHint(hint, 60, 60)).toBe(0);
+  });
+
+  it('averages short drops over 5 s', () => {
+    const hint = createLowFpsHint();
+    runHint(hint, 3, 60);
+    // 4 s at 40 fps + 1 s at 10 fps: 170 frames / 5 s = 34 fps
+    let fired = 0;
+    for (let k = 0; k < 6; k += 1) {
+      fired += runHint(hint, 4, 40);
+      fired += runHint(hint, 1, 10);
+    }
+    expect(fired).toBe(0);
+  });
+
+  it('does not measure while not riding and needs the grace period afterwards', () => {
+    const hint = createLowFpsHint();
+    expect(runHint(hint, 30, 10, false)).toBe(0);
+    expect(runHint(hint, 7.9, 10)).toBe(0); // 3 s grace + 4.9 s measuring
+    expect(runHint(hint, 0.2, 10)).toBe(1);
+  });
+
+  it('an interruption resets the window and the grace period', () => {
+    const hint = createLowFpsHint();
+    runHint(hint, 7, 10); // 3 s grace + 4 s measured
+    hint.interrupt();
+    expect(runHint(hint, 7, 10)).toBe(0);
+    expect(runHint(hint, 1.1, 10)).toBe(1);
+  });
+
+  it('reset starts a new ride: it can fire again and needs the grace period again', () => {
+    const hint = createLowFpsHint();
+    expect(runHint(hint, 60, 10)).toBe(1);
+    expect(runHint(hint, 60, 10)).toBe(0);
+    hint.reset();
+    expect(runHint(hint, 7.9, 10)).toBe(0);
+    expect(runHint(hint, 0.2, 10)).toBe(1);
+  });
+
+  it('a frame longer than 2 s counts as an interruption', () => {
+    const hint = createLowFpsHint();
+    runHint(hint, 7, 10);
+    hint.frame(2.5, true);
+    expect(runHint(hint, 7, 10)).toBe(0);
+    expect(runHint(hint, 1.1, 10)).toBe(1);
+  });
+
+  it('shows the hint again for a new ride (a new instance)', () => {
+    expect(runHint(createLowFpsHint(), 20, 10)).toBe(1);
+    expect(runHint(createLowFpsHint(), 20, 10)).toBe(1);
+  });
+
+  it('ignores invalid frame times', () => {
+    const hint = createLowFpsHint();
+    for (const bad of [NaN, -1, undefined]) expect(hint.frame(bad, true)).toBe(false);
+  });
+
+  it('accepts other thresholds through options', () => {
+    const hint = createLowFpsHint({ options: { windowS: 2, graceS: 0, maxFps: 20 } });
+    expect(runHint(hint, 2.1, 15)).toBe(1);
+  });
+});
+
+describe('canHintLowerLevel', () => {
+  it('is true only for a manual level above low', () => {
+    expect(canHintLowerLevel({ auto: false, level: 'high' })).toBe(true);
+    expect(canHintLowerLevel({ auto: false, level: 'medium' })).toBe(true);
+  });
+
+  it('is false at the lowest level: there is nothing lower to pick', () => {
+    expect(canHintLowerLevel({ auto: false, level: 'low' })).toBe(false);
+  });
+
+  it('is false with "Automatic" on (the governor handles it)', () => {
+    expect(canHintLowerLevel({ auto: true, level: 'high' })).toBe(false);
   });
 });

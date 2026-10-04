@@ -4,6 +4,7 @@
 import { expect, test } from '@playwright/test';
 import {
   canvasScreenshotSize,
+  createFinger,
   createKeys,
   jumpOverCross,
   NAMED,
@@ -18,18 +19,6 @@ import {
 
 // A small window keeps the software renderer of the CI browser fast enough
 test.use({ viewport: { width: 640, height: 400 } });
-
-/** Touch input through the Chrome DevTools Protocol (real touch events, like a finger). */
-async function createFinger(page) {
-  const client = await page.context().newCDPSession(page);
-  const send = (type, points) =>
-    client.send('Input.dispatchTouchEvent', { type, touchPoints: points });
-  return {
-    down: (x, y) => send('touchStart', [{ x, y, id: 1 }]),
-    move: (x, y) => send('touchMove', [{ x, y, id: 1 }]),
-    up: () => send('touchEnd', []),
-  };
-}
 
 test.describe('free riding (SRT-002)', () => {
   test('starts, renders a non-blank 3D scene without console errors or asset files', async ({
@@ -127,6 +116,25 @@ test.describe('free riding (SRT-002)', () => {
     expect((await rideState(page)).horse.speed).toBe(0);
   });
 
+  test('S from halt reins the horse back after a short pause; releasing S stops it', async ({
+    page,
+    browserName,
+  }) => {
+    await openGameMenu(page, test, browserName);
+    const start = await startFreeRide(page);
+    expect(start.horse.speed).toBe(0);
+    const keys = createKeys(page);
+    await keys.set('s', true);
+    await page.waitForFunction(() => window.__zhfTest.ride().horse.gait === 'back');
+    const backing = await rideState(page);
+    expect(backing.horse.speed).toBeLessThan(0);
+    await keys.set('s', false);
+    await page.waitForFunction(() => window.__zhfTest.ride().horse.speed === 0);
+    const stopped = await rideState(page);
+    expect(stopped.horse.gait).toBe('halt');
+    await keys.releaseAll();
+  });
+
   test('Esc pauses: the horse stands still, the pause menu offers four actions', async ({
     page,
     browserName,
@@ -139,7 +147,8 @@ test.describe('free riding (SRT-002)', () => {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.__zhfTest.ride().paused);
     await keys.releaseAll();
-    await expect(page.locator('[data-overlay="pause"] [data-action]')).toHaveCount(4);
+    // the "Reload" button exists only while a lost WebGL context does not come back
+    await expect(page.locator('[data-overlay="pause"] [data-action]:visible')).toHaveCount(4);
     // the pause menu is a modal dialog with a name
     const dialog = page.locator('[data-overlay="pause"]');
     await expect(dialog).toHaveAttribute('role', 'dialog');
@@ -400,6 +409,37 @@ test.describe('touch controls (SRT-002)', () => {
       { polling: 100 },
     );
     await finger.up();
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('dragging the joystick straight down from halt reins the horse back', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CDP touch input needs Chromium');
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName);
+    await page.locator('[data-entry="free"]').tap();
+    const start = await waitForRide(page, 'free');
+    expect(start.horse.speed).toBe(0);
+    const box = await page.locator('[data-control="joystick"]').boundingBox();
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    const finger = await createFinger(page);
+
+    await finger.down(cx, cy);
+    await finger.move(cx, cy + 20);
+    await finger.move(cx, cy + 60);
+    await page.waitForFunction(() => window.__zhfTest.ride().horse.gait === 'back', null, {
+      polling: 100,
+    });
+    expect((await rideState(page)).horse.speed).toBeLessThan(0);
+
+    // released: the horse stops
+    await finger.up();
+    await page.waitForFunction(() => window.__zhfTest.ride().horse.speed === 0, null, {
+      polling: 100,
+    });
     expect(watch.errors).toEqual([]);
   });
 

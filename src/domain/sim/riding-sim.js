@@ -21,6 +21,7 @@ import {
   updateSpeed,
   updateSteering,
 } from './movement.js';
+import { updateReinBack } from './rein-back.js';
 import {
   blockExtents,
   gaitAllows,
@@ -89,6 +90,10 @@ export function createRidingSim({
   };
 
   let settling = false;
+  // Speed controller state shared by rein-back and the normal speed update; `backHold` is the
+  // pause before the horse starts to step back, `backBlocked` keeps it standing after fence or
+  // obstacle stopped it until S is released.
+  const control = { speed: 0, gallop: false, settling: false, backHold: 0, backBlocked: false };
   let gallopBlocked = false;
   let fenceStopNormal = null;
   let jump = null;
@@ -136,6 +141,8 @@ export function createRidingSim({
       turnRate: 0,
     });
     settling = false;
+    control.backHold = 0;
+    control.backBlocked = false;
     // after a restart the horse only gallops after a fresh key press
     gallopBlocked = !gallop;
     fenceStopNormal = null;
@@ -162,6 +169,8 @@ export function createRidingSim({
 
   function approaches() {
     const list = [];
+    // A horse that reins back is not approaching anything, whatever it faces
+    if (horse.speed < 0) return list;
     for (const el of elements) {
       if (jump && jump.el === el) continue;
       const info = approachInfo(el, horse, T.approachDistance);
@@ -207,7 +216,8 @@ export function createRidingSim({
   // `buffered`: a press carried over from the landing; it only jumps when an obstacle is within
   // reach and never turns into a hop.
   function pressJump(events, { buffered = false } = {}) {
-    if (refusal || maneuver) {
+    // no jump, no hop and no buffered press while the horse reins back (rule 9)
+    if (refusal || maneuver || horse.speed < 0) {
       spaceBuffer = 0;
       return;
     }
@@ -515,6 +525,42 @@ export function createRidingSim({
     }
   }
 
+  function rearInside(el, rx, rz) {
+    // the tail reaches further back than the front margin: use the rear clearance along the poles
+    const ext = blockExtents(el, T, T.reinBack.rearClearance);
+    const p = toLocal(el, rx, rz);
+    return Math.abs(p.along) < ext.along && Math.abs(p.across) < ext.across;
+  }
+
+  /**
+   * The hindquarters must not pass through an obstacle while the horse reins back: a step that
+   * would put the rear point into a blocked area is undone (position and heading, so turning
+   * into the obstacle is held back too). It also holds when the rear point already is inside, e.g.
+   * right after a landing: the horse cannot back through the obstacle. Turning on the spot
+   * and riding forward are not touched (the rear may swing past an obstacle there).
+   */
+  function holdRearBack(prevX, prevZ, prevHeading) {
+    if (jump || horse.speed >= 0) return;
+    const f = forwardOf(horse.heading);
+    const rx = horse.x - f.x * T.horse.rearLength;
+    const rz = horse.z - f.z * T.horse.rearLength;
+    for (const el of elements) {
+      if (!rearInside(el, rx, rz)) continue;
+      horse.x = prevX;
+      horse.z = prevZ;
+      horse.heading = prevHeading;
+      horse.turnRate = 0;
+      return;
+    }
+  }
+
+  function stopBacking() {
+    horse.speed = 0;
+    horse.gait = 'halt';
+    control.speed = 0;
+    control.backBlocked = true;
+  }
+
   function handleFence(dt, events) {
     const speedBefore = horse.speed;
     const res = applyFence(horse, T, { allowStop: !jump, dt });
@@ -582,6 +628,9 @@ export function createRidingSim({
   function substep(dt, input, events) {
     const prevX = horse.x;
     const prevZ = horse.z;
+    const prevHeading = horse.heading;
+    // distance the rein-back intends to cover in this step (0 when not backing)
+    let backDistance = 0;
     if (spaceBuffer > 0) {
       spaceBuffer = Math.max(0, spaceBuffer - dt);
       if (spaceBuffer > 0 && !jump) pressJump(events, { buffered: true });
@@ -593,25 +642,39 @@ export function createRidingSim({
         horse.speed = Math.max(0, horse.speed - refusal.decel * dt);
         horse.turnRate = 0;
       } else {
-        const ctl = { speed: horse.speed, gallop: horse.gallop, settling };
-        updateSpeed(ctl, refusal ? 0 : input.throttle, dt, T);
-        horse.speed = ctl.speed;
-        settling = ctl.settling;
+        control.speed = horse.speed;
+        control.gallop = horse.gallop;
+        control.settling = settling;
+        // rein-back only from a calm halt: never during a refusal or an evasion
+        const backThrottle = refusal || maneuver ? 0 : input.throttle;
+        if (!updateReinBack(control, backThrottle, dt, T)) {
+          updateSpeed(control, refusal ? 0 : input.throttle, dt, T);
+        }
+        horse.speed = control.speed;
+        settling = control.settling;
         if (maneuver) steerManeuver(dt);
         else updateSteering(horse, input.steer, dt, T);
       }
       horse.gait = gaitForSpeed(horse.speed, horse.gallop, T.speeds);
+      if (horse.speed < 0) backDistance = -horse.speed * dt;
       advance(horse, horse.speed, dt);
     }
     constrainObstacles(prevX, prevZ, events);
+    holdRearBack(prevX, prevZ, prevHeading);
     handleFence(dt, events);
+    if (backDistance > 0 && horse.speed < 0) {
+      // fence or obstacle held the hindquarters back: the horse stops stepping back
+      const f = forwardOf(horse.heading);
+      const moved = (prevX - horse.x) * f.x + (prevZ - horse.z) * f.z;
+      if (moved < backDistance * T.reinBack.blockedShare) stopBacking();
+    }
     if (maneuver) updateManeuver(dt);
     if (refusal) updateRefusal(dt);
     if (hop) {
       hop.t += dt;
       if (hop.t >= T.jump.hop.duration) hop = null;
     }
-    if (!jump && !refusal && !maneuver) checkLastPoints(events);
+    if (!jump && !refusal && !maneuver && horse.speed >= 0) checkLastPoints(events);
     releaseLocks();
     syncView();
   }

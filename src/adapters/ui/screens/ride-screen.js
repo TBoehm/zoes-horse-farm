@@ -4,6 +4,9 @@
 import { onLangChange, t } from '../i18n.js';
 import { h } from '../dom.js';
 import { getEngine } from '../../view3d/engine.js';
+import { canHintLowerLevel, createLowFpsHint } from '../../view3d/quality.js';
+import { createRestoreWatchdog } from '../../view3d/resilience.js';
+import { createFpsMeter, formatFpsText } from '../fps-display.js';
 import { createInput } from '../../input/input.js';
 import { trapTab } from '../../input/focus-trap.js';
 import { createRideMode } from '../../../application/modes/index.js';
@@ -13,6 +16,7 @@ import { showBadgeToast } from './profile/badge-toast.js';
 
 const HUDS = {};
 const FEEDBACK_VISIBLE_S = 2;
+const HINT_VISIBLE_S = 5; // the "graphics too high" hint is longer than a jump message
 
 /**
  * A mode with a HUD registers a view per mode id:
@@ -42,11 +46,26 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   const hud = h('div', { class: 'ride-hud' });
   const feedbackEl = h('div', { class: 'ride-feedback', role: 'status', 'aria-live': 'polite' });
   const hint = h('div', { class: 'ride-hint' });
+  // Frame rate and graphics level (rule 4), top left above the course HUD; shown on demand
+  const fpsEl = h('div', {
+    class: 'ride-fps',
+    hidden: true,
+    dataset: { hud: 'fps' },
+  });
   const controls = h('div', { class: 'ride-controls' });
   const pauseTitle = h('h2', { id: 'ride-pause-title' });
+  const lostNote = h('p', {
+    class: 'pause-note',
+    hidden: true,
+    role: 'status',
+    dataset: { note: 'graphics-lost' },
+  });
   const btn = (action, cls = '') =>
     h('button', { class: `btn ${cls}`, type: 'button', dataset: { action } });
   const resumeBtn = btn('resume', 'btn-menu');
+  // only shown when the lost WebGL context does not come back (see the watchdog below)
+  const reloadBtn = btn('reload', 'btn-menu');
+  reloadBtn.hidden = true;
   const restartBtn = btn('restart', 'btn-secondary');
   const quitBtn = btn('quit', 'btn-secondary');
   const settingsBtn = btn('settings', 'btn-secondary');
@@ -64,12 +83,36 @@ export function createRideScreen(ctx, params = {}, { rng }) {
       'section',
       { class: 'panel panel-pause' },
       pauseTitle,
-      h('div', { class: 'menu-list' }, resumeBtn, restartBtn, quitBtn, settingsBtn),
+      lostNote,
+      h('div', { class: 'menu-list' }, reloadBtn, resumeBtn, restartBtn, quitBtn, settingsBtn),
     ),
   );
   const el = h('section', { class: 'ride-screen' }, hud, feedbackEl, hint, controls, pauseMenu);
+  hud.append(fpsEl);
   if (hudView) hud.append(hudView.el);
   const renderHud = (model = session.view.hud) => hudView?.render(model);
+
+  // --- fps display (rule 4): setting, averaged value, level text ---
+  const fpsMeter = createFpsMeter();
+  let showFps = settings.get().showFps;
+  let autoGraphics = settings.get().graphicsAuto;
+  let fps = null;
+  function renderFps() {
+    fpsEl.hidden = !showFps;
+    if (!showFps) return;
+    fpsEl.textContent = formatFpsText({ fps, level: engine.level, auto: autoGraphics }, t);
+  }
+  // live: the level can change by the governor or in the settings, the toggle in the settings
+  const offSettings = settings.onChange((s) => {
+    if (s.showFps !== showFps) {
+      // switched on or off: do not show the value of the last time
+      fpsMeter.reset();
+      fps = null;
+    }
+    showFps = s.showFps;
+    autoGraphics = s.graphicsAuto;
+    renderFps();
+  });
 
   // Session lines carry label keys; translate them here (the language may have changed)
   function applyLines(lines) {
@@ -83,13 +126,20 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     );
   }
 
+  function renderLostNote() {
+    lostNote.textContent = t(restoreOverdue ? 'pause.graphicsReload' : 'pause.graphicsLost');
+  }
+
   const renderTexts = () => {
     pauseTitle.textContent = t('pause.title');
     resumeBtn.textContent = t('pause.resume');
+    reloadBtn.textContent = t('pause.reload');
     restartBtn.textContent = t('pause.restart');
     quitBtn.textContent = t(session.quitLabelKey);
     settingsBtn.textContent = t('pause.settings');
     hint.textContent = t('ride.pauseHint');
+    renderLostNote();
+    renderFps();
     hudView?.renderTexts();
     renderHud();
     applyLines(session.view.lines); // the line labels are translated texts too
@@ -97,6 +147,9 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   const offLang = onLangChange(renderTexts);
 
   let paused = false;
+  // WebGL context state (rule 4): see the loss handlers below
+  let contextLost = false;
+  let restoreOverdue = false; // the lost context did not come back in time: ask for a reload
 
   // --- Input and world ---
   // The keyboard only listens while this ride is the top screen and not paused
@@ -117,11 +170,22 @@ export function createRideScreen(ctx, params = {}, { rng }) {
 
   let feedbackTimer = 0;
 
-  function showFeedback(key) {
+  function showFeedback(key, { long = false } = {}) {
     feedbackEl.textContent = t(key);
+    feedbackEl.classList.toggle('is-hint', long);
     feedbackEl.classList.add('is-visible');
-    feedbackTimer = FEEDBACK_VISIBLE_S;
+    feedbackTimer = long ? HINT_VISIBLE_S : FEEDBACK_VISIBLE_S;
   }
+
+  /** Focus for the pause menu: the first button that can be used (Continue is off while lost). */
+  function focusPauseMenu() {
+    const first = [...pauseMenu.querySelectorAll('button')].find((b) => !b.disabled && !b.hidden);
+    first?.focus({ preventScroll: true });
+  }
+
+  // Manual level that is too high for the device: one hint per ride, the level stays (rule 4).
+  // Not at the lowest level: there is nothing lower to pick (canHintLowerLevel).
+  const lowFpsHint = createLowFpsHint();
 
   /** Executes the commands of the session; returns true if the screen is being left. */
   function execute(commands) {
@@ -156,17 +220,54 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     placeHorse(view.horse);
     cameraRig.snap();
     governor.interrupt();
+    lowFpsHint.reset(); // "Start again" is a new ride (concept rule 39)
   }
+
+  // WebGL context lost (rule 4): the ride pauses and cannot go on before the picture is back. If
+  // the browser never restores it (e.g. after repeated losses), the watchdog turns the note into a
+  // reload request.
+  const restoreWatchdog = createRestoreWatchdog({
+    onTimeout() {
+      restoreOverdue = true;
+      renderLostNote();
+      reloadBtn.hidden = false;
+      if (paused && app.current === 'ride') focusPauseMenu();
+    },
+  });
+  function onContextLost() {
+    contextLost = true;
+    restoreOverdue = false;
+    renderLostNote();
+    lostNote.hidden = false;
+    resumeBtn.disabled = true;
+    setPaused(true);
+    restoreWatchdog.start();
+  }
+  function onContextRestored() {
+    contextLost = false;
+    restoreWatchdog.cancel();
+    restoreOverdue = false;
+    reloadBtn.hidden = true;
+    lostNote.hidden = true;
+    resumeBtn.disabled = false;
+    governor.interrupt();
+    lowFpsHint.interrupt();
+    if (paused && app.current === 'ride') focusPauseMenu();
+  }
+  const offContextLost = engine.on('contextLost', onContextLost);
+  const offContextRestored = engine.on('contextRestored', onContextRestored);
 
   function setPaused(next) {
     if (paused === next) return;
+    if (!next && contextLost) return;
     paused = next;
     pauseMenu.hidden = !paused;
     el.classList.toggle('is-paused', paused);
     input.clearEdges();
     governor.interrupt();
+    lowFpsHint.interrupt();
     services.audio?.setPaused(paused);
-    if (paused) resumeBtn.focus({ preventScroll: true });
+    if (paused) focusPauseMenu();
     // a focused menu button must not keep Space/Enter once the ride goes on
     else if (el.contains(document.activeElement)) document.activeElement.blur();
   }
@@ -178,6 +279,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   });
   quitBtn.addEventListener('click', () => app.go(session.quitScreen));
   settingsBtn.addEventListener('click', () => app.push('settings', { fromPause: true }));
+  reloadBtn.addEventListener('click', () => location.reload());
 
   // Auto-pause on lost focus and portrait orientation (rules 12, 38)
   const onHidden = () => document.hidden && setPaused(true);
@@ -200,6 +302,13 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   horse.onFootfall = (gait) => !paused && services.audio?.sfx.hoof(gait);
 
   function frame(dt, rawDt) {
+    if (showFps) {
+      const value = fpsMeter.frame(rawDt); // restarts itself after a suspended tab
+      if (value !== null) {
+        fps = value;
+        renderFps();
+      }
+    }
     if (paused || app.current !== 'ride') {
       governor.frame(rawDt, false);
       return;
@@ -216,7 +325,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     if (execute(session.step(dt, inp).commands)) return;
 
     if (feedbackTimer > 0) {
-      feedbackTimer -= dt;
+      feedbackTimer -= rawDt; // real time: the toast must not stay longer at a low frame rate
       if (feedbackTimer <= 0) feedbackEl.classList.remove('is-visible');
     }
 
@@ -232,10 +341,20 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     cameraRig.update(dt, view.horse, horse.earAnchor);
     world.update(dt, engine.camera);
     governor.frame(rawDt, !document.hidden);
+    if (
+      lowFpsHint.frame(
+        rawDt,
+        !document.hidden && canHintLowerLevel({ auto: autoGraphics, level: engine.level }),
+      )
+    ) {
+      showFeedback('ride.graphicsTooHigh', { long: true });
+    }
   }
 
   cameraRig.setMode(settings.get().camera);
   restart();
+  // The context may have been lost while no ride was running: start paused then
+  if (engine.contextLost) onContextLost();
   engine.run(frame);
 
   const instance = {
@@ -245,13 +364,17 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     screenClass: 'screen-ride',
     onShow() {
       // Back from the settings: still paused
-      if (paused) resumeBtn.focus({ preventScroll: true });
+      if (paused) focusPauseMenu();
     },
     destroy() {
       engine.run(null);
       offLang();
       offMode();
       offRotate();
+      offSettings();
+      offContextLost();
+      offContextRestored();
+      restoreWatchdog.cancel();
       horse.onFootfall = null;
       document.removeEventListener('visibilitychange', onHidden);
       window.removeEventListener('blur', onBlur);

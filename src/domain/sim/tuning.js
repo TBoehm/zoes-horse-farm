@@ -46,17 +46,54 @@ export const TUNING = {
     canterDepart: 3.0,
     // gentle deceleration after the gallop ends down to trotMedium
     settleDecel: 2.5,
-    // turn rate on the spot (rad/s); it drops with speed,
-    // so the turn radius v / ω grows with speed
-    turnInPlace: 1.6,
-    turnSpeedRef: 5.0,
-    // steering responsiveness (1/s)
-    turnResponse: 10,
-    // gamepad/touch stick deflection below this value counts as centered
+    // turn rate on the spot (rad/s); it drops with speed as ω = turnInPlace / (1 + v / turnSpeedRef),
+    // so the turn radius v / ω grows with speed. Reference values (real horses): 10 m volte
+    // (r = 5 m) at walk/trot, 20 m circle (r = 10 m) at canter, jump-off turns at jumping canter
+    // r ≈ 6–8 m, turn on the haunches ≈ on the spot. The game is a bit more agile (child
+    // audience): full lock gives r ≈ 1.0 m at walk (1.5 m/s), 2.7 m at medium trot (3.2 m/s),
+    // 6.3 m at jumping canter (5.8 m/s) and 10.4 m at full gallop (8 m/s); lateral acceleration
+    // v·ω stays ≤ 6.3 m/s² (real: 2.5 m/s² on a 20 m canter circle, ≈ 6–8 m/s² in tight turns).
+    turnInPlace: 1.8,
+    turnSpeedRef: 6.0,
+    // steering responsiveness (1/s): the turn rate reaches 90 % of its target in ~0.19 s
+    turnResponse: 12,
+    // gamepad/touch stick: deflection (share of the stick radius) below this value counts as
+    // centered; scaled radial dead zone, see joystick-mapping.js
     stickDeadZone: 0.12,
+    // stick: sideways deflection (share of the stick radius) that already gives full steering
+    // lock; must stay ≤ 2/3 so the tightest turn is reached before the stop (rule 10)
+    stickSteerFull: 0.6,
+    // stick: axial dead zones on the unit direction components (hybrid dead zone), so the two
+    // controls do not bleed into each other. A hold within ±asin(0.2) ≈ ±11.5° of horizontal
+    // changes no speed (turning on the spot stays a turn, no rein-back or walk-off); a hold
+    // within ±asin(0.12) ≈ ±7° of vertical does not steer (straight approach, thumb wobble).
+    stickAxialThrottle: 0.2,
+    stickAxialSteer: 0.12,
     // ending the gallop below trotMin (strike-off): acceleration (m/s²) up to the working trot
     // instead of dropping to a walk
     gallopEndTrotUp: 2.5,
+  },
+
+  // Rein-back (concept rule 9). A horse reins back in a slow two-beat diagonal gait (same footfall
+  // as the trot, reversed; Mad Barn "Guide to Horse Gaits", USDF "We Got Rhythm"). No published
+  // speed exists, so the values are estimated from the dressage test requirement of a few clear,
+  // calm steps: ≈ 0.5 m per diagonal step at about one stride per second, well below the walk.
+  reinBack: {
+    // standing with S (or the stick down) held: pause before the horse starts to step back (< 0.5 s);
+    // long enough that a child who is still braking has time to release before it reverses
+    delayS: 0.45,
+    // backing speed (m/s) at full deflection; the stick deflection scales it
+    maxSpeed: 0.5,
+    // speed up from the first step to the target speed (m/s²)
+    accel: 1.5,
+    // slow down to a stop when S is released or the deflection is reduced (m/s²)
+    decel: 3.0,
+    // when fence or obstacle hold the hindquarters back, the backward travel of a step falls
+    // below this share of the intended distance: the horse stops (until S is released)
+    blockedShare: 0.98,
+    // clearance (m) the rear point keeps from an obstacle's pole line while backing: the tail and
+    // buttocks reach ≈ 0.27 m behind the rear point (the fence uses horse.rearMargin = 0.3)
+    rearClearance: 0.35,
   },
 
   fence: {

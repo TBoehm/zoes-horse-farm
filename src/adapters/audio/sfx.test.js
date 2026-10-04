@@ -88,7 +88,7 @@ const isClop = (b) =>
   b.length <= 0.03;
 
 describe('mid-range clop for small speakers', () => {
-  for (const gait of ['walk', 'trot', 'canter']) {
+  for (const gait of ['back', 'walk', 'trot', 'canter']) {
     it(`hoof (${gait}) has a clop between 1 and 2.5 kHz that is clearly audible`, () => {
       const clop = render(sfx.hoof, gait).filter(isClop);
       expect(clop.length).toBeGreaterThanOrEqual(1);
@@ -111,6 +111,7 @@ describe('mid-range clop for small speakers', () => {
       );
     expect(peak('canter')).toBeGreaterThanOrEqual(peak('trot'));
     expect(peak('trot')).toBeGreaterThanOrEqual(peak('walk'));
+    expect(peak('walk')).toBeGreaterThanOrEqual(peak('back'));
   });
 });
 
