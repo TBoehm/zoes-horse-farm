@@ -3,9 +3,10 @@ import { clamp } from '../../shared/math.js';
 import { ARENA } from './tuning.js';
 import { forwardOf, headingOf, wrapAngle } from './geometry.js';
 
-/** Gait from speed; with gallop it is always canter (rule 9). */
+/** Gait from speed; with gallop it is always canter, negative speed is the rein-back (rule 9). */
 export function gaitForSpeed(speed, gallop, speeds) {
   if (gallop) return 'canter';
+  if (speed < 0) return 'back';
   if (speed < speeds.haltBelow) return 'halt';
   if (speed <= speeds.walkMax) return 'walk';
   return 'trot';

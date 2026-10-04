@@ -66,11 +66,12 @@ export function riderSeat(state = {}, ctx = null, out = {}) {
     walk: 0,
     trot: 0,
     canter: 0,
+    back: 0,
     [state.gait || 'halt']: 1,
   };
   const phi = ctx?.phi ?? 0;
   for (const k of KEYS) out[k] = 0;
-  blendInto(out, SIT, (weights.halt || 0) + (weights.walk || 0));
+  blendInto(out, SIT, (weights.halt || 0) + (weights.walk || 0) + (weights.back || 0));
   const r = posting(phi);
   blendInto(
     out,

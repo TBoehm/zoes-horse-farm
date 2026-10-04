@@ -4,6 +4,7 @@
 import { courseById } from '../../domain/course/courses.js';
 import { createCourseRun } from '../../domain/course/course-run.js';
 import { toCentiseconds } from '../../domain/course/scoring.js';
+import { movedBackwards } from '../../domain/sim/geometry.js';
 
 /**
  * Pure strategy: knows the course run, but neither the store nor the progress. The ride session
@@ -90,7 +91,10 @@ export function createCourseMode(params = {}) {
       if (run.phase === 'riding') clockMs += dt * 1000;
       next.x = horse.x;
       next.z = horse.z;
-      run.onLineCross(prev, next, clockMs);
+      // a line crossed in rein-back does not count (rule 9)
+      run.onLineCross(prev, next, clockMs, {
+        backwards: movedBackwards(prev, next, horse.heading),
+      });
       run.update(horse, clockMs);
       for (const id of run.drainRebuilds()) host.rebuildNow(id);
       if (run.phase !== 'finished') return null;

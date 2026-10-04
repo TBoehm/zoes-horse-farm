@@ -217,6 +217,7 @@ describe('effects', () => {
     const audio = make();
     audio.unlock();
     const calls = {
+      back: () => audio.sfx.hoof('back'),
       walk: () => audio.sfx.hoof('walk'),
       trot: () => audio.sfx.hoof('trot'),
       canter: () => audio.sfx.hoof('canter'),

@@ -6,6 +6,7 @@ import {
   forwardOf,
   fromLocal,
   headingOf,
+  movedBackwards,
   toLocal,
   wrapAngle,
 } from './geometry.js';
@@ -153,5 +154,24 @@ describe('element coordinates', () => {
       const f = forwardOf(h);
       expect(headingOf(f.x, f.z)).toBeCloseTo(h, 12);
     }
+  });
+});
+
+describe('movedBackwards', () => {
+  // heading 0 looks to +z
+  it('is true when the displacement points against the heading', () => {
+    expect(movedBackwards({ x: 0, z: 0 }, { x: 0, z: -0.1 }, 0)).toBe(true);
+    expect(movedBackwards({ x: 0, z: 0 }, { x: 0.1, z: 0 }, -Math.PI / 2)).toBe(true);
+  });
+
+  it('is false when moving forward, sideways or standing', () => {
+    expect(movedBackwards({ x: 0, z: 0 }, { x: 0, z: 0.1 }, 0)).toBe(false);
+    expect(movedBackwards({ x: 0, z: 0 }, { x: 0.1, z: 0 }, 0)).toBe(false);
+    expect(movedBackwards({ x: 1, z: 2 }, { x: 1, z: 2 }, 0)).toBe(false);
+  });
+
+  it('is false without a usable heading', () => {
+    expect(movedBackwards({ x: 0, z: 0 }, { x: 0, z: -1 }, undefined)).toBe(false);
+    expect(movedBackwards({ x: 0, z: 0 }, { x: 0, z: -1 }, Number.NaN)).toBe(false);
   });
 });

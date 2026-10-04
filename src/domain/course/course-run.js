@@ -172,8 +172,12 @@ export function createCourseRun(course, { tuning = TUNING } = {}) {
       },
     },
 
-    /** Checks the start and finish lines; returns 'start' | 'finish' | 'missing' | null. */
-    onLineCross(prev, next, timeMs) {
+    /**
+     * Checks the start and finish lines; returns 'start' | 'finish' | 'missing' | null.
+     * `backwards`: the horse moved backwards (rein-back) – a line crossed that way does not count.
+     */
+    onLineCross(prev, next, timeMs, { backwards = false } = {}) {
+      if (backwards) return null;
       if (phase === 'prestart' && crossesLine(course.start, prev, next)) {
         phase = 'riding';
         startMs = timeMs;

@@ -1,7 +1,8 @@
 // Gaits as pure functions (no three.js): footfall sequence, cadence, duty factor and hoof paths.
 // Leg index: 0 = LF (left fore), 1 = RF, 2 = LH, 3 = RH.
 // Cadence (riding theory): walk ≈ 55/min, trot ≈ 80/min, canter ≈ 100/min; speed rises mainly
-// through stride length. No foot sliding: hoof travel during stance L = duty · speed / frequency
+// through stride length. The rein-back is a slow two-beat diagonal gait (the trot's footfall,
+// backwards), here ≈ 33–57/min at the backing speeds of TUNING.reinBack. No foot sliding: hoof travel during stance L = duty · speed / frequency
 // (the hoof rests relative to the ground).
 import { TUNING } from '../../../domain/sim/tuning.js';
 import { clamp, lerp, smoothstep } from './math.js';
@@ -13,8 +14,9 @@ const { walkMax, trotMin, trotMax, canterMin, canterMax, trotMedium } = TUNING.s
 const WALK_REF_SPEED = 1.6;
 const TROT_REF_SPEED = trotMedium;
 const CANTER_REF_SPEED = 6;
+const BACK_REF_SPEED = TUNING.reinBack.maxSpeed;
 
-export const GAIT_KEYS = ['halt', 'walk', 'trot', 'canter'];
+export const GAIT_KEYS = ['halt', 'walk', 'trot', 'canter', 'back'];
 
 const powSafe = (x, e) => Math.pow(Math.max(x, 1e-4), e);
 
@@ -41,6 +43,19 @@ export const GAITS = {
     center: [0.07, 0.07, 0.02, 0.02],
     sink: 0.045,
   },
+  back: {
+    // rein-back: two-beat diagonal (LF + RH, then RF + LH), no suspension phase. `reverse`: the
+    // hoof path runs forward relative to the body during stance (the body moves backwards).
+    reverse: true,
+    offsets: [0, 0.5, 0.5, 0],
+    duty: () => 0.55,
+    freq: (v) => 0.55 + 0.4 * clamp(v / BACK_REF_SPEED, 0, 1),
+    lift: [0.13, 0.13, 0.1, 0.1],
+    flex: [1.4, 1.4, 0.65, 0.65],
+    past: [1.1, 1.1, 0.8, 0.8],
+    center: [0.03, 0.03, 0.0, 0.0],
+    sink: 0.02,
+  },
   canter: {
     // left lead: RH → (LH + RF) → LF → suspension. Right lead mirrored.
     offsets: [0.47, 0.26, 0.22, 0],
@@ -65,10 +80,10 @@ export function offsetsFor(gait, lead) {
   return gait === 'canter' && lead < 0 ? g.offsetsRight : g.offsets;
 }
 
-/** Blended stride frequency (Hz) for weights {walk, trot, canter} at speed v. */
+/** Blended stride frequency (Hz) for weights {walk, trot, canter, back} at speed v (≥ 0). */
 export function blendedFrequency(weights, v) {
   let f = 0;
-  for (const k of ['walk', 'trot', 'canter']) {
+  for (const k of ['walk', 'trot', 'canter', 'back']) {
     if (weights[k] > 0) f += weights[k] * GAITS[k].freq(v);
   }
   return f;
@@ -86,7 +101,9 @@ export function legSample(gait, leg, phi, v, f, lead = 1, out = {}) {
   const L = f > 1e-4 ? Math.min(MAX_STANCE_TRAVEL, (d * v) / f) : 0;
   const c = g.center[leg];
   // lift scales a bit with speed within the gait (slow walk: flatter)
-  const liftScale = gait === 'walk' ? lerp(0.45, 1, clamp(v / 1.4, 0, 1)) : 1;
+  let liftScale = 1;
+  if (gait === 'walk') liftScale = lerp(0.45, 1, clamp(v / 1.4, 0, 1));
+  else if (gait === 'back') liftScale = lerp(0.5, 1, clamp(v / BACK_REF_SPEED, 0, 1));
   if (p < d) {
     const u = p / d;
     out.dz = c + L / 2 - L * u;
@@ -105,6 +122,8 @@ export function legSample(gait, leg, phi, v, f, lead = 1, out = {}) {
     out.sink = 0;
     out.stance = false;
   }
+  // rein-back: the same cycle mirrored around the neutral position (forward in stance)
+  if (g.reverse) out.dz = 2 * c - out.dz;
   return out;
 }
 
@@ -126,6 +145,12 @@ export function bodySample(gait, phi, v, lead = 1, out = {}) {
     out.bob = -0.045 * (0.5 + 0.5 * Math.cos(2 * TAU * (phi - d / 2)));
     out.neck = 0.015 * Math.cos(2 * TAU * (phi - d / 2));
     out.roll = 0.006 * Math.sin(TAU * phi);
+  } else if (gait === 'back') {
+    // calm: small bob once per beat, the head follows the diagonal steps a little
+    const a = clamp(v / 0.5, 0, 1);
+    out.bob = -0.012 * a * (0.5 + 0.5 * Math.cos(2 * TAU * (phi - 0.1)));
+    out.neck = 0.03 * a * Math.cos(2 * TAU * (phi - 0.1));
+    out.roll = 0.008 * a * Math.sin(TAU * phi);
   } else if (gait === 'canter') {
     out.bob = -0.065 * (0.5 + 0.5 * Math.cos(TAU * (phi - 0.36)));
     // rocking: nose up when the hindquarters land, nose down on the leading foreleg

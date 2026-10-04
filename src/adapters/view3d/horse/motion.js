@@ -14,11 +14,11 @@ import { clamp, smoothstep } from './math.js';
 import { jumpParam } from './poses.js';
 
 const GAIT_RATE = 5; // gait cross-fade rate (1/s)
-const MOVING_GAITS = ['walk', 'trot', 'canter'];
+const MOVING_GAITS = ['walk', 'trot', 'canter', 'back'];
 
 export function createMotion() {
   return {
-    weights: { halt: 1, walk: 0, trot: 0, canter: 0 },
+    weights: { halt: 1, walk: 0, trot: 0, canter: 0, back: 0 },
     phi: 0,
     freq: 0,
     lead: 1, // +1 left lead, −1 right lead
@@ -41,7 +41,7 @@ export function createMotion() {
 
 const tmpLeg = {};
 const tmpBody = {};
-const target = { halt: 0, walk: 0, trot: 0, canter: 0 };
+const target = { halt: 0, walk: 0, trot: 0, canter: 0, back: 0 };
 
 /**
  * Advance one time step. state = sim.horse. Returns the leg indices whose hoof touched down
@@ -50,13 +50,14 @@ const target = { halt: 0, walk: 0, trot: 0, canter: 0 };
  */
 export function stepMotion(m, dt, state) {
   const gait = GAIT_KEYS.includes(state.gait) ? state.gait : 'halt';
-  const v = Math.max(0, state.speed || 0);
+  // speed of the gait cycles (never negative); the rein-back has a negative sim speed
+  const v = Math.abs(state.speed || 0);
   const turn = state.turnRate || 0;
   m.time += dt;
   m.speed = v;
 
   // gait weights; turning on the spot: walking steps without forward travel
-  target.halt = target.walk = target.trot = target.canter = 0;
+  target.halt = target.walk = target.trot = target.canter = target.back = 0;
   if (gait === 'halt') {
     const step = smoothstep(0.15, 0.6, Math.abs(turn));
     target.walk = step;
@@ -108,7 +109,7 @@ export function stepMotion(m, dt, state) {
 
   // turns: bend into the turn, lean inwards (centripetal)
   m.bend = approach(m.bend, clamp(-turn * 0.28, -0.35, 0.35), 4, dt);
-  m.lean = approach(m.lean, clamp(Math.atan((v * turn) / 9.81), -0.3, 0.3), 4, dt);
+  m.lean = approach(m.lean, clamp(Math.atan(((state.speed || 0) * turn) / 9.81), -0.3, 0.3), 4, dt);
 
   // hoof paths and ground contact per leg
   const falls = m.falls;
@@ -164,7 +165,13 @@ export function stepMotion(m, dt, state) {
 
 /** Base neck carriage per gait (+ = lower/forward). */
 export function neckCarriage(weights) {
-  return weights.halt * 0.04 + weights.walk * 0.12 + weights.trot * 0.0 + weights.canter * -0.05;
+  return (
+    weights.halt * 0.04 +
+    weights.walk * 0.12 +
+    weights.trot * 0.0 +
+    weights.canter * -0.05 +
+    weights.back * 0.1
+  );
 }
 
 export { GAITS };

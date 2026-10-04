@@ -39,6 +39,16 @@ export function headingOf(x, z) {
   return Math.atan2(x, z);
 }
 
+/**
+ * Did the step prev→next lead against the heading (rein-back)? False for a missing heading.
+ * Used so that crossing a line backwards does not count (rule 9).
+ */
+export function movedBackwards(prev, next, heading) {
+  if (!Number.isFinite(heading)) return false;
+  const f = forwardOf(heading);
+  return (next.x - prev.x) * f.x + (next.z - prev.z) * f.z < 0;
+}
+
 /** Angle wrapped to (−π, π]. */
 export function wrapAngle(a) {
   let r = a % (2 * Math.PI);

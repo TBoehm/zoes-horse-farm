@@ -36,6 +36,28 @@ describe('course mode', () => {
     expect(mode.quitLabelKey).toBe('pause.toSelect');
   });
 
+  it('backing over the start line (rein-back) does not start the ride, riding over it does', () => {
+    const { mode, host } = setup();
+    const { prev, next } = across(course.start);
+    // facing against the riding direction, so the crossing in riding direction is backwards
+    const heading = Math.atan2(-course.start.dir[0], -course.start.dir[1]);
+    mode.update(0.1, { horse: { ...next, heading }, prev }, host);
+    expect(mode.hudModel().phase).toBe('prestart');
+    mode.update(0.1, { horse: { ...next, heading: heading + Math.PI }, prev }, host);
+    expect(mode.hudModel().phase).toBe('riding');
+  });
+
+  it('backing over the finish line does not end the ride', () => {
+    const { mode, host } = setup();
+    startRide(mode, host);
+    const { prev, next } = across(course.finish);
+    const heading = Math.atan2(-course.finish.dir[0], -course.finish.dir[1]);
+    // all obstacles are still open, so a forward crossing would only show the missing hint;
+    // a backward one must not even do that
+    mode.update(0.1, { horse: { ...next, heading }, prev }, host);
+    expect(mode.hudModel().missingHint).toBeNull();
+  });
+
   it('has a plain-data HUD model before the start', () => {
     const { mode } = setup();
     expect(mode.hudModel()).toEqual({

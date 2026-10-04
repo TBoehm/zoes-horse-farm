@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TUNING } from '../../../domain/sim/tuning.js';
 import { GAITS, MAX_STANCE_TRAVEL, legPhase, legSample, offsetsFor } from './gaits.js';
 
 describe('gaits: cadence and stride length (riding-theory values)', () => {
@@ -26,6 +27,49 @@ describe('gaits: cadence and stride length (riding-theory values)', () => {
     for (const v of [4.5, 6, 8]) {
       expect(GAITS.canter.duty(v)).toBeGreaterThanOrEqual(0.3);
       expect(GAITS.canter.duty(v)).toBeLessThanOrEqual(0.4);
+    }
+  });
+
+  it('rein-back: slow two-beat diagonal gait, same diagonal pairs as the trot', () => {
+    const o = offsetsFor('back', 1);
+    // LF+RH together, RF+LH together, half a cycle apart
+    expect(o[0]).toBe(o[3]);
+    expect(o[1]).toBe(o[2]);
+    expect(Math.abs(o[0] - o[1])).toBeCloseTo(0.5, 9);
+    // calm cadence: well below the trot at the full backing speed
+    const v = TUNING.reinBack.maxSpeed;
+    expect(GAITS.back.freq(v)).toBeLessThan(GAITS.trot.freq(3.2));
+    expect(GAITS.back.freq(v)).toBeGreaterThan(0.5);
+    expect(GAITS.back.freq(0.05)).toBeGreaterThan(0.3);
+    // no suspension phase
+    expect(GAITS.back.duty(v)).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it('rein-back: the stance hoof travels forward relative to the body (reverse of the trot)', () => {
+    const v = TUNING.reinBack.maxSpeed;
+    const f = GAITS.back.freq(v);
+    const d = GAITS.back.duty(v);
+    const early = legSample('back', 0, 0.05, v, f);
+    const late = legSample('back', 0, d - 0.05, v, f);
+    expect(early.stance && late.stance).toBe(true);
+    expect(late.dz).toBeGreaterThan(early.dz);
+    const tf = GAITS.trot.freq(3);
+    const td = GAITS.trot.duty(3);
+    expect(legSample('trot', 0, td - 0.02, 3, tf).dz).toBeLessThan(
+      legSample('trot', 0, 0.02, 3, tf).dz,
+    );
+  });
+
+  it('rein-back: the swing hoof is lifted and the path is continuous at the phase boundaries', () => {
+    const v = TUNING.reinBack.maxSpeed;
+    const f = GAITS.back.freq(v);
+    const d = GAITS.back.duty(v);
+    const off = offsetsFor('back', 1)[0];
+    expect(legSample('back', 0, (off + d + (1 - d) / 2) % 1, v, f).y).toBeGreaterThan(0.05);
+    for (const p of [d, 1]) {
+      const a = legSample('back', 0, (off + p - 1e-6) % 1, v, f);
+      const b = legSample('back', 0, (off + p + 1e-6) % 1, v, f);
+      expect(a.dz).toBeCloseTo(b.dz, 3);
     }
   });
 
