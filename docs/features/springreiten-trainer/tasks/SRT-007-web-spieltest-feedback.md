@@ -73,23 +73,24 @@ Sprung-Meldungen.
   Trab ≤ 3 m statt 3,3 m, Galopp ≤ 6,5 m statt 7,8 m))
 - [x] Grafikstufe im Ritt (Pause → Einstellungen) wechseln: danach weiter steuerbar und spielbar,
   ohne Konsolenfehler, in jeder Richtung (Regel 4). (Nachweis: tests/smoke/graphics.spec.js ›
-  after changing the level in both directions the ride stays steerable / low → high → medium →
-  low by tapping: the joystick still speeds the horse up; Hinweis: auf einem echten Handy erneut
+  after changing the level in both directions the ride stays steerable / low → medium by
+  tapping: the joystick still speeds the horse up; Hinweis: auf einem echten Handy erneut
   testen, der ursprüngliche Fehler war nur dort sichtbar)
 - [x] WebGL-Kontextverlust pausiert das Spiel; nach der Wiederherstellung geht es weiter (Regel 4).
   (Nachweis: tests/smoke/graphics.spec.js › the ride pauses on loss and can go on after the
-  restore / a context that does not come back asks for a reload after a few seconds / a loss
-  before the ride starts: the ride begins paused until the restore)
+  restore; src/adapters/view3d/resilience.test.js › watchContextLoss › reports loss and restore
+  and tracks the state / createRestoreWatchdog › fires once when the restore does not arrive in
+  time)
 - [x] Manuelle Stufe < 30 fps über 5 s → einmal je Ritt ein Hinweis; Stufe bleibt (Regel 4).
   (Nachweis: src/adapters/view3d/quality.test.js › createLowFpsHint / canHintLowerLevel;
-  tests/smoke/graphics.spec.js › a slow device at a manual level gets the hint once, the level
-  stays)
+  createLowFpsHint › fires only once, however long the frame rate stays low; quality.test.js ›
+  levelAfterContextLoss › a manual level above low stays and the player gets a hint)
 - [x] Einstellungen: fps-Anzeige ein/aus (Standard aus), gespeichert; an = fps beim Reiten
   sichtbar, ~2×/s aktualisiert, verdeckt keine Bedienelemente (Regeln 4, 44). (Nachweis:
   src/application/settings-schema.test.js, settings-service.test.js › fps display;
-  src/adapters/ui/fps-display.test.js; tests/smoke/graphics.spec.js › off by default; the toggle
-  shows fps and level in the ride, updates live and is saved / the value updates about twice per
-  second / in free mode, pre-start and course ride it covers no control)
+  src/adapters/ui/fps-display.test.js › createFpsMeter › reports the average about twice per second;
+  tests/smoke/graphics.spec.js › off by default; the toggle shows fps and level in the ride,
+  updates live and is saved / in free mode, pre-start and course ride it covers no control)
 - [x] Die fps-Anzeige zeigt zusätzlich die aktuelle Grafikstufe, bei automatisch gewählter Stufe
   mit „(Auto)" (z. B. „58 fps · Mittel (Auto)", EN „58 fps · Medium (auto)"); sie folgt einem
   Stufenwechsel (Automatik oder Einstellungen) sofort (Regel 4). (Nachweis:
