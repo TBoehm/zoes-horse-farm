@@ -252,7 +252,8 @@ export function canHintLowerLevel({ auto, level }) {
 
 /**
  * Hint for a manually chosen level that is too high for the device (rule 4): the level stays, the
- * player only gets told. Create one instance per ride or free-mode session: it fires at most once (until reset()).
+ * player only gets told. Create one instance per ride or free-mode session: it fires at most once
+ * (until reset()).
  * frame(dtSeconds, measuring) returns true exactly once, when the average over the window is below
  * the limit. Pass measuring=false while paused, hidden, in menus or with "Automatic" on (the
  * governor takes care of that case).

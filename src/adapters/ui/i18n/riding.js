@@ -30,7 +30,7 @@ export default {
     'pause.graphicsLost': 'Die Grafik ist kurz weg. Gleich geht es weiter.',
     'pause.graphicsReload': 'Bitte lade die Seite neu.',
     'pause.reload': 'Neu laden',
-    'settings.showFps': 'fps anzeigen',
+    'settings.showFps': 'Bildrate (fps) anzeigen',
   },
   en: {
     'menu.free': 'Free Riding',
@@ -62,6 +62,6 @@ export default {
     'pause.graphicsLost': 'The graphics are gone for a moment. Back in a second.',
     'pause.graphicsReload': 'Please reload the page.',
     'pause.reload': 'Reload',
-    'settings.showFps': 'Show fps',
+    'settings.showFps': 'Show frame rate (fps)',
   },
 };

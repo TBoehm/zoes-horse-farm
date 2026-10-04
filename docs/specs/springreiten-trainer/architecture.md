@@ -218,7 +218,8 @@ input.touch.setGallop(bool) // Galopp-Umschalter setzen (Touch)
 ```
 Tastatur: `gallop = shiftHeld && !shiftLatched`. Ein fokussiertes Bedienelement (Button, Eingabefeld,
 Schieberegler) **behält seine Tasten** (Leertaste/Enter/Pfeile): die Tastatur ignoriert Ereignisse,
-deren Ziel ein solches Element ist. Touch: Galopp-Umschalter. Joystick (`joystick-mapping.js`, rein): **hybride Totzone**
+deren Ziel ein solches Element ist. Touch: Galopp-Umschalter. Joystick (`joystick-mapping.js`,
+rein): **hybride Totzone**
 („scaled radial followed by sloped scaled axial“, minimuino.github.io/thumbstick-deadzones). Erst
 eine skalierte **radiale** Totzone (`TUNING.control.stickDeadZone`; Länge des Stick-Vektors, Rest
 auf 0..1 umgerechnet), dann axiale Totzonen auf den Einheits-Richtungskomponenten, danach mal
@@ -292,10 +293,11 @@ expliziten Wächter, wo nötig):
 - Ritt-Klang: `ride-sounds` hängt nur an Ereignissen; Rückwärtsrichten erzeugt keine. Der Hufschlag
   kommt über `horse.onFootfall('back', leg)` (leiser, langsamer Tritt in `sfx.hoof`).
 Spielwerte stehen im eigenen Block `TUNING.reinBack` (`delayS`, `maxSpeed`, `accel`, `decel`,
-`blockedShare`, `rearClearance`; kein Messwert veröffentlicht: Fußfolge Zweitakt-Diagonale wie der Trab rückwärts, Tempo
-geschätzt aus den wenigen klaren Tritten der Dressur-Aufgabe).
+`blockedShare`, `rearClearance`; kein Messwert veröffentlicht: Fußfolge Zweitakt-Diagonale wie der
+Trab rückwärts, Tempo geschätzt aus den wenigen klaren Tritten der Dressur-Aufgabe).
 Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven, Parcours-Bau `TUNING.course`: Galoppsprung, Landung/Absprung, freie Strecke, Oxer-Tiefen, Wiederaufbau-Verzögerung `rebuildDelayS`,
-Hinweis-Dauer `missingHintS`, `control.stickDeadZone`, `control.stickSteerFull`, `control.stickAxial*`, Lenkraten `control.turn*`) nur in `src/domain/sim/tuning.js`;
+Hinweis-Dauer `missingHintS`, `control.stickDeadZone`, `control.stickSteerFull`,
+`control.stickAxial*`, Lenkraten `control.turn*`) nur in `src/domain/sim/tuning.js`;
 Regel-Konstanten (Fehlerpunkte, Zeitfehler-Schritt, Sterne, Auszeichnungs-Schwellen) bleiben in
 ihren Domain-Modulen. Die Governor-Defaults (`GOVERNOR_DEFAULTS` in `view3d/quality.js`) sind
 Regel-4-Werte und bleiben dort; ebenso die Werte des Hinweises „Stufe zu hoch“
@@ -442,8 +444,8 @@ Sekunde einen gerundeten Wert; ein Frame länger als `maxFrameS` (ausgesetzter T
 Intervall. `formatFpsText({ fps, level, auto }, t)` wählt nur den i18n-Schlüssel und übergibt
 Parameter: `ride.fpsLevelAuto` („58 fps · Mittel (Auto)“), `ride.fpsLevel` („58 fps · Mittel“, bei
 manueller Stufe) oder `ride.fps` („58 fps“, ohne Stufe); Trennzeichen, Wortstellung und der Platzhalter
-`ride.fpsNone` („–“, bis der erste Mittelwert da ist) stehen in den Sprachdateien. Das Element `[data-hud="fps"]` ist die erste Zeile der HUD-Spalte
-oben links (`.ride-hud`), kann also keine Parcours-Chips verdecken; es folgt live der Einstellung
+`ride.fpsNone` („–“, bis der erste Mittelwert da ist) stehen in den Sprachdateien. Das Element
+`[data-hud="fps"]` ist die erste Zeile der HUD-Spalte oben links (`.ride-hud`), kann also keine Parcours-Chips verdecken; es folgt live der Einstellung
 `showFps` und der Stufe (Governor, Einstellungen). Beim Ein-/Ausschalten wird der angezeigte Wert
 zurückgesetzt (Platzhalter, bis der nächste Mittelwert da ist).
 

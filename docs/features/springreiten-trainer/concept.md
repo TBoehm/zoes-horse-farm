@@ -111,9 +111,8 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 
 ### Steuerung
 
-8. Tastatur: A/D lenken links/rechts; W erhöht, S verringert das Tempo stufenlos, solange gedrückt; aus dem Halt
-   geht das Pferd mit gehaltenem S rückwärts (Regel 9);
-   Space springt; Shift (gehalten) = Galopp; Esc = Pause; C = Kamera umschalten.
+8. Tastatur: A/D lenken links/rechts; W erhöht, S verringert das Tempo stufenlos, solange gedrückt;
+   aus dem Halt geht das Pferd mit gehaltenem S rückwärts (Regel 9); Space springt; Shift (gehalten) = Galopp; Esc = Pause; C = Kamera umschalten.
 9. SOLANGE kein Galopp aktiv ist, MUSS das Tempo stufenlos zwischen Halt, Schritt und Trab liegen;
    die Gangart ergibt sich aus dem Tempo. SOLANGE Galopp aktiv ist, MUSS das Pferd galoppieren und
    W/S (bzw. Joystick) regeln das Galopptempo stufenlos. WENN Galopp beendet wird, MUSS das Pferd
@@ -203,8 +202,8 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
       (auch der Touch-Umschalter; Tastatur siehe Regel 9). Treffen Gangart bzw. Tempo und Winkel
       zusammen, gilt das Verhalten für Gangart/Tempo (stehen bleiben, Halt).
 23. Bei einem Abwurf MUSS die Stange sichtbar fallen; die Meldung im Spiel sagt es kindgerecht
-    („Stange gefallen!"), damit sie nicht mit einem Sturz verwechselt wird. Wann sie wieder aufgebaut wird, regeln die
-    Regeln 26, 27, 29, 31 und 41.
+    („Stange gefallen!"), damit sie nicht mit einem Sturz verwechselt wird. Wann sie wieder aufgebaut
+    wird, regeln die Regeln 26, 27, 29, 31 und 41.
 24. Das Pferd MUSS je Gangart, beim Rückwärtsrichten und beim Sprung (Absprung, Flug, Landung)
     erkennbar animiert sein.
     Das Pferd kann den Platz nicht verlassen. Trifft es frontal auf die Umzäunung, MUSS es stoppen
@@ -331,8 +330,8 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 44. Im Browser gespeichert werden MÜSSEN: freigeschaltete Parcours, Bestleistung (Fehler und Zeit)
     und beste Sternzahl je Parcours, erhaltene Auszeichnungen mit Datum, Zähler (beendete
     Parcours-Ritte, Sprünge), Pferd (Name, Fellfarbe, Kopfabzeichen) und Einstellungen (Sprache,
-    Lautstärke und Stumm je Kanal (Musik, Effekte), Grafikstufe und ob „Automatisch", Bildraten-Anzeige, Absprung-Hilfe je Modus,
-    Kamera). Wo der Browser es anbietet, MUSS dauerhafter Speicher angefordert werden. Bekannte
+    Lautstärke und Stumm je Kanal (Musik, Effekte), Grafikstufe und ob „Automatisch",
+    Bildraten-Anzeige, Absprung-Hilfe je Modus, Kamera). Wo der Browser es anbietet, MUSS dauerhafter Speicher angefordert werden. Bekannte
     Grenze: Safari kann Daten einer Website nach längerer Nichtnutzung löschen (nicht bei Nutzung
     über den Startbildschirm).
 45. Gespeichert wird sofort bei jeder Änderung: beim Ende eines Ritts, bei jedem gezählten Sprung,

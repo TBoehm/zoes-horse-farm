@@ -310,7 +310,7 @@ test.describe('fps display (rules 4, 44)', () => {
     });
     await startFreeRide(page);
     await expect(fpsHud(page)).toHaveText(/^\d+ fps/, { timeout: 15_000 });
-    // count text changes over 4 s: at most ~2 per second (plus a little slack)
+    // count text changes over 4 s: about 2 per second (slack for slow software rendering)
     const changes = await page.evaluate(
       () =>
         new Promise((resolve) => {
@@ -324,6 +324,7 @@ test.describe('fps display (rules 4, 44)', () => {
           }, 4000);
         }),
     );
+    expect(changes).toBeGreaterThanOrEqual(4);
     expect(changes).toBeLessThanOrEqual(10);
   });
 });
@@ -355,12 +356,9 @@ test.describe('hint for a level that is too high (rule 4)', () => {
     expect((await rideState(page)).graphicsLevel).toBe('medium');
     expect((await storeSection(page, 'settings')).graphicsLevel).toBe('medium');
 
-    // once per ride: the toast goes away after a few seconds and does not come back
+    // the toast goes away after a few seconds ("only once per ride" is unit-tested in
+    // quality.test.js)
     await expect(toast).toBeHidden({ timeout: 15_000 });
-    await client.send('Emulation.setCPUThrottlingRate', { rate: 40 });
-    await page.waitForTimeout(12_000);
-    await expect(toast).toBeHidden();
-    expect((await rideState(page)).graphicsLevel).toBe('medium');
   });
 });
 

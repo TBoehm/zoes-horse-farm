@@ -1,4 +1,5 @@
-// Frame-rate display (rule 4): the averaging and the text are pure, the ride screen only shows them.
+// Frame-rate display (rule 4): the averaging and the text are pure; the ride screen only shows
+// them.
 
 /**
  * Averages the frame rate over a fixed interval, so that the number does not flicker.

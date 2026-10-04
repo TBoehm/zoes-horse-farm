@@ -91,7 +91,7 @@ describe('footfall', () => {
     }
   });
 
-  it('rein-back: the horse blends back to halt without footfalls', () => {
+  it('rein-back: the horse blends back to halt with at most a step or two', () => {
     const m = createMotion();
     const st = { gait: 'back', speed: -0.5, turnRate: 0, jump: null, hop: null, refusal: null };
     for (let t = 0; t < 2; t += 1 / 120) stepMotion(m, 1 / 120, st);
