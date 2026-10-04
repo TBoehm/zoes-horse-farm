@@ -1,7 +1,7 @@
 ---
 id: SRT-013
 title: „Mittel" stürzt nach ca. 5 s ab – leichter, sparsames Herunterstufen, Absturz-Erkennung
-status: ready-for-dev
+status: in-review
 platform: web
 feature: docs/features/springreiten-trainer/concept.md
 priority: p1
@@ -33,18 +33,30 @@ Absturz startet das Spiel nicht erneut in die zu hohe Stufe.
 Kein neues UI; der Hinweis bei manueller Stufe ist der bestehende Hinweis aus Regel 4.
 
 ## Akzeptanzkriterien
-- [ ] „Mittel" hat höchstens geringfügig mehr Shader-Programme, Draw Calls, Dreiecke und
+- [x] „Mittel" hat höchstens geringfügig mehr Shader-Programme, Draw Calls, Dreiecke und
   geschätzten Grafikspeicher als vor SRT-011 (Stand 5e240fc), geprüft per Test; Wind, Blumen,
-  Vögel, Schmetterlinge, grasende Pferde nur auf „Hoch" (Regeln 3, 4).
-- [ ] Beim Herunterstufen wird Grafikspeicher der wegfallenden Details freigegeben, bevor neue
+  Vögel, Schmetterlinge, grasende Pferde nur auf „Hoch" (Regeln 3, 4). (Nachweis:
+  src/adapters/view3d/world-budget.test.js › medium stays close to what it was before the details
+  (SRT-013, commit 5e240fc) / has the wind only on high … / has no grazing horses and no dust on
+  low and medium …; gemessen im Browser: Mittel 17 statt 29 Shader-Programme, 5e240fc: 21)
+- [x] Beim Herunterstufen wird Grafikspeicher der wegfallenden Details freigegeben, bevor neue
   Programme oder Objekte entstehen; die Spitze der gleichzeitig belegten Programme und Objekte
-  während eines Wechsels liegt nicht über dem Wert vor dem Wechsel (Regel 4).
-- [ ] Endet das Spiel während der 3D-Darstellung unerwartet, gilt beim nächsten Start:
-  „Automatisch" → Niedrig (gespeichert); manuelle Stufe über Niedrig → Hinweis (Regel 4).
-- [ ] Normales Schließen, App-Wechsel oder ein Ende im Hintergrund zählt nicht als Absturz
-  (Regel 4).
-- [ ] Die Debug-Anzeige (`?debug`) zeigt nach einem erkannten Absturz die Stufe und Laufzeit der
-  abgestürzten Sitzung.
+  während eines Wechsels liegt nicht über dem Wert vor dem Wechsel (Regel 4). (Nachweis:
+  src/adapters/view3d/world-stages.test.js › steps down without ever holding more than before the
+  change / frees the programs of the old materials …; tests/smoke/graphics.spec.js › a downgrade
+  frees GPU programs and buffers first …; gemessen Mittel → Niedrig: Spitze 17 statt 77 Programme)
+- [x] Endet das Spiel während der 3D-Darstellung unerwartet, gilt beim nächsten Start:
+  „Automatisch" → Niedrig (gespeichert); manuelle Stufe über Niedrig → Hinweis (Regel 4). (Nachweis:
+  src/application/crash-guard.test.js › check of the previous run; tests/smoke/graphics-crash.spec.js
+  › after a crash with Automatic on … / a crash reload of the same tab counts even with a fresh
+  heartbeat / after a crash at a manual level above low, the next ride shows the hint once)
+- [x] Normales Schließen, App-Wechsel oder ein Ende im Hintergrund zählt nicht als Absturz
+  (Regel 4). (Nachweis: crash-guard.test.js › background / whose mark it is (tab id);
+  graphics-crash.spec.js › a normal reload during the ride is not a crash (pagehide) / a fresh mark
+  of another tab is a live tab, not a crash / the ride marks rendering … clean when … the tab hides)
+- [x] Die Debug-Anzeige (`?debug`) zeigt nach einem erkannten Absturz die Stufe und Laufzeit der
+  abgestürzten Sitzung. (Nachweis: src/adapters/ui/debug-display.test.js; graphics-crash.spec.js ›
+  the debug display shows the last detected crash)
 - [?] Auf dem Tablet läuft „Mittel" stabil (Nachweis nur am Gerät).
 
 ## Links

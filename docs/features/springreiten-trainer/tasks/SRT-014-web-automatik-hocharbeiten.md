@@ -1,7 +1,7 @@
 ---
 id: SRT-014
 title: Automatik startet auf „Niedrig" und stuft dynamisch hoch
-status: ready-for-dev
+status: in-review
 platform: web
 feature: docs/features/springreiten-trainer/concept.md
 priority: p1
@@ -34,18 +34,32 @@ Kein neues UI. Die fps-Anzeige zeigt wie bisher die aktuelle Stufe mit „(Auto)
 zusätzlich gesperrte Stufen und den Grund des letzten Wechsels.
 
 ## Akzeptanzkriterien
-- [ ] Erster Start (und neues Wählen von „Automatisch"): Stufe Niedrig (Regel 4).
-- [ ] Bei ≥ 57 fps im Mittel über 10 s mit kaum langsamen Bildern stuft das Spiel in kleinen
+- [x] Erster Start (und neues Wählen von „Automatisch"): Stufe Niedrig (Regel 4). (Nachweis:
+  tests/smoke/graphics-upgrade.spec.js › a first start without a saved level is automatic at low /
+  selecting „Automatic" …; settings-service.test.js)
+- [x] Bei ≥ 57 fps im Mittel über 10 s mit kaum langsamen Bildern stuft das Spiel in kleinen
   Schritten hoch, mit mindestens 20 s Abstand nach jeder Anpassung; kein Schritt beginnt in einem
-  Sprung (Regel 4).
-- [ ] Das Hochstufen ist in kleine Schritte geteilt und belegt nie mehr Grafikspeicher als die Ziel-
-  stufe selbst (keine doppelten Programme oder Objekte während des Wechsels) (Regel 4).
-- [ ] Nie auf eine gesperrte Stufe (Kontextverlust oder Absturz auf diesem Gerät, gespeichert), nie
+  Sprung (Regel 4). (Nachweis: src/adapters/view3d/quality-upgrade.test.js › 57 fps, 2 % slow
+  frames, warm-up, 20 s cooldown, never starts a step while busy; ride-session.test.js (jumping,
+  approaching); graphics-upgrade.spec.js › fast frames: low → medium … / slow frames: it stays at low)
+- [x] Das Hochstufen ist in kleine Schritte geteilt und belegt nie mehr Grafikspeicher als die Ziel-
+  stufe selbst (keine doppelten Programme oder Objekte während des Wechsels) (Regel 4). (Nachweis:
+  world-stages.test.js › steps up without ever holding more than the target level needs / survives
+  a round trip high → low → high …)
+- [x] Nie auf eine gesperrte Stufe (Kontextverlust oder Absturz auf diesem Gerät, gespeichert), nie
   über die Speicher-Grenze, nie zurück auf eine Stufe, von der im laufenden Spiel wegen Ruckelns
-  heruntergestuft wurde (Regel 4).
-- [ ] Die erreichte Stufe gilt beim nächsten Start (Regel 4).
-- [ ] Manuelle Stufe: keine Automatik, kein Hochstufen (Regel 4).
-- [ ] Die fps-Anzeige folgt jedem Wechsel sofort; `?debug` zeigt gesperrte Stufen (Regel 4).
+  heruntergestuft wurde (Regel 4). (Nachweis: quality-upgrade.test.js › never goes to a blocked
+  level … / … left because of a low frame rate … / … does not fit the memory budget …;
+  graphics-upgrade.spec.js › a blocked level (crash guard) is not climbed to / a lost WebGL context
+  blocks the level … / a level left in this session … is not climbed back to / a level that does not
+  fit the memory budget …)
+- [x] Die erreichte Stufe gilt beim nächsten Start (Regel 4). (Nachweis: graphics-upgrade.spec.js ›
+  a saved automatic level applies at the next start / fast frames: … saved)
+- [x] Manuelle Stufe: keine Automatik, kein Hochstufen (Regel 4). (Nachweis: graphics-upgrade.spec.js
+  › a manually chosen level is never raised)
+- [x] Die fps-Anzeige folgt jedem Wechsel sofort; `?debug` zeigt gesperrte Stufen (Regel 4). (Nachweis:
+  debug-display.test.js; graphics-upgrade.spec.js › fast frames: … the debug box says why;
+  tests/smoke/graphics.spec.js (fps-Anzeige folgt dem Stufenwechsel))
 - [?] Auf dem Tablet pendelt sich die Automatik stabil ein (Nachweis nur am Gerät).
 
 ## Links

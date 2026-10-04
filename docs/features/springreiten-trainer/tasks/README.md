@@ -16,8 +16,8 @@ Konzept: [../concept.md](../concept.md)
 | [SRT-010](SRT-010-web-button-farben.md) | Button-Farben – Grün für Weiter, Rot nur für Löschen | in-review | web | p1 | S | SRT-001 |
 | [SRT-011](SRT-011-web-details-animationen.md) | Mehr Details und geschmeidigere Animationen – Umgebung, Pferd, Reiter | in-review | web | p1 | L | SRT-002, SRT-003, SRT-008 |
 | [SRT-012](SRT-012-web-bedienungs-tipps.md) | Bedienungs-Tipps – beim ersten Start und jederzeit wieder aufrufbar | in-review | web | p1 | M | SRT-001, SRT-007 |
-| [SRT-013](SRT-013-web-mittel-absturz.md) | „Mittel" stürzt nach ca. 5 s ab – leichter, sparsames Herunterstufen, Absturz-Erkennung | ready-for-dev | web | p1 | M | SRT-008, SRT-011 |
-| [SRT-014](SRT-014-web-automatik-hocharbeiten.md) | Automatik startet auf „Niedrig" und stuft dynamisch hoch | ready-for-dev | web | p1 | M | SRT-008, SRT-013 |
+| [SRT-013](SRT-013-web-mittel-absturz.md) | „Mittel" stürzt nach ca. 5 s ab – leichter, sparsames Herunterstufen, Absturz-Erkennung | in-review | web | p1 | M | SRT-008, SRT-011 |
+| [SRT-014](SRT-014-web-automatik-hocharbeiten.md) | Automatik startet auf „Niedrig" und stuft dynamisch hoch | in-review | web | p1 | M | SRT-008, SRT-013 |
 
 Empfohlene Reihenfolge: SRT-001 → SRT-002 → SRT-003 → SRT-004 → SRT-005 → SRT-006.
 Umsetzung je Ticket mit `/implement-feature <ID>`.
