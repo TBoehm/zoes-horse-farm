@@ -1,6 +1,6 @@
 // Graphics quality levels (concept rules 3, 4): presets, GPU memory budget and the downgrade
 // governor (the upgrade governor is in quality-upgrade.js). Pure, no three.js.
-import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
+import { FOREGROUND_GRACE_S, GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
 
 export const QUALITY_PRESETS = Object.freeze({
   low: Object.freeze({
@@ -374,9 +374,10 @@ export function lowerLevel(level) {
 
 // Measuring values of the frame-rate checks below. They are no game-play values (those belong to
 // TUNING), so they stay here: the downgrade governor, the upgrade governor (quality-upgrade.js) and
-// the "level too high" hint measure the same way (rule 4): only while riding, not in the first 3 s, and a frame longer than
-// maxFrameS is a real interruption (suspend). Slower frames still count: a very slow device must
-// be able to step down. Pauses/hidden tabs are reported via measuring=false.
+// the "level too high" hint measure the same way (rule 4): only while riding, not in the first
+// 3 s, and a frame longer than maxFrameS is a real interruption (suspend). Slower frames still
+// count: a very slow device must be able to step down. Pauses/hidden tabs are reported via
+// measuring=false.
 export const GOVERNOR_DEFAULTS = Object.freeze({
   windowS: 5, // moving average
   minFps: 50,
@@ -546,8 +547,9 @@ export function canHintLowerLevel({ auto, level }) {
 
 // A context loss within this many seconds of the page going to the background or coming back is
 // not counted as overload (technical value, no game play): Android browsers often drop the
-// context on an app switch, and right after the return the page is still waking up.
-export const CONTEXT_LOSS_GRACE_S = 3;
+// context on an app switch, and right after the return the page is still waking up. The crash
+// guard uses the same time (FOREGROUND_GRACE_S).
+export const CONTEXT_LOSS_GRACE_S = FOREGROUND_GRACE_S;
 
 /**
  * What a lost WebGL context means for the graphics level (rule 4). A loss in the foreground shows
@@ -572,6 +574,17 @@ export function levelAfterContextLoss({
   const lowered = lowerLevel(level) !== level;
   if (auto) return { level: 'low', persist: lowered, hint: false, counted: true };
   return { level, persist: false, hint: canHintLowerLevel({ auto, level }), counted: true };
+}
+
+/**
+ * The "last change" of the debug box when the previous run crashed (crash guard): the automatic
+ * level was lowered to low at the start. A crash at low (or without a known level) or of a manual
+ * level changed nothing, so there is nothing to report. Returns { kind: 'crash' } or null.
+ */
+export function startupCrashChange(startupCrash) {
+  if (!startupCrash?.crashed || !startupCrash.auto) return null;
+  if (!startupCrash.level || startupCrash.level === 'low') return null;
+  return { kind: 'crash' };
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   gpuBudgetMB,
   levelAfterContextLoss,
   QUALITY_PRESETS,
+  startupCrashChange,
 } from './quality.js';
 import { createUpgradeGovernor, nextUpgradeLevel } from './quality-upgrade.js';
 import {
@@ -242,13 +243,11 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   // governor, with plenty of reserve. Both are paced by the same rules and use applyQuality (the
   // staged, memory-first change). The session remembers what it must not climb back to.
   const leftByFps = new Set(); // levels the automatic stepped down from because of a low frame rate
-  let lastChange = null; // why the automatic changed the level last: { kind, fps? } (debug box)
+  // why the automatic changed the level last: { kind, fps? } (debug box). A crash at the previous
+  // start already lowered the level (crash guard, before the engine).
+  let lastChange = startupCrashChange(app.services.startupCrash);
   // the crash guard is created by the composition root (absent in a bare test setup)
   const guard = () => app.services.crashGuard ?? null;
-  // a crash at the previous start already lowered the level (crash guard, before the engine)
-  if (app.services.startupCrash?.crashed && app.services.startupCrash.auto) {
-    lastChange = { kind: 'crash' };
-  }
 
   /** The unreduced estimate of a level for this device against its budget (rule 4, b). */
   const fitsBudget = (candidate) =>

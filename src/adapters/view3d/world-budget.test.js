@@ -8,7 +8,7 @@ import { createWorld } from './world.js';
 import { estimateGpuMemoryMB, QUALITY_PRESETS } from './quality.js';
 import { sceneStats } from '../../../tests/support/scene-stats.js';
 import { createGpuTracker } from '../../../tests/support/gpu-tracker.js';
-import { collectGpuObjects } from './resilience.js';
+import { collectGpuObjects, createGpuEpoch } from './resilience.js';
 import { PADDOCK, paddockContains } from './world-layout.js';
 import { planPaddockKeepOut } from './decor-plan.js';
 
@@ -385,6 +385,38 @@ describe('a staged level change and the shader programs', () => {
     expect(shownDetails(world)).toEqual([]);
     world.applyQualityStage('density', testPreset('low'));
     expect(shownDetails(world)).toEqual([]);
+    world.dispose();
+  });
+});
+
+describe('a level change after a lost and restored context', () => {
+  it('marks the materials for a rebuild although their dispose is skipped (no stale wind)', () => {
+    installFakeCanvas();
+    const epoch = createGpuEpoch();
+    const world = createWorld(renderer, { quality: testPreset('high'), release: epoch.release });
+    world.setObstacles(OBSTACLES, { flags: true });
+    world.update(0.016, camera);
+    const trees = world.scene.getObjectByName('trees-deciduous').material;
+    const bushes = world.scene.getObjectByName('bushes').material;
+    expect(trees.customProgramCacheKey()).toMatch(/^wind-/);
+    const disposed = [];
+    for (const material of [trees, bushes]) {
+      material.addEventListener('dispose', () => disposed.push(material));
+    }
+
+    epoch.contextLost(world.gpuObjects());
+    epoch.contextRestored();
+    const versions = [trees.version, bushes.version];
+    for (const id of ['shadows', 'materials', 'density']) {
+      world.applyQualityStage(id, testPreset('medium'));
+    }
+
+    // three.js recompiles a material only when its version changed
+    expect([trees.version, bushes.version].map((v, i) => v > versions[i])).toEqual([true, true]);
+    expect(trees.customProgramCacheKey().startsWith('wind-')).toBe(false);
+    expect(bushes.customProgramCacheKey().startsWith('wind-')).toBe(false);
+    // the dispose of a pre-loss material would delete handles of the lost context
+    expect(disposed).toEqual([]);
     world.dispose();
   });
 });

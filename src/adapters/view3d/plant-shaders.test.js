@@ -8,7 +8,6 @@ import {
   patchBlossoms,
   patchBunting,
   patchWings,
-  hasWindPatch,
   setWindPatch,
 } from './plant-shaders.js';
 
@@ -152,10 +151,10 @@ describe('setWindPatch', () => {
   it('switches the wind code off and on again, and tells when the program changes', () => {
     const material = patched();
     const plainKey = new THREE.MeshStandardMaterial().customProgramCacheKey();
-    expect(hasWindPatch(material)).toBe(true);
+    expect(material.userData.windPatch.on).toBe(true);
     expect(material.customProgramCacheKey()).toBe('wind-tree-v1');
     expect(setWindPatch(material, false)).toBe(true);
-    expect(hasWindPatch(material)).toBe(false);
+    expect(material.userData.windPatch.on).toBe(false);
     // the plain program key: shared with materials that never had the code
     expect(material.customProgramCacheKey()).toBe(plainKey);
     const shader = { uniforms: {}, vertexShader: SHADERS.standard };
@@ -170,6 +169,6 @@ describe('setWindPatch', () => {
     const material = patched();
     expect(setWindPatch(material, true)).toBe(false);
     expect(setWindPatch(new THREE.MeshStandardMaterial(), false)).toBe(false);
-    expect(hasWindPatch(new THREE.MeshStandardMaterial())).toBe(false);
+    expect(new THREE.MeshStandardMaterial().userData.windPatch).toBeUndefined();
   });
 });

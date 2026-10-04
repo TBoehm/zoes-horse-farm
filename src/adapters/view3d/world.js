@@ -173,9 +173,18 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
    * wind code, fog, shadows) that only sets `needsUpdate` would hold the old and the new programs
    * at the same time. A disposed material is no problem to use again: three.js builds its program
    * anew with the next compile.
+   *
+   * `needsUpdate` comes first: after a lost WebGL context `release` skips the dispose of the
+   * materials that were on the lost context (see resilience.js), and three.js only notices a
+   * changed program key, wind code or normal map through the material's version. Without it a
+   * material would keep its old program after a loss and a later level change. After a dispose
+   * the extra version bump does nothing.
    */
   function freePrograms(materials) {
-    for (const material of new Set(materials)) release(material);
+    for (const material of new Set(materials)) {
+      material.needsUpdate = true;
+      release(material);
+    }
   }
   const pairMaterials = () => pairs.flatMap((pair) => [pair.standard, pair.lambert]);
   /** Every material of the scene, also those of the horses, the rider and the dust. */

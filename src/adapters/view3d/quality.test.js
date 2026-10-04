@@ -8,6 +8,7 @@ import {
   presetFor,
   levelAfterContextLoss,
   CONTEXT_LOSS_GRACE_S,
+  startupCrashChange,
   createLowFpsHint,
   createQualityGovernor,
   lowerLevel,
@@ -409,6 +410,18 @@ describe('levelAfterContextLoss (rule 4)', () => {
       counted: false,
     });
     expect(levelAfterContextLoss({ auto: false, level: 'high', ...justBack }).hint).toBe(false);
+  });
+
+  it('names a crash as the reason only when the automatic level really was lowered', () => {
+    const crash = { crashed: true, auto: true, seconds: 5 };
+    expect(startupCrashChange({ ...crash, level: 'medium' })).toEqual({ kind: 'crash' });
+    expect(startupCrashChange({ ...crash, level: 'high' })).toEqual({ kind: 'crash' });
+    // already at low (or unknown), manual, or no crash: no change was made
+    expect(startupCrashChange({ ...crash, level: 'low' })).toBeNull();
+    expect(startupCrashChange({ ...crash, level: null })).toBeNull();
+    expect(startupCrashChange({ ...crash, level: 'high', auto: false })).toBeNull();
+    expect(startupCrashChange({ crashed: false })).toBeNull();
+    expect(startupCrashChange(undefined)).toBeNull();
   });
 
   it('a loss in the foreground after the grace time counts as before', () => {

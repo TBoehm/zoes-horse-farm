@@ -42,11 +42,6 @@ function patchMaterial(
   return material;
 }
 
-/** Is the wind code of the material switched on (false for a material without any)? */
-export function hasWindPatch(material) {
-  return Boolean(material.userData.windPatch?.on);
-}
-
 /**
  * Switches the wind code of a patched material on or off (rule 4: wind only on "high"). Off, the
  * material builds the plain three.js program (the one it had before the details existed, which
