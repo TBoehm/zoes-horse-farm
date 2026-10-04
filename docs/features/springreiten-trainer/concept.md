@@ -92,8 +92,10 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
      Grafik für das Gerät zu hoch ist; die Stufe bleibt.
    - In den Einstellungen MUSS sich eine Bildraten-Anzeige ein- und ausschalten lassen (Standard:
      aus). SOLANGE sie an ist, MUSS beim Reiten (Vorstart, Ritt, freier Modus) die aktuelle Bildrate
-     in fps (etwa zweimal pro Sekunde aktualisiert) in einer Ecke stehen, ohne Bedienelemente zu
-     verdecken.
+     in fps (etwa zweimal pro Sekunde aktualisiert) zusammen mit der aktuellen Grafikstufe in einer
+     Ecke stehen, ohne Bedienelemente zu verdecken; bei automatisch gewählter Stufe MUSS das
+     erkennbar sein (z. B. „58 fps · Mittel (Auto)"). Wechselt die Stufe (Automatik oder
+     Einstellungen), MUSS die Anzeige sofort folgen.
 5. Das Spiel MUSS nach dem ersten vollständigen Laden ohne Internetverbindung startbar und spielbar
    sein und auf Tablet/Handy zum Startbildschirm hinzugefügt werden können. Eine neue Spielversion
    MUSS im Hintergrund geladen werden und ab dem nächsten Start gelten, ohne Hinweis und ohne

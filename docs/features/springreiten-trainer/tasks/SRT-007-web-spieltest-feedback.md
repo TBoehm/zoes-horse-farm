@@ -32,8 +32,9 @@ eine ausschaltbare fps-Anzeige.
 - Out: Gamepad; Hochstufen durch die Automatik; neue Grafikstufen.
 
 ## Design (SSoT)
-Kein Design-Werkzeug. fps-Anzeige: kleine Zahl in der oberen linken Ecke (nicht unter Pause/Kamera
-oben rechts, nicht über dem Joystick unten links), im Stil der HUD-Texte. Einstellung als
+Kein Design-Werkzeug. fps-Anzeige: kleine Zeile „58 fps · Mittel (Auto)" in der oberen linken Ecke
+(nicht unter Pause/Kamera oben rechts, nicht über dem Joystick unten links; im Parcours über den
+HUD-Chips), im Stil der HUD-Texte. Einstellung als
 Ein/Aus-Umschalter im Abschnitt „Grafik". Hinweis bei zu hoher Stufe als Toast wie die
 Sprung-Meldungen.
 
@@ -54,6 +55,9 @@ Sprung-Meldungen.
 - [ ] Manuelle Stufe < 30 fps über 5 s → einmal je Ritt ein Hinweis; Stufe bleibt (Regel 4).
 - [ ] Einstellungen: fps-Anzeige ein/aus (Standard aus), gespeichert; an = fps beim Reiten
   sichtbar, ~2×/s aktualisiert, verdeckt keine Bedienelemente (Regeln 4, 44).
+- [ ] Die fps-Anzeige zeigt zusätzlich die aktuelle Grafikstufe, bei automatisch gewählter Stufe
+  mit „(Auto)" (z. B. „58 fps · Mittel (Auto)", EN „58 fps · Medium (auto)"); sie folgt einem
+  Stufenwechsel (Automatik oder Einstellungen) sofort (Regel 4).
 
 ## Links
 Konzept Regeln 4, 8, 9, 10, 23, 24, 44; SRT-002, SRT-003.
