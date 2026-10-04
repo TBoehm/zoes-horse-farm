@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { createRng } from '../textures.js';
-import { createGrazingHorses } from './grazing.js';
-import { insideArea } from './grazing-logic.js';
+import { createHorse } from './index.js';
+import { createGrazingHorses, dealCoats } from './grazing.js';
+import { GRAZING, HORSE_EXTENT, insideArea } from './grazing-logic.js';
 
 const AREA = { x: 40, z: -20, width: 22, depth: 14, rotation: -0.4 };
 
@@ -33,23 +34,13 @@ describe('grazing horses', () => {
   });
 
   it('gives the horses different coats, the same ones for the same seed', () => {
-    const coatsOf = (seed) => {
-      const p = createGrazingHorses({
-        quality: 'low',
-        area: AREA,
-        count: 2,
-        coats: ['grey', 'chestnut'],
-        rng: createRng(seed),
-      });
-      const coats = p.coats;
-      p.dispose();
-      return coats;
-    };
     for (const seed of [1, 2, 3, 4, 5, 6]) {
-      const [a, b] = coatsOf(seed);
+      const [a, b] = dealCoats(['grey', 'chestnut'], 2, createRng(seed));
       expect(a).not.toBe(b);
-      expect(coatsOf(seed)).toEqual([a, b]);
+      expect(dealCoats(['grey', 'chestnut'], 2, createRng(seed))).toEqual([a, b]);
     }
+    // more horses than coats: the coats start over
+    expect(dealCoats(['a', 'b'], 3, () => 0)).toEqual(['a', 'b', 'a']);
   });
 
   it('uses the low horse model on low and medium and the medium model on high', () => {
@@ -67,32 +58,39 @@ describe('grazing horses', () => {
     p.dispose();
   });
 
-  it('the horses stay in the paddock, graze with the head down and sometimes walk', () => {
+  it('the horses stand at their spots before the first update and stay in the paddock', () => {
     const paddock = createGrazingHorses({
       quality: 'low',
       area: AREA,
       count: 2,
       rng: createRng(3),
     });
-    const start = paddock.horses.map((h) => h.object.position.clone());
+    const horses = paddock.group.children;
+    const start = horses.map((h) => h.position.clone());
+    for (const p of start) expect(insideArea(AREA, p.x, p.z, GRAZING.margin - 1)).toBe(true);
     let headDown = 0;
     let walking = 0;
     let frames = 0;
+    const last = start.map((p) => p.clone());
+    const head = horses.map((h) => h.getObjectByName('head'));
+    const v = new THREE.Vector3();
     for (let t = 0; t < 400; t += 1 / 30) {
       paddock.update(1 / 30);
       frames++;
-      for (const [i, h] of paddock.horses.entries()) {
-        const p = h.object.position;
-        expect(insideArea(AREA, p.x, p.z, -0.6)).toBe(true);
+      horses.forEach((h, i) => {
+        const p = h.position;
+        // the object origin is ahead of the body centre: at most bodyOffset plus the tolerance
+        expect(insideArea(AREA, p.x, p.z, GRAZING.margin - GRAZING.bodyOffset - 0.3)).toBe(true);
         expect(p.y).toBe(0);
-        if (paddock.grazers[i].graze > 0.9) headDown++;
-        if (paddock.grazers[i].speed > 0.2) walking++;
-      }
+        h.updateMatrixWorld(true);
+        if (head[i].getWorldPosition(v).y < 0.9) headDown++;
+        if (p.distanceTo(last[i]) * 30 > 0.2) walking++;
+        last[i].copy(p);
+      });
     }
     expect(headDown / (frames * 2)).toBeGreaterThan(0.5);
     expect(walking).toBeGreaterThan(30);
-    const moved = paddock.horses.some((h, i) => h.object.position.distanceTo(start[i]) > 1);
-    expect(moved).toBe(true);
+    expect(horses.some((h, i) => h.position.distanceTo(start[i]) > 1)).toBe(true);
     paddock.dispose();
   });
 
@@ -103,17 +101,21 @@ describe('grazing horses', () => {
       count: 1,
       rng: createRng(5),
     });
-    const horse = paddock.horses[0];
-    const head = horse.object.getObjectByName('head');
-    const muzzle = (out) => {
-      horse.object.updateMatrixWorld(true);
-      return out.set(0, -0.5, 0.35).applyMatrix4(head.matrixWorld);
-    };
-    paddock.grazers[0].timer = 100;
+    const horse = paddock.group.children[0];
+    const head = horse.getObjectByName('head');
     const v = new THREE.Vector3();
-    for (let t = 0; t < 6; t += 1 / 30) paddock.update(1 / 30);
-    expect(paddock.grazers[0].graze).toBeGreaterThan(0.95);
-    expect(muzzle(v).y).toBeLessThan(0.6);
+    let lowest = Infinity;
+    let highest = 0;
+    for (let t = 0; t < 60; t += 1 / 30) {
+      paddock.update(1 / 30);
+      horse.updateMatrixWorld(true);
+      // the muzzle: in the head frame, below and in front of the poll
+      const y = v.set(0, -0.5, 0.35).applyMatrix4(head.matrixWorld).y;
+      lowest = Math.min(lowest, y);
+      highest = Math.max(highest, y);
+    }
+    expect(lowest).toBeLessThan(0.6);
+    expect(highest).toBeGreaterThan(1.0); // it looks up now and then
     paddock.dispose();
   });
 
@@ -121,7 +123,7 @@ describe('grazing horses', () => {
     const run = () => {
       const p = createGrazingHorses({ quality: 'low', area: AREA, count: 2, rng: createRng(9) });
       for (let t = 0; t < 120; t += 1 / 30) p.update(1 / 30);
-      const out = p.horses.map((h) => [h.object.position.x, h.object.position.z]);
+      const out = p.group.children.map((h) => [h.position.x, h.position.z]);
       p.dispose();
       return out;
     };
@@ -159,4 +161,56 @@ describe('grazing horses', () => {
     expect(drawables).toHaveLength(4);
     paddock.dispose();
   });
+});
+
+describe('the model of a paddock horse fits into the extent that the behaviour plans with', () => {
+  /** Extent of the skinned body in the frame of the object (+Z forward) over a series of poses. */
+  function measure(level) {
+    const horse = createHorse({
+      quality: level,
+      rider: false,
+      tack: false,
+      rng: createRng(4),
+    });
+    const body = horse.object.getObjectByName('horse-body');
+    const v = new THREE.Vector3();
+    const ext = { front: -Infinity, back: -Infinity, side: 0, radius: 0 };
+    const scan = () => {
+      horse.object.updateMatrixWorld(true);
+      const n = body.geometry.attributes.position.count;
+      for (let i = 0; i < n; i++) {
+        body.getVertexPosition(i, v);
+        v.applyMatrix4(body.matrixWorld);
+        ext.front = Math.max(ext.front, v.z);
+        ext.back = Math.max(ext.back, -v.z);
+        ext.side = Math.max(ext.side, Math.abs(v.x));
+        ext.radius = Math.max(ext.radius, Math.hypot(v.x, v.z + GRAZING.bodyOffset));
+      }
+    };
+    const run = (state, seconds) => {
+      for (let t = 0; t < seconds; t += 1 / 30) {
+        horse.update(1 / 30, state);
+        if (Math.round(t * 30) % 15 === 0) scan();
+      }
+    };
+    run({ gait: 'halt', speed: 0, turnRate: 0, y: 0, graze: 1, jump: null }, 40);
+    run({ gait: 'halt', speed: 0, turnRate: 0, y: 0, graze: 0, jump: null }, 40);
+    run({ gait: 'walk', speed: GRAZING.walkSpeed, turnRate: 0.3, y: 0, graze: 0, jump: null }, 20);
+    run({ gait: 'halt', speed: 0, turnRate: GRAZING.turnRate, y: 0, graze: 0, jump: null }, 20);
+    horse.dispose();
+    return ext;
+  }
+
+  for (const level of ['low', 'medium']) {
+    it(`${level}: nose, tail, sides and the circle around the body centre`, () => {
+      const e = measure(level);
+      expect(e.front).toBeLessThanOrEqual(HORSE_EXTENT.front);
+      expect(e.back).toBeLessThanOrEqual(HORSE_EXTENT.back);
+      expect(e.side).toBeLessThanOrEqual(HORSE_EXTENT.side);
+      expect(e.radius).toBeLessThanOrEqual(GRAZING.bodyRadius);
+      // and the numbers are not wildly generous (the model would shrink and nobody would notice)
+      expect(e.front).toBeGreaterThan(HORSE_EXTENT.front - 0.08);
+      expect(e.back).toBeGreaterThan(HORSE_EXTENT.back - 0.08);
+    });
+  }
 });

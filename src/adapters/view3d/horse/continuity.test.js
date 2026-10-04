@@ -2,12 +2,32 @@
 // popping. The tests drive the animation through scripted rides at 60 fps and measure what changes
 // from one frame to the next.
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createRng } from '../textures.js';
 import { REST } from './anatomy.js';
 import { createHorse } from './index.js';
 import { createMotion, stepMotion } from './motion.js';
-import { FRAME, SEQUENCES, createDeltaTracker, runScript } from './sequence-helper.js';
+
+// The motion state of the real horse is private; the tests of the planted hooves read it from the
+// motion objects that the horse creates.
+const created = vi.hoisted(() => []);
+vi.mock('./motion.js', async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    createMotion: (...args) => {
+      const motion = original.createMotion(...args);
+      created.push(motion);
+      return motion;
+    },
+  };
+});
+import {
+  FRAME,
+  SEQUENCES,
+  createDeltaTracker,
+  runScript,
+} from '../../../../tests/support/sequence-helper.js';
 
 // Largest per-frame change of the motion state (pure model, 60 fps). The steady canter at full
 // speed reaches about 0.10 m for a hoof, so these leave a margin of 20-30 % and nothing more.
@@ -215,18 +235,52 @@ const FETLOCK_REST = [
 
 // Bones that carry no leg may turn this much per frame, leg joints more (the canter folds the
 // carpus by 100° in a tenth of a second). The old animation reached 1.0-1.2 rad on leg joints.
-const ROT_LIMIT = { body: 0.15, leg: 0.6 };
+// A leg joint also may not change its angular velocity by more than LEG_ACCEL per frame: a joint
+// that speeds up or stops dead within a frame is a visible pop even when its step is small (the
+// first difference alone let one-frame V-kinks of 0.5-0.8 rad through).
+const ROT_LIMIT = { body: 0.15, leg: 0.35 };
+const LEG_ACCEL = 0.3; // rad, change of the per-frame rotation from one frame to the next
 const ROOT_STEP = 0.08; // m per frame (the take-off rotates the body about the hind feet)
 const HOOF_STEP = 0.2; // m per frame, hoof relative to the body
 const IK_SLIDE = 0.004; // m per frame, planted hoof relative to the ground (IK error)
 
+/**
+ * Largest per-frame rotation (first difference) and largest change of that rotation from one
+ * frame to the next (second difference) of leg joints. Leg bones turn about X only, so the signed
+ * rotation.x is the angle.
+ */
+function createLegTracker() {
+  const prev = new Map();
+  const worst = { step: { v: 0, w: '' }, accel: { v: 0, w: '' } };
+  return {
+    worst,
+    sample(bone, tag) {
+      const x = bone.rotation.x;
+      const p = prev.get(bone);
+      if (!p) {
+        prev.set(bone, { x, d: null });
+        return;
+      }
+      const d = x - p.x;
+      if (Math.abs(d) > worst.step.v) worst.step = { v: Math.abs(d), w: `${bone.name} ${tag}` };
+      if (p.d !== null && Math.abs(d - p.d) > worst.accel.v) {
+        worst.accel = { v: Math.abs(d - p.d), w: `${bone.name} ${tag}` };
+      }
+      p.x = x;
+      p.d = d;
+    },
+  };
+}
+
 function trackHorse(name) {
   const horse = createHorse({ quality: 'low', rider: false, rng: createRng(3) });
+  const m = created[created.length - 1];
   const bones = [];
   horse.object.traverse((o) => o.isBone && bones.push(o));
   const byName = Object.fromEntries(bones.map((b) => [b.name, b]));
   const prevQ = new Map();
-  const worst = { body: { v: 0, w: '' }, leg: { v: 0, w: '' } };
+  const worst = { body: { v: 0, w: '' } };
+  const legs = createLegTracker();
   const prevHoof = [null, null, null, null];
   const hoof = { step: 0, slide: 0, where: '' };
   const root = { prev: null, step: 0, where: '' };
@@ -241,16 +295,18 @@ function trackHorse(name) {
     (state, step, t) => {
       const tag = `${name}#${step}@${t.toFixed(2)}s`;
       for (const b of bones) {
+        if (LEG_BONES.test(b.name)) {
+          legs.sample(b, tag);
+          continue;
+        }
         const q = prevQ.get(b);
         // the eyelids close within three frames (a blink)
         if (q && !b.name.endsWith('lid')) {
           const angle = 2 * Math.acos(Math.min(1, Math.abs(q.dot(b.quaternion))));
-          const kind = LEG_BONES.test(b.name) ? 'leg' : 'body';
-          if (angle > worst[kind].v) worst[kind] = { v: angle, w: `${b.name} ${tag}` };
+          if (angle > worst.body.v) worst.body = { v: angle, w: `${b.name} ${tag}` };
         }
         prevQ.set(b, b.quaternion.clone());
       }
-      const m = horse.motion;
       // planted hooves are only comparable on a straight line (a turn moves them in the horse frame)
       const poseFree =
         m.jumpWeight < 0.01 &&
@@ -286,15 +342,16 @@ function trackHorse(name) {
     },
   );
   horse.dispose();
-  return { worst, hoof, root };
+  return { worst, legs: legs.worst, hoof, root };
 }
 
 describe('full animation continuity at 60 fps (bones of the real horse)', () => {
   for (const name of Object.keys(SEQUENCES)) {
     it(`${name}: bones, body and hooves move smoothly, planted hooves stay put`, () => {
-      const { worst, hoof, root } = trackHorse(name);
+      const { worst, legs, hoof, root } = trackHorse(name);
       expect(worst.body.v, `body bone ${worst.body.w}`).toBeLessThanOrEqual(ROT_LIMIT.body);
-      expect(worst.leg.v, `leg bone ${worst.leg.w}`).toBeLessThanOrEqual(ROT_LIMIT.leg);
+      expect(legs.step.v, `leg joint ${legs.step.w}`).toBeLessThanOrEqual(ROT_LIMIT.leg);
+      expect(legs.accel.v, `leg joint ${legs.accel.w}`).toBeLessThanOrEqual(LEG_ACCEL);
       expect(root.step, `root at ${root.where}`).toBeLessThanOrEqual(ROOT_STEP);
       expect(hoof.step).toBeLessThanOrEqual(HOOF_STEP);
       expect(hoof.slide, `hoof ${hoof.where}`).toBeLessThanOrEqual(IK_SLIDE);
@@ -304,11 +361,10 @@ describe('full animation continuity at 60 fps (bones of the real horse)', () => 
 
 // --- jumps from every gait, with the real height of the horse and the rider on top ---------------
 
-// The fast swing of the canter turns the carpus by about 0.5 rad per frame at the top speed, so a
-// leg joint may do that in a jump, too. Before the soft reach of the IK, the landing (the hoof
-// target comes back into reach and the straight leg bends in one frame) turned the forearm by
-// 0.8-0.9 rad.
-const JUMP_LEG_LIMIT = 0.6;
+// The same limits as in the gaits: before the soft reach of the IK, the landing (the hoof target
+// comes back into reach and the straight leg bends in one frame) turned the forearm by 0.8-0.9
+// rad, and the quick tuck-in of the take-off by 0.5 rad in one frame and then not at all.
+const JUMP_LEG_LIMIT = ROT_LIMIT.leg;
 const JUMP_RIDER_LIMIT = 0.15; // the rider's joints move calmly through the whole jump
 const RIDER_BONES = /^(pelvis|spine|chest|neck|head|(L|R)(upperArm|forearm|hand|thigh|shin|foot))$/;
 
@@ -351,29 +407,29 @@ describe('jumps from every gait: no pop in the take-off or the landing', () => {
       const bones = [];
       horse.object.traverse((o) => o.isBone && bones.push(o));
       const prevQ = new Map();
-      const worst = { leg: { v: 0, w: '' }, rider: { v: 0, w: '' } };
+      const worst = { rider: { v: 0, w: '' } };
+      const legs = createLegTracker();
       const { frames, from } = jumpFrames(gait, speed, height);
       frames.forEach((state, i) => {
         horse.update(FRAME, { turnRate: 0, hop: null, refusal: null, ...state });
         for (const b of bones) {
+          const isRider = riderObjects.has(b);
+          if (!isRider && LEG_BONES.test(b.name)) {
+            if (i >= from) legs.sample(b, `frame ${i - from}`);
+            continue;
+          }
           const q = prevQ.get(b);
           prevQ.set(b, b.quaternion.clone());
-          if (!q || i < from) continue;
+          if (!q || i < from || !isRider || !RIDER_BONES.test(b.name)) continue;
           const angle = 2 * Math.acos(Math.min(1, Math.abs(q.dot(b.quaternion))));
-          const isRider = riderObjects.has(b);
-          const kind = isRider
-            ? RIDER_BONES.test(b.name)
-              ? 'rider'
-              : null
-            : LEG_BONES.test(b.name)
-              ? 'leg'
-              : null;
-          if (kind && angle > worst[kind].v)
-            worst[kind] = { v: angle, w: `${b.name} frame ${i - from}` };
+          if (angle > worst.rider.v) worst.rider = { v: angle, w: `${b.name} frame ${i - from}` };
         }
       });
       horse.dispose();
-      expect(worst.leg.v, `leg bone ${worst.leg.w}`).toBeLessThanOrEqual(JUMP_LEG_LIMIT);
+      expect(legs.worst.step.v, `leg joint ${legs.worst.step.w}`).toBeLessThanOrEqual(
+        JUMP_LEG_LIMIT,
+      );
+      expect(legs.worst.accel.v, `leg joint ${legs.worst.accel.w}`).toBeLessThanOrEqual(LEG_ACCEL);
       expect(worst.rider.v, `rider bone ${worst.rider.w}`).toBeLessThanOrEqual(JUMP_RIDER_LIMIT);
     });
   }

@@ -33,7 +33,7 @@ export const EAR = {
 };
 
 /** Anchor of the forelock bone on the forehead (it swings about this point). */
-export const FORELOCK_ANCHOR = () => headPoint(-0.02, 0.08, 0);
+const FORELOCK_ANCHOR = () => headPoint(-0.02, 0.08, 0);
 
 /**
  * Eye and eyelid: the eye is an ellipsoid turned about Y by `yaw`; the upper lid is a hemispherical

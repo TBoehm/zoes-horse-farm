@@ -8,7 +8,8 @@ import { allPlanted, blendGait, createLegModel, stepLegs } from './legs.js';
 import { clamp, smoothstep } from './math.js';
 import { jumpParam } from './poses.js';
 import { createGestureScheduler } from './schedule.js';
-import { createSpring, smoothTo, stepSpring } from './spring.js';
+import { createSpring, stepSpring } from '../../../shared/spring.js';
+import { smoothTo } from './spring.js';
 
 // Cross-fade of the gaits: a critically damped spring reaches 95 % after 4.7 / omega ≈ 0.47 s
 const GAIT_OMEGA = 10;
@@ -51,7 +52,7 @@ export function turnLean(speed, turn) {
 }
 
 /** Weight of the jump pose for the jump parameter J. */
-export function jumpWeightFor(J) {
+function jumpWeightFor(J) {
   return smoothstep(0, JUMP_IN, J) * (1 - smoothstep(JUMP_OUT[0], JUMP_OUT[1], J));
 }
 
@@ -264,7 +265,7 @@ export function stepMotion(m, dt, state) {
  * set down again. g.weight (0..1, smooth) scales the whole motion, so it starts and ends without
  * a pop.
  */
-export function scrapeHoof(leg, g) {
+function scrapeHoof(leg, g) {
   const reach = smoothstep(0, 0.4, g.t) * (1 - smoothstep(g.duration - 0.45, g.duration, g.t));
   const drag = 0.5 + 0.5 * Math.cos(2 * Math.PI * 1.7 * (g.t - 0.4)); // 1 = forward, 0 = back
   const k = g.weight * reach;

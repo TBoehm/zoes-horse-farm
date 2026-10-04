@@ -3,7 +3,7 @@
 // +Y up, +X to the left), so bob, acceleration, turns and posting all reach the ponytail without
 // the rider code knowing about gaits.
 import { clamp } from '../../shared/math.js';
-import { makeSpring, springStep } from './rider-spring.js';
+import { createSpring, stepSpring } from '../../shared/spring.js';
 
 /** Bones of the chain (the ponytail hangs from the head bone). */
 export const PONY_SEGMENTS = 3;
@@ -30,8 +30,8 @@ const TUNING = {
 
 export function createPonytail() {
   return {
-    pitch: Array.from({ length: PONY_SEGMENTS }, () => makeSpring(0)),
-    yaw: Array.from({ length: PONY_SEGMENTS }, () => makeSpring(0)),
+    pitch: Array.from({ length: PONY_SEGMENTS }, () => createSpring(0)),
+    yaw: Array.from({ length: PONY_SEGMENTS }, () => createSpring(0)),
   };
 }
 
@@ -60,8 +60,8 @@ export function stepPonytail(p, input, dt) {
   ponytailTarget(input, target);
   for (let i = 0; i < PONY_SEGMENTS; i++) {
     const w = TUNING.omega[i];
-    springStep(p.pitch[i], target.pitch * TUNING.share[i], w, dt, TUNING.zeta);
-    springStep(p.yaw[i], target.yaw * TUNING.share[i], w, dt, TUNING.zeta);
+    stepSpring(p.pitch[i], target.pitch * TUNING.share[i], w, TUNING.zeta, dt);
+    stepSpring(p.yaw[i], target.yaw * TUNING.share[i], w, TUNING.zeta, dt);
   }
   return p;
 }

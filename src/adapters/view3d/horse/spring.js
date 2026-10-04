@@ -1,62 +1,12 @@
 // Damped springs and spring chains (pure, no three.js). Used for the secondary motion of mane,
 // forelock and tail and for smoothing parameters.
 //
-// The step is the closed-form solution of the damped harmonic oscillator for a constant target, so
-// it is stable for any time step (no blow-up at large dt) and frame-rate independent. Reference:
-// https://theorangeduck.com/page/spring-roll-call and https://www.ryanjuckett.com/damped-springs/
+// The spring step itself is in shared/spring.js (the rider uses it, too).
+import { createSpring, stepSpring } from '../../../shared/spring.js';
 import { clamp } from './math.js';
 
-/** Longest time step the secondary motion integrates in one go (s); longer frames are clamped. */
-export const MAX_SPRING_DT = 0.1;
-/** Output limit of a spring state (guard against bad input, in the unit of the spring). */
-const STATE_LIMIT = 50;
 /** Largest equilibrium offset of a hair segment (rad); keeps the hair from folding over. */
 const MAX_OFFSET = 1.1;
-
-/** A spring state { x, v }: position (offset from rest) and velocity. */
-export const createSpring = (x = 0, v = 0) => ({ x, v });
-
-/**
- * Advances a spring towards `target`. omega: undamped angular frequency (rad/s), zeta: damping
- * ratio (1 = critical, < 1 swings over). Exact for a constant target and any dt ≥ 0.
- */
-export function stepSpring(s, target, omega, zeta, dt) {
-  if (!(dt > 0)) return s;
-  const h = Math.min(dt, MAX_SPRING_DT * 4);
-  const e = s.x - target;
-  const v = s.v;
-  const w = Math.max(omega, 1e-6);
-  const z = Math.max(zeta, 0);
-  let ne;
-  let nv;
-  if (Math.abs(z - 1) < 1e-4) {
-    const ex = Math.exp(-w * h);
-    const j = v + w * e;
-    ne = (e + j * h) * ex;
-    nv = (v - j * w * h) * ex;
-  } else if (z < 1) {
-    const wd = w * Math.sqrt(1 - z * z);
-    const ex = Math.exp(-z * w * h);
-    const c = Math.cos(wd * h);
-    const sn = Math.sin(wd * h);
-    const c2 = (v + z * w * e) / wd;
-    ne = ex * (e * c + c2 * sn);
-    nv = ex * (v * c - ((z * w * v + w * w * e) / wd) * sn);
-  } else {
-    const r = w * Math.sqrt(z * z - 1);
-    const r1 = -w * z + r;
-    const r2 = -w * z - r;
-    const c2 = (v - r1 * e) / (r2 - r1);
-    const c1 = e - c2;
-    const e1 = Math.exp(r1 * h);
-    const e2 = Math.exp(r2 * h);
-    ne = c1 * e1 + c2 * e2;
-    nv = c1 * r1 * e1 + c2 * r2 * e2;
-  }
-  s.x = clamp(target + ne, -STATE_LIMIT, STATE_LIMIT);
-  s.v = clamp(nv, -STATE_LIMIT * 10, STATE_LIMIT * 10);
-  return s;
-}
 
 /** Critically damped smoothing of a value towards a target (≈ 95 % after 4.7 / omega seconds). */
 export function smoothTo(s, target, omega, dt) {
@@ -135,14 +85,6 @@ export function kickChain(chain, pitchV, swayV) {
     s.pitch.v += pitchV * f;
     s.sway.v += swayV * f;
   });
-}
-
-/** Moves a chain back to rest. */
-export function resetChain(chain) {
-  for (const s of chain.segments) {
-    s.pitch.x = s.pitch.v = s.sway.x = s.sway.v = 0;
-    s.accP = s.accS = 0;
-  }
 }
 
 /**

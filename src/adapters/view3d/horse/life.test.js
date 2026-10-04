@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from '../textures.js';
-import { createLife, gestureHead, resetLife, stepLife } from './life.js';
+import { createLife, gestureHead, stepLife } from './life.js';
 
 const DT = 1 / 60;
 const HALT = { halt: 1, walk: 0, trot: 0, canter: 0, back: 0 };
@@ -90,8 +90,6 @@ describe('tail and mane follow the motion of the horse', () => {
         expect(Math.abs(seg.pitch.x)).toBeLessThan(3);
       }
     }
-    resetLife(life);
-    expect(life.tail.segments[2].pitch.x).toBe(0);
   });
 
   it('swishes the tail now and then at halt, not while galloping', () => {

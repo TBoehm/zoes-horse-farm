@@ -1,7 +1,7 @@
 // Small signs of life for the rider (pure, no three.js): breathing with a little shoulder
 // movement, and a pat on the horse's neck once it stands after a jump.
 import { smoothstep } from './horse/math.js';
-import { makeSpring, springStep } from './rider-spring.js';
+import { createSpring, stepSpring } from '../../shared/spring.js';
 
 const LIFE = {
   breathHz: 0.27,
@@ -23,7 +23,7 @@ export function breathing(time, calm = 0, out = { chest: 0, roll: 0 }) {
 }
 
 export function createPat() {
-  return { armed: false, since: 0, t: -1, reach: 0, tap: 0, reachSpring: makeSpring(0) };
+  return { armed: false, since: 0, t: -1, reach: 0, tap: 0, reachSpring: createSpring(0) };
 }
 
 /**
@@ -61,7 +61,7 @@ export function stepPat(p, dt, { jumping = false, halted = false } = {}) {
     tap = 0.5 - 0.5 * Math.cos(2 * Math.PI * LIFE.patCount * u);
   }
   // a cancelled pat must not make the hand jump: the reach always goes through a spring
-  p.reach = springStep(p.reachSpring, reach, LIFE.reachOmega, dt);
+  p.reach = stepSpring(p.reachSpring, reach, LIFE.reachOmega, 1, dt).x;
   p.tap = tap * p.reach;
   return p;
 }

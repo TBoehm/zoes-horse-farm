@@ -2,7 +2,7 @@
 // position in rider space, blended from the horse's motion state.
 import { smoothstep } from './math.js';
 import { jumpParam } from './poses.js';
-import { makeSpring, snapSpring, springStep } from '../rider-spring.js';
+import { createSpring, snapSpring, stepSpring } from '../../../shared/spring.js';
 
 const KEYS = ['rise', 'forward', 'lean', 'handX', 'handY', 'handZ', 'footForward'];
 
@@ -176,14 +176,14 @@ const FILTER_OMEGA = {
  */
 export function createSeatFilter() {
   const springs = {};
-  for (const k of KEYS) springs[k] = makeSpring(0);
+  for (const k of KEYS) springs[k] = createSpring(0);
   let started = false;
   return {
     step(dt, state, ctx, out = {}) {
       riderSeatParts(state, ctx, scratchBase, scratchOsc);
       for (const k of KEYS) {
         if (!started) snapSpring(springs[k], scratchBase[k]);
-        else springStep(springs[k], scratchBase[k], FILTER_OMEGA[k], dt);
+        else stepSpring(springs[k], scratchBase[k], FILTER_OMEGA[k], 1, dt);
         out[k] = springs[k].x + scratchOsc[k];
       }
       started = true;

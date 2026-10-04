@@ -5,7 +5,7 @@ import { curveFrames, nearestU, table } from './loft.js';
 
 const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 
-export const NECK_PTS = [
+const NECK_PTS = [
   [0, 1.25, 0.46],
   [0, 1.42, 0.74],
   [0, 1.66, 1.0],
@@ -47,7 +47,7 @@ export const MANE_SPLIT = MANE_U.slice(1).map((u, i) => (u + MANE_U[i]) / 2);
 export const MANE_BLEND = (MANE_U[1] - MANE_U[0]) / 2;
 
 /** Bone that carries the neck at curve parameter u. */
-export function neckBoneAt(u) {
+function neckBoneAt(u) {
   const j = neckJoints();
   const names = ['spineFront', 'neck1', 'neck2', 'neck3', 'head'];
   let k = 0;

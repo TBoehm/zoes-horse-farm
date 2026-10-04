@@ -2,6 +2,7 @@
 // Angle convention: angD(dz, dy) = atan2(dz, −dy), 0 = straight down, positive = forwards.
 // A bone rotation rotation.x = r changes a segment's angD by −r.
 import { clamp } from '../../../shared/math.js';
+import { softReach } from '../../../shared/reach.js';
 
 export const angD = (dz, dy) => Math.atan2(dz, -dy);
 export const wrap = (a) => {
@@ -70,24 +71,6 @@ export function makeHindRig(P, T, K, F, H) {
     tLeg: sf.ang,
     sigma: Math.sign(wrap(s1.ang - sk.ang)) || 1,
   };
-}
-
-/**
- * Soft limit of the reach: a target distance up to `soft` short of the full stretch is kept, further
- * out it is compressed so that it approaches the full stretch without ever touching it. With
- * soft = 0 it is the hard clamp. A hard clamp locks the leg straight for as long as the hoof
- * target is out of reach (the body is in the air during a jump) and then, when the target comes
- * back, the knee bends by 40° or more in one frame (acos has an infinite slope at the full
- * stretch). The compression keeps the slope bounded, so that a landing or a take-off bends the
- * joints smoothly. The price is a hoof that stays up to a centimetre short of a target near the
- * full stretch, which is why only an airborne horse uses it (the rest pose and the stance of the
- * gaits are near the full stretch).
- */
-function softReach(d, dMax, soft) {
-  if (soft <= 0) return Math.min(d, dMax);
-  const dSoft = dMax - soft;
-  if (d <= dSoft) return d;
-  return dSoft + soft * (1 - Math.exp(-(d - dSoft) / soft));
 }
 
 // Result of twoBone, reused: the solvers run four times per frame

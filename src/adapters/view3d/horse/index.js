@@ -8,7 +8,8 @@
 //   horse.footfalls                   // footfalls of the last update (for dust and sound), see below
 //
 // Footfalls: after update(), `horse.footfalls` lists what touched the ground in this frame (the
-// array is reused by the next update): { kind: 'step' | 'landing', leg: 0..3 (LF, RF, LH, RH),
+// array and its events are reused by the next update, so copy what you keep):
+// { kind: 'step' | 'landing', leg: 0..3 (LF, RF, LH, RH),
 // gait, strength: 0..1, x, y, z } with the contact point in the local frame of horse.object
 // (y = the ground level there). 'landing' events come in pairs per jump: forelegs (strength 1) and
 // hindlegs (0.65). horse.footfallWorld(event, out) converts a point to world space with the
@@ -37,6 +38,7 @@ import {
   createCoatUniforms,
   createVertexColorMaterial,
 } from './material.js';
+import { createJointLimiter, limitJoint } from './joint-limit.js';
 import { clamp, lerp, smoothstep } from './math.js';
 import { createLife, gestureHead, stepLife } from './life.js';
 import { createMotion, neckCarriage, stepMotion } from './motion.js';
@@ -61,11 +63,21 @@ const MANE_SWING = 0.6;
 // then; the muzzle ends up about 0.15 m above the ground, 0.55 m in front of the forefeet
 const GRAZE = Object.freeze({ neck: [1.0, 0.5, 0.15], head: -0.85, chew: 0.03, chewRate: 1.7 });
 const GRAZE_NECK_SUM = GRAZE.neck[0] + GRAZE.neck[1] + GRAZE.neck[2];
-// Soft zone of the leg reach (m) while the horse is in the air, reached after the body has risen by
-// AIRBORNE_RAMP (m): see softReach in ik.js
-const AIRBORNE_SOFT_REACH = 0.08;
+// Soft zone of the leg reach (m), see softReach in ik.js. On the ground a small one: a straight
+// leg bends by 0.3 rad for the first 3 cm that the hoof lifts, and the hoof path of a long stride
+// ends at the full stretch, where a hard limit locks the leg and lets it snap on the next frame.
+// In the air a bigger one: the ground target of a hoof is out of reach during a jump, and the leg
+// must not lock straight and bend in a single frame when the target comes back. The zone widens
+// when the body has risen by AIRBORNE_RAMP (m), so that there is no switch in one frame.
+const GROUND_SOFT_REACH = 0.03;
+const AIRBORNE_SOFT_REACH = 0.16;
 const AIRBORNE_RAMP = 0.15;
-const AIRBORNE_RATE = 10; // 1/s, how fast the soft zone follows (no switch in one frame)
+const AIRBORNE_RATE = 10; // 1/s, how fast the soft zone follows
+// Limit of the leg joints (see joint-limit.js): 0.33 rad per frame and 0.25 rad per frame and
+// frame at 60 fps. Smooth motion never reaches it; only the kinks of the IK do. A hoof on the
+// ground gets twice the room: limiting it would make it slide over the ground.
+const LEG_JOINT_LIMIT = Object.freeze({ speed: 20, accel: 900 });
+const STANCE_LIMIT_FACTOR = 2;
 const PI = POSE_KEYS.reduce((o, k, i) => ((o[k] = i), o), {});
 
 function rigPoint(a, parent) {
@@ -200,6 +212,8 @@ export function createHorse(options = {}) {
   const motion = createMotion({ rng });
   const life = createLife({ rng });
   const footfalls = [];
+  const footfallPool = []; // the event objects, reused every frame
+  let footfallCount = 0;
   let airborne = 0; // 0..1, smoothed: how much the soft reach is used
   const headGesture = { yaw: 0, pitch: 0, neck: 0 };
   const maneBones = [1, 2, 3, 4, 5].map((k) => B[`mane${k}`]);
@@ -214,6 +228,7 @@ export function createHorse(options = {}) {
   const v3 = new THREE.Vector3();
   const down = new THREE.Vector3();
   const rotOut = new Array(5);
+  const legLimiters = legBones.map((bones) => bones.map(() => createJointLimiter()));
   const riderCtx = {}; // reused every frame
   const tailBones = [1, 2, 3, 4, 5].map((k) => B[`tail${k}`]);
   const qObj = new THREE.Quaternion();
@@ -230,8 +245,6 @@ export function createHorse(options = {}) {
     earAnchor,
     onFootfall: null,
     rider,
-    /** The motion state (read-only; for tests and debugging). */
-    motion,
     footfalls,
     update,
     /** Contact point of a footfall event in world space (uses the current object transform). */
@@ -253,12 +266,23 @@ export function createHorse(options = {}) {
       release(tack?.geometry);
       release(body.material);
       release(tack?.material);
-      reins?.dispose();
+      reins?.dispose(release);
       rider?.dispose();
       release(skeleton.boneTexture);
       object.removeFromParent();
     },
   };
+
+  function limitLeg(leg, k, target, dt, planted) {
+    const f = planted ? STANCE_LIMIT_FACTOR : 1;
+    return limitJoint(
+      legLimiters[leg][k],
+      target,
+      dt,
+      LEG_JOINT_LIMIT.speed * f,
+      LEG_JOINT_LIMIT.accel * f,
+    );
+  }
 
   function addPose(src, w) {
     if (w <= 1e-4) return 0;
@@ -414,12 +438,13 @@ export function createHorse(options = {}) {
     // leg straight and bend it in a single frame when the target comes back (see softReach)
     airborne += (smoothstep(0, AIRBORNE_RAMP, y) - airborne) * (1 - Math.exp(-AIRBORNE_RATE * dt));
     if (airborne < 1e-3) airborne = 0;
-    const soft = AIRBORNE_SOFT_REACH * airborne;
+    const soft = lerp(GROUND_SOFT_REACH, AIRBORNE_SOFT_REACH, airborne);
     for (let leg = 0; leg < 4; leg++) {
       const front = leg < 2;
       const rigL = front ? frontRig : hindRig;
       inv.copy(front ? mFront : mRear).invert();
       const L = m.legs[leg];
+      const planted = L.stance && !L.squaring && W < 0.02 && y <= 1e-3;
       // gait target in rig space (ground = −y because the integration lifts the object by y)
       v3.set(legX[leg], -y + L.y, legZ[leg] + L.dz).applyMatrix4(inv);
       down.set(0, -1, 0).transformDirection(inv);
@@ -434,13 +459,13 @@ export function createHorse(options = {}) {
         const scap = scapulaSlide(hz - rigL.H.z);
         solveFront(rigL, hz, hy, past, flex, scap, rotOut, soft);
         const bones = legBones[leg];
-        for (let k = 0; k < 5; k++) bones[k].rotation.x = rotOut[k];
+        for (let k = 0; k < 5; k++) bones[k].rotation.x = limitLeg(leg, k, rotOut[k], dt, planted);
       } else {
         const sweep = hindSweep(rigL, hz, hy, past);
         const cannon = rigL.t3 + 0.85 * (sweep - a) + a - flex;
         solveHind(rigL, hz, hy, past, cannon, rotOut, soft);
         const bones = legBones[leg];
-        for (let k = 0; k < 4; k++) bones[k].rotation.x = rotOut[k];
+        for (let k = 0; k < 4; k++) bones[k].rotation.x = limitLeg(leg, k, rotOut[k], dt, planted);
       }
     }
 
@@ -485,40 +510,59 @@ export function createHorse(options = {}) {
 
     // --- footfalls (dust, sound) ---------------------------------------------------------
     footfalls.length = 0;
+    footfallCount = 0;
     const groundY = -y || 0; // (−0 → 0)
     const strength = STEP_STRENGTH[state.gait] ?? 0.3;
-    for (const leg of falls) {
-      footfalls.push({
-        kind: 'step',
+    for (let i = 0; i < falls.length; i++) {
+      const leg = falls[i];
+      pushFootfall(
+        'step',
         leg,
-        gait: state.gait,
+        state.gait,
         strength,
-        x: legX[leg],
-        y: groundY,
-        z: legZ[leg] + m.legs[leg].dz - ORIGIN_OFFSET_Z,
-      });
+        legX[leg],
+        groundY,
+        legZ[leg] + m.legs[leg].dz - ORIGIN_OFFSET_Z,
+      );
     }
     pushLanding(0, m.landing.front, 0.12, state.gait, groundY);
     pushLanding(2, m.landing.hind, 0.1, state.gait, groundY);
     if (api.onFootfall) {
-      for (const e of footfalls) if (e.kind === 'step') api.onFootfall(state.gait, e.leg);
+      for (let i = 0; i < footfalls.length; i++) {
+        if (footfalls[i].kind === 'step') api.onFootfall(state.gait, footfalls[i].leg);
+      }
     }
     return footfalls;
+  }
+
+  /** Adds an event to `footfalls`; the event objects are reused from frame to frame. */
+  function pushFootfall(kind, leg, gait, strength, x, y, z) {
+    let e = footfallPool[footfallCount];
+    if (!e) e = footfallPool[footfallCount] = {};
+    footfallCount++;
+    e.kind = kind;
+    e.leg = leg;
+    e.gait = gait;
+    e.strength = strength;
+    e.x = x;
+    e.y = y;
+    e.z = z;
+    footfalls.push(e);
   }
 
   /** Landing of the legs first and first + 1 (strength 0 = nothing). */
   function pushLanding(first, power, reach, gait, groundY) {
     if (power <= 0) return;
     for (let leg = first; leg < first + 2; leg++) {
-      footfalls.push({
-        kind: 'landing',
+      pushFootfall(
+        'landing',
         leg,
         gait,
-        strength: power,
-        x: legX[leg],
-        y: groundY,
-        z: legZ[leg] + reach - ORIGIN_OFFSET_Z,
-      });
+        power,
+        legX[leg],
+        groundY,
+        legZ[leg] + reach - ORIGIN_OFFSET_Z,
+      );
     }
   }
 

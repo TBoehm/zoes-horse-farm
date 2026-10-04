@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createRng } from '../textures.js';
 import { buildBodyGeometry, buildTackGeometry } from './geometry.js';
 import { createHorse } from './index.js';
-import { FRAME, SEQUENCES, runScript } from './sequence-helper.js';
+import { FRAME, SEQUENCES, runScript } from '../../../../tests/support/sequence-helper.js';
 import { EYE, createSkeletonBones, eyeGaze, lidAxis, lidPole } from './skeleton.js';
 
 // Size of body and tack geometry before SRT-011 (vertices, triangles): low must not grow
@@ -36,6 +36,22 @@ describe('detail per level (GPU cost)', () => {
     expect(c.body[1]).toBeLessThanOrEqual(BEFORE.low.body[1]);
     expect(c.tack[0]).toBeLessThanOrEqual(BEFORE.low.tack[0]);
     expect(c.tack[1]).toBeLessThanOrEqual(BEFORE.low.tack[1]);
+  });
+
+  it('low: horse and rider together have no more triangles and no more draw calls than before', () => {
+    // before SRT-011: rider 1336 + body 3202 + tack 1228 + reins 160 triangles, four meshes
+    const horse = createHorse({ quality: 'low' });
+    const meshes = [];
+    horse.object.traverse((o) => (o.isMesh || o.isPoints || o.isLine) && meshes.push(o));
+    const triangles = meshes.reduce((sum, m) => sum + m.geometry.index.count / 3, 0);
+    expect(meshes.map((m) => m.name).sort()).toEqual([
+      'horse-body',
+      'horse-reins',
+      'horse-tack',
+      'rider-body',
+    ]);
+    expect(triangles).toBeLessThanOrEqual(5926);
+    horse.dispose();
   });
 
   it('medium and high add eyelids and leg wraps, within the same two meshes', () => {
@@ -248,6 +264,22 @@ describe('footfall events', () => {
     horse.dispose();
   });
 
+  it('reuses the event objects from frame to frame (no allocation per step)', () => {
+    const horse = createHorse({ quality: 'low', rider: false, rng: createRng(3) });
+    const state = { gait: 'canter', speed: 6, turnRate: 0, y: 0, jump: null };
+    const seen = new Set();
+    let events = 0;
+    for (let i = 0; i < 600; i++) {
+      for (const e of horse.update(FRAME, state)) {
+        seen.add(e);
+        events++;
+      }
+    }
+    expect(events).toBeGreaterThan(20);
+    expect(seen.size).toBeLessThanOrEqual(4);
+    horse.dispose();
+  });
+
   it('no step events at halt, none during the jump', () => {
     const { horse, events } = ride('refusalStop');
     expect(events.filter((e) => e.kind === 'landing')).toHaveLength(0);
@@ -277,16 +309,17 @@ describe('release of GPU objects', () => {
     const meshes = [];
     horse.object.traverse((o) => o.isMesh && meshes.push(o));
     const old = meshes
-      .flatMap((m) => [m.geometry, m.material])
-      .filter((o) => o.isBufferGeometry || o.isMaterial);
+      .filter((m) => m.name === 'horse-body' || m.name === 'horse-tack')
+      .flatMap((m) => [m.geometry, m.material]);
     horse.setQuality('high');
-    const body = horse.object.getObjectByName('horse-body');
-    const tack = horse.object.getObjectByName('horse-tack');
-    for (const o of old) {
-      // reins keep their buffers; body and tack are rebuilt
-      if (o === body.geometry || o === tack.geometry) continue;
-    }
-    expect(released.size).toBeGreaterThanOrEqual(4);
+    // body and tack are rebuilt: the old buffers and materials go through the hook
+    for (const o of old) expect(released.has(o)).toBe(true);
+    const current = [];
+    horse.object.traverse((o) => o.isMesh && current.push(o.geometry, o.material));
+    released.clear();
     horse.dispose();
+    // the final dispose goes through the hook, too: the reins' buffers as well (an object of a lost
+    // context must not be freed with GL calls)
+    for (const o of current) expect(released.has(o)).toBe(true);
   });
 });
