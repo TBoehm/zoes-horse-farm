@@ -1,0 +1,356 @@
+/* Course selection, pre-start card, ride HUD, results (SRT-004) */
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.course-card {
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  min-height: 44px;
+  border-radius: 18px;
+  border: 3px solid #f2d48a;
+  background: #fff7e6;
+  color: var(--c-ink);
+  cursor: pointer;
+  box-shadow: 0 4px 0 #d9b766;
+  transition: transform 0.08s ease;
+}
+
+.course-card:active {
+  transform: translateY(3px);
+}
+
+.course-card:focus-visible {
+  outline: 4px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+.course-card.is-locked {
+  cursor: not-allowed;
+  background: #efebe5;
+  border-color: #d6cfc4;
+  box-shadow: 0 4px 0 #c2b9ab;
+  color: #7b7368;
+}
+
+.course-number {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--c-primary);
+  color: #fff;
+  font-weight: 900;
+  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.course-card.is-locked .course-number {
+  background: #a59c8f;
+}
+
+.course-best {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--c-ink-soft);
+}
+
+.lock {
+  font-size: 1.4rem;
+}
+
+.stars {
+  display: inline-flex;
+  gap: 2px;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.star {
+  color: #d8cfbf;
+}
+
+.star.is-on {
+  color: #f2b632;
+  text-shadow: 0 1px 0 #b8861b;
+}
+
+.panel-results .stars {
+  font-size: 2.6rem;
+  justify-content: center;
+  width: 100%;
+}
+
+.plan-wrap {
+  width: 100%;
+  aspect-ratio: 70 / 40;
+  max-height: 46vh;
+}
+
+.course-plan {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.prestart-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.prestart-info .setting-row {
+  flex: 0 1 auto;
+}
+
+.hud-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.hud-notice {
+  background: rgba(255, 225, 168, 0.95);
+}
+
+.hud-notice[hidden],
+.hud-chip[hidden] {
+  display: none;
+}
+
+.panel-results {
+  text-align: center;
+}
+
+.results-horse {
+  margin: 0 0 6px;
+  font-weight: 700;
+  color: var(--c-ink-soft);
+}
+
+.new-best {
+  margin: 8px auto;
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--c-accent);
+  font-weight: 900;
+}
+
+.unlocked-note {
+  font-weight: 800;
+  color: var(--c-secondary);
+}
+
+.result-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  text-align: left;
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #f6eedf;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-row[data-result='total'] {
+  background: #efe0c4;
+  font-size: 1.1rem;
+}
+
+.unlocked-note {
+  margin: 6px 0;
+}
+
+.new-badges h3 {
+  margin: 6px 0 4px;
+  font-size: 1rem;
+}
+
+/* New badges: compact chips right under the stars (no big cards, so nothing is pushed down) */
+.badge-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.badge-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 3px;
+  border-radius: 999px;
+  background: #fff7e6;
+  border: 2px solid #f2d48a;
+  font-size: 0.95rem;
+}
+
+.badge-chip .badge-emblem {
+  width: 28px;
+  height: 28px;
+  font-size: 0.95rem;
+  box-shadow: 0 2px 0 #a86e12;
+}
+
+@media (max-height: 520px) {
+  .panel {
+    padding: 14px 18px;
+  }
+  .plan-wrap {
+    max-height: 40vh;
+  }
+  /* Pre-start card: plan left, details and buttons right, so that the plan stays large */
+  .panel-prestart {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 230px;
+    grid-template-rows: auto 1fr auto;
+    column-gap: 16px;
+  }
+  .panel-prestart h2 {
+    grid-column: 1 / -1;
+  }
+  .panel-prestart .plan-wrap {
+    grid-row: 2 / 4;
+    max-height: none;
+    align-self: center;
+  }
+  .panel-prestart .prestart-info {
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: 0;
+    align-self: start;
+  }
+  .panel-prestart .panel-actions {
+    margin-top: 0;
+    align-self: end;
+  }
+  /* Results: summary left, figures right, the new-badge chips across the full width below, so
+     that all of it fits on phones (640x360, 568x320) without scrolling */
+  .panel-results {
+    width: min(680px, 100%);
+    padding: 10px 18px;
+  }
+  .panel-results .results-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr);
+    grid-template-areas:
+      'summary table'
+      'badges badges';
+    column-gap: 16px;
+    row-gap: 4px;
+    align-content: start;
+    align-items: center;
+  }
+  .results-summary {
+    grid-area: summary;
+  }
+  .result-table {
+    grid-area: table;
+  }
+  .new-badges {
+    grid-area: badges;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .new-badges h3 {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  /* up to six chips in two rows */
+  .new-badges {
+    gap: 3px 6px;
+  }
+  .badge-chip {
+    gap: 4px;
+    padding: 1px 10px 1px 1px;
+    font-size: 0.8rem;
+  }
+  .badge-chip .badge-emblem {
+    width: 20px;
+    height: 20px;
+    font-size: 0.7rem;
+    box-shadow: 0 1px 0 #a86e12;
+  }
+  .results-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0 10px;
+  }
+  .panel-results h2 {
+    margin: 0;
+    font-size: 1.3rem;
+  }
+  .results-horse {
+    margin: 0;
+    font-size: 0.95rem;
+  }
+  .panel-results .stars {
+    font-size: 1.8rem;
+  }
+  .new-best {
+    margin: 2px auto;
+    padding: 1px 12px;
+    font-size: 0.9rem;
+  }
+  .unlocked-note {
+    margin: 2px 0 0;
+    font-size: 0.9rem;
+  }
+  .result-table {
+    gap: 3px;
+    margin: 0;
+  }
+  .result-row {
+    padding: 3px 10px;
+    font-size: 0.9rem;
+  }
+  .result-row[data-result='total'] {
+    font-size: 0.95rem;
+  }
+  .panel-results .panel-actions {
+    margin-top: 6px;
+  }
+}
+
+/* The buttons stay reachable when the results do not fit on the screen */
+.panel-results {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-results .results-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.panel-results .panel-actions {
+  flex: none;
+}

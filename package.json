@@ -1,0 +1,43 @@
+{
+  "name": "zoes-horse-farm",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Zoe's Horse Farm – show-jumping trainer in the browser (three.js, static)",
+  "scripts": {
+    "icons": "node scripts/generate-icons.mjs",
+    "predev": "npm run icons",
+    "dev": "vite",
+    "prebuild": "npm run icons",
+    "build": "vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "playwright test",
+    "qa": "npm run lint && npm run format:check && npm run test && npm run build && npm run smoke"
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26"
+  },
+  "dependencies": {
+    "nipplejs": "^1.0.4",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.13.0",
+    "jsdom": "^30.1.1",
+    "prettier": "^3.9.9",
+    "vite": "^8.3.2",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.3"
+  }
+}

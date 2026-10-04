@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Audio Demo</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 42rem;
+        margin: 1rem auto;
+        padding: 0 1rem;
+        line-height: 1.4;
+      }
+      fieldset {
+        margin: 1rem 0;
+        border: 1px solid #aaa;
+        border-radius: 8px;
+      }
+      button,
+      select {
+        font: inherit;
+        padding: 0.5rem 0.9rem;
+        margin: 0.2rem;
+        min-height: 44px;
+      }
+      label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin: 0.3rem 0.8rem 0.3rem 0;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      input[type='range'] {
+        width: 12rem;
+      }
+      #status {
+        font-family: monospace;
+        background: #eee;
+        padding: 0.5rem;
+        border-radius: 6px;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Audio Demo</h1>
+    <p>Dev page, not shipped. Sound starts after the first click or key press.</p>
+    <pre id="status">Waiting for interaction …</pre>
+
+    <fieldset>
+      <legend>Effects</legend>
+      <button data-sfx="takeoff">Take-off</button>
+      <button data-sfx="landing">Landing</button>
+      <button data-sfx="railDown">Falling pole</button>
+      <button data-sfx="startSignal">Start signal</button>
+      <button data-sfx="finishSignal">Finish signal</button>
+      <div class="row">
+        <button data-hoof="walk">Hoof walk</button>
+        <button data-hoof="trot">Hoof trot</button>
+        <button data-hoof="canter">Hoof canter</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Gait loop</legend>
+      <label
+        >Gait
+        <select id="gait">
+          <option value="halt">Halt (silent)</option>
+          <option value="walk">Walk (four-beat, 1.8 Hz)</option>
+          <option value="trot">Trot (two-beat)</option>
+          <option value="canter">Canter (three-beat)</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Music and volume</legend>
+      <label><input type="checkbox" id="musicWanted" /> Music should play</label>
+      <div class="row">
+        <label
+          >Music <input type="range" id="musicVolume" min="0" max="1" step="0.01" value="0.5"
+        /></label>
+        <label><input type="checkbox" id="musicMuted" /> Music muted</label>
+      </div>
+      <div class="row">
+        <label
+          >Effects <input type="range" id="sfxVolume" min="0" max="1" step="0.01" value="0.5"
+        /></label>
+        <label><input type="checkbox" id="sfxMuted" /> Effects muted</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>State</legend>
+      <label><input type="checkbox" id="hidden" /> Simulate background (setHidden)</label>
+      <label><input type="checkbox" id="paused" /> Game pause (setPaused)</label>
+    </fieldset>
+
+    <script type="module" src="./audio.js"></script>
+  </body>
+</html>

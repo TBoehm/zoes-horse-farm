@@ -1,0 +1,19 @@
+// Texts for the sound settings (SRT-006).
+export default {
+  de: {
+    'settings.music': 'Musik',
+    'settings.sfx': 'Effekte',
+    'settings.musicVolume': 'Lautstärke Musik',
+    'settings.sfxVolume': 'Lautstärke Effekte',
+    'settings.musicOn': 'Musik an',
+    'settings.sfxOn': 'Effekte an',
+  },
+  en: {
+    'settings.music': 'Music',
+    'settings.sfx': 'Sounds',
+    'settings.musicVolume': 'Music volume',
+    'settings.sfxVolume': 'Sound volume',
+    'settings.musicOn': 'Music on',
+    'settings.sfxOn': 'Sounds on',
+  },
+};

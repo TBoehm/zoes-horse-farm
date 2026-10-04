@@ -1,0 +1,275 @@
+/* Name prompt, My Horse, badges, delete progress (SRT-005) */
+.text-input {
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 700;
+  min-height: 52px;
+  width: min(280px, 100%);
+  padding: 8px 14px;
+  border-radius: 14px;
+  border: 3px solid #d9c7ab;
+  background: #fff;
+  color: var(--c-ink);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--c-accent);
+}
+
+.panel-name {
+  text-align: center;
+}
+
+.name-form .text-input {
+  width: 100%;
+  text-align: center;
+}
+
+.setting-name {
+  flex-wrap: wrap;
+}
+
+.setting-name .text-input {
+  flex: 1 1 160px;
+  width: auto;
+  min-width: 0;
+}
+
+.setting-name .field-hint {
+  flex: 1 0 100%;
+  margin: 0;
+}
+
+.setting-name .field-hint[hidden] {
+  display: none;
+}
+
+.text-input.is-invalid {
+  border-color: #c0392b;
+  background: #fff1ec;
+}
+
+.field-hint.is-invalid {
+  color: #a8281b;
+  font-weight: 700;
+}
+
+.field-hint {
+  margin: 6px 0 0;
+  color: var(--c-ink-soft);
+  font-size: 0.95rem;
+}
+
+.menu-greeting {
+  margin: 8px 0 0;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--c-secondary);
+}
+
+.screen.screen-horse {
+  justify-content: flex-start;
+}
+
+.horse-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.horse-layout .panel {
+  pointer-events: auto;
+  width: min(460px, 52vw);
+}
+
+.horse-preview-space {
+  flex: 1;
+}
+
+@media (orientation: portrait) {
+  .horse-layout {
+    align-items: flex-end;
+  }
+  .horse-layout .panel {
+    width: 100%;
+    max-height: 60%;
+  }
+  .horse-preview-space {
+    display: none;
+  }
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panel-head h2 {
+  margin: 0;
+}
+
+.chip {
+  background: #efe4d3;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-weight: 800;
+}
+
+.badge-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.badge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 12px 10px;
+  border-radius: 16px;
+  background: #fff7e6;
+  border: 3px solid #f2d48a;
+}
+
+.badge-card.is-missing {
+  background: #f1eee9;
+  border-color: #ddd6cc;
+  color: #7b7368;
+}
+
+.badge-emblem {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  background: radial-gradient(circle at 35% 30%, #fff3c4, #f2b632 70%, #c8861b);
+  box-shadow: 0 3px 0 #a86e12;
+}
+
+.badge-emblem:not(.is-earned) {
+  filter: grayscale(1) opacity(0.55);
+}
+
+.badge-name {
+  font-size: 1.05rem;
+}
+
+.badge-condition {
+  font-size: 0.9rem;
+}
+
+.badge-status {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.badge-toast {
+  position: fixed;
+  /* --toast-bottom is the stack offset set by badge-toast.js; --toast-x / --toast-max-w follow
+     the free gap between the touch controls (touch mode only) */
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--toast-bottom, 0px));
+  left: var(--toast-x, 50%);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: var(--toast-max-w, min(92vw, 380px));
+  width: max-content;
+  padding: 4px 14px 4px 4px;
+  border-radius: 22px;
+  background: var(--c-panel);
+  box-shadow: var(--shadow);
+  font-weight: 800;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  z-index: 600;
+  pointer-events: none;
+  animation: toast-in 0.3s ease;
+  transition:
+    opacity 0.4s ease,
+    bottom 0.2s ease,
+    left 0.2s ease;
+}
+
+.badge-toast[hidden] {
+  display: none;
+}
+
+.badge-toast .badge-emblem {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  font-size: 1.1rem;
+  box-shadow: 0 2px 0 #a86e12;
+}
+
+.badge-toast.is-leaving {
+  opacity: 0;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translate(-50%, 16px);
+    opacity: 0;
+  }
+}
+
+.btn-danger {
+  background: #b33a2b;
+  box-shadow: 0 4px 0 #7f2419;
+}
+
+.setting-reset {
+  flex-direction: column;
+  align-items: stretch;
+  border-top: 2px dashed #e2d3bd;
+  padding-top: 14px;
+}
+
+.confirm-box {
+  background: #fff1ec;
+  border: 3px solid #e7a593;
+  border-radius: 14px;
+  padding: 10px 14px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.confirm-box[hidden] {
+  display: none;
+}
+
+/* Badges: only the grid scrolls, "Back" stays in view */
+.panel-badges {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-badges .badge-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.panel-badges .panel-head,
+.panel-badges .panel-actions {
+  flex: none;
+}
