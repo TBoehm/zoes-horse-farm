@@ -4,6 +4,7 @@ import './adapters/ui/styles/main.css';
 import './adapters/ui/styles/ride.css';
 import './adapters/ui/styles/profile.css';
 import './adapters/ui/styles/courses.css';
+import './adapters/ui/styles/help.css';
 import { detectLang, getLang, setLang } from './adapters/ui/i18n.js';
 import { createStore, requestPersistentStorage } from './adapters/storage/local-store.js';
 import { hasWebGL } from './adapters/platform/webgl.js';
@@ -33,8 +34,10 @@ import './application/settings-schema.js';
 import { createSettingsService } from './application/settings-service.js';
 import './adapters/ui/settings-sections.js';
 import { createRideScreen } from './adapters/ui/screens/ride-screen.js';
-import { firstScreen, registerProfile } from './adapters/ui/screens/profile/register.js';
+import { registerProfile } from './adapters/ui/screens/profile/register.js';
+import { registerControlsHelp } from './adapters/ui/screens/controls-help.js';
 import { registerCourses } from './adapters/ui/screens/courses/register.js';
+import { nextStartScreen } from './application/start-flow.js';
 import { registerAudio } from './adapters/ui/audio-wiring.js';
 
 function boot() {
@@ -75,6 +78,7 @@ function boot() {
   app.register('ride', (ctx, params) => createRideScreen(ctx, params, { rng: Math.random }));
   registerProfile(app);
   registerCourses(app);
+  registerControlsHelp(app);
   registerAudio(app);
   registerMenuEntry({
     id: 'free',
@@ -106,7 +110,7 @@ function boot() {
     installTestHooks({ app, store, inputMode });
     app.services.gpuBudgetOverrideMB = gpuBudgetOverride(); // forces a small budget in tests
   }
-  app.go(firstScreen(store));
+  app.go(nextStartScreen(store));
 }
 
 try {

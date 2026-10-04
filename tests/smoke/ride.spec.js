@@ -148,7 +148,7 @@ test.describe('free riding (SRT-002)', () => {
     await page.waitForFunction(() => window.__zhfTest.ride().paused);
     await keys.releaseAll();
     // the "Reload" button exists only while a lost WebGL context does not come back
-    await expect(page.locator('[data-overlay="pause"] [data-action]:visible')).toHaveCount(4);
+    await expect(page.locator('[data-overlay="pause"] [data-action]:visible')).toHaveCount(5);
     // the pause menu is a modal dialog with a name
     const dialog = page.locator('[data-overlay="pause"]');
     await expect(dialog).toHaveAttribute('role', 'dialog');
@@ -177,7 +177,7 @@ test.describe('free riding (SRT-002)', () => {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.__zhfTest.ride().paused);
     await expect(page.locator('[data-action="resume"]')).toBeFocused();
-    // Tab never leaves the four buttons of the dialog
+    // Tab never leaves the buttons of the dialog
     for (let i = 0; i < 6; i += 1) await page.keyboard.press('Tab');
     expect(
       await page.evaluate(() => document.activeElement.closest('[data-overlay="pause"]') !== null),
@@ -474,7 +474,7 @@ test.describe('touch controls (SRT-002)', () => {
         b.getBoundingClientRect().bottom,
       ]),
     );
-    expect(heights).toHaveLength(5);
+    expect(heights).toHaveLength(6);
     for (const [height, bottom] of heights) {
       expect(height).toBeGreaterThanOrEqual(44);
       expect(bottom).toBeLessThanOrEqual(420);

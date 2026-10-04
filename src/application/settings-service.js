@@ -56,6 +56,11 @@ export function createSettingsService(store) {
       if (typeof on === 'boolean') patch({ showFps: on });
     },
 
+    /** The controls help was closed with "Got it": it no longer shows up by itself (rule 56). */
+    markControlsHelpSeen() {
+      patch({ controlsHelpSeen: true });
+    },
+
     /** @param {'music'|'sfx'} channel @param {number} value 0..1 */
     setVolume(channel, value) {
       const prefix = SOUND_PREFIX[channel];

@@ -5,8 +5,9 @@ import {
   NAME_MAX_LENGTH,
   skipName,
 } from '../../../../application/horse-service.js';
+import { nextStartScreen } from '../../../../application/start-flow.js';
 
-export function createNamePromptScreen(ctx, params = {}) {
+export function createNamePromptScreen(ctx) {
   const { t, h, store, app } = ctx;
   const input = h('input', {
     class: 'text-input',
@@ -31,7 +32,8 @@ export function createNamePromptScreen(ctx, params = {}) {
     { class: 'btn btn-secondary', type: 'button', dataset: { action: 'skip' } },
     t('namePrompt.skip'),
   );
-  const done = () => app.go(params.next ?? 'menu');
+  // after the name question: the controls help on the first start, then the menu (rule 56)
+  const done = () => app.go(nextStartScreen(store));
   input.addEventListener('input', () => {
     ok.disabled = !isValidName(input.value);
   });

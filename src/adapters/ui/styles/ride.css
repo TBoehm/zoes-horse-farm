@@ -301,3 +301,19 @@
     height: 92px;
   }
 }
+
+/* Low landscape screens (phones): the five pause buttons sit in two columns so that all fit */
+@media (max-height: 560px) and (orientation: landscape) {
+  .panel-pause {
+    width: min(560px, 100%);
+    padding: 12px 20px;
+  }
+  .panel-pause .menu-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .panel-pause .menu-list > .btn-menu {
+    grid-column: 1 / -1;
+  }
+}

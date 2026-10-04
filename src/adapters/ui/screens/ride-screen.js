@@ -70,6 +70,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   const restartBtn = btn('restart', 'btn-secondary');
   const quitBtn = btn('quit', 'btn-secondary');
   const settingsBtn = btn('settings', 'btn-secondary');
+  const helpBtn = btn('help', 'btn-secondary');
   const pauseMenu = h(
     'div',
     {
@@ -85,7 +86,16 @@ export function createRideScreen(ctx, params = {}, { rng }) {
       { class: 'panel panel-pause' },
       pauseTitle,
       lostNote,
-      h('div', { class: 'menu-list' }, reloadBtn, resumeBtn, restartBtn, quitBtn, settingsBtn),
+      h(
+        'div',
+        { class: 'menu-list' },
+        reloadBtn,
+        resumeBtn,
+        restartBtn,
+        quitBtn,
+        settingsBtn,
+        helpBtn,
+      ),
     ),
   );
   const el = h('section', { class: 'ride-screen' }, hud, feedbackEl, hint, controls, pauseMenu);
@@ -148,6 +158,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     restartBtn.textContent = t('pause.restart');
     quitBtn.textContent = t(session.quitLabelKey);
     settingsBtn.textContent = t('pause.settings');
+    helpBtn.textContent = t('pause.help');
     hint.textContent = t('ride.pauseHint');
     renderLostNote();
     renderFps();
@@ -303,6 +314,8 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   });
   quitBtn.addEventListener('click', () => app.go(session.quitScreen));
   settingsBtn.addEventListener('click', () => app.push('settings', { fromPause: true }));
+  // Controls help on top of the paused ride: "Got it" pops back to the open pause menu (rule 56)
+  helpBtn.addEventListener('click', () => app.push('controlsHelp', { fromPause: true }));
   reloadBtn.addEventListener('click', () => location.reload());
 
   // Auto-pause on lost focus and portrait orientation (rules 12, 38)

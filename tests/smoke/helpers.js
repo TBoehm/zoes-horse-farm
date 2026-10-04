@@ -45,13 +45,19 @@ export async function hasWebGL(page) {
   });
 }
 
-/** Opens the app and skips the name prompt on first start if it appears. */
+/**
+ * Opens the app and gets through the first-start screens if they appear: the name prompt (skip)
+ * and the controls help ("Got it"), up to the main menu.
+ */
 export async function openMenu(page) {
   await page.goto('./');
   const skip = page.locator('[data-action="skip"]');
+  const helpDone = page.locator('[data-action="help-done"]');
   const menu = page.locator('[data-screen="menu"]');
-  await skip.or(menu).first().waitFor();
+  await skip.or(helpDone).or(menu).first().waitFor();
   if (await skip.isVisible()) await skip.click();
+  await helpDone.or(menu).first().waitFor();
+  if (await helpDone.isVisible()) await helpDone.click();
   await menu.waitFor();
 }
 
@@ -63,18 +69,23 @@ export const SAVE_KEY = 'zoes-horse-farm.save';
 
 /**
  * Opens the app with the test hook; an optional save game is written once before the first load.
- * `query`: more URL parameters, e.g. '&debug'.
+ * `query`: more URL parameters, e.g. '&debug'. A given `save` counts as a player who already
+ * closed the controls help (`helpSeen: false` for one who did not); without a save the app starts
+ * from scratch (name question, then the help).
  */
-export async function openGame(page, { save, lang, query = '' } = {}) {
+export async function openGame(page, { save, lang, query = '', helpSeen = true } = {}) {
   if (save || lang) {
     await page.addInitScript(
-      ({ key, data, lang: l }) => {
+      ({ key, data, lang: l, seen }) => {
         if (localStorage.getItem(key)) return;
         const base = { version: 1, settings: l ? { lang: l } : {}, ...data };
         if (l) base.settings = { lang: l, ...base.settings };
+        if (data && Object.keys(data).length) {
+          base.settings = { ...base.settings, controlsHelpSeen: seen };
+        }
         localStorage.setItem(key, JSON.stringify(base));
       },
-      { key: SAVE_KEY, data: save ?? {}, lang },
+      { key: SAVE_KEY, data: save ?? {}, lang, seen: helpSeen },
     );
   }
   await page.goto(`./?testhooks${query}`);
