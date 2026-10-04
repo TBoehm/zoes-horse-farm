@@ -8,9 +8,10 @@ const meshOf = (rider) => rider.object.children.find((c) => c.isSkinnedMesh);
 const trianglesOf = (rider) => meshOf(rider).geometry.index.count / 3;
 const verticesOf = (rider) => meshOf(rider).geometry.attributes.position.count;
 
-// the rider before SRT-011 had 1336 / 2518 / 4036 triangles (low / medium / high); the face, chin
-// strap, ponytail bow and jacket details may cost this much more, no more (GPU memory estimate)
-const TRIANGLE_BUDGET = { low: 1700, medium: 4300, high: 7400 };
+// the rider before SRT-011 had 1336 / 2518 / 4036 triangles (low / medium / high); on medium and
+// high the face, chin strap, ponytail bow and jacket details may cost this much more, no more (GPU
+// memory estimate). Low gets them for free (rule 3): it must not exceed what it had.
+const TRIANGLE_BUDGET = { low: 1336, medium: 4300, high: 7400 };
 
 describe('rider geometry', () => {
   for (const level of LEVELS) {
@@ -102,7 +103,18 @@ describe('rider lifecycle', () => {
     rider.dispose();
   });
 
-  it('dispose frees the geometry and the material', () => {
+  it('dispose frees the geometry and the material, through release()', () => {
+    const released = [];
+    const rider = createRider({ quality: 'medium', release: (o) => released.push(o) });
+    const mesh = meshOf(rider);
+    const { geometry, material } = mesh;
+    rider.dispose();
+    expect(released).toContain(geometry);
+    expect(released).toContain(material);
+    expect(rider.object.parent).toBe(null);
+  });
+
+  it('dispose frees the geometry and the material right away by default', () => {
     const rider = createRider({ quality: 'medium' });
     const mesh = meshOf(rider);
     const geometry = vi.spyOn(mesh.geometry, 'dispose');

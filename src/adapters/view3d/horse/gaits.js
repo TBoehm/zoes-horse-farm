@@ -87,6 +87,13 @@ export const swingPast = (u) => hump(u, 0.36);
 /** Fore/aft travel over the swing (0 … 1, slow start and end). */
 export const swingTravel = (u) => u - Math.sin(2 * Math.PI * u) / (2 * Math.PI);
 
+/**
+ * Correction of the fore/aft travel of the swing that gives it the slope 1 (per unit of u) at both
+ * ends and next to nothing in between: add slope × swingEnds(u) to a path that starts and ends
+ * with zero slope. Zero at u = 0 and u = 1.
+ */
+export const swingEnds = (u) => u * Math.pow(1 - u, 6) - (1 - u) * Math.pow(u, 6);
+
 /** Lift scales a bit with speed within the gait (slow walk: flatter). */
 export function liftScaleFor(gait, v) {
   if (gait === 'walk') return lerp(0.45, 1, clamp(v / 1.4, 0, 1));

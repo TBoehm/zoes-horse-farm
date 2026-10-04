@@ -247,8 +247,9 @@ export function createDust({ quality = 'medium', release = releaseNow, rng = cre
     dispose() {
       if (built) {
         object.remove(built.points);
-        built.geometry.dispose();
-        built.material.dispose();
+        // through `release`, so that objects of a lost context are not freed with GL calls
+        release(built.geometry);
+        release(built.material);
         built = null;
       }
       pool = null;

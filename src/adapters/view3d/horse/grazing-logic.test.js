@@ -3,6 +3,7 @@ import { createRng } from '../textures.js';
 import {
   GRAZER_STATES,
   GRAZING,
+  HORSE_EXTENT,
   createGrazer,
   distanceToSegment,
   insideArea,
@@ -14,6 +15,24 @@ import {
 
 const AREA = { x: 30, z: -12, width: 24, depth: 16, rotation: 0.6 };
 const DT = 1 / 30;
+
+/** The nose, the tail and the two sides (at the middle of the body) of a grazer (world x/z). */
+function bodyPoints(g) {
+  const fx = Math.sin(g.heading);
+  const fz = Math.cos(g.heading);
+  const ox = g.x + fx * GRAZING.bodyOffset;
+  const oz = g.z + fz * GRAZING.bodyOffset;
+  const out = [];
+  for (const [along, across] of [
+    [HORSE_EXTENT.front, 0],
+    [-HORSE_EXTENT.back, 0],
+    [-GRAZING.bodyOffset, HORSE_EXTENT.side],
+    [-GRAZING.bodyOffset, -HORSE_EXTENT.side],
+  ]) {
+    out.push({ x: ox + fx * along + fz * across, z: oz + fz * along - fx * across });
+  }
+  return out;
+}
 
 function simulate(seed, seconds, count = 2, area = AREA) {
   const rng = createRng(seed);
@@ -42,7 +61,7 @@ function simulate(seed, seconds, count = 2, area = AREA) {
       log.maxGrazeStep = Math.max(log.maxGrazeStep, Math.abs(g.graze - prevGraze[i]));
       prevGraze[i] = g.graze;
       walked += Math.hypot(g.x - before.x, g.z - before.z);
-      if (!insideArea(area, g.x, g.z, -1)) log.outside++;
+      if (!insideArea(area, g.x, g.z, 0)) log.outside++;
     });
     if (count > 1) {
       log.minGap = Math.min(
@@ -172,6 +191,66 @@ describe('grazing horse', () => {
     }
     expect(checkedWalk).toBeGreaterThan(5);
     expect(checkedGraze).toBeGreaterThan(100);
+  });
+});
+
+describe('the whole horse, not only its reference point, stays where it belongs', () => {
+  it('the body centre lies behind the origin of the horse and covers the whole model', () => {
+    expect(GRAZING.bodyOffset + HORSE_EXTENT.front).toBeLessThanOrEqual(GRAZING.bodyRadius);
+    expect(HORSE_EXTENT.back - GRAZING.bodyOffset).toBeLessThanOrEqual(GRAZING.bodyRadius);
+    expect(GRAZING.margin).toBeGreaterThanOrEqual(GRAZING.bodyRadius);
+  });
+
+  it('nose, tail and sides stay inside the fence for half an hour, several seeds, two horses', () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const rng = createRng(seed);
+      const grazers = [-5, 5].map((x) => {
+        const p = toWorld(AREA, x, (rng() - 0.5) * 6);
+        return createGrazer({ x: p.x, z: p.z, heading: rng() * 6 - 3, rng });
+      });
+      let turned = 0;
+      let worst = Infinity; // the closest a point comes to the fence (m)
+      for (let t = 0; t < 1800; t += DT) {
+        for (const g of grazers) {
+          stepGrazer(g, DT, AREA, grazers, rng);
+          if (g.state === GRAZER_STATES.turn) turned++;
+          for (const p of bodyPoints(g)) {
+            const l = toLocal(AREA, p.x, p.z);
+            worst = Math.min(worst, AREA.width / 2 - Math.abs(l.x), AREA.depth / 2 - Math.abs(l.z));
+          }
+        }
+      }
+      expect(turned, `seed ${seed}: turns on the spot happened`).toBeGreaterThan(0);
+      expect(worst, `seed ${seed}`).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('nose, tail and sides stay out of the footprints of the props', () => {
+    // footprints (radius of the prop) and the keep-out circles of the area (footprint + reach)
+    const props = [
+      { x: toWorld(AREA, -8, 0).x, z: toWorld(AREA, -8, 0).z, r: 3.2 },
+      { x: toWorld(AREA, 6, 4.5).x, z: toWorld(AREA, 6, 4.5).z, r: 1.2 },
+      { x: toWorld(AREA, -2, -5).x, z: toWorld(AREA, -2, -5).z, r: 1.0 },
+    ];
+    const area = { ...AREA, avoid: props.map((c) => ({ ...c, r: c.r + GRAZING.bodyRadius })) };
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const rng = createRng(seed);
+      const start = toWorld(AREA, 3, -2);
+      const g = createGrazer({ x: start.x, z: start.z, heading: rng() * 6 - 3, rng });
+      let walked = 0;
+      let closest = Infinity;
+      for (let t = 0; t < 1800; t += DT) {
+        const before = { x: g.x, z: g.z };
+        stepGrazer(g, DT, area, [g], rng);
+        walked += Math.hypot(g.x - before.x, g.z - before.z);
+        for (const p of bodyPoints(g)) {
+          for (const c of props)
+            closest = Math.min(closest, Math.hypot(p.x - c.x, p.z - c.z) - c.r);
+        }
+      }
+      expect(walked, `seed ${seed}: the horse moved around`).toBeGreaterThan(20);
+      expect(closest, `seed ${seed}`).toBeGreaterThanOrEqual(0);
+    }
   });
 });
 

@@ -27,7 +27,7 @@ const PONY_STUB = [0, 0.815, -0.085];
 
 // segment counts per level: [ellipsoid width, height], tube samples, tube radial
 const FACE_DETAIL = {
-  low: { eye: [5, 4], small: [5, 3], tube: [5, 3], strap: [8, 3], tail: [4, 5] },
+  low: { eye: [4, 3], small: [4, 3], tube: [4, 3], strap: [6, 3], tail: [4, 4] },
   medium: { eye: [8, 6], small: [7, 5], tube: [8, 4], strap: [14, 4], tail: [6, 7] },
   high: { eye: [10, 8], small: [9, 6], tube: [12, 5], strap: [20, 5], tail: [8, 8] },
 };
@@ -131,13 +131,15 @@ export function addFace(b, level, C) {
         seg: D.small,
       });
     }
-    // ears (below the helmet rim)
-    surfaceBlob(b, 'head', C.skin, [0.0065, 0.022, 0.015], -0.12, 1.5 * s, {
-      off: 0.015,
-      push: 0.0,
-      roll: 0,
-      seg: D.small,
-    });
+    // ears (below the helmet rim; not on low, where they would cost more than they show)
+    if (!low) {
+      surfaceBlob(b, 'head', C.skin, [0.0065, 0.022, 0.015], -0.12, 1.5 * s, {
+        off: 0.015,
+        push: 0.0,
+        roll: 0,
+        seg: D.small,
+      });
+    }
     if (level === 'high') {
       surfaceBlob(b, 'head', C.blush, [0.014, 0.0095, 0.004], -0.52, 0.62 * s, {
         off: 0.004,
@@ -248,7 +250,12 @@ export function addPonytail(b, level, C) {
   const root = V3(PONY_JOINTS.pony1).add(new THREE.Vector3(0, -0.006, -0.012));
   const dir = V3(PONY_JOINTS.pony2).sub(V3(PONY_JOINTS.pony1)).normalize();
   const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-  const ring = torusData(0.03, 0.0115, D.small[1] > 3 ? 5 : 4, level === 'low' ? 6 : 9);
+  const ring = torusData(
+    0.03,
+    0.0115,
+    level === 'low' ? 3 : D.small[1] > 3 ? 5 : 4,
+    level === 'low' ? 5 : 9,
+  );
   b.addIndexed(
     ring.p,
     ring.idx,

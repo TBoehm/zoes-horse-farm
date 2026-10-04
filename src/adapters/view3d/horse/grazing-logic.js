@@ -2,10 +2,15 @@
 // now and then lifts the head and looks around, and walks a few slow steps to a new spot inside
 // the paddock. Randomness comes from an injected rng.
 //
-// Positions are world x/z; the heading follows the simulation: the forward direction is
-// (sin h, cos h) and h grows to the left, so a positive turn rate (right turn) lowers it.
+// Positions are world x/z of the BODY CENTRE of the horse (the horse object itself has its origin on
+// the ground below the forelegs, GRAZING.bodyOffset ahead of the centre, see grazing.js). The whole
+// horse, in every pose and also while it turns on the spot, lies within GRAZING.bodyRadius of the
+// centre, so the fence and the props are kept at that distance. The heading follows the
+// simulation: the forward direction is (sin h, cos h) and h grows to the left, so a positive turn
+// rate (right turn) lowers it.
 import { clamp, smoothstep } from './math.js';
-import { createSpring, smoothTo } from './spring.js';
+import { createSpring } from '../../../shared/spring.js';
+import { smoothTo } from './spring.js';
 
 export const GRAZER_STATES = Object.freeze({
   graze: 'graze',
@@ -13,6 +18,15 @@ export const GRAZER_STATES = Object.freeze({
   turn: 'turn',
   walk: 'walk',
 });
+
+/**
+ * Extent (m) of the horse model around its object origin (ground below the forelegs): in front
+ * (head up, the farthest), behind (tail) and to the sides, over all poses of a paddock horse.
+ * Measured on the model, and checked against it in grazing.test.js.
+ */
+export const HORSE_EXTENT = Object.freeze({ front: 1.22, back: 2.05, side: 0.8 });
+
+const BODY_RADIUS = (HORSE_EXTENT.back + HORSE_EXTENT.front) / 2 + 0.075;
 
 /** Technical values of the paddock behaviour (look, not game play). */
 export const GRAZING = Object.freeze({
@@ -28,15 +42,19 @@ export const GRAZING = Object.freeze({
   arrive: 0.3, // m: the target is reached
   creepSpeed: 0.25, // m/s: slowest walk before the spot
   headOmega: 2.6, // 1/s, how fast the head goes down / up (95 % after ≈ 1.8 s)
-  margin: 1.4, // m: targets keep this far from the fence
+  // the body centre is the middle between the nose and the tail; the whole horse lies within
+  // bodyRadius of it (nose, tail and sides, any pose, also while it turns on the spot)
+  bodyOffset: (HORSE_EXTENT.back - HORSE_EXTENT.front) / 2, // m: the origin of the horse object is this far ahead of the centre
+  bodyRadius: BODY_RADIUS, // m
+  margin: BODY_RADIUS + 0.2, // m: the body centre keeps this far from the fence (room to arrive)
   separation: 3, // m: the horses keep this far from each other when they pick a spot
   candidates: 8,
 });
 
 /**
  * Area { x, z, width, depth, rotation, avoid? }: a rectangle around (x, z), turned about Y.
- * `avoid`: [{ x, z, r }] circles (shelter, trough, ...) that the horses neither stand in nor walk
- * through (world coordinates).
+ * `avoid`: [{ x, z, r }] circles (shelter, trough, ...) that the body centre of a horse neither
+ * stands in nor walks through (world coordinates): r = radius of the prop + GRAZING.bodyRadius.
  */
 export function toLocal(area, x, z, out = { x: 0, z: 0 }) {
   const dx = x - area.x;
@@ -57,9 +75,11 @@ export function toWorld(area, lx, lz, out = { x: 0, z: 0 }) {
   return out;
 }
 
+const scratch = { x: 0, z: 0 };
+
 /** Is (x, z) inside the area, `margin` m away from the border? */
 export function insideArea(area, x, z, margin = 0) {
-  const p = toLocal(area, x, z);
+  const p = toLocal(area, x, z, scratch);
   return Math.abs(p.x) <= area.width / 2 - margin && Math.abs(p.z) <= area.depth / 2 - margin;
 }
 
@@ -89,7 +109,8 @@ const headingTo = (dx, dz) => Math.atan2(dx, dz);
  * A point in the area for the next grazing spot: `distance` away from `from` in a random
  * direction when it fits, as far from the other horses as possible (several candidates). Spots
  * whose way crosses a keep-out circle of the area are skipped; null when no candidate is free.
- * others: [{ x, z }] positions the horse should keep away from.
+ * others: [{ x, z }] positions the horse should keep away from (`from` itself is skipped, so a list
+ * of all horses can be passed).
  */
 export function pickSpot(rng, area, from, others = [], tuning = GRAZING) {
   let best = null;
@@ -99,14 +120,16 @@ export function pickSpot(rng, area, from, others = [], tuning = GRAZING) {
     const a = rng() * Math.PI * 2;
     const raw = { x: from.x + Math.sin(a) * dist, z: from.z + Math.cos(a) * dist };
     // clamp into the area (keeps the margin to the fence)
-    const p = toLocal(area, raw.x, raw.z);
+    const p = toLocal(area, raw.x, raw.z, scratch);
     p.x = clamp(p.x, -area.width / 2 + tuning.margin, area.width / 2 - tuning.margin);
     p.z = clamp(p.z, -area.depth / 2 + tuning.margin, area.depth / 2 - tuning.margin);
     const spot = toWorld(area, p.x, p.z);
     if (blockedByAvoid(area.avoid, from, spot)) continue;
     const moved = Math.hypot(spot.x - from.x, spot.z - from.z);
     let gap = Infinity;
-    for (const o of others) gap = Math.min(gap, Math.hypot(spot.x - o.x, spot.z - o.z));
+    for (const o of others) {
+      if (o !== from) gap = Math.min(gap, Math.hypot(spot.x - o.x, spot.z - o.z));
+    }
     // far from the others (up to the separation), and a real step
     const score = Math.min(gap, tuning.separation) + (moved > 1.2 ? 1 : 0) + rng() * 0.5;
     if (score > bestScore) {
@@ -117,7 +140,7 @@ export function pickSpot(rng, area, from, others = [], tuning = GRAZING) {
   return best;
 }
 
-/** A grazer at (x, z) heading h. rng decides how long the first graze lasts. */
+/** A grazer with its body centre at (x, z) heading h. rng decides how long the first graze lasts. */
 export function createGrazer({ x, z, heading = 0, rng }) {
   return {
     x,
@@ -135,7 +158,8 @@ export function createGrazer({ x, z, heading = 0, rng }) {
 }
 
 /**
- * Advances a grazer. others: [{ x, z }] of the other horses (for the choice of the next spot).
+ * Advances a grazer. others: [{ x, z }] of the horses (for the choice of the next spot; the grazer
+ * itself in the list is skipped).
  * After the step g.speed (m/s), g.turnRate (rad/s, + = right) and g.graze (0..1) are what
  * horse.update() needs.
  */

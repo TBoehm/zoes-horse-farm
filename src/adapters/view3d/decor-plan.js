@@ -2,6 +2,7 @@
 // and the props in the paddock (pure, no three.js; the meshes are built in arena-decor.js).
 import { FENCE, GATE, PADDOCK, paddockPoint, planFence } from './world-layout.js';
 import { ARENA } from '../../domain/sim/tuning.js';
+import { GRAZING } from './horse/grazing-logic.js';
 
 /** Colours of the pennants (sRGB hex). */
 export const BUNTING_COLORS = Object.freeze([
@@ -88,12 +89,20 @@ export function planPaddockProps() {
   };
 }
 
-// Radius (m) of the circle around each prop that grazing horses keep out of: the footprint plus
-// room for a horse (about 1.2 m from its centre to its nose or tail)
-const KEEP_OUT = Object.freeze({ shelter: 3.6, trough: 2.4, rack: 2.2 });
+// Radius (m) of the circle around each prop that holds its footprint (the shelter with the roof
+// overhang; the trough and the rack are about 1 m from their middle to their corners)
+const FOOTPRINT = Object.freeze({ shelter: 3.2, trough: 1.2, rack: 1.0 });
 
-/** Circles { x, z, r } around the props of the paddock, for the grazing horses (world space). */
+/**
+ * Circles { x, z, r } around the props of the paddock, for the grazing horses (world space). The
+ * horses are planned by their body centre, and the whole horse lies within GRAZING.bodyRadius of
+ * it, so a circle is the footprint of the prop plus that reach.
+ */
 export function planPaddockKeepOut() {
   const props = planPaddockProps();
-  return Object.entries(KEEP_OUT).map(([key, r]) => ({ x: props[key].x, z: props[key].z, r }));
+  return Object.entries(FOOTPRINT).map(([key, r]) => ({
+    x: props[key].x,
+    z: props[key].z,
+    r: r + GRAZING.bodyRadius,
+  }));
 }

@@ -140,7 +140,11 @@ describe('dust object', () => {
     dust.setQuality('medium');
     expect(dust.object.children).toHaveLength(1);
     const last = dust.object.children[0];
+    released.length = 0;
     dust.dispose();
+    // the final dispose goes through the hook, too (objects of a lost context are not freed)
+    expect(released).toContain(last.geometry);
+    expect(released).toContain(last.material);
     expect(dust.object.parent).toBe(null);
     expect(last.parent).toBe(null);
   });

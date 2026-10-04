@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { TUNING } from '../../../domain/sim/tuning.js';
-import { GAITS, MAX_STANCE_TRAVEL, legPhase, legSample, offsetsFor } from './gaits.js';
+import {
+  GAITS,
+  MAX_STANCE_TRAVEL,
+  legPhase,
+  legSample,
+  offsetsFor,
+  swingEnds,
+  swingTravel,
+} from './gaits.js';
 
 describe('gaits: cadence and stride length (riding-theory values)', () => {
   it('walk ≈ 55/min, trot ≈ 80/min, canter ≈ 100/min at typical speed', () => {
@@ -117,5 +125,28 @@ describe('hoof path', () => {
   it('legPhase stays in [0, 1)', () => {
     expect(legPhase(0.1, 0.75)).toBeCloseTo(0.35);
     expect(legPhase(0.9, 0.25)).toBeCloseTo(0.65);
+  });
+});
+
+describe('swingEnds (hoof speed at lift-off and touch-down)', () => {
+  const slope = (u) => (swingEnds(u + 1e-6) - swingEnds(u - 1e-6)) / 2e-6;
+
+  it('is zero at both ends and has the slope 1 there', () => {
+    expect(swingEnds(0)).toBe(0);
+    expect(swingEnds(1)).toBe(0);
+    expect(slope(1e-5)).toBeCloseTo(1, 3);
+    expect(slope(1 - 1e-5)).toBeCloseTo(1, 3);
+  });
+
+  it('hardly moves the hoof in the middle of the swing', () => {
+    for (let u = 0.3; u <= 0.7; u += 0.05) expect(Math.abs(swingEnds(u))).toBeLessThan(0.04);
+  });
+
+  it('moves the hoof back only a little behind the lift-off point', () => {
+    // a unit stride with the hoof speed of a canter (−2.4 per unit of u): the dip is a few percent
+    let min = 0;
+    for (let u = 0; u <= 1; u += 0.01)
+      min = Math.min(min, swingTravel(u) - 2.4 * 0.3 * swingEnds(u));
+    expect(min).toBeGreaterThan(-0.2);
   });
 });

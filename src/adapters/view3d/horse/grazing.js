@@ -5,6 +5,7 @@
 //     quality: 'medium',                         // level name or preset (characterDetail)
 //     area: { x, z, width, depth, rotation, avoid? }, // the paddock: a rectangle around (x, z),
 //                                                // turned about Y; avoid: [{ x, z, r }] props
+//                                                // (r = prop radius + GRAZING.bodyRadius)
 //     count: 2,
 //     coats: ['chestnut', 'bay', 'grey'],        // coats to pick from (default: all)
 //     rng,                                       // random numbers (default: seeded)
@@ -15,6 +16,10 @@
 //   paddock.update(dt);                          // every frame
 //   paddock.setQuality('high');                  // geometry detail of the horses changes
 //   paddock.dispose();
+//
+// A horse is planned by its body centre: the whole horse (nose to tail, any pose, turning on the
+// spot) lies within GRAZING.bodyRadius of it, so it stays inside the fence and out of the props.
+// The object origin (ground below the forelegs) is GRAZING.bodyOffset ahead of the centre.
 //
 // Level of detail: low and medium use the "low" horse (one draw call, ≈ 3.2 k triangles each),
 // high the "medium" horse (one draw call, ≈ 8.4 k triangles). The horses cast no shadows and are
@@ -43,6 +48,15 @@ const MIN_SPACING = 2.5; // m between the horses at the start
 function levelOf(quality) {
   const name = typeof quality === 'string' ? quality : quality?.characterDetail || quality?.level;
   return HORSE_LEVEL[name] ?? 'low';
+}
+
+/**
+ * The coats are dealt out one after the other from a random start, so the horses differ (as long
+ * as there are enough coats).
+ */
+export function dealCoats(coats, count, rng) {
+  const first = Math.floor(rng() * coats.length);
+  return Array.from({ length: count }, (_, i) => coats[(first + i) % coats.length]);
 }
 
 export function createGrazingHorses({
@@ -83,13 +97,10 @@ export function createGrazingHorses({
     starts.push(best ?? toWorld(area, 0, 0));
   }
 
-  // the coats are dealt out one after the other from a random start, so the horses differ
-  const firstCoat = Math.floor(rng() * coats.length);
-  const used = [];
+  const dealt = dealCoats(coats, starts.length, rng);
   starts.forEach((p, i) => {
     const horseRng = createRng(Math.floor(rng() * 1e9));
-    const coat = coats[(firstCoat + i) % coats.length];
-    used.push(coat);
+    const coat = dealt[i];
     const horse = createHorse({
       coat,
       marking: MARKINGS[Math.floor(rng() * MARKINGS.length)],
@@ -105,38 +116,45 @@ export function createGrazingHorses({
     group.add(horse.object);
     horses.push(horse);
     grazers.push(createGrazer({ x: p.x, z: p.z, heading: (rng() - 0.5) * 2 * Math.PI, rng }));
+    place(i);
   });
 
   const state = { gait: 'halt', speed: 0, turnRate: 0, y: 0, graze: 0, jump: null };
+  const back = { x: 0, z: 0 };
+  update(0); // (the horses stand at their spots before the first frame)
+
+  /** Puts the object of horse i at its grazer: the origin is ahead of the body centre. */
+  function place(i) {
+    const g = grazers[i];
+    const x = g.x + Math.sin(g.heading) * GRAZING.bodyOffset;
+    const z = g.z + Math.cos(g.heading) * GRAZING.bodyOffset;
+    horses[i].object.position.set(x, groundY(x, z), z);
+    horses[i].object.rotation.y = g.heading;
+  }
+
   function update(dt) {
     const step = Math.min(dt, 0.1);
-    grazers.forEach((g, i) => {
-      const others = grazers.filter((o) => o !== g);
-      stepGrazer(g, step, area, others, rng);
-      // keep the horse in the paddock whatever happens
-      if (!insideArea(area, g.x, g.z, -0.5)) {
-        const back = toWorld(area, 0, 0);
+    for (let i = 0; i < grazers.length; i++) {
+      const g = grazers[i];
+      stepGrazer(g, step, area, grazers, rng);
+      // keep the whole horse in the paddock whatever happens
+      if (!insideArea(area, g.x, g.z, GRAZING.bodyRadius)) {
+        toWorld(area, 0, 0, back);
         g.x += (back.x - g.x) * 0.02;
         g.z += (back.z - g.z) * 0.02;
       }
+      place(i);
       const horse = horses[i];
-      horse.object.position.set(g.x, groundY(g.x, g.z), g.z);
-      horse.object.rotation.y = g.heading;
       state.gait = g.speed >= 0.15 ? 'walk' : 'halt';
       state.speed = g.speed;
       state.turnRate = g.turnRate;
       state.graze = g.graze;
       horse.update(step, state);
-    });
+    }
   }
 
   return {
     group,
-    /** The grazers (state of the behaviour; for tests and debugging). */
-    grazers,
-    horses,
-    /** The coat of each horse (for tests and debugging). */
-    coats: used,
     update,
     setQuality(next) {
       const wanted = levelOf(next);

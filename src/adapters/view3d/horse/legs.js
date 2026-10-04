@@ -22,6 +22,7 @@ import {
   legPhase,
   liftScaleFor,
   offsetsFor,
+  swingEnds,
   swingFlex,
   swingLift,
   swingPast,
@@ -48,13 +49,18 @@ const SQUARE = Object.freeze({
 });
 
 const FREEZE_SPEED = 0.1; // m/s: below this a stopped horse plants its legs
-// Longest stance travel of a hoof (m): what the legs can reach with the IK of index.js. A faster
-// gait shortens the duty factor instead of stretching the stride (real horses do the same).
-const REACH_TRAVEL = 1.0;
+// Longest stance travel of a hoof (m): what the legs can reach with the IK of index.js, with a
+// margin to the full stretch: a hoof that touches down or lifts off at the full stretch makes the
+// joints snap (the IK angle follows acos of the reach). A faster gait shortens the duty factor
+// instead of stretching the stride (real horses do the same).
+const REACH_TRAVEL = 0.85;
 const MAX_TRAVEL = REACH_TRAVEL * 1.1; // m: the planted hoof never goes further than this
 
 const CONTACT_Y = 0.004; // m: lower than this the hoof counts as on the ground
 const MIN_PEAK = 0.02; // m: a swing lower than this does not make a footfall (stepping in place)
+// Share of the ground speed at which the hoof leaves and meets the ground (1 would match the
+// stance exactly but moves the hoof faster than 0.13 m per frame in the middle of a canter swing)
+const GROUND_SPEED_SHARE = 0.3;
 const SHAPE_TAU = 0.1; // s: smoothing of the speed-dependent shape of the steps
 const HOLD_TAU = 0.5; // s: release time of the step amplitude when the moving gaits fade out
 const RB_EPS = 0.02; // keeps the rein-back share continuous when the moving gaits fade out
@@ -91,6 +97,7 @@ export function createLegModel() {
     hold: 0,
     primed: false,
     stride: 0, // smoothed stride length (m)
+    vsm: 0, // smoothed signed speed (m/s), for the speed of the hoof at lift-off and touch-down
     // amplitudes per unit of the moving gaits' share (last known)
     shape: { lift: [0, 0, 0, 0], flex: [0, 0, 0, 0], past: [0, 0, 0, 0] },
     // blended gait parameters (reused every frame)
@@ -178,6 +185,7 @@ export function stepLegs(model, input, dt, falls) {
   const strideNow = P.S >= 1e-4 ? Math.min(REACH_TRAVEL, (model.duty * v) / model.fn) : 0;
   model.stride += (strideNow - model.stride) * (dt > 0 ? 1 - Math.exp(-dt / SHAPE_TAU) : 1);
   const stride = model.stride;
+  model.vsm += (input.vs - model.vsm) * (dt > 0 ? 1 - Math.exp(-dt / SHAPE_TAU) : 1);
   const offsets = offsetsFor(input.gait, input.lead);
   const baseSink = w.halt * HALT_SINK;
   for (let i = 0; i < 4; i++) {
@@ -290,7 +298,12 @@ function stepCycle(model, leg, i, input, offsets, stride, baseSink, dt, falls) {
   } else {
     const u = clamp((q - d) / (1 - d), 0, 1);
     const target = c + (sgn * stride) / 2;
-    dz = leg.from + (target - leg.from) * swingTravel(u);
+    // The hoof leaves and meets the ground moving back relative to the body, as the ground does
+    // (see swingEnds), so that its speed is nearly continuous at lift-off and touch-down: a hoof
+    // that stops dead at touch-down and sets off at once in stance makes the joints of the leg
+    // turn by half a radian in one frame.
+    const slope = (-model.vsm * (1 - d) * GROUND_SPEED_SHARE) / fn;
+    dz = leg.from + (target - leg.from) * swingTravel(u) + slope * swingEnds(u);
     leg.y = P.lift[i] * swingLift(u);
     leg.flex = P.flex[i] * swingFlex(u);
     leg.past = P.past[i] * swingPast(u);

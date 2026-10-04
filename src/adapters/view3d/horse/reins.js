@@ -1,5 +1,6 @@
 // Reins as a dynamic band (two thin tubes updated every frame; one draw call).
 import * as THREE from 'three';
+import { releaseNow } from '../resilience.js';
 
 const SEG = 10;
 const SIDES = 4;
@@ -67,8 +68,9 @@ export function createReins() {
       geo.attributes.position.needsUpdate = true;
       geo.computeVertexNormals();
     },
-    dispose() {
-      geo.dispose();
+    /** Frees the buffers through `release` (see createGpuEpoch), right away by default. */
+    dispose(release = releaseNow) {
+      release(geo);
     },
   };
 }

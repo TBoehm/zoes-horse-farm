@@ -8,6 +8,7 @@ import {
   planPaddockProps,
   planPaddockKeepOut,
 } from './decor-plan.js';
+import { GRAZING } from './horse/grazing-logic.js';
 
 const hx = ARENA.width / 2 + FENCE.offset;
 const hz = ARENA.length / 2 + FENCE.offset;
@@ -127,6 +128,20 @@ describe('planPaddockProps', () => {
 });
 
 describe('planPaddockKeepOut', () => {
+  it('a circle is the footprint of the prop plus the reach of a horse around its body centre', () => {
+    const [shelter, trough, rack] = ['shelter', 'trough', 'rack'].map((k) =>
+      planPaddockKeepOut().find((c) => {
+        const p = planPaddockProps()[k];
+        return c.x === p.x && c.z === p.z;
+      }),
+    );
+    // the shelter is 4.4 m × 2.8 m with a roof that overhangs by 0.35 m at the sides and 0.4 m at
+    // the front and back: the corners of the roof are 3.1 m from its middle
+    expect(shelter.r).toBeGreaterThanOrEqual(Math.hypot(2.55, 1.8) + GRAZING.bodyRadius);
+    expect(trough.r).toBeGreaterThanOrEqual(Math.hypot(1, 0.3) + GRAZING.bodyRadius);
+    expect(rack.r).toBeGreaterThanOrEqual(Math.hypot(0.9, 0.35) + GRAZING.bodyRadius);
+  });
+
   const props = planPaddockProps();
   const circles = planPaddockKeepOut();
 
@@ -143,7 +158,7 @@ describe('planPaddockKeepOut', () => {
       for (let v = -0.9; v <= 0.9; v += 0.1) {
         const p = paddockPoint(u, v);
         if (
-          paddockContains(p.x, p.z, 1.4) &&
+          paddockContains(p.x, p.z, GRAZING.margin) &&
           !circles.some((c) => Math.hypot(p.x - c.x, p.z - c.z) < c.r)
         )
           free++;

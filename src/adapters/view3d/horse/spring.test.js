@@ -3,15 +3,13 @@ import {
   ACCEL_LIMITS,
   createAccelEstimator,
   createHairChain,
-  createSpring,
   kickChain,
-  resetChain,
   smoothTo,
   softClamp,
   stepAccelEstimator,
   stepHairChain,
-  stepSpring,
 } from './spring.js';
+import { createSpring } from '../../../shared/spring.js';
 
 const TAIL_CFG = {
   count: 5,
@@ -24,57 +22,7 @@ const TAIL_CFG = {
   couple: 0.3,
 };
 
-describe('stepSpring', () => {
-  it('settles to the target for every damping regime', () => {
-    for (const zeta of [0.2, 0.7, 1, 1.5, 4]) {
-      const s = createSpring(1, 0);
-      for (let i = 0; i < 600; i++) stepSpring(s, 0.25, 12, zeta, 1 / 60);
-      expect(s.x).toBeCloseTo(0.25, 4);
-      expect(Math.abs(s.v)).toBeLessThan(1e-3);
-    }
-  });
-
-  it('critical damping does not overshoot', () => {
-    const s = createSpring(0, 0);
-    let max = 0;
-    for (let i = 0; i < 300; i++) {
-      stepSpring(s, 1, 10, 1, 1 / 60);
-      max = Math.max(max, s.x);
-    }
-    expect(max).toBeLessThanOrEqual(1 + 1e-9);
-  });
-
-  it('under-damped spring overshoots and rings', () => {
-    const s = createSpring(0, 0);
-    let max = 0;
-    for (let i = 0; i < 300; i++) {
-      stepSpring(s, 1, 10, 0.3, 1 / 60);
-      max = Math.max(max, s.x);
-    }
-    expect(max).toBeGreaterThan(1.2);
-  });
-
-  it('is exact: one big step equals many small steps (constant target)', () => {
-    for (const zeta of [0.3, 1, 2]) {
-      const a = createSpring(0.5, 2);
-      const b = createSpring(0.5, 2);
-      stepSpring(a, 0, 9, zeta, 0.2);
-      for (let i = 0; i < 20; i++) stepSpring(b, 0, 9, zeta, 0.01);
-      expect(a.x).toBeCloseTo(b.x, 6);
-      expect(a.v).toBeCloseTo(b.v, 6);
-    }
-  });
-
-  it('does not blow up at huge steps, stiff springs or odd input', () => {
-    const s = createSpring(1, 1);
-    for (const dt of [0.5, 5, 1e3, 1e-9, 0, -1]) {
-      stepSpring(s, 0, 500, 0.1, dt);
-      expect(Number.isFinite(s.x)).toBe(true);
-      expect(Number.isFinite(s.v)).toBe(true);
-      expect(Math.abs(s.x)).toBeLessThan(60);
-    }
-  });
-
+describe('smoothing and soft limits', () => {
   it('smoothTo reaches about 95 % after 4.7 / omega', () => {
     const s = createSpring();
     const omega = 10;
@@ -149,16 +97,13 @@ describe('hair chain', () => {
     }
   });
 
-  it('kick adds motion that fades out; reset clears it', () => {
+  it('kick adds motion that fades out', () => {
     const c = createHairChain(TAIL_CFG);
     kickChain(c, 0, 2);
     run(c, { fwd: 0, up: 0, lat: 0 }, 0.1);
     expect(Math.abs(c.segments[3].sway.x)).toBeGreaterThan(0.01);
     run(c, { fwd: 0, up: 0, lat: 0 }, 8);
     expect(Math.abs(c.segments[3].sway.x)).toBeLessThan(1e-3);
-    kickChain(c, 1, 1);
-    resetChain(c);
-    expect(c.segments[3].pitch.v).toBe(0);
   });
 });
 

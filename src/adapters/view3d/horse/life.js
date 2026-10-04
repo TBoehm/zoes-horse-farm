@@ -8,14 +8,13 @@ import {
   createAccelEstimator,
   createHairChain,
   kickChain,
-  resetChain,
   stepAccelEstimator,
   stepHairChain,
 } from './spring.js';
 
 // Hair dynamics. Gains are radians of deflection per m/s² of body acceleration; the hair is
 // under-damped (zeta < 1) so that it swings over and settles again. Later segments are softer.
-export const TAIL = Object.freeze({
+const TAIL = Object.freeze({
   count: 5,
   omega0: 15,
   omegaTail: 8.5,
@@ -26,7 +25,7 @@ export const TAIL = Object.freeze({
   windGain: [0.4, 0.7, 1, 1.2, 1.3],
   couple: 0.25,
 });
-export const MANE = Object.freeze({
+const MANE = Object.freeze({
   count: 5,
   omega0: 14,
   omegaTail: 8,
@@ -37,7 +36,7 @@ export const MANE = Object.freeze({
   windGain: [0.5, 0.8, 1, 1.1, 1.1],
   couple: 0.3,
 });
-export const FORELOCK = Object.freeze({
+const FORELOCK = Object.freeze({
   count: 1,
   omega0: 13,
   omegaTail: 13,
@@ -134,13 +133,6 @@ export function stepLife(life, dt, input) {
 
   life.blinkClosure = life.blinker.step(dt, input.alert ?? 0);
   return life;
-}
-
-/** Clears the hair motion (e.g. after the horse was put somewhere else). */
-export function resetLife(life) {
-  resetChain(life.tail);
-  resetChain(life.mane);
-  resetChain(life.forelock);
 }
 
 /**

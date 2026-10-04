@@ -27,7 +27,7 @@ import {
 } from './rider-details.js';
 import { createHeadLook, stepHeadLook } from './rider-look.js';
 import { breathing, createPat, stepPat } from './rider-life.js';
-import { softReach } from './rider-reach.js';
+import { limbReach } from './rider-reach.js';
 import { PONY_SEGMENTS, createPonytail, stepPonytail } from './rider-ponytail.js';
 
 const SIDES = [1, -1];
@@ -98,10 +98,40 @@ const lin = (c) => {
 };
 const C = Object.fromEntries(Object.entries(COLORS).map(([k, v]) => [k, lin(v)]));
 
+// Rings and segments per level. `low` must not get more triangles than the rider had before the
+// face and the ponytail were added (1336): the face is paid for with coarser hands, boots and
+// stirrups, which are small in the picture.
 const DETAIL = {
-  low: { torso: [8, 8], limb: [4, 6], head: [8, 6], misc: 6 },
-  medium: { torso: [14, 12], limb: [7, 9], head: [12, 9], misc: 10 },
-  high: { torso: [20, 16], limb: [10, 12], head: [16, 12], misc: 14 },
+  low: {
+    torso: [8, 8],
+    limb: [4, 6],
+    head: [8, 6],
+    peak: [5, 3],
+    hand: [5, 4],
+    iron: [3, 5],
+    foot: 3,
+    leather: 2,
+  },
+  medium: {
+    torso: [14, 12],
+    limb: [7, 9],
+    head: [12, 9],
+    peak: [10, 4],
+    hand: [10, 6],
+    iron: [4, 10],
+    foot: 4,
+    leather: 4,
+  },
+  high: {
+    torso: [20, 16],
+    limb: [10, 12],
+    head: [16, 12],
+    peak: [14, 4],
+    hand: [14, 6],
+    iron: [4, 14],
+    foot: 4,
+    leather: 4,
+  },
 };
 
 const samples = (n) => Array.from({ length: n + 1 }, (_, i) => i / n);
@@ -253,7 +283,7 @@ function buildRiderGeometry(index, level) {
     () => ({ color: C.helmet }),
   );
   helmet.dispose();
-  const peak = ellipsoidData(0.072, 0.008, 0.05, D.misc, 4);
+  const peak = ellipsoidData(0.072, 0.008, 0.05, D.peak[0], D.peak[1]);
   b.addIndexed(
     peak.p,
     peak.idx,
@@ -281,7 +311,7 @@ function buildRiderGeometry(index, level) {
       C.jacket,
       D,
     );
-    const hand = ellipsoidData(0.028, 0.042, 0.05, D.misc, 6);
+    const hand = ellipsoidData(0.028, 0.042, 0.05, D.hand[0], D.hand[1]);
     const hp = V(J.wrist)
       .setX(J.wrist[0] * s)
       .add(new THREE.Vector3(-0.01 * s, -0.01, 0.04));
@@ -321,10 +351,10 @@ function buildRiderGeometry(index, level) {
       [`${p}foot`, `${p}foot`],
       C.boot,
       D,
-      { n: 4 },
+      { n: D.foot },
     );
     // Stirrup iron under the ball of the foot, leather up to the saddle
-    const iron = torusData(0.055, 0.007, 4, D.misc);
+    const iron = torusData(0.055, 0.007, D.iron[0], D.iron[1]);
     const ip = new THREE.Vector3(J.toe[0] * s, J.toe[1] + 0.055 - 0.035, J.toe[2] - 0.07);
     b.addIndexed(
       iron.p,
@@ -343,7 +373,7 @@ function buildRiderGeometry(index, level) {
         [`${p}foot`, smoothstep(0.0, 1.0, u)],
       ],
       attrs: () => ({ color: C.leather }),
-    }).build(b, { uSamples: samples(4), radial: 4 });
+    }).build(b, { uSamples: samples(D.leather), radial: 4 });
   }
   return b.build();
 }
@@ -407,7 +437,7 @@ export function createRider({ quality = 'medium', release = releaseNow } = {}) {
     const l1 = bMid.position.length();
     const l2 = end.position.length();
     const d = vA.subVectors(target, pRoot);
-    const dist = softReach(d.length(), l1, l2);
+    const dist = limbReach(d.length(), l1, l2);
     d.normalize();
     const x = (l1 * l1 + dist * dist - l2 * l2) / (2 * dist);
     const h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
@@ -540,9 +570,10 @@ export function createRider({ quality = 'medium', release = releaseNow } = {}) {
       mesh.castShadow = level !== 'low';
     },
     dispose() {
-      mesh.geometry.dispose();
-      mesh.material.dispose();
-      skeleton.dispose();
+      // through `release`, so that objects of a lost context are not freed with GL calls
+      release(mesh.geometry);
+      release(mesh.material);
+      release(skeleton.boneTexture);
       object.removeFromParent();
     },
   };
