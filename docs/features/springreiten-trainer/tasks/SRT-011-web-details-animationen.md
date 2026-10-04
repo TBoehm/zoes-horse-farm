@@ -79,8 +79,9 @@ die größte Dichte und Schmetterlinge.
   horse and rider together have no more triangles and no more draw calls than before; Bildrate
   am Gerät: [?])
 - [x] Die Speicher-Abschätzung zählt die neuen Details mit (Regel 4). (Nachweis: src/adapters/view3d/quality.test.js
-  (estimateGpuMemoryMB / fitPresetToBudget mit Blumen, Deko, Tieren, grasenden Pferden, Staub);
-  tests/smoke/graphics.spec.js › manual switch to high)
+  (estimateGpuMemoryMB / fitPresetToBudget mit Blumen, Deko, Tieren, grasenden Pferden, Staub:
+  every detail that a level shows is part of its estimate; world-budget.test.js › medium and high
+  stay inside the budget of their level)
 - [x] Weiterhin werden keine Bild-, Modell- oder Audiodateien geladen (Regel 2). (Nachweis: tests/smoke/app.spec.js › … no
   forbidden files)
 

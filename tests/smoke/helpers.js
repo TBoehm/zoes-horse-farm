@@ -1,4 +1,6 @@
 // Shared checks for smoke tests: console errors and forbidden files (rule 2).
+import { expect } from '@playwright/test';
+
 const ALLOWED_FILES = [/\/icon\.svg$/, /\/generated\/[\w-]+\.png$/];
 const FORBIDDEN_EXT =
   /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg|mp3|wav|ogg|m4a|aac|flac|webm|mp4|glb|gltf|obj|fbx|ktx2?|basis|hdr|exr|woff2?|ttf|otf|eot)(\?|$)/i;
@@ -125,31 +127,6 @@ export const setTabHidden = (page, hidden) =>
     document.dispatchEvent(new Event('visibilitychange'));
   }, hidden);
 
-/**
- * The WebGL context is lost right as the tab comes back to the foreground. Returns what
- * loseContext() returns.
- */
-export const showTabAndLoseContext = (page) =>
-  page.evaluate(() => {
-    // The browser fires `webglcontextlost` asynchronously; with the slow software renderer a whole
-    // frame (seconds) can run before it. So the tab comes back from a capturing window listener,
-    // which runs right before the engine's canvas listener: the loss is exactly "just after
-    // returning", however slow the frames are.
-    window.addEventListener(
-      'webglcontextlost',
-      () => {
-        Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
-        Object.defineProperty(document, 'visibilityState', {
-          configurable: true,
-          get: () => 'visible',
-        });
-        document.dispatchEvent(new Event('visibilitychange'));
-      },
-      { capture: true, once: true },
-    );
-    return window.__zhfTest.loseContext();
-  });
-
 /** Waits until a ride is running (optionally in a given mode) and returns its state. */
 export async function waitForRide(page, mode) {
   await page.waitForFunction((m) => {
@@ -177,6 +154,129 @@ export async function canvasScreenshotSize(page) {
     }
   });
   return buffer.length;
+}
+
+/**
+ * Distinct colours in a small copy of the 3D canvas as it was drawn in the next frame, in the whole
+ * picture (`total`) and in its lower half only (`lower`). A blank or flat canvas gives 1. It reads
+ * the drawing buffer inside an animation frame callback, which runs after the engine's own callback
+ * of the same frame, while the buffer is still valid. A screenshot of the canvas costs seconds on
+ * the software renderer of the CI browser (a PNG of the full device-pixel picture), this costs a few
+ * milliseconds. Colours are quantised to 4 bits per channel, so a smooth gradient is only a few
+ * colours.
+ */
+export function canvasColorStats(page) {
+  return page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          const canvas = document.querySelector('canvas.scene-canvas');
+          const probe = document.createElement('canvas');
+          probe.width = 64;
+          probe.height = 40;
+          const context = probe.getContext('2d', { willReadFrequently: true });
+          context.drawImage(canvas, 0, 0, probe.width, probe.height);
+          const { data } = context.getImageData(0, 0, probe.width, probe.height);
+          const all = new Set();
+          const lower = new Set();
+          for (let i = 0; i < data.length; i += 4) {
+            const color = ((data[i] >> 4) << 8) | ((data[i + 1] >> 4) << 4) | (data[i + 2] >> 4);
+            all.add(color);
+            if (i >= data.length / 2) lower.add(color);
+          }
+          resolve({ total: all.size, lower: lower.size });
+        });
+      }),
+  );
+}
+
+// Measured on the software renderer (4-bit colours, probe of 64 × 40): the sky alone gives 8 in
+// the whole picture and 1 in the lower half (at 640 × 400, 640 × 360 and 900 × 420; a sun in view
+// may add some, so the limit has room above it); a ride scene gives 88 to 178 in total (lowest: low,
+// 640 × 360) and 27 to 47 in the lower half. The limits sit between the two.
+const MIN_PICTURE_COLORS = 40;
+const MIN_LOWER_HALF_COLORS = 12;
+
+/**
+ * Waits until the 3D canvas shows a drawn scene, not only the sky (a blank canvas, one flat colour
+ * or the sky gradient alone). A ride scene (arena, horse, scenery) has far more colours than the
+ * sky shader, in the lower half of the picture too (the ground, which the sky never covers).
+ */
+export async function expectPicture(page, timeout = 30_000) {
+  const samples = [];
+  const started = Date.now();
+  try {
+    await expect
+      .poll(
+        async () => {
+          const begin = Date.now();
+          const { total, lower } = await canvasColorStats(page);
+          samples.push({ total, lower, probeMs: Date.now() - begin });
+          return total >= MIN_PICTURE_COLORS && lower >= MIN_LOWER_HALF_COLORS;
+        },
+        { timeout, message: 'the 3D canvas shows a drawn scene, not only the sky' },
+      )
+      .toBe(true);
+  } catch (error) {
+    // On a slow runner a missing picture is either slow frames or a real stall: say which
+    error.message +=
+      `\n\nPicture check after ${Date.now() - started} ms (limits ${MIN_PICTURE_COLORS}` +
+      ` / ${MIN_LOWER_HALF_COLORS}), samples: ${JSON.stringify(samples)}\n` +
+      JSON.stringify(await pictureDiagnostics(page), null, 1);
+    throw error;
+  }
+}
+
+/** Runs `work` in the page and gives up after `ms`: a stalled page must not hide the answer. */
+const within = (promise, ms) =>
+  Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve('timeout'), ms))]);
+
+/** State for a failed picture check: ride, debug box, canvas and the real frame intervals. */
+async function pictureDiagnostics(page) {
+  const read = (work) =>
+    within(
+      page.evaluate(work).catch((e) => `error: ${e.message}`),
+      10_000,
+    );
+  return {
+    ride: await read(() => {
+      const ride = window.__zhfTest?.ride();
+      return (
+        ride && {
+          paused: ride.paused,
+          contextLost: ride.contextLost,
+          graphicsLevel: ride.graphicsLevel,
+          graphicsSettling: ride.graphicsSettling,
+          graphicsPixelRatio: ride.graphicsPixelRatio,
+          horse: { z: ride.horse.z, speed: ride.horse.speed },
+        }
+      );
+    }),
+    debugBox: await read(() => document.querySelector('[data-hud="debug"]')?.innerText ?? null),
+    canvas: await read(() => {
+      const canvas = document.querySelector('canvas.scene-canvas');
+      return {
+        width: canvas?.width,
+        height: canvas?.height,
+        hidden: document.hidden,
+        visibility: document.visibilityState,
+      };
+    }),
+    frameIntervalsMs: await read(
+      () =>
+        new Promise((resolve) => {
+          const intervals = [];
+          let last = performance.now();
+          const tick = (now) => {
+            intervals.push(Math.round(now - last));
+            last = now;
+            if (intervals.length < 6) requestAnimationFrame(tick);
+            else resolve(intervals);
+          };
+          requestAnimationFrame(tick);
+        }),
+    ),
+  };
 }
 
 /** Touch input through the Chrome DevTools Protocol (real touch events, like a finger). */

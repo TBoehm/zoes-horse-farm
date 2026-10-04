@@ -43,24 +43,31 @@ Kein neues UI; der Hinweis bei manueller Stufe ist der bestehende Hinweis aus Re
   Programme oder Objekte entstehen; die Spitze der gleichzeitig belegten Programme und Objekte
   während eines Wechsels liegt nicht über dem Wert vor dem Wechsel (Regel 4). (Nachweis:
   src/adapters/view3d/world-stages.test.js › steps down without ever holding more than before the
-  change / frees the programs of the old materials …; tests/smoke/graphics.spec.js › a downgrade
-  frees GPU programs and buffers first …; gemessen Mittel → Niedrig: Spitze 17 statt 77 Programme)
+  change / frees the programs of the old materials …; world-stages.test.js › gives the GPU buffers of
+  the hidden details back / ends with exactly what a world that started at the target level holds;
+  gemessen Mittel → Niedrig: Spitze 17 statt 77 Programme)
 - [x] Endet das Spiel während der 3D-Darstellung unerwartet, gilt beim nächsten Start:
   „Automatisch" → Niedrig (gespeichert); manuelle Stufe über Niedrig → Hinweis (Regel 4). (Nachweis:
-  src/application/crash-guard.test.js › check of the previous run; tests/smoke/graphics-crash.spec.js
-  › after a crash with Automatic on … / a crash reload of the same tab counts even with a fresh
-  heartbeat / after a crash at a manual level above low, the next ride shows the hint once)
+  src/application/crash-guard.test.js › check of the previous run; crash-guard.test.js › whose mark it is
+  (tab id) › the mark of this very tab is a crash even with a fresh heartbeat; Smoke-Test:
+  tests/smoke/graphics-crash.spec.js › after a crash with Automatic on, the level is low and stays
+  automatic / after a crash at a manual level above low, the next ride shows the hint once)
 - [x] Normales Schließen, App-Wechsel oder ein Ende im Hintergrund zählt nicht als Absturz
   (Regel 4). (Nachweis: crash-guard.test.js › background / whose mark it is (tab id);
-  graphics-crash.spec.js › a normal reload during the ride is not a crash (pagehide) / a fresh mark
-  of another tab is a live tab, not a crash / the ride marks rendering … clean when … the tab hides)
+  crash-guard.test.js › the mark of another tab with a fresh heartbeat is a live tab: no crash,
+  untouched; page-lifecycle.test.js › marks the guard clean on pagehide (reload, close); Smoke-Test:
+  graphics-crash.spec.js › a normal reload during the ride is not a crash (pagehide) / the ride
+  marks rendering while it draws and clean when it ends)
 - [x] Die Debug-Anzeige (`?debug`) zeigt nach einem erkannten Absturz die Stufe und Laufzeit der
-  abgestürzten Sitzung. (Nachweis: src/adapters/ui/debug-display.test.js; graphics-crash.spec.js ›
-  the debug display shows the last detected crash)
+  abgestürzten Sitzung. (Nachweis: src/adapters/ui/debug-display.test.js › formatDebugText ›
+  shows level, mode, seconds and time of the last detected crash; crash-guard.test.js ›
+  lastCrash returns the remembered crash for the debug display)
 - [?] Auf dem Tablet läuft „Mittel" stabil (Nachweis nur am Gerät).
 
 ## Links
 Konzept Regeln 3, 4; SRT-008 (Grafikbudget, Kontextverlust), SRT-011 (Details).
+Seit 2026-10-04 laufen die Browser-Smoke-Tests nur noch in Chromium; Detailregeln der Grafik sind
+per Unit-Test abgesichert (Entscheid Nutzer).
 
 ## Definition of Ready
 - [x] Ziel klar, nutzersichtbares Ergebnis benannt

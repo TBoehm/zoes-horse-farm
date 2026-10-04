@@ -24,7 +24,7 @@ Entwickler-Demoseiten (nicht ausgeliefert) laufen über den Dev-Server unter `/d
 Test-Hook für Browser-Tests: Mit `?testhooks` in der URL (z. B. `http://localhost:4173/?testhooks`)
 stellt die App `window.__zhfTest` bereit (aktueller Bildschirm, Zustand des laufenden Rittes, Speicher,
 Audio-Zustand; dazu als Aktionen `go(screen, params)` zum Springen auf einen Bildschirm,
-`setAutoLevel(level)` für einen Stufenwechsel wie durch die Automatik, `loseContext()` /
+`loseContext()` /
 `restoreContext()` für einen simulierten Grafikverlust und `setFrameFeed({ dt, repeat })`, das der
 Grafik-Automatik eingespeiste Bildzeiten statt der echten liefert; `&gpubudget=MB` setzt die
 Grafikspeicher-Grenze für Tests). Ohne den Parameter existiert der Hook nicht. Die Smoke-Tests (`tests/smoke/`) nutzen ihn und warten auf
@@ -62,13 +62,15 @@ Dieselben Befehle wie in GitHub Actions (`.github/workflows/ci.yml`):
 | Build        | `npm run build`                                                                             |
 | Smoke        | `npm run smoke` (nach `npm run build`; Browser einmalig: `npx playwright install chromium`) |
 
-Alles am Stück: `npm run qa`. Der Smoke-Test läuft lokal in Chromium; andere Browser per
-`SMOKE_BROWSERS=firefox,webkit npm run smoke`. Ein bereits installiertes Chromium lässt sich mit
-`PW_CHROMIUM_PATH=/pfad/zu/chrome` nutzen. In CI läuft er in Chromium, Firefox, WebKit und Edge.
+Alles am Stück: `npm run qa`. Der Smoke-Test läuft nur in Chromium (lokal und in CI); die
+Grafik-Specs (`tests/smoke/graphics*.spec.js`) sind bewusst klein gehalten und prüfen nur das
+Zusammenspiel im echten Browser, die Regeln dahinter sind Unit-Tests. Ein bereits installiertes
+Chromium lässt sich mit `PW_CHROMIUM_PATH=/pfad/zu/chrome` nutzen. Andere Browser sind für
+Einzelversuche möglich (`SMOKE_BROWSERS=firefox npm run smoke`), laufen aber nicht in CI.
 
 ## CI/CD
 
-- **Pull Request:** Lint, Format check, Unit tests, Build und Smoke (je Browser) laufen als eigene
+- **Pull Request:** Lint, Format check, Unit tests, Build und Smoke (Chromium) laufen als eigene
   Checks (`ci.yml`).
 - **Merge auf main:** `deploy.yml` führt alle Gates erneut aus; nur wenn alle grün sind, wird
   `dist/` auf GitHub Pages veröffentlicht (Job „Deploy to GitHub Pages" hängt von allen Gates ab).
@@ -78,7 +80,7 @@ Alles am Stück: `npm run qa`. Der Smoke-Test läuft lokal in Chromium; andere B
 1. **Pages-Quelle:** Settings → Pages → Build and deployment → Source: **GitHub Actions**.
 2. **Branch-Schutz für `main`:** Settings → Branches → Regel für `main` mit „Require status checks
    to pass" und diesen Pflicht-Checks: `Lint`, `Format check`, `Unit tests`, `Build`,
-   `Smoke (chromium)`, `Smoke (firefox)`, `Smoke (webkit)`, `Smoke (msedge)`.
+   `Smoke (chromium)`.
 
 Beides erledigt auch das Skript (idempotent, mit Vorschau):
 

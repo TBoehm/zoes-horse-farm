@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createUpgradeGovernor, nextUpgradeLevel, UPGRADE_DEFAULTS } from './quality-upgrade.js';
+import {
+  createUpgradeGovernor,
+  nextUpgradeLevel,
+  upgradeMeasuring,
+  UPGRADE_DEFAULTS,
+} from './quality-upgrade.js';
 import { createFrameWindow } from './quality.js';
 
 /** Frames of a constant rate for `seconds`; returns the first result that is not null. */
@@ -261,5 +266,28 @@ describe('nextUpgradeLevel', () => {
 
   it('an unknown level has no next one', () => {
     expect(nextUpgradeLevel({ level: 'ultra' })).toBeNull();
+  });
+});
+
+describe('upgradeMeasuring (a manual level is never raised, rule 4)', () => {
+  it('measures only while riding with "Automatic" on', () => {
+    expect(upgradeMeasuring({ measuring: true, auto: true })).toBe(true);
+    expect(upgradeMeasuring({ measuring: false, auto: true })).toBe(false);
+  });
+
+  it('never measures with a manual level, however fast the frames are', () => {
+    expect(upgradeMeasuring({ measuring: true, auto: false })).toBe(false);
+    const { chooseTarget, gov } = setup();
+    // the gate feeds the governor: a manual level never gets a measurement, so it never climbs
+    expect(
+      run(gov, 60, 60, { measuring: upgradeMeasuring({ measuring: true, auto: false }) }),
+    ).toBe(null);
+    expect(chooseTarget).not.toHaveBeenCalled();
+  });
+
+  it('lets the governor climb when "Automatic" is on', () => {
+    const { gov } = setup();
+    const measuring = upgradeMeasuring({ measuring: true, auto: true });
+    expect(run(gov, 60, 60, { measuring })).toMatchObject({ level: 'medium' });
   });
 });

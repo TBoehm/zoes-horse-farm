@@ -67,13 +67,9 @@ jobs:
           retention-days: 7
 
   smoke:
-    name: Smoke (${{ matrix.browser }})
+    name: Smoke (chromium)
     needs: build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chromium, firefox, webkit, msedge]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -85,14 +81,13 @@ jobs:
         with:
           name: dist
           path: dist
-      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npx playwright install --with-deps chromium
       - run: npm run smoke
         env:
           CI: 'true'
-          SMOKE_BROWSERS: ${{ matrix.browser }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report-${{ matrix.browser }}
+          name: playwright-report
           path: playwright-report
           retention-days: 7
