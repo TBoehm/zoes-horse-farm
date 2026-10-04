@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { installTestHooks, testHooksRequested } from './test-hooks.js';
+import { gpuBudgetOverride, installTestHooks, testHooksRequested } from './test-hooks.js';
 
 const fakeApp = (services = {}) => ({
   current: 'menu',
@@ -14,6 +14,21 @@ describe('testHooksRequested', () => {
     expect(testHooksRequested('?a=1&testhooks')).toBe(true);
     expect(testHooksRequested('')).toBe(false);
     expect(testHooksRequested('?testhook')).toBe(false);
+  });
+});
+
+describe('gpuBudgetOverride', () => {
+  it('reads the budget only together with the test hooks', () => {
+    expect(gpuBudgetOverride('?testhooks&gpubudget=70')).toBe(70);
+    expect(gpuBudgetOverride('?gpubudget=70')).toBeNull();
+  });
+
+  it('ignores missing or invalid values', () => {
+    for (const search of ['?testhooks', '?testhooks&gpubudget=', '?testhooks&gpubudget=abc']) {
+      expect(gpuBudgetOverride(search)).toBeNull();
+    }
+    expect(gpuBudgetOverride('?testhooks&gpubudget=0')).toBeNull();
+    expect(gpuBudgetOverride('?testhooks&gpubudget=-5')).toBeNull();
   });
 });
 
@@ -50,6 +65,7 @@ describe('installTestHooks', () => {
       screen: { paused: false },
       engine: {
         level: 'low',
+        settling: true,
         cameraRig: { mode: 'follow' },
         horse: { object: { position: { toArray: () => [1, 0, 2] } } },
       },
@@ -63,6 +79,7 @@ describe('installTestHooks', () => {
     });
     const snapshot = target.__zhfTest.ride();
     expect(snapshot.horse).toMatchObject({ x: 1, z: 2, speed: 3, gait: 'trot', jump: null });
+    expect(snapshot.graphicsSettling).toBe(true);
     expect(snapshot.rails).toEqual({ f1: [true] });
     horse.x = 99;
     expect(snapshot.horse.x).toBe(1);

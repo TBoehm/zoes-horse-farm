@@ -8,8 +8,17 @@ import { detectLang, getLang, setLang } from './adapters/ui/i18n.js';
 import { createStore, requestPersistentStorage } from './adapters/storage/local-store.js';
 import { hasWebGL } from './adapters/platform/webgl.js';
 import { createInputMode, detectDevice } from './adapters/platform/input-mode.js';
-import { installTestHooks, testHooksRequested } from './adapters/platform/test-hooks.js';
+import {
+  gpuBudgetOverride,
+  installTestHooks,
+  testHooksRequested,
+} from './adapters/platform/test-hooks.js';
 import { systemClock } from './adapters/platform/clock.js';
+import {
+  createErrorLog,
+  debugRequested,
+  installErrorCapture,
+} from './adapters/platform/debug-info.js';
 import { registerAllStrings } from './adapters/ui/i18n/index.js';
 import { createApp } from './adapters/ui/app.js';
 import { createMainMenuScreen, registerMenuEntry } from './adapters/ui/menu.js';
@@ -29,6 +38,12 @@ import { registerCourses } from './adapters/ui/screens/courses/register.js';
 import { registerAudio } from './adapters/ui/audio-wiring.js';
 
 function boot() {
+  // `?debug`: collect errors from the very start for the debug box of the ride
+  let debugService = null;
+  if (debugRequested()) {
+    debugService = { errorLog: createErrorLog() };
+    installErrorCapture(debugService.errorLog);
+  }
   const root = document.getElementById('app');
   registerAllStrings();
 
@@ -53,6 +68,7 @@ function boot() {
   const settings = createSettingsService(store);
 
   const app = createApp({ root, store, settings, inputMode, clock: systemClock });
+  if (debugService) app.services.debug = debugService;
   app.register('menu', createMainMenuScreen);
   app.register('settings', createSettingsScreen);
   // The ride use case gets its random source here (the application layer never calls Math.random)
@@ -84,9 +100,13 @@ function boot() {
     if (store.shouldShowSaveNotice()) showSaveNotice(app.layers.overlay);
   });
 
+  // Read-only helpers for browser tests; only with `?testhooks` in the URL. Installed before the
+  // first screen so that everything they configure is there when the screens start.
+  if (testHooksRequested()) {
+    installTestHooks({ app, store, inputMode });
+    app.services.gpuBudgetOverrideMB = gpuBudgetOverride(); // forces a small budget in tests
+  }
   app.go(firstScreen(store));
-  // Read-only helpers for browser tests; only with `?testhooks` in the URL
-  if (testHooksRequested()) installTestHooks({ app, store, inputMode });
 }
 
 try {

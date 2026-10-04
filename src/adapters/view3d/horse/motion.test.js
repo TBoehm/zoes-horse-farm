@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createMotion, stepMotion } from './motion.js';
+import { createMotion, stepMotion, turnBend, turnLean } from './motion.js';
 import { GAITS } from './gaits.js';
 
 const LF = 0;
@@ -220,5 +220,46 @@ describe('motion blending', () => {
     st.refusal = { type: 'stop', progress: 1 };
     for (let i = 0; i < 30; i++) stepMotion(m, 1 / 60, st);
     expect(m.stopWeight).toBeLessThan(0.1);
+  });
+});
+
+describe('turn lean and bend (agile steering, SRT-009)', () => {
+  it('lean follows the centripetal acceleration and stays within 0.3 rad (about 17 degrees)', () => {
+    for (const [v, w] of [
+      [1.5, 2.16],
+      [3.2, 1.76],
+      [5.8, 1.37],
+      [8, 1.16],
+      [0, 2.7],
+    ]) {
+      expect(Math.abs(turnLean(v, w))).toBeLessThanOrEqual(0.3);
+    }
+  });
+
+  it('lean is not saturated at the usual gaits, so it still grows with speed', () => {
+    const walk = turnLean(1.5, 2.16);
+    const trot = turnLean(3.2, 1.76);
+    const canter = turnLean(5.8, 1.37);
+    expect(trot).toBeGreaterThan(walk);
+    expect(canter).toBeGreaterThan(trot);
+    expect(canter).toBeLessThan(0.3);
+  });
+
+  it('leans into the turn: right turn (+) leans right (+), left turn leans left', () => {
+    expect(turnLean(5, 1)).toBeGreaterThan(0);
+    expect(turnLean(5, -1)).toBeLessThan(0);
+    expect(turnLean(5, 0)).toBe(0);
+  });
+
+  it('bend stays within 0.35 rad and grows with the turn rate without saturating at canter', () => {
+    expect(Math.abs(turnBend(2.7))).toBeLessThanOrEqual(0.35);
+    expect(Math.abs(turnBend(-2.7))).toBeLessThanOrEqual(0.35);
+    expect(Math.abs(turnBend(1.37))).toBeLessThan(0.3);
+    expect(Math.abs(turnBend(1.76))).toBeGreaterThan(Math.abs(turnBend(1.37)));
+  });
+
+  it('bends towards the inside: right turn (+) bends to the right (-)', () => {
+    expect(turnBend(1)).toBeLessThan(0);
+    expect(turnBend(-1)).toBeGreaterThan(0);
   });
 });

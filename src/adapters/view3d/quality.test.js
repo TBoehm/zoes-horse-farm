@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   canHintLowerLevel,
+  chooseAntialias,
+  estimateGpuMemoryMB,
+  fitPresetToBudget,
+  gpuBudgetMB,
+  presetFor,
+  levelAfterContextLoss,
+  CONTEXT_LOSS_GRACE_S,
   createLowFpsHint,
   createQualityGovernor,
   pickInitialLevel,
@@ -356,5 +363,339 @@ describe('canHintLowerLevel', () => {
 
   it('is false with "Automatic" on (the governor handles it)', () => {
     expect(canHintLowerLevel({ auto: true, level: 'high' })).toBe(false);
+  });
+});
+
+describe('levelAfterContextLoss (rule 4)', () => {
+  it('with "Automatic" on, a level above low goes to low and is saved', () => {
+    expect(levelAfterContextLoss({ auto: true, level: 'high' })).toEqual({
+      level: 'low',
+      persist: true,
+      hint: false,
+    });
+    expect(levelAfterContextLoss({ auto: true, level: 'medium' })).toEqual({
+      level: 'low',
+      persist: true,
+      hint: false,
+    });
+  });
+
+  it('with "Automatic" on at low nothing changes and nothing is saved', () => {
+    expect(levelAfterContextLoss({ auto: true, level: 'low' })).toEqual({
+      level: 'low',
+      persist: false,
+      hint: false,
+    });
+  });
+
+  it('a manual level above low stays and the player gets a hint', () => {
+    for (const level of ['medium', 'high']) {
+      expect(levelAfterContextLoss({ auto: false, level })).toEqual({
+        level,
+        persist: false,
+        hint: true,
+      });
+    }
+  });
+
+  it('a manual low level needs no hint: there is nothing lower to pick', () => {
+    expect(levelAfterContextLoss({ auto: false, level: 'low' })).toEqual({
+      level: 'low',
+      persist: false,
+      hint: false,
+    });
+  });
+
+  it('a loss while the page is in the background is no overload: nothing changes, no hint', () => {
+    for (const auto of [true, false]) {
+      for (const level of GRAPHICS_LEVELS) {
+        expect(levelAfterContextLoss({ auto, level, visible: false })).toEqual({
+          level,
+          persist: false,
+          hint: false,
+        });
+      }
+    }
+  });
+
+  it('a loss right after the page came back to the foreground is no overload either', () => {
+    const justBack = { visible: true, sinceVisibilityChangeS: CONTEXT_LOSS_GRACE_S - 0.1 };
+    expect(levelAfterContextLoss({ auto: true, level: 'high', ...justBack })).toEqual({
+      level: 'high',
+      persist: false,
+      hint: false,
+    });
+    expect(levelAfterContextLoss({ auto: false, level: 'high', ...justBack }).hint).toBe(false);
+  });
+
+  it('a loss in the foreground after the grace time counts as before', () => {
+    const settled = { visible: true, sinceVisibilityChangeS: CONTEXT_LOSS_GRACE_S };
+    expect(levelAfterContextLoss({ auto: true, level: 'high', ...settled })).toEqual({
+      level: 'low',
+      persist: true,
+      hint: false,
+    });
+    expect(levelAfterContextLoss({ auto: false, level: 'high', ...settled }).hint).toBe(true);
+  });
+
+  it('without visibility information a loss counts (visible, no change seen)', () => {
+    expect(levelAfterContextLoss({ auto: true, level: 'medium' }).level).toBe('low');
+  });
+
+  it('the hint follows the same rule as the "level too high" hint', () => {
+    for (const auto of [true, false]) {
+      for (const level of GRAPHICS_LEVELS) {
+        expect(levelAfterContextLoss({ auto, level }).hint).toBe(
+          canHintLowerLevel({ auto, level }),
+        );
+      }
+    }
+  });
+});
+
+describe('presetFor', () => {
+  it('maps level names to presets and passes preset objects through', () => {
+    expect(presetFor('medium')).toBe(QUALITY_PRESETS.medium);
+    const custom = { ...QUALITY_PRESETS.high, pixelRatio: 1.25 };
+    expect(presetFor(custom)).toBe(custom);
+    expect(presetFor('nope')).toBeUndefined();
+    expect(presetFor(null)).toBeUndefined();
+  });
+
+  it('every preset knows its level name', () => {
+    for (const level of GRAPHICS_LEVELS) expect(QUALITY_PRESETS[level].level).toBe(level);
+  });
+});
+
+// a 4 GiB tablet: 1280 × 800 CSS pixels at a device pixel ratio of 2
+const TABLET = { cssWidth: 1280, cssHeight: 800, devicePixelRatio: 2, antialias: true };
+
+describe('estimateGpuMemoryMB', () => {
+  const estimate = (level, ctx = {}) =>
+    estimateGpuMemoryMB(QUALITY_PRESETS[level], { ...TABLET, ...ctx });
+
+  it('adds drawing buffer, shadow map, environment map, textures and scenery (high on a tablet)', () => {
+    // 2560 × 1600 px × 40 B (MSAA ×4 colour+depth, two colour buffers) = 156.25 MiB; shadow map
+    // 2048² × 8 B = 32 MiB; environment map 6 MiB; 3 textures with mipmaps 4 MiB; baseline 16 MiB;
+    // scenery 2 + 1 MiB
+    expect(estimate('high')).toBeCloseTo(217.25, 1);
+  });
+
+  it('grows with the square of the pixel ratio', () => {
+    const at = (ratio) => estimate('high', { pixelRatio: ratio });
+    // 4× the pixels at ratio 2 vs 1: the difference is 3 × the buffer at ratio 1
+    const buffer1 = (1280 * 800 * 40) / (1024 * 1024);
+    expect(at(2) - at(1)).toBeCloseTo(3 * buffer1, 1);
+  });
+
+  it('is capped by the device pixel ratio', () => {
+    expect(estimate('high', { devicePixelRatio: 1 })).toBeCloseTo(
+      estimate('high', { pixelRatio: 1 }),
+      5,
+    );
+  });
+
+  it('antialiasing costs a lot: multisampled colour and depth on top', () => {
+    const aa = estimate('high', { antialias: true });
+    const plain = estimate('high', { antialias: false });
+    expect(aa - plain).toBeCloseTo((2560 * 1600 * (4 * 8 + 8 - 12)) / (1024 * 1024), 1);
+  });
+
+  it('takes the context attribute, not the preset, for antialiasing', () => {
+    const preset = QUALITY_PRESETS.low; // wants no antialiasing
+    expect(estimateGpuMemoryMB(preset, { ...TABLET, antialias: true })).toBeGreaterThan(
+      estimateGpuMemoryMB(preset, { ...TABLET, antialias: false }),
+    );
+  });
+
+  it('a shadow map costs size² × 8 bytes, none without shadows', () => {
+    const noShadow = estimateGpuMemoryMB({ ...QUALITY_PRESETS.medium, shadows: false }, TABLET);
+    expect(estimate('medium') - noShadow).toBeCloseTo(8, 5); // 1024² × 8 B
+    const big = estimateGpuMemoryMB({ ...QUALITY_PRESETS.medium, shadowMapSize: 2048 }, TABLET);
+    expect(big - estimate('medium')).toBeCloseTo(24, 5);
+  });
+
+  it('the environment map and the normal maps only count when the level uses them', () => {
+    const base = QUALITY_PRESETS.medium;
+    const noEnv = estimateGpuMemoryMB({ ...base, envMap: false }, TABLET);
+    expect(estimate('medium') - noEnv).toBeCloseTo(6, 5);
+    const noNormal = estimateGpuMemoryMB({ ...base, normalMaps: false }, TABLET);
+    expect(estimate('medium') - noNormal).toBeCloseTo((512 * 512 * 4 * (4 / 3)) / (1024 * 1024), 5);
+  });
+
+  it('counts the textures it is given', () => {
+    const none = estimate('medium', { textures: [] });
+    const one = estimate('medium', { textures: [{ width: 1024, height: 1024, normal: false }] });
+    expect(one - none).toBeCloseTo((1024 * 1024 * 4 * (4 / 3)) / (1024 * 1024), 5);
+  });
+
+  it('orders the levels: low < medium < high', () => {
+    const ctx = { antialias: true };
+    const [low, medium, high] = GRAPHICS_LEVELS.map((l) => estimate(l, ctx));
+    expect(low).toBeLessThan(medium);
+    expect(medium).toBeLessThan(high);
+  });
+});
+
+describe('gpuBudgetMB', () => {
+  it('is smaller on touch devices than on desktops', () => {
+    expect(gpuBudgetMB({ isTouch: true, deviceMemory: 4 })).toBeLessThan(
+      gpuBudgetMB({ isTouch: false, deviceMemory: 4 }),
+    );
+    expect(gpuBudgetMB({ isTouch: true })).toBeLessThan(gpuBudgetMB({ isTouch: false }));
+  });
+
+  it('follows the device memory, within the class limits', () => {
+    expect(gpuBudgetMB({ isTouch: true, deviceMemory: 4 })).toBe(160);
+    expect(gpuBudgetMB({ isTouch: true, deviceMemory: 8 })).toBe(320);
+    expect(gpuBudgetMB({ isTouch: true, deviceMemory: 2 })).toBe(96); // floor
+    expect(gpuBudgetMB({ isTouch: true, deviceMemory: 0.5 })).toBe(96);
+    expect(gpuBudgetMB({ isTouch: false, deviceMemory: 8 })).toBe(512);
+    expect(gpuBudgetMB({ isTouch: false, deviceMemory: 16 })).toBe(1024); // ceiling
+  });
+
+  it('uses a conservative value when the browser does not report memory', () => {
+    expect(gpuBudgetMB({ isTouch: true })).toBe(160);
+    expect(gpuBudgetMB({ isTouch: false })).toBe(512);
+    expect(gpuBudgetMB({ isTouch: true, deviceMemory: undefined })).toBe(160);
+    expect(gpuBudgetMB({ isTouch: true, deviceMemory: 0 })).toBe(160);
+    expect(gpuBudgetMB()).toBe(512);
+  });
+
+  it('gives a weak GPU a quarter less', () => {
+    expect(gpuBudgetMB({ isTouch: true, deviceMemory: 4, rendererString: 'Mali-G52' })).toBe(120);
+    expect(gpuBudgetMB({ isTouch: true, deviceMemory: 4, rendererString: 'Apple GPU' })).toBe(160);
+  });
+});
+
+describe('fitPresetToBudget', () => {
+  const fit = (level, budget, ctx = {}) =>
+    fitPresetToBudget(QUALITY_PRESETS[level], { ...TABLET, ...ctx }, budget);
+
+  it('changes nothing when the level fits (the very same preset object)', () => {
+    const result = fit('medium', 160);
+    expect(result.preset).toBe(QUALITY_PRESETS.medium);
+    expect(result.fits).toBe(true);
+    expect(result.capped).toEqual({ pixelRatio: null, shadowMapSize: null, scenery: false });
+    expect(result.estimateMB).toBeCloseTo(result.requestedMB, 9);
+  });
+
+  it('lowers only the pixel ratio first, in steps of 0.05, and keeps every effect', () => {
+    const result = fit('high', 160);
+    expect(result.fits).toBe(true);
+    expect(result.estimateMB).toBeLessThanOrEqual(160);
+    expect(result.preset.pixelRatio).toBe(1.55);
+    expect(result.capped.pixelRatio).toEqual({ from: 2, to: 1.55 });
+    expect(result.capped.shadowMapSize).toBeNull();
+    expect(result.capped.scenery).toBe(false);
+    expect({ ...result.preset, pixelRatio: 2 }).toEqual(QUALITY_PRESETS.high);
+  });
+
+  it('takes the biggest ratio that fits (a bit more would not)', () => {
+    const result = fit('high', 160);
+    const next = estimateGpuMemoryMB(result.preset, {
+      ...TABLET,
+      pixelRatio: result.preset.pixelRatio + 0.05,
+    });
+    expect(next).toBeGreaterThan(160);
+  });
+
+  it('goes down to the ratio 1, then halves the shadow map', () => {
+    const atRatio1 = estimateGpuMemoryMB(QUALITY_PRESETS.high, { ...TABLET, pixelRatio: 1 });
+    const result = fit('high', atRatio1 - 5);
+    expect(result.preset.pixelRatio).toBe(1);
+    expect(result.preset.shadowMapSize).toBe(1024);
+    expect(result.capped.shadowMapSize).toEqual({ from: 2048, to: 1024 });
+    expect(result.capped.scenery).toBe(false);
+    expect(result.fits).toBe(true);
+  });
+
+  it('takes the tufts and then the density of the scenery as the last lever', () => {
+    const base = fit('high', 1000);
+    expect(base.preset).toBe(QUALITY_PRESETS.high);
+    const noShadowGain = estimateGpuMemoryMB(
+      { ...QUALITY_PRESETS.high, pixelRatio: 1, shadowMapSize: 1024 },
+      TABLET,
+    );
+    const result = fit('high', noShadowGain - 0.5);
+    expect(result.preset.grassTufts).toBe(0);
+    expect(result.capped.scenery).toBe(true);
+    expect(result.preset.envDensity).toBe(1); // the tufts were enough
+    const tiny = fit('high', 20);
+    expect(tiny.preset.grassTufts).toBe(0);
+    expect(tiny.preset.envDensity).toBe(0.55);
+    expect(tiny.preset.pixelRatio).toBe(1);
+    expect(tiny.preset.shadowMapSize).toBe(1024);
+    expect(tiny.fits).toBe(false); // best effort: the level still plays
+  });
+
+  it('is monotonic: a bigger budget never gives a lower ratio or fewer features', () => {
+    const contexts = [TABLET, { ...TABLET, devicePixelRatio: 3 }, { ...TABLET, antialias: false }];
+    for (const level of GRAPHICS_LEVELS) {
+      for (const ctx of contexts) {
+        let previous = null;
+        for (let budget = 5; budget <= 600; budget += 5) {
+          const { preset } = fit(level, budget, ctx);
+          if (previous) {
+            expect(preset.pixelRatio).toBeGreaterThanOrEqual(previous.pixelRatio);
+            expect(preset.shadowMapSize).toBeGreaterThanOrEqual(previous.shadowMapSize);
+            expect(preset.grassTufts).toBeGreaterThanOrEqual(previous.grassTufts);
+            expect(preset.envDensity).toBeGreaterThanOrEqual(previous.envDensity);
+          }
+          previous = preset;
+        }
+      }
+    }
+  });
+
+  it('never goes below ratio 1 (a lower device ratio is simply used as it is)', () => {
+    expect(fit('high', 20).preset.pixelRatio).toBe(1);
+    const slow = fit('high', 20, { devicePixelRatio: 0.75 });
+    expect(Math.min(0.75, slow.preset.pixelRatio)).toBe(0.75);
+    expect(slow.capped.pixelRatio).toBeNull();
+  });
+
+  it('does not touch what is already small: medium keeps its shadow map', () => {
+    const result = fit('medium', 20);
+    expect(result.preset.shadowMapSize).toBe(1024);
+    expect(result.capped.shadowMapSize).toBeNull();
+    expect(result.preset.pixelRatio).toBe(1);
+  });
+
+  it('does not cap the ratio when the device ratio is below the level cap already', () => {
+    const result = fit('high', 1000, { devicePixelRatio: 1.25 });
+    expect(result.preset).toBe(QUALITY_PRESETS.high);
+  });
+
+  it('does not change the presets (copies, frozen)', () => {
+    const before = JSON.stringify(QUALITY_PRESETS);
+    const result = fit('high', 100);
+    expect(JSON.stringify(QUALITY_PRESETS)).toBe(before);
+    expect(Object.isFrozen(result.preset)).toBe(true);
+    expect(result.preset.level).toBe('high');
+  });
+
+  it('reports the estimate of the fitted preset and the requested one', () => {
+    const result = fit('high', 160);
+    expect(result.requestedMB).toBeCloseTo(217.25, 1);
+    expect(result.estimateMB).toBeCloseTo(estimateGpuMemoryMB(result.preset, TABLET), 9);
+    expect(result.budgetMB).toBe(160);
+  });
+});
+
+describe('chooseAntialias', () => {
+  const ctx = { cssWidth: 1280, cssHeight: 800, devicePixelRatio: 2 };
+
+  it('keeps antialiasing when the budget carries it with the other levers used up', () => {
+    expect(chooseAntialias(QUALITY_PRESETS.high, ctx, 160)).toBe(true);
+    expect(chooseAntialias(QUALITY_PRESETS.medium, ctx, 160)).toBe(true);
+  });
+
+  it('drops it when the multisampled buffers alone would not fit', () => {
+    expect(chooseAntialias(QUALITY_PRESETS.high, ctx, 40)).toBe(false);
+  });
+
+  it('is off for a level that does not want it', () => {
+    expect(chooseAntialias(QUALITY_PRESETS.low, ctx, 1000)).toBe(false);
   });
 });

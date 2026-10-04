@@ -1,6 +1,7 @@
 // Arena: sand footing with track, wooden fence (instanced), gate, start/finish lines.
 import * as THREE from 'three';
 import { ARENA } from '../../domain/sim/tuning.js';
+import { releaseNow } from './resilience.js';
 import { FENCE, GATE, linePosts, planFence, planLines } from './world-layout.js';
 import {
   createSandTextures,
@@ -275,7 +276,7 @@ export function roundRect(ctx, x, y, w, h, r) {
  * Start/finish lines: ground line, posts with sign. set(null | { start:{a,b}, finish:{a,b},
  * labels:{start, finish} }), setFinishMarked(bool), update(dt).
  */
-export function createCourseLines({ materialFactory }) {
+export function createCourseLines({ materialFactory, release = releaseNow }) {
   const group = new THREE.Group();
   group.name = 'course-lines';
   const staticMats = materialFactory('lines', { vertexColors: true, roughness: 0.8 });
@@ -305,14 +306,14 @@ export function createCourseLines({ materialFactory }) {
   function clear() {
     if (staticMesh) {
       group.remove(staticMesh);
-      staticMesh.geometry.dispose();
+      release(staticMesh.geometry);
       staticMesh = null;
     }
     if (signMesh) {
       group.remove(signMesh);
-      signMesh.geometry.dispose();
-      signMaterial.dispose();
-      atlas.texture.dispose();
+      release(signMesh.geometry);
+      release(signMaterial);
+      release(atlas.texture);
       signMesh = null;
     }
     finishLine = null;

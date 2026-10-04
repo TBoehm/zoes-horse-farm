@@ -1,5 +1,6 @@
-// SRT-007 in the browser: switching the graphics level during a ride, WebGL context loss and the
-// fps display (rule 4, rule 44). The tests read the state through `window.__zhfTest`.
+// SRT-007 and SRT-008 in the browser: switching the graphics level during a ride (staged), WebGL
+// context loss with its fallback, the fps display and the debug box (rule 4, rule 44). The tests
+// read the state through `window.__zhfTest`.
 import { expect, test } from '@playwright/test';
 import {
   canvasScreenshotSize,
@@ -9,6 +10,8 @@ import {
   openGameMenu,
   rideCourseOne,
   rideState,
+  setTabHidden,
+  showTabAndLoseContext,
   startFreeRide,
   storeSection,
   waitForRide,
@@ -246,6 +249,490 @@ test.describe('WebGL context loss (rule 4)', () => {
     await page.locator('[data-action="resume"]').click();
     await page.waitForFunction(() => !window.__zhfTest.ride().paused);
     expect(await rideForward(page)).toBeGreaterThan(0.5);
+  });
+});
+
+test.describe('context loss fallback (rule 4)', () => {
+  const lostToasts = (page) => page.locator('.ride-feedback.is-visible');
+
+  /** Loses the context, waits for the pause, restores it and continues the ride. */
+  async function loseRestoreResume(page) {
+    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    await page.waitForFunction(() => window.__zhfTest.ride().contextLost);
+    expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);
+    await page.waitForFunction(() => !window.__zhfTest.ride().contextLost);
+    await page.locator('[data-action="resume"]').click();
+    await page.waitForFunction(() => !window.__zhfTest.ride().paused);
+  }
+
+  test('"Automatic": the level goes to low (saved, automatic stays on) and the ride goes on', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'medium' } },
+      lang: 'en',
+    });
+    await startFreeRide(page);
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+
+    // lost: the level is already low while nothing is drawn, so the restored scene comes back low
+    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    await page.waitForFunction(() => window.__zhfTest.ride().contextLost);
+    expect((await rideState(page)).graphicsLevel).toBe('low');
+    expect(await storeSection(page, 'settings')).toMatchObject({
+      graphicsAuto: true,
+      graphicsLevel: 'low',
+    });
+
+    expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);
+    await page.waitForFunction(() => !window.__zhfTest.ride().contextLost);
+    await page.locator('[data-action="resume"]').click();
+    await page.waitForFunction(() => !window.__zhfTest.ride().paused);
+    expect((await rideState(page)).graphicsLevel).toBe('low');
+    // no extra switch after the restore, and no hint in automatic mode
+    await page.waitForFunction(() => !window.__zhfTest.ride().graphicsSettling);
+    await expect(lostToasts(page)).toHaveCount(0);
+
+    expect(await rideForward(page)).toBeGreaterThan(0.5);
+    await expect
+      .poll(() => canvasScreenshotSize(page), { timeout: 30_000 })
+      .toBeGreaterThan(30_000);
+    expect(await storeSection(page, 'settings')).toMatchObject({
+      graphicsAuto: true,
+      graphicsLevel: 'low',
+    });
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a manual level above low stays and a hint asks for a lower one once the ride goes on', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: false, graphicsLevel: 'medium' } },
+      lang: 'en',
+    });
+    await startFreeRide(page);
+    await loseRestoreResume(page);
+
+    await expect(lostToasts(page)).toHaveText(
+      'The graphics were too much for this device. Pick a lower level in the settings.',
+    );
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+    expect(await storeSection(page, 'settings')).toMatchObject({
+      graphicsAuto: false,
+      graphicsLevel: 'medium',
+    });
+    expect(await rideForward(page)).toBeGreaterThan(0.5);
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a loss while the tab is in the background is no overload: the level stays, no hint', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'medium' } },
+      lang: 'en',
+    });
+    await startFreeRide(page);
+
+    await setTabHidden(page, true); // the app goes to the background, the ride pauses
+    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    await page.waitForFunction(() => window.__zhfTest.ride().contextLost);
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+    expect(await storeSection(page, 'settings')).toMatchObject({
+      graphicsAuto: true,
+      graphicsLevel: 'medium',
+    });
+
+    expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);
+    await page.waitForFunction(() => !window.__zhfTest.ride().contextLost);
+    await setTabHidden(page, false);
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+    expect(await storeSection(page, 'settings')).toMatchObject({ graphicsLevel: 'medium' });
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a manual level gets no hint for a loss in the background', async ({
+    page,
+    browserName,
+  }) => {
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: false, graphicsLevel: 'medium' } },
+      lang: 'en',
+    });
+    await startFreeRide(page);
+    await setTabHidden(page, true); // the loss comes while the app is in the background
+    await loseRestoreResume(page);
+    await setTabHidden(page, false);
+    await expect(lostToasts(page)).toHaveCount(0);
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+  });
+
+  test('a loss right after the tab came back is no overload; a few seconds later it is', async ({
+    page,
+    browserName,
+  }) => {
+    test.setTimeout(90_000);
+    // a manual level: no governor can change the level in between on the slow CI renderer, and
+    // the hint shows whether the loss counted (same decision as the automatic fallback)
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: false, graphicsLevel: 'medium' } },
+      lang: 'en',
+    });
+    await startFreeRide(page);
+
+    await setTabHidden(page, true);
+    // back in the foreground right as the context is lost
+    expect(await showTabAndLoseContext(page)).toBe(true);
+    await page.waitForFunction(() => window.__zhfTest.ride().contextLost);
+    expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);
+    await page.waitForFunction(() => !window.__zhfTest.ride().contextLost);
+    await page.locator('[data-action="resume"]').click();
+    await page.waitForFunction(() => !window.__zhfTest.ride().paused);
+    // only the context-loss hint matters here (a slow renderer may show the low-fps hint)
+    const lossHint = lostToasts(page).filter({ hasText: /too much for this device/ });
+    await expect(lossHint).toHaveCount(0);
+
+    // settled in the foreground (the grace time is 3 s): a loss now counts
+    await page.waitForTimeout(3500);
+    await loseRestoreResume(page);
+    await expect(lossHint).toHaveCount(1);
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+  });
+
+  test('a manual low level gets no hint', async ({ page, browserName }) => {
+    await openGameMenu(page, test, browserName, { save: MANUAL_LOW, lang: 'en' });
+    await startFreeRide(page);
+    await loseRestoreResume(page);
+    await expect(lostToasts(page)).toHaveCount(0);
+    expect((await rideState(page)).graphicsLevel).toBe('low');
+  });
+});
+
+test.describe('context loss fallback: drawing buffer (rule 4)', () => {
+  // a device pixel ratio of 2 gives "high" the full ratio 2, "low" gets 1
+  test.use({ deviceScaleFactor: 2 });
+
+  const bufferWidth = (page) => page.evaluate(() => document.querySelector('.scene-canvas').width);
+
+  test('the buffer is already small while the context is lost, so the restore does not rebuild the big one', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'high' } },
+    });
+    await startFreeRide(page);
+    expect((await rideState(page)).graphicsPixelRatio).toBe(2);
+    const big = await bufferWidth(page);
+    // back to the menu: no frame loop, so only the loss handler can change the buffer now
+    await page.keyboard.press('Escape');
+    await page.locator('[data-action="quit"]').click();
+    await page.locator('[data-screen="menu"]').waitFor();
+
+    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    await expect.poll(async () => (await storeSection(page, 'settings')).graphicsLevel).toBe('low');
+    // still lost: the buffer already has the size of the low level (ratio 1 instead of 2)
+    expect(await bufferWidth(page)).toBe(big / 2);
+
+    expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);
+    await page.waitForTimeout(500);
+    expect(await bufferWidth(page)).toBe(big / 2);
+    await page.locator('[data-entry="free"]').click();
+    await page.waitForFunction(
+      () => window.__zhfTest.ride() && !window.__zhfTest.ride().contextLost,
+    );
+    expect((await rideState(page)).graphicsLevel).toBe('low');
+    expect((await rideState(page)).graphicsPixelRatio).toBe(1);
+    expect(watch.errors).toEqual([]);
+  });
+});
+
+test.describe('staged downgrade during a ride (rule 4)', () => {
+  test('a governor-style change medium → low is applied over several frames, the picture stays', async ({
+    page,
+    browserName,
+  }) => {
+    test.setTimeout(120_000);
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'medium' } },
+    });
+    await startFreeRide(page);
+    expect(await rideForward(page)).toBeGreaterThan(0.5);
+
+    // lower the level while riding and count the drawn frames until the switch is complete
+    const frames = await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          window.__zhfTest.setAutoLevel('low');
+          let settlingFrames = 0;
+          const check = () => {
+            if (window.__zhfTest.ride().graphicsSettling) settlingFrames += 1;
+            else if (settlingFrames > 0) return resolve(settlingFrames);
+            requestAnimationFrame(check);
+          };
+          requestAnimationFrame(check);
+          setTimeout(() => resolve(settlingFrames), 60_000);
+        }),
+    );
+    // five stages with a gap of several frames each: never a single frame
+    expect(frames).toBeGreaterThanOrEqual(5);
+
+    const ride = await rideState(page);
+    expect(ride.graphicsLevel).toBe('low');
+    expect(await storeSection(page, 'settings')).toMatchObject({
+      graphicsAuto: true,
+      graphicsLevel: 'low',
+    });
+    // still steerable and the canvas is not blank
+    expect(await rideForward(page)).toBeGreaterThan(0.5);
+    const keys = createKeys(page);
+    const heading = (await rideState(page)).horse.heading;
+    await keys.set('a', true);
+    await page.waitForFunction((h) => window.__zhfTest.ride().horse.heading !== h, heading);
+    await keys.releaseAll();
+    expect(await canvasScreenshotSize(page)).toBeGreaterThan(30_000);
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('the real governor on a slow device lowers the level without losing the picture', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CPU throttling needs the Chromium DevTools protocol');
+    test.setTimeout(150_000);
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'medium' } },
+    });
+    await startFreeRide(page);
+    const client = await page.context().newCDPSession(page);
+    await client.send('Emulation.setCPUThrottlingRate', { rate: 8 });
+    // 3 s grace + 5 s window below 50 fps: the governor steps down
+    await page.waitForFunction(() => window.__zhfTest.ride().graphicsLevel === 'low', null, {
+      timeout: 90_000,
+      polling: 250,
+    });
+    await page.waitForFunction(() => !window.__zhfTest.ride().graphicsSettling, null, {
+      timeout: 90_000,
+      polling: 250,
+    });
+    await client.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+
+    const ride = await rideState(page);
+    expect(ride.contextLost).toBe(false);
+    expect(await storeSection(page, 'settings')).toMatchObject({
+      graphicsAuto: true,
+      graphicsLevel: 'low',
+    });
+    expect(await rideForward(page)).toBeGreaterThan(0.5);
+    expect(await canvasScreenshotSize(page)).toBeGreaterThan(30_000);
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a change back up and down again in a row ends at the last level', async ({
+    page,
+    browserName,
+  }) => {
+    test.setTimeout(120_000);
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'medium' } },
+    });
+    await startFreeRide(page);
+    await page.evaluate(() => {
+      window.__zhfTest.setAutoLevel('low');
+      window.__zhfTest.setAutoLevel('medium');
+      window.__zhfTest.setAutoLevel('low');
+    });
+    await page.waitForFunction(() => !window.__zhfTest.ride().graphicsSettling, null, {
+      timeout: 60_000,
+    });
+    expect((await rideState(page)).graphicsLevel).toBe('low');
+    expect(await rideForward(page)).toBeGreaterThan(0.5);
+    expect(await canvasScreenshotSize(page)).toBeGreaterThan(30_000);
+    expect(watch.errors).toEqual([]);
+  });
+});
+
+test.describe('GPU memory budget (rule 4)', () => {
+  // a device pixel ratio of 2 gives the level's pixel ratio something to cap
+  test.use({ deviceScaleFactor: 2 });
+
+  const MANUAL_HIGH = { ...NAMED, settings: { graphicsAuto: false, graphicsLevel: 'high' } };
+  const debugBox = (page) => page.locator('[data-hud="debug"]');
+
+  /** Opens a free ride at "high" with a forced budget (MiB) and the debug box. */
+  async function rideWithBudget(page, test, browserName, budget, extra = {}) {
+    await openGameMenu(page, test, browserName, {
+      save: MANUAL_HIGH,
+      lang: 'en',
+      query: `&debug&gpubudget=${budget}`,
+      ...extra,
+    });
+    await startFreeRide(page);
+  }
+
+  const steerAndDraw = async (page) => {
+    expect(await rideForward(page)).toBeGreaterThan(0.5);
+    await expect
+      .poll(() => canvasScreenshotSize(page), { timeout: 30_000 })
+      .toBeGreaterThan(30_000);
+  };
+
+  test('without a small budget "high" keeps its full pixel ratio', async ({
+    page,
+    browserName,
+  }) => {
+    await openGameMenu(page, test, browserName, {
+      save: MANUAL_HIGH,
+      lang: 'en',
+      query: '&debug',
+    });
+    await startFreeRide(page);
+    expect((await rideState(page)).graphicsPixelRatio).toBe(2);
+    await expect(debugBox(page)).toContainText(/GPU est\. \d+ \/ \d+ MB/);
+    await expect(debugBox(page)).not.toContainText('capped');
+  });
+
+  test('a budget that "high" does not fit caps the pixel ratio and the ride still renders', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await rideWithBudget(page, test, browserName, 90);
+    const ratio = (await rideState(page)).graphicsPixelRatio;
+    expect(ratio).toBeGreaterThanOrEqual(1);
+    expect(ratio).toBeLessThan(2);
+    expect((await rideState(page)).graphicsLevel).toBe('high'); // the level stays
+    await expect(debugBox(page)).toContainText(
+      new RegExp(`GPU est\\. \\d+ / 90 MB, ratio capped 2 → ${ratio}`),
+    );
+    await steerAndDraw(page);
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a smaller budget goes down to ratio 1, then halves the shadow map', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await rideWithBudget(page, test, browserName, 60);
+    expect((await rideState(page)).graphicsPixelRatio).toBe(1);
+    await expect(debugBox(page)).toContainText('ratio capped 2 → 1');
+    await expect(debugBox(page)).toContainText('Shadow map capped 2048 → 1024');
+    await steerAndDraw(page);
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a budget that not even the multisampled buffers fit creates the context without antialiasing', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await rideWithBudget(page, test, browserName, 12);
+    await expect(debugBox(page)).toContainText('Antialiasing: off (not enough graphics memory)');
+    expect((await rideState(page)).graphicsPixelRatio).toBe(1);
+    await steerAndDraw(page);
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a manual switch to "high" is checked against the budget too', async ({
+    page,
+    browserName,
+  }) => {
+    test.setTimeout(120_000);
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: MANUAL_LOW,
+      lang: 'en',
+      // the context was made for "low", without multisampling: that is cheaper than the "high"
+      // contexts of the tests above, so the budget has to be smaller to cap anything
+      query: '&debug&gpubudget=65',
+    });
+    await startFreeRide(page);
+    expect((await rideState(page)).graphicsPixelRatio).toBe(1);
+    await switchLevelInPause(page, 'high');
+    await page.waitForFunction(() => !window.__zhfTest.ride().graphicsSettling, null, {
+      timeout: 60_000,
+    });
+    const ride = await rideState(page);
+    expect(ride.graphicsLevel).toBe('high');
+    expect(ride.graphicsPixelRatio).toBeGreaterThan(1);
+    expect(ride.graphicsPixelRatio).toBeLessThan(2);
+    await steerAndDraw(page);
+    expect(watch.errors).toEqual([]);
+  });
+});
+
+test.describe('debug box (?debug)', () => {
+  const debugBox = (page) => page.locator('[data-hud="debug"]');
+
+  test('shows GPU, level, pixel ratios, buffer, context counts and the last errors', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'low' } },
+      lang: 'en',
+      query: '&debug',
+    });
+    await startFreeRide(page);
+    const box = debugBox(page);
+    await expect(box).toBeVisible();
+    await expect(box).toContainText(/^GPU: \S+/);
+    await expect(box).toContainText('Level: Low (auto)');
+    await expect(box).toContainText(/Pixel ratio: device [\d.]+, drawing [\d.]+/);
+    await expect(box).toContainText(/Canvas: \d+ × \d+/);
+    await expect(box).toContainText(/Largest texture: \d+/);
+    await expect(box).toContainText(/Antialiasing: (on|off)/);
+    await expect(box).toContainText(/GPU est\. \d+ \/ \d+ MB/);
+    await expect(box).toContainText('Graphics lost: 0× (–), back: 0× (–)');
+    await expect(box).toContainText('Errors: none');
+
+    // it sits under the fps line in the HUD column (the fps line is off: it is the first line)
+    const y = await box.evaluate((el) => el.getBoundingClientRect().top);
+    expect(y).toBeLessThan(120);
+
+    // errors show up (newest first), about twice per second
+    await page.evaluate(() => {
+      window.dispatchEvent(new ErrorEvent('error', { message: 'first problem' }));
+      window.dispatchEvent(new ErrorEvent('error', { message: 'second problem' }));
+    });
+    await expect(box).toContainText('Last errors (2):', { timeout: 5000 });
+    const text = await box.innerText();
+    expect(text.indexOf('second problem')).toBeLessThan(text.indexOf('first problem'));
+
+    // context counts follow a loss and a restore
+    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    await expect(box).toContainText(/Graphics lost: 1× \(at \d+ s\)/, { timeout: 5000 });
+    expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);
+    await expect(box).toContainText(/back: 1× \(at \d+ s\)/, { timeout: 15_000 });
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('is in German too', async ({ page, browserName }) => {
+    await openGameMenu(page, test, browserName, { save: MANUAL_LOW, lang: 'de', query: '&debug' });
+    await startFreeRide(page);
+    await expect(debugBox(page)).toContainText('Stufe: Niedrig');
+    await expect(debugBox(page)).toContainText('Zeichenfläche:');
+  });
+
+  test('is not there without ?debug', async ({ page, browserName }) => {
+    await openGameMenu(page, test, browserName, { save: MANUAL_LOW });
+    await startFreeRide(page);
+    await expect(page.locator('[data-hud="fps"]')).toBeHidden();
+    await expect(debugBox(page)).toHaveCount(0);
+    expect(await page.evaluate(() => window.__zhfTest.ride().graphicsLevel)).toBe('low');
   });
 });
 

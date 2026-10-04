@@ -351,7 +351,9 @@ describe('Jump sequence (rule 24)', () => {
     const phases = [];
     let maxY = 0;
     let headingAtTakeoff = null;
-    drive(sim, pressAt({ gallop: true, steer: 1 }, atCenter), {
+    // straight run-in; full lock is held only once the jump has started (steering is locked)
+    const press = pressAt({ gallop: true }, atCenter);
+    drive(sim, (s, t) => ({ ...press(s, t), steer: s.horse.jump ? 1 : 0 }), {
       maxT: 3,
       onStep: (s, ev) => {
         if (ofType(ev, 'takeoff').length) headingAtTakeoff = s.horse.heading;
@@ -419,6 +421,37 @@ describe('Self jump and refusal (rules 20, 22)', () => {
       { until: untilQuiet },
     );
     expect(ofType(events, 'refusal')).toHaveLength(0);
+    expect(ofType(events, 'landed')).toHaveLength(1);
+  });
+
+  it('a moderate steering correction in the last 5 m still jumps, without a refusal', () => {
+    const v = makeElement('vertical', 0.8);
+    const sim = makeSim([v]);
+    placeBefore(sim, v, 8, { speed: 5.8, gallop: true });
+    const press = pressAt({ gallop: true }, atCenter);
+    let correctingSince = null;
+    let maxHeading = 0;
+    const { events } = drive(
+      sim,
+      (s, t) => {
+        // the correction (steer 0.5) starts 5 m before the obstacle and lasts 0.3 s
+        if (correctingSince === null && s.approach && s.approach.distance <= 5) correctingSince = t;
+        const correcting = correctingSince !== null && t - correctingSince < 0.3;
+        return { ...press(s, t), steer: correcting ? 0.5 : 0 };
+      },
+      {
+        until: untilQuiet,
+        maxT: 6,
+        onStep: (s) => {
+          maxHeading = Math.max(maxHeading, Math.abs(s.horse.heading));
+        },
+      },
+    );
+    expect(correctingSince).not.toBeNull();
+    expect(maxHeading).toBeGreaterThan(0.05); // the correction really turned the horse
+    expect(ofType(events, 'refusal')).toHaveLength(0);
+    expect(ofType(events, 'swerve')).toHaveLength(0);
+    expect(ofType(events, 'takeoff')).toHaveLength(1);
     expect(ofType(events, 'landed')).toHaveLength(1);
   });
 

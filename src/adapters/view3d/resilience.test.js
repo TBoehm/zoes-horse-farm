@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  collectGpuObjects,
   createErrorReporter,
+  createGpuEpoch,
   createRenderGate,
   createRestoreWatchdog,
+  releaseNow,
   watchContextLoss,
 } from './resilience.js';
 
@@ -183,5 +186,123 @@ describe('createErrorReporter', () => {
     report('frame', new Error('x'));
     report('render', new Error('y'));
     expect(log).toHaveBeenCalledTimes(2);
+  });
+});
+
+const disposable = () => ({ dispose: vi.fn() });
+
+describe('releaseNow', () => {
+  it('disposes the object and tolerates a missing one', () => {
+    const obj = disposable();
+    releaseNow(obj);
+    expect(obj.dispose).toHaveBeenCalledTimes(1);
+    expect(() => releaseNow(null)).not.toThrow();
+  });
+});
+
+describe('createGpuEpoch', () => {
+  it('disposes objects as usual as long as no context was ever lost', () => {
+    const gpu = createGpuEpoch();
+    const obj = disposable();
+    gpu.release(obj);
+    expect(obj.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('only forgets objects that lived through a context loss (their handles are stale)', () => {
+    const gpu = createGpuEpoch();
+    const old = disposable();
+    gpu.contextLost([old]);
+    gpu.contextRestored();
+    gpu.release(old);
+    expect(old.dispose).not.toHaveBeenCalled();
+    expect(gpu.isStale(old)).toBe(true);
+  });
+
+  it('disposes objects that were built after the loss normally once the context is back', () => {
+    const gpu = createGpuEpoch();
+    const old = disposable();
+    gpu.contextLost([old]);
+    gpu.contextRestored();
+    const fresh = disposable();
+    gpu.release(fresh);
+    expect(fresh.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes no GL calls at all while the context is lost', () => {
+    const gpu = createGpuEpoch();
+    gpu.contextLost([]);
+    const built = disposable();
+    gpu.release(built);
+    expect(built.dispose).not.toHaveBeenCalled();
+    expect(gpu.lost).toBe(true);
+    gpu.contextRestored();
+    expect(gpu.lost).toBe(false);
+  });
+
+  it('marks objects again at a second loss (they may have been uploaded again)', () => {
+    const gpu = createGpuEpoch();
+    const obj = disposable();
+    gpu.contextLost([]);
+    gpu.contextRestored();
+    gpu.contextLost([obj]);
+    gpu.contextRestored();
+    gpu.release(obj);
+    expect(obj.dispose).not.toHaveBeenCalled();
+  });
+
+  it('tolerates a missing object', () => {
+    const gpu = createGpuEpoch();
+    expect(() => gpu.release(null)).not.toThrow();
+    expect(() => gpu.release(undefined)).not.toThrow();
+  });
+});
+
+describe('collectGpuObjects', () => {
+  const texture = () => ({ isTexture: true });
+  const traverseOf = (nodes) => ({
+    traverse: (fn) => nodes.forEach(fn),
+  });
+
+  it('finds geometries, materials, their textures, skeleton textures and shadow maps', () => {
+    const map = texture();
+    const normalMap = texture();
+    const material = { map, normalMap, color: { r: 1 }, roughness: 0.5 };
+    const geometry = {};
+    const boneTexture = texture();
+    const shadowMap = { isRenderTarget: true, texture: texture() };
+    const scene = {
+      ...traverseOf([
+        { geometry, material },
+        { skeleton: { boneTexture } },
+        { shadow: { map: shadowMap } },
+      ]),
+    };
+    const found = collectGpuObjects(scene);
+    for (const obj of [geometry, material, map, normalMap, boneTexture, shadowMap]) {
+      expect(found).toContain(obj);
+    }
+  });
+
+  it('handles material arrays, instanced meshes, the scene environment and extra roots', () => {
+    const a = { map: texture() };
+    const b = {};
+    const instanced = { isInstancedMesh: true, geometry: {}, material: [a, b] };
+    const environment = texture();
+    const extra = { isRenderTarget: true };
+    const scene = { ...traverseOf([instanced]), environment, background: { r: 1 } };
+    const found = collectGpuObjects(scene, [extra, null]);
+    for (const obj of [instanced, a, b, a.map, environment, extra]) expect(found).toContain(obj);
+    expect(found).not.toContain(null);
+    expect(found).not.toContain(scene.background);
+  });
+
+  it('lists every object once', () => {
+    const shared = {};
+    const scene = traverseOf([
+      { geometry: shared, material: {} },
+      { geometry: shared, material: {} },
+    ]);
+    const found = collectGpuObjects(scene);
+    expect(found.filter((o) => o === shared)).toHaveLength(1);
   });
 });

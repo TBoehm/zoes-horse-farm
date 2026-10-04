@@ -8,6 +8,9 @@ export function watchPage(page) {
   const forbidden = [];
   page.on('console', (msg) => {
     if (msg.type() === 'error' || /Missing text/.test(msg.text())) errors.push(msg.text());
+    // Chromium logs WebGL errors (e.g. deleting a handle of a lost context) only as warnings,
+    // WebKit as errors: count both, so that Chromium catches what WebKit would
+    else if (/WebGL: INVALID_/.test(msg.text())) errors.push(`[${msg.type()}] ${msg.text()}`);
   });
   page.on('pageerror', (err) => errors.push(String(err)));
   page.on('request', (req) => {
@@ -60,8 +63,9 @@ export const SAVE_KEY = 'zoes-horse-farm.save';
 
 /**
  * Opens the app with the test hook; an optional save game is written once before the first load.
+ * `query`: more URL parameters, e.g. '&debug'.
  */
-export async function openGame(page, { save, lang } = {}) {
+export async function openGame(page, { save, lang, query = '' } = {}) {
   if (save || lang) {
     await page.addInitScript(
       ({ key, data, lang: l }) => {
@@ -73,7 +77,7 @@ export async function openGame(page, { save, lang } = {}) {
       { key: SAVE_KEY, data: save ?? {}, lang },
     );
   }
-  await page.goto('./?testhooks');
+  await page.goto(`./?testhooks${query}`);
 }
 
 /** Save game of a player who already named the horse (no name question). */
@@ -96,12 +100,44 @@ export const audioState = (page) => page.evaluate(() => window.__zhfTest.audio()
 /** How often each effect was really played (dropped ones are not counted). */
 export const sfxCounts = async (page) => (await audioState(page)).sfxCounts;
 
-/** Emulates a tab that goes to the background (or comes back): `hidden` + `visibilitychange`. */
+/**
+ * Emulates a tab that goes to the background (or comes back): `hidden`, `visibilityState` and
+ * `visibilitychange`.
+ */
 export const setTabHidden = (page, hidden) =>
   page.evaluate((value) => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => value });
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => (value ? 'hidden' : 'visible'),
+    });
     document.dispatchEvent(new Event('visibilitychange'));
   }, hidden);
+
+/**
+ * The WebGL context is lost right as the tab comes back to the foreground. Returns what
+ * loseContext() returns.
+ */
+export const showTabAndLoseContext = (page) =>
+  page.evaluate(() => {
+    // The browser fires `webglcontextlost` asynchronously; with the slow software renderer a whole
+    // frame (seconds) can run before it. So the tab comes back from a capturing window listener,
+    // which runs right before the engine's canvas listener: the loss is exactly "just after
+    // returning", however slow the frames are.
+    window.addEventListener(
+      'webglcontextlost',
+      () => {
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+        Object.defineProperty(document, 'visibilityState', {
+          configurable: true,
+          get: () => 'visible',
+        });
+        document.dispatchEvent(new Event('visibilitychange'));
+      },
+      { capture: true, once: true },
+    );
+    return window.__zhfTest.loseContext();
+  });
 
 /** Waits until a ride is running (optionally in a given mode) and returns its state. */
 export async function waitForRide(page, mode) {

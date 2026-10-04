@@ -200,35 +200,78 @@ describe('Steering (rules 8, 10, 22)', () => {
   });
 });
 
-describe('Turn agility (rule 10: direct steering, plausible radii)', () => {
+describe('Turn agility (rule 10: direct steering, SRT-009 child feedback)', () => {
   // Real horses: 10 m volte (r = 5 m) at trot/walk, 20 m circle (r = 10 m) at canter, jump-off
-  // turns at jumping canter about r = 6-8 m; the game may be somewhat more agile (child audience).
-  it('walk: tight turn, at most 1.5 m radius (turn on the haunches)', () => {
-    expect(turnRadius(1.5, TUNING)).toBeLessThanOrEqual(1.5);
+  // turns at jumping canter about r = 6-8 m. The child asked for "about 50 % better" turning,
+  // so the game is deliberately far more agile than reality: radius = 1/1.5 of the values
+  // before SRT-009 (walk 1.0 m, trot 2.7 m, jumping canter 6.3 m, full gallop 10.4 m).
+  const BEFORE = { turnInPlace: 1.8, turnSpeedRef: 6.0 };
+  const radiusBefore = (v) => (v * (1 + v / BEFORE.turnSpeedRef)) / BEFORE.turnInPlace;
+
+  it('walk: very tight turn, at most 0.8 m radius (turn on the haunches)', () => {
+    expect(turnRadius(1.5, TUNING)).toBeLessThanOrEqual(0.8);
   });
 
-  it('working trot: tighter than a 10 m volte but not tighter than 2 m', () => {
+  it('working trot: radius about 1.8 m (between 1.6 and 2.0 m)', () => {
     const r = turnRadius(S.trotMedium, TUNING);
-    expect(r).toBeLessThanOrEqual(3);
-    expect(r).toBeGreaterThanOrEqual(2);
+    expect(r).toBeGreaterThanOrEqual(1.6);
+    expect(r).toBeLessThanOrEqual(2.0);
   });
 
-  it('jumping canter: jump-off turn radius between 4 and 6.5 m', () => {
+  it('jumping canter: jump-off turn radius about 4.2 m (between 3.8 and 4.6 m)', () => {
     const r = turnRadius(S.canterMedium, TUNING);
-    expect(r).toBeLessThanOrEqual(6.5);
-    expect(r).toBeGreaterThanOrEqual(4);
+    expect(r).toBeGreaterThanOrEqual(3.8);
+    expect(r).toBeLessThanOrEqual(4.6);
   });
 
-  it('lateral acceleration stays plausible at every speed (at most 7 m/s²)', () => {
-    for (let v = 0.5; v <= S.canterMax; v += 0.5) {
-      expect(v * maxTurnRate(v, TUNING)).toBeLessThanOrEqual(7);
+  it('every gait turns about 1.5 times tighter than before SRT-009 (ratio 1.4 to 1.6)', () => {
+    for (const v of [1.5, S.trotMedium, S.canterMedium, S.canterMax]) {
+      const ratio = radiusBefore(v) / turnRadius(v, TUNING);
+      expect(ratio).toBeGreaterThanOrEqual(1.4);
+      expect(ratio).toBeLessThanOrEqual(1.6);
     }
   });
 
-  it('the turn rate follows the stick quickly (90 % of the target within 0.2 s)', () => {
+  it('on-the-spot turn rate allows a half turn in about 1.2 s (at least 2.4 rad/s)', () => {
+    expect(maxTurnRate(0, TUNING)).toBeGreaterThanOrEqual(2.4);
+  });
+
+  // Game-feel bound, not a realism bound: reality is ~2.5 m/s² on a 20 m canter circle and
+  // 6-8 m/s² in tight turns; the child-friendly arcade steering reaches up to ~9.3 m/s² at full
+  // gallop (v * omega). It must stay below 1 g (9.81 m/s²) so the horse never feels like it snaps.
+  it('game-feel bound: lateral acceleration v·ω stays below 1 g at every speed', () => {
+    for (let v = 0.5; v <= S.canterMax; v += 0.5) {
+      expect(v * maxTurnRate(v, TUNING)).toBeLessThan(9.81);
+    }
+  });
+
+  it('the turn rate follows the stick quickly (90 % of the target within 0.13 s)', () => {
     const sim = makeSim([]);
-    drive(sim, { steer: 1 }, { maxT: 0.2 });
+    drive(sim, { steer: 1 }, { maxT: 0.13 });
     expect(Math.abs(sim.horse.turnRate)).toBeGreaterThanOrEqual(0.9 * maxTurnRate(0, TUNING));
+  });
+
+  it('releasing the stick stops the turn calmly: monotone decay, no overshoot, done in 0.3 s', () => {
+    const sim = makeSim([]);
+    drive(sim, { steer: 1 }, { maxT: 1 });
+    let last = Math.abs(sim.horse.turnRate);
+    for (let t = 0; t < 0.3; t += DT) {
+      sim.step(DT, { steer: 0 });
+      const now = sim.horse.turnRate;
+      expect(now).toBeGreaterThanOrEqual(0);
+      expect(now).toBeLessThanOrEqual(last + 1e-12);
+      last = now;
+    }
+    expect(last).toBeLessThan(0.02 * maxTurnRate(0, TUNING));
+  });
+
+  it('full lock at canter really rides the small circle (measured radius about 4.2 m)', () => {
+    const sim = makeSim([]);
+    sim.reset({ x: 0, z: 0, heading: 0, speed: S.canterMedium, gallop: true });
+    drive(sim, { steer: 1, gallop: true }, { maxT: 1 });
+    const r = S.canterMedium / Math.abs(sim.horse.turnRate);
+    expect(r).toBeGreaterThanOrEqual(3.8);
+    expect(r).toBeLessThanOrEqual(4.6);
   });
 });
 

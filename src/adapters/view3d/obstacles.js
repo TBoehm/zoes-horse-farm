@@ -12,6 +12,7 @@ import {
   createRng,
 } from './textures.js';
 import { makeSignQuad } from './arena.js';
+import { releaseNow } from './resilience.js';
 import {
   POLE_RADIUS,
   POLE_GEOM_LENGTH,
@@ -315,7 +316,7 @@ function createBadge() {
   return { sprite, draw, texture, material };
 }
 
-function createHighlight() {
+function createHighlight(release) {
   const group = new THREE.Group();
   group.name = 'highlight';
   group.visible = false;
@@ -342,7 +343,7 @@ function createHighlight() {
     show(element, text) {
       const hw = STAND_X + STAND_WIDTH / 2 + 0.7;
       const hd = (element.kind === 'oxer' ? (element.spread || 0) / 2 : 0) + 1.1;
-      ring.geometry.dispose();
+      release(ring.geometry);
       ring.geometry = ringGeometry(hw, hd, 0.24);
       group.position.set(element.x, 0, element.z);
       group.rotation.y = element.rot || 0;
@@ -383,7 +384,7 @@ function createHighlight() {
 /**
  * materialFactory(kind, params) → { standard, lambert }. Returns the obstacle manager.
  */
-export function createObstacles({ materialFactory }) {
+export function createObstacles({ materialFactory, release = releaseNow }) {
   const group = new THREE.Group();
   group.name = 'obstacles';
   const staticMats = materialFactory('obstacle-static', { vertexColors: true, roughness: 0.55 });
@@ -411,7 +412,7 @@ export function createObstacles({ materialFactory }) {
   let poles = [];
   /** elementId → { element, obstacle, index, label, rails: Map rail → pole[], color } */
   const elements = new Map();
-  const highlight = createHighlight();
+  const highlight = createHighlight(release);
   group.add(highlight.group);
   let shownHighlight = null; // key of the highlight that is currently built
 
@@ -443,18 +444,18 @@ export function createObstacles({ materialFactory }) {
   function clear() {
     if (staticMesh) {
       group.remove(staticMesh);
-      staticMesh.geometry.dispose();
+      release(staticMesh.geometry);
       staticMesh = null;
     }
     if (boardMesh) {
       group.remove(boardMesh);
-      boardMesh.geometry.dispose();
+      release(boardMesh.geometry);
       boardMats.standard.map = null;
       boardMats.lambert.map = null;
       boardMesh = null;
     }
     if (atlas) {
-      atlas.texture.dispose();
+      release(atlas.texture);
       atlas = null;
     }
     elements.clear();
