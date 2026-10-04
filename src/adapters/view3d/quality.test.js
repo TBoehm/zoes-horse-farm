@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  canHintLowerLevel,
   createLowFpsHint,
   createQualityGovernor,
   pickInitialLevel,
@@ -312,6 +313,16 @@ describe('createLowFpsHint (rule 4: manual level too high for the device)', () =
     expect(runHint(hint, 1.1, 10)).toBe(1);
   });
 
+  it('reset starts a new ride: it can fire again and needs the grace period again', () => {
+    const hint = createLowFpsHint();
+    expect(runHint(hint, 60, 10)).toBe(1);
+    expect(runHint(hint, 60, 10)).toBe(0);
+    hint.reset();
+    expect(hint.shown).toBe(false);
+    expect(runHint(hint, 7.9, 10)).toBe(0);
+    expect(runHint(hint, 0.2, 10)).toBe(1);
+  });
+
   it('a frame longer than 2 s counts as an interruption', () => {
     const hint = createLowFpsHint();
     runHint(hint, 7, 10);
@@ -333,5 +344,20 @@ describe('createLowFpsHint (rule 4: manual level too high for the device)', () =
   it('accepts other thresholds through options', () => {
     const hint = createLowFpsHint({ options: { windowS: 2, graceS: 0, maxFps: 20 } });
     expect(runHint(hint, 2.1, 15)).toBe(1);
+  });
+});
+
+describe('canHintLowerLevel', () => {
+  it('is true only for a manual level above low', () => {
+    expect(canHintLowerLevel({ auto: false, level: 'high' })).toBe(true);
+    expect(canHintLowerLevel({ auto: false, level: 'medium' })).toBe(true);
+  });
+
+  it('is false at the lowest level: there is nothing lower to pick', () => {
+    expect(canHintLowerLevel({ auto: false, level: 'low' })).toBe(false);
+  });
+
+  it('is false with "Automatic" on (the governor handles it)', () => {
+    expect(canHintLowerLevel({ auto: true, level: 'high' })).toBe(false);
   });
 });

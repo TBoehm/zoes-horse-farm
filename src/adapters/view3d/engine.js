@@ -70,6 +70,11 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   const camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.1, 900);
   const cameraRig = createCameraRig(camera);
 
+  // The first picture is not there yet, so the level's pixel ratio can be applied right away. Later
+  // changes wait for the render gate (see applyQuality).
+  setMaxPixelRatio(renderer, QUALITY_PRESETS[level].pixelRatio);
+  let pendingPixelRatio = null;
+
   const world = createWorld(renderer, { quality: level });
   const horse = createHorse({ ...DEFAULT_APPEARANCE, quality: level });
   world.scene.add(horse.object);
@@ -98,13 +103,20 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     );
   }
 
+  /**
+   * Switches the level while the last picture stays on screen. The pixel ratio is NOT changed
+   * here: resizing the drawing buffer clears it, and with the render gate closed (shaders
+   * compiling, up to COMPILE_HOLD_MAX_MS) nothing would be drawn, so the screen would be black and
+   * the ride frozen. The new ratio is stored and applied by the frame loop in the very frame that
+   * draws again (the buffer is cleared and refilled before the browser shows it). Between the
+   * switch and that frame the old picture is simply a little too sharp or too soft.
+   */
   function applyQuality(next) {
     level = next;
     guarded('quality switch', () => {
-      setMaxPixelRatio(renderer, QUALITY_PRESETS[next].pixelRatio);
+      pendingPixelRatio = QUALITY_PRESETS[next].pixelRatio;
       world.setQuality(next);
       horse.setQuality(next);
-      resize(true);
     });
     if (!contextWatch.lost) precompile();
   }
@@ -156,7 +168,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     },
   });
 
-  applyQuality(level);
+  if (!contextWatch.lost) precompile(); // the shaders of the first level, before the first frame
 
   let frameFn = null;
   let last = 0;
@@ -166,6 +178,15 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     last = time;
     // shaders are compiling: keep the last picture, do not simulate (no hidden time passes)
     if (gate.blocked) return;
+    if (pendingPixelRatio !== null) {
+      // drawing happens right below in this frame, so the cleared buffer is never shown
+      const ratio = pendingPixelRatio;
+      pendingPixelRatio = null;
+      guarded('pixel ratio', () => {
+        setMaxPixelRatio(renderer, ratio);
+        resize(true);
+      });
+    }
     // each step on its own: a failing step is logged and the others still run (no closures here,
     // this runs every frame)
     try {

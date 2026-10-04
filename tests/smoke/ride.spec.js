@@ -4,6 +4,7 @@
 import { expect, test } from '@playwright/test';
 import {
   canvasScreenshotSize,
+  createFinger,
   createKeys,
   jumpOverCross,
   NAMED,
@@ -18,18 +19,6 @@ import {
 
 // A small window keeps the software renderer of the CI browser fast enough
 test.use({ viewport: { width: 640, height: 400 } });
-
-/** Touch input through the Chrome DevTools Protocol (real touch events, like a finger). */
-async function createFinger(page) {
-  const client = await page.context().newCDPSession(page);
-  const send = (type, points) =>
-    client.send('Input.dispatchTouchEvent', { type, touchPoints: points });
-  return {
-    down: (x, y) => send('touchStart', [{ x, y, id: 1 }]),
-    move: (x, y) => send('touchMove', [{ x, y, id: 1 }]),
-    up: () => send('touchEnd', []),
-  };
-}
 
 test.describe('free riding (SRT-002)', () => {
   test('starts, renders a non-blank 3D scene without console errors or asset files', async ({
@@ -158,7 +147,8 @@ test.describe('free riding (SRT-002)', () => {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.__zhfTest.ride().paused);
     await keys.releaseAll();
-    await expect(page.locator('[data-overlay="pause"] [data-action]')).toHaveCount(4);
+    // the "Reload" button exists only while a lost WebGL context does not come back
+    await expect(page.locator('[data-overlay="pause"] [data-action]:visible')).toHaveCount(4);
     // the pause menu is a modal dialog with a name
     const dialog = page.locator('[data-overlay="pause"]');
     await expect(dialog).toHaveAttribute('role', 'dialog');

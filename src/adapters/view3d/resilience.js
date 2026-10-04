@@ -1,11 +1,16 @@
 // Helpers that keep the 3D view playable when things go wrong (rule 4): WebGL context loss, shader
 // compilation stalls after a quality switch and exceptions in the frame loop. Pure, no three.js.
 
+// How long the ride screen waits for `webglcontextrestored` before it asks to reload the page
+// (some browsers stop restoring after repeated losses). A technical value, not a game value.
+export const CONTEXT_RESTORE_TIMEOUT_MS = 8000;
+
 /**
  * Watches the canvas for a lost and restored WebGL context.
- * The default of the loss event is prevented: without that the browser never restores the context
- * (https://www.khronos.org/webgl/wiki/HandlingContextLost). Callbacks may throw; the state stays
- * right.
+ * The default of the loss event is prevented as a safety net: without that the browser never
+ * restores the context (https://www.khronos.org/webgl/wiki/HandlingContextLost). three.js
+ * (r186, WebGLRenderer onContextLost) already does this on its own listener, so the call here
+ * only keeps us independent of that detail. Callbacks may throw; the state stays right.
  */
 export function watchContextLoss(canvas, { onLost, onRestored } = {}) {
   let lost = false;
@@ -33,10 +38,6 @@ export function watchContextLoss(canvas, { onLost, onRestored } = {}) {
   return {
     get lost() {
       return lost;
-    },
-    dispose() {
-      canvas.removeEventListener('webglcontextlost', lostListener, false);
-      canvas.removeEventListener('webglcontextrestored', restoredListener, false);
     },
   };
 }
@@ -73,12 +74,31 @@ export function createRenderGate() {
         () => open(mine),
       );
     },
-    release() {
-      open(token);
-    },
     get blocked() {
       return blocked;
     },
+  };
+}
+
+/**
+ * Countdown for a context that does not come back: start() when it is lost, cancel() when it is
+ * restored; onTimeout fires once if the time runs out first. A second start() restarts it.
+ */
+export function createRestoreWatchdog({ timeoutMs = CONTEXT_RESTORE_TIMEOUT_MS, onTimeout }) {
+  let timer = 0;
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = 0;
+  };
+  return {
+    start() {
+      cancel();
+      timer = setTimeout(() => {
+        timer = 0;
+        onTimeout?.();
+      }, timeoutMs);
+    },
+    cancel,
   };
 }
 

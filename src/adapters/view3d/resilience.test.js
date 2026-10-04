@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createErrorReporter, createRenderGate, watchContextLoss } from './resilience.js';
+import {
+  CONTEXT_RESTORE_TIMEOUT_MS,
+  createErrorReporter,
+  createRenderGate,
+  createRestoreWatchdog,
+  watchContextLoss,
+} from './resilience.js';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -28,7 +34,7 @@ describe('watchContextLoss', () => {
     expect(calls).toEqual(['lost', 'restored']);
   });
 
-  it('prevents the default of the loss event, otherwise the browser never restores', () => {
+  it('prevents the default of the loss event (safety net next to three.js)', () => {
     const canvas = new EventTarget();
     watchContextLoss(canvas, {});
     expect(fire(canvas, 'webglcontextlost').defaultPrevented).toBe(true);
@@ -44,15 +50,6 @@ describe('watchContextLoss', () => {
     });
     expect(() => fire(canvas, 'webglcontextlost')).not.toThrow();
     expect(watch.lost).toBe(true);
-  });
-
-  it('stops listening after dispose', () => {
-    const canvas = new EventTarget();
-    const onLost = vi.fn();
-    const watch = watchContextLoss(canvas, { onLost });
-    watch.dispose();
-    fire(canvas, 'webglcontextlost');
-    expect(onLost).not.toHaveBeenCalled();
   });
 });
 
@@ -105,12 +102,48 @@ describe('createRenderGate', () => {
     gate.hold(undefined, 1000);
     expect(gate.blocked).toBe(false);
   });
+});
 
-  it('release opens the gate at once', () => {
-    const gate = createRenderGate();
-    gate.hold(new Promise(() => {}), 1000);
-    gate.release();
-    expect(gate.blocked).toBe(false);
+describe('createRestoreWatchdog', () => {
+  it('fires once when the restore does not arrive in time', () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    const watchdog = createRestoreWatchdog({ timeoutMs: 8000, onTimeout });
+    watchdog.start();
+    vi.advanceTimersByTime(7999);
+    expect(onTimeout).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(2);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(60_000);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fire after cancel (the context came back)', () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    const watchdog = createRestoreWatchdog({ timeoutMs: 8000, onTimeout });
+    watchdog.start();
+    vi.advanceTimersByTime(5000);
+    watchdog.cancel();
+    vi.advanceTimersByTime(60_000);
+    expect(onTimeout).not.toHaveBeenCalled();
+  });
+
+  it('a second start restarts the countdown instead of stacking timers', () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    const watchdog = createRestoreWatchdog({ timeoutMs: 8000, onTimeout });
+    watchdog.start();
+    vi.advanceTimersByTime(6000);
+    watchdog.start();
+    vi.advanceTimersByTime(6000);
+    expect(onTimeout).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(2001);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits about 8 s by default', () => {
+    expect(CONTEXT_RESTORE_TIMEOUT_MS).toBe(8000);
   });
 });
 

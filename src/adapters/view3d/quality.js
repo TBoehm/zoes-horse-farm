@@ -120,7 +120,7 @@ function createFrameWindow(windowS) {
   const length = () => samples.length - head;
   return {
     clear() {
-      samples = [];
+      samples.length = 0; // in place: this is called every frame while nothing is measured
       head = 0;
       sum = 0;
     },
@@ -242,8 +242,17 @@ export function createQualityGovernor({
 }
 
 /**
+ * Does the "level too high" hint make sense? Only for a manual level that has a lower one to pick:
+ * with "Automatic" on the governor steps down by itself, and at "low" the hint would send the
+ * player to a level that does not exist.
+ */
+export function canHintLowerLevel({ auto, level }) {
+  return !auto && lowerLevel(level) !== level;
+}
+
+/**
  * Hint for a manually chosen level that is too high for the device (rule 4): the level stays, the
- * player only gets told. Create one instance per ride or free-mode session: it fires at most once.
+ * player only gets told. Create one instance per ride or free-mode session: it fires at most once (until reset()).
  * frame(dtSeconds, measuring) returns true exactly once, when the average over the window is below
  * the limit. Pass measuring=false while paused, hidden, in menus or with "Automatic" on (the
  * governor takes care of that case).
@@ -279,6 +288,11 @@ export function createLowFpsHint({ options = {} } = {}) {
     },
     /** Report an interruption (pause, menu, hidden tab, level change). */
     interrupt,
+    /** A new ride begins (e.g. "Start again"): the hint may show once more. */
+    reset() {
+      shown = false;
+      interrupt();
+    },
     get shown() {
       return shown;
     },

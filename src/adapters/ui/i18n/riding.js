@@ -25,7 +25,9 @@ export default {
     'ride.fps': '{fps} fps',
     'ride.fpsAuto': '(Auto)',
     'ride.graphicsTooHigh': 'Die Grafik ist für dieses Gerät zu hoch. Wähle eine niedrigere Stufe.',
-    'pause.graphicsLost': 'Die Grafik war kurz weg. Gleich geht es weiter.',
+    'pause.graphicsLost': 'Die Grafik ist kurz weg. Gleich geht es weiter.',
+    'pause.graphicsReload': 'Bitte lade die Seite neu.',
+    'pause.reload': 'Neu laden',
     'settings.showFps': 'fps anzeigen',
   },
   en: {
@@ -53,7 +55,9 @@ export default {
     'ride.fps': '{fps} fps',
     'ride.fpsAuto': '(auto)',
     'ride.graphicsTooHigh': 'The graphics are too high for this device. Pick a lower level.',
-    'pause.graphicsLost': 'The graphics were gone for a moment. Back in a second.',
+    'pause.graphicsLost': 'The graphics are gone for a moment. Back in a second.',
+    'pause.graphicsReload': 'Please reload the page.',
+    'pause.reload': 'Reload',
     'settings.showFps': 'Show fps',
   },
 };

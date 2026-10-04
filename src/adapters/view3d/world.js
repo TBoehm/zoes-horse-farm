@@ -2,7 +2,6 @@
 // Quality levels can be switched at runtime (the governor downgrades).
 import * as THREE from 'three';
 import { QUALITY_PRESETS } from './quality.js';
-import { setMaxPixelRatio } from './renderer.js';
 import { createSky, SKY_COLORS } from './sky.js';
 import { createArena, createCourseLines } from './arena.js';
 import { createEnvironment, SITE } from './environment.js';
@@ -71,7 +70,8 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
   const aid = createAidMarker();
   scene.add(aid.mesh);
 
-  // image-based light from the sky (PMREM, once; rebuilt after a lost WebGL context)
+  // image-based light from the sky (PMREM; built lazily, freed on "low", rebuilt after a lost
+  // WebGL context)
   let envTarget = null;
   let envTexture = null;
   function buildEnvironmentMap() {
@@ -100,6 +100,12 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     envTarget?.dispose();
     envTarget = null;
     envTexture = null;
+  }
+
+  function disposeShadowMap() {
+    if (!sun.shadow.map) return;
+    sun.shadow.map.dispose();
+    sun.shadow.map = null;
   }
 
   /** All meshes with material pair and shadow role. */
@@ -134,17 +140,18 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     if (!p) return;
     const before = preset;
     preset = p;
-    setMaxPixelRatio(renderer, p.pixelRatio);
+    // The pixel ratio is the engine's business: changing it clears the drawing buffer, which must
+    // not happen before the new shaders are ready (see engine.js)
 
-    // shadows
+    // shadows: the map is freed when it is not used (2048² depth target on "high") and made again
+    // by three.js on the first shadow pass, or when its size changes
     renderer.shadowMap.enabled = p.shadows;
     sun.castShadow = p.shadows;
-    if (p.shadows && sun.shadow.mapSize.x !== p.shadowMapSize) {
+    if (!p.shadows) {
+      disposeShadowMap();
+    } else if (sun.shadow.mapSize.x !== p.shadowMapSize) {
       sun.shadow.mapSize.set(p.shadowMapSize, p.shadowMapSize);
-      if (sun.shadow.map) {
-        sun.shadow.map.dispose();
-        sun.shadow.map = null;
-      }
+      disposeShadowMap();
     }
 
     // materials: the Lambert variant has no normal map, so only the standard one is rebuilt
@@ -170,6 +177,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       hemi.intensity = 0.6;
     } else {
       scene.environment = null;
+      disposeEnvironmentMap(); // after it is detached; built again when going back up
       hemi.intensity = 1.5;
     }
 
@@ -186,20 +194,17 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
    * After a lost and restored WebGL context. three.js recreates its own GPU state (programs,
    * textures, buffers of geometries, instanced meshes and the shadow-map target) from the CPU
    * data on the next render. Not restorable is what only lived on the GPU: the PMREM environment
-   * map is the result of a render pass, so it comes back empty and must be rendered again.
+   * map is the result of a render pass, so it comes back empty and must be rendered again. The
+   * old target is only forgotten, not disposed: disposing it would run dispose listeners of the
+   * pre-restore textures and delete handles that belong to the lost context. The shadow map stays
+   * as it is (three.js rebuilds its framebuffer lazily).
    * Source: onContextRestore in three r186 src/renderers/WebGLRenderer.js (calls initGLContext,
    * which resets properties, textures, geometries, programs and the shadow map object).
    */
   function restoreAfterContextLoss() {
-    if (envTexture) {
-      disposeEnvironmentMap();
-      if (preset.envMap) scene.environment = buildEnvironmentMap();
-    }
-    if (sun.shadow.map) {
-      sun.shadow.map.dispose();
-      sun.shadow.map = null;
-    }
-    renderer.shadowMap.needsUpdate = true;
+    envTarget = null;
+    envTexture = null;
+    if (preset.envMap) scene.environment = buildEnvironmentMap();
   }
 
   // The sun never moves: its light-space axes and the scratch vectors are made once
@@ -318,7 +323,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       }
       textures.forEach((t) => t.dispose());
       disposeEnvironmentMap();
-      if (sun.shadow.map) sun.shadow.map.dispose();
+      disposeShadowMap();
     },
   };
 }

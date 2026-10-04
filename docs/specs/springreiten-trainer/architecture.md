@@ -334,9 +334,14 @@ world.setLines(null | { start, finish, labels: { start, finish } })  // Start-/Z
 world.setFinishMarked(bool)
 world.setShadowFocus(x, z)                          // Schatten folgt dem Pferd
 world.setQuality('low'|'medium'|'high')            // fasst nur an, was sich wirklich ändert (Normal-
-                                                    // Maps, Anisotropie, Nebel nur bei Wertwechsel)
+                                                    // Maps, Anisotropie, Nebel nur bei Wertwechsel);
+                                                    // gibt Schatten-Map und PMREM-Ziel frei, wenn die
+                                                    // Stufe sie nicht braucht (baut sie später neu);
+                                                    // ändert NICHT die Pixel-Ratio (Sache der Engine)
 world.restoreAfterContextLoss()                     // nach wiederhergestelltem WebGL-Kontext: PMREM-
-                                                    // Umgebungslicht und Schatten-Map neu erzeugen
+                                                    // Umgebungslicht neu rendern (altes Ziel nur
+                                                    // vergessen, nicht disposen); Schatten-Map baut
+                                                    // three.js selbst neu
 world.update(dt, camera)                            // Himmel, Umgebung, Ringe, Linien (je Frame)
 world.dispose()
 const horse = createHorse({ coat, marking, quality });  // → { object, earAnchor, ... }
@@ -394,9 +399,11 @@ audio.dispose()
 `medium`: pixelRatio ≤ 1,5, Schatten 1024 (nur Pferd/Hindernisse), Standard-Materialien.
 `high`: pixelRatio ≤ 2, Schatten 2048, mehr Umgebung (Bäume, Gras-Instanzen), Nebel.
 Automatik: `src/adapters/view3d/quality.js` (`createQualityGovernor`), misst nur beim Reiten.
-Bei **manueller** Stufe meldet `createLowFpsHint` (gleiche Messregeln, eine Instanz je Ritt bzw.
-freiem Modus) einmal „Grafik zu hoch“ (< 30 fps im 5-s-Mittel); der Ritt-Bildschirm zeigt das als
-Toast (`feedback`-Element, 5 s), die Stufe bleibt.
+Bei **manueller** Stufe über `low` (`canHintLowerLevel`) meldet `createLowFpsHint` (gleiche
+Messregeln, eine Instanz je Ritt bzw. freiem Modus) einmal „Grafik zu hoch“ (< 30 fps im 5-s-Mittel);
+auf `low` wird weder gemessen noch gezeigt (es gibt nichts Niedrigeres). „Neu starten“ im Parcours
+ist ein neuer Ritt (Konzept-Regel 39): `reset()` erlaubt den Hinweis erneut. Der Ritt-Bildschirm
+zeigt ihn als Toast (`feedback`-Element, 5 s Echtzeit, auch bei wenigen fps), die Stufe bleibt.
 
 ### Engine, Stufenwechsel und Kontextverlust (`view3d/engine.js`, `view3d/resilience.js`)
 
@@ -404,16 +411,26 @@ Toast (`feedback`-Element, 5 s), die Stufe bleibt.
 engine.contextLost                    // true, solange der WebGL-Kontext weg ist
 engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
 ```
-- **Kontextverlust:** `watchContextLoss` verhindert das Standardverhalten (sonst gäbe es nie eine
-  Wiederherstellung) und meldet Verlust/Wiederherstellung. Der Ritt-Bildschirm abonniert beides:
+- **Kontextverlust:** `watchContextLoss` meldet Verlust/Wiederherstellung und ruft zur Sicherheit
+  `preventDefault` auf (ohne das gäbe es nie eine Wiederherstellung; three.js r186 tut es in
+  `onContextLost` bereits selbst, wir verlassen uns nicht darauf). Der Ritt-Bildschirm abonniert beides:
   bei Verlust pausiert er, „Weiter“ ist gesperrt und ein Hinweis steht im Pausenmenü; nach der
   Wiederherstellung (Engine: three.js hat seinen Zustand selbst neu aufgebaut, dann
   `world.restoreAfterContextLoss()`, Resize, Shader-Vorkompilierung) wird „Weiter“ wieder frei,
   der Ritt bleibt pausiert, bis das Kind fortsetzt. Beginnt ein Ritt bei verlorenem Kontext, startet
   er pausiert.
-- **Stufenwechsel:** `applyQuality` ändert Pixel-Ratio, Welt und Pferd und startet danach
-  `renderer.compileAsync` (KHR_parallel_shader_compile). Währenddessen hält ein `RenderGate`
-  (höchstens 2,5 s) Simulation und Zeichnen an, das letzte Bild bleibt stehen.
+- **Kommt der Kontext nicht zurück:** Ein Wächter (`createRestoreWatchdog`, Konstante
+  `CONTEXT_RESTORE_TIMEOUT_MS` = 8 s, technischer Wert, nicht in `tuning.js`) startet beim Verlust.
+  Läuft er ab, wechselt der Hinweis im Pausenmenü zu „Bitte lade die Seite neu.“ und ein Knopf
+  „Neu laden“ (`[data-action="reload"]`, `location.reload()`) erscheint und bekommt den Fokus. Kommt
+  der Kontext doch noch, verschwinden beide wieder. Den Fokus im Pausenmenü bekommt immer der erste
+  nutzbare Knopf (bei Verlust ist „Weiter“ gesperrt).
+- **Stufenwechsel:** `applyQuality` ändert Welt und Pferd (die Pixel-Ratio wird nur **vorgemerkt**)
+  und startet danach `renderer.compileAsync` (KHR_parallel_shader_compile). Währenddessen hält ein
+  `RenderGate` (höchstens 2,5 s) Simulation und Zeichnen an, das letzte Bild bleibt stehen. Die
+  Pixel-Ratio samt `resize` wendet erst die Schleife an, wenn das Gate offen ist, im selben Frame,
+  der wieder zeichnet: Ein Resize leert den Zeichenpuffer, bei geschlossenem Gate wäre der
+  Bildschirm sonst bis zu 2,5 s schwarz.
 - **Robustheit:** Jeder Schritt der Schleife (Resize, Ritt-Frame, Render) und der Einstellungs-
   Handler läuft in `try/catch`; Fehler werden begrenzt geloggt (`createErrorReporter`, einmal je
   Stelle und 5 s), die Schleife läuft weiter.
@@ -424,7 +441,8 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
 gerundeten Wert; `formatFpsText({ fps, level, auto }, t)` liefert „58 fps · Mittel (Auto)“ (ohne
 „(Auto)“ bei manueller Stufe). Das Element `[data-hud="fps"]` ist die erste Zeile der HUD-Spalte
 oben links (`.ride-hud`), kann also keine Parcours-Chips verdecken; es folgt live der Einstellung
-`showFps` und der Stufe (Governor, Einstellungen).
+`showFps` und der Stufe (Governor, Einstellungen). Beim Ein-/Ausschalten wird der angezeigte Wert
+zurückgesetzt („– fps“, bis der nächste Mittelwert da ist).
 
 ## Arbeitsweise
 

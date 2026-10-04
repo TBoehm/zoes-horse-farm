@@ -132,6 +132,18 @@ export async function canvasScreenshotSize(page) {
   return buffer.length;
 }
 
+/** Touch input through the Chrome DevTools Protocol (real touch events, like a finger). */
+export async function createFinger(page) {
+  const client = await page.context().newCDPSession(page);
+  const send = (type, points) =>
+    client.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+  return {
+    down: (x, y) => send('touchStart', [{ x, y, id: 1 }]),
+    move: (x, y) => send('touchMove', [{ x, y, id: 1 }]),
+    up: () => send('touchEnd', []),
+  };
+}
+
 // ---- a small rider bot (keyboard) -------------------------------------------------------------
 
 const wrapAngle = (a) => {

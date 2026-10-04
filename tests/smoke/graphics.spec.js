@@ -3,6 +3,7 @@
 import { expect, test } from '@playwright/test';
 import {
   canvasScreenshotSize,
+  createFinger,
   createKeys,
   NAMED,
   openGameMenu,
@@ -77,6 +78,76 @@ test.describe('graphics level switch during a ride (rule 4)', () => {
   });
 });
 
+test.describe('graphics level switch with touch (rule 4)', () => {
+  // A small window keeps the software renderer fast enough, also for "high"
+  test.use({ viewport: { width: 640, height: 360 }, hasTouch: true, isMobile: true });
+
+  /** Pause → settings → pick a graphics level → back → continue, all by tapping. */
+  async function tapSwitchLevel(page, value) {
+    await page.locator('.touch-pause').tap();
+    await page.waitForFunction(() => window.__zhfTest.ride().paused);
+    await page.locator('[data-action="settings"]').tap();
+    await page.locator(`[data-name="graphics"][data-value="${value}"]`).tap();
+    await page.locator('.panel-settings [data-action="back"]').tap();
+    await page.locator('[data-action="resume"]').tap();
+    await page.waitForFunction(() => !window.__zhfTest.ride().paused);
+  }
+
+  const waitSpeed = (page, test, arg) =>
+    page.waitForFunction(test, arg, { polling: 100, timeout: 45_000 });
+
+  /** Pushes the joystick forward: the speed must rise. Then lets go (the speed stays). */
+  async function pushForward(page, finger) {
+    const box = await page.locator('[data-control="joystick"]').boundingBox();
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await finger.down(cx, cy);
+    await finger.move(cx, cy - 10);
+    await finger.move(cx, cy - 60);
+    await waitSpeed(page, () => window.__zhfTest.ride().horse.speed > 0.5);
+    await finger.up();
+  }
+
+  /** Pulls the joystick down until the horse stands still again. */
+  async function pullToStop(page, finger) {
+    const box = await page.locator('[data-control="joystick"]').boundingBox();
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await finger.down(cx, cy);
+    await finger.move(cx, cy + 20);
+    await finger.move(cx, cy + 60);
+    await waitSpeed(page, () => window.__zhfTest.ride().horse.speed < 0);
+    await finger.up();
+    await waitSpeed(page, () => window.__zhfTest.ride().horse.speed === 0);
+  }
+
+  test('low → high → medium → low by tapping: the joystick still speeds the horse up', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CDP touch input needs Chromium');
+    test.setTimeout(240_000);
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, { save: MANUAL_LOW });
+    await page.locator('[data-entry="free"]').tap();
+    await waitForRide(page, 'free');
+    const finger = await createFinger(page);
+    await pushForward(page, finger);
+
+    for (const level of ['high', 'medium', 'low']) {
+      await pullToStop(page, finger);
+      await tapSwitchLevel(page, level);
+      expect((await rideState(page)).graphicsLevel).toBe(level);
+      // the speed rises from a standstill after the switch
+      expect((await rideState(page)).horse.speed).toBe(0);
+      await pushForward(page, finger);
+    }
+
+    expect(await canvasScreenshotSize(page)).toBeGreaterThan(30_000);
+    expect(watch.errors).toEqual([]);
+  });
+});
+
 test.describe('WebGL context loss (rule 4)', () => {
   test('the ride pauses on loss and can go on after the restore', async ({ page, browserName }) => {
     const watch = watchPage(page);
@@ -108,6 +179,48 @@ test.describe('WebGL context loss (rule 4)', () => {
     await expect
       .poll(() => canvasScreenshotSize(page), { timeout: 30_000 })
       .toBeGreaterThan(30_000);
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a context that does not come back asks for a reload after a few seconds', async ({
+    page,
+    browserName,
+  }) => {
+    test.setTimeout(90_000);
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, { save: MANUAL_LOW, lang: 'en' });
+    await startFreeRide(page);
+
+    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    await page.waitForFunction(() => window.__zhfTest.ride().contextLost);
+    const note = page.locator('[data-note="graphics-lost"]');
+    const reload = page.locator('[data-action="reload"]');
+    await expect(note).toHaveText(/Back in a second/);
+    await expect(reload).toBeHidden();
+    // Continue is off, so the focus goes to the first button that works
+    await expect(page.locator('[data-action="restart"]')).toBeFocused();
+
+    // no restore for ~8 s: the note asks for a reload and the button appears and gets the focus
+    await expect(reload).toBeVisible({ timeout: 20_000 });
+    await expect(note).toHaveText('Please reload the page.');
+    await expect(reload).toHaveText('Reload');
+    await expect(reload).toBeFocused();
+    await expect(page.locator('[data-action="resume"]')).toBeDisabled();
+
+    // a late restore still works: back to the normal pause menu
+    expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);
+    await page.waitForFunction(() => !window.__zhfTest.ride().contextLost);
+    await expect(reload).toBeHidden();
+    await expect(note).toBeHidden();
+    await expect(page.locator('[data-action="resume"]')).toBeEnabled();
+    await expect(page.locator('[data-action="resume"]')).toBeFocused();
+
+    // lost again and never restored: the button reloads the page (back in the main menu)
+    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    await expect(reload).toBeVisible({ timeout: 20_000 });
+    await reload.click();
+    await page.locator('[data-screen="menu"]').waitFor();
+    expect(await page.evaluate(() => window.__zhfTest.screen())).toBe('menu');
     expect(watch.errors).toEqual([]);
   });
 
