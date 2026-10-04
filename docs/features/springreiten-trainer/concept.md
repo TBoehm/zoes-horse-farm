@@ -72,6 +72,16 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
    schwachen Geräten halten (keine feste Geräte-Untergrenze). Abnahmegrenze: Auf der automatisch
    gewählten Stufe MÜSSEN im Mittel mindestens 50 fps erreicht werden. Zielgeräte sind PC, Tablet und
    Handy mit aktuellen Versionen von Chrome, Safari (inklusive iPad/iPhone), Firefox und Edge.
+   Detailreichtum (Spieltest 2026-10-04: „viel zu wenig Details"), gestuft nach Grafikstufe; „Niedrig"
+   DARF dafür nicht langsamer werden als bisher, und die Speicher-Abschätzung (Regel 4) MUSS die
+   neuen Details mitzählen:
+   - Umgebung: Blumen auf den Wiesen, Bäume, Büsche und Gras bewegen sich leicht im Wind, Vögel am
+     Himmel, Schmetterlinge über den Blumen, Schmuck am Reitplatz (Blumenkästen an den Hindernissen,
+     Wimpelketten), eine Koppel mit grasenden Pferden; Sand staubt unter den Hufen.
+   - Pferd: Mähne und Schweif schwingen der Bewegung nach, das Pferd blinzelt, Bandagen an den
+     Beinen, Nüstern bewegen sich mit dem Atem; im Stand gelegentlich Kopfschütteln oder Hufscharren.
+   - Reiter: Gesicht (Augen, Nase, Mund), Kinnriemen am Helm, Zopf schwingt nach, der Kopf schaut in
+     die Kurve.
 4. Das Spiel MUSS drei Grafikstufen (Niedrig, Mittel, Hoch) und die Einstellung „Automatisch" haben.
    - WENN das Spiel zum ersten Mal startet, MUSS „Automatisch" aktiv sein und eine Stufe passend zum
      Gerät gewählt werden.
@@ -218,7 +228,10 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     („Stange gefallen!"), damit sie nicht mit einem Sturz verwechselt wird. Wann sie wieder aufgebaut
     wird, regeln die Regeln 26, 27, 29, 31 und 41.
 24. Das Pferd MUSS je Gangart, beim Rückwärtsrichten und beim Sprung (Absprung, Flug, Landung)
-    erkennbar animiert sein.
+    erkennbar animiert sein. Die Bewegungen MÜSSEN geschmeidig sein: Gangartwechsel, Galoppwechsel,
+    Übergänge in und aus dem Sprung, Verweigerung und Halt laufen ohne sichtbares Springen oder
+    Ruckeln der Beine, des Körpers und des Reiters; die Hufe rutschen nicht über den Boden.
+    Der Reiter geht beim Sprung in den leichten Sitz und gibt mit den Händen am Hals nach.
     Das Pferd kann den Platz nicht verlassen. Trifft es frontal auf die Umzäunung, MUSS es stoppen
     und ist danach im Halt (Galopp aus, wie Regel 22); trifft es schräg auf, MUSS es mit
     unverändertem Tempo daran entlanggleiten. Ab wann „frontal" gilt, ist ein Spielwert.
@@ -344,7 +357,8 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     und beste Sternzahl je Parcours, erhaltene Auszeichnungen mit Datum, Zähler (beendete
     Parcours-Ritte, Sprünge), Pferd (Name, Fellfarbe, Kopfabzeichen) und Einstellungen (Sprache,
     Lautstärke und Stumm je Kanal (Musik, Effekte), Grafikstufe und ob „Automatisch",
-    Bildraten-Anzeige, Absprung-Hilfe je Modus, Kamera). Wo der Browser es anbietet, MUSS dauerhafter Speicher angefordert werden. Bekannte
+    Bildraten-Anzeige, Absprung-Hilfe je Modus, Kamera, ob die Bedienungs-Tipps schon geschlossen
+    wurden). Wo der Browser es anbietet, MUSS dauerhafter Speicher angefordert werden. Bekannte
     Grenze: Safari kann Daten einer Website nach längerer Nichtnutzung löschen (nicht bei Nutzung
     über den Startbildschirm).
 45. Gespeichert wird sofort bei jeder Änderung: beim Ende eines Ritts, bei jedem gezählten Sprung,
@@ -405,16 +419,32 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 
 ### Menüs
 
-53. Hauptmenü: „Parcours", „Freier Modus", „Mein Pferd", „Auszeichnungen", „Einstellungen".
+53. Hauptmenü: „Parcours", „Freier Modus", „Mein Pferd", „Auszeichnungen", „Bedienungs-Tipps",
+    „Einstellungen".
 54. Das Hauptmenü MUSS so aufgebaut sein, dass später weitere Spielbereiche als zusätzliche Einträge
     dazukommen können, ohne dass sich die bestehenden Einträge oder ihr Verhalten ändern.
 55. Die Parcours-Auswahl MUSS je Parcours zeigen: Nummer, Anzahl Hindernisse, gesperrt/offen, beste
     Sterne und Bestleistung (Fehler und Zeit), falls vorhanden.
 
+56. Bedienungs-Tipps: WENN das Spiel zum ersten Mal startet, MUSS nach der Frage nach dem
+    Pferdenamen (Regel 43) und vor dem Hauptmenü eine Übersicht der Bedienung erscheinen; das gilt
+    auch für einen bestehenden Spielstand, solange die Übersicht noch nie geschlossen wurde. Sie
+    MUSS die Bedienung der aktuellen Eingabeart zeigen (Tastatur: Tasten als Tastenkappen mit kurzer
+    Erklärung; Touch: Joystick und Buttons) und sich auf die andere Eingabeart umschalten lassen.
+    Texte kurz, mit Symbolen, für eine 3. Klasse lesbar. WENN sie mit „Verstanden" geschlossen
+    wird, MUSS das gespeichert werden (Regel 44) und sie erscheint nicht mehr von selbst. Über
+    „Bedienungs-Tipps" im Hauptmenü und im Pausenmenü MUSS sie jederzeit wieder geöffnet werden
+    können; aus der Pause geöffnet, führt „Verstanden" zurück in die Pause.
+57. Farbsprache der Buttons: Buttons für das Weitermachen (z. B. Menü-Einträge, „Los", „Weiter",
+    „Nochmal", „Verstanden") MÜSSEN grün sein, zurückhaltende Buttons (z. B. „Zurück",
+    „Abbrechen", „Überspringen", „Neu starten") hell mit Rahmen, und nur Buttons, die etwas
+    löschen, rot. Die Schrift auf allen Buttons MUSS gut lesbar sein (Kontrast mindestens 4,5 : 1),
+    und die Art eines Buttons DARF nicht nur an der Farbe erkennbar sein (Beschriftung, Form).
+
 ## Grenzfälle
 
-- **Erster Start / leerer Speicher:** Frage nach dem Pferdenamen (Regel 43), Parcours 1 offen,
-  Browsersprache, Grafikstufe automatisch.
+- **Erster Start / leerer Speicher:** Frage nach dem Pferdenamen (Regel 43), dann
+  Bedienungs-Tipps (Regel 56), Parcours 1 offen, Browsersprache, Grafikstufe automatisch.
 - **Speichern nicht möglich:** Regel 46.
 - **Defekte oder alte Speicherdaten:** Regel 47.
 - **Safari löscht Daten nach längerer Nichtnutzung:** bekannte Grenze (Regel 44).
