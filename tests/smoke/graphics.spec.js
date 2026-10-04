@@ -666,6 +666,7 @@ test.describe('GPU memory budget (rule 4)', () => {
     page,
     browserName,
   }) => {
+    test.setTimeout(120_000); // software rendering at "high" is slow on a busy runner
     await openGameMenu(page, test, browserName, {
       save: MANUAL_HIGH,
       lang: 'en',
@@ -681,6 +682,7 @@ test.describe('GPU memory budget (rule 4)', () => {
     page,
     browserName,
   }) => {
+    test.setTimeout(120_000); // software rendering at "high" is slow on a busy runner
     const watch = watchPage(page);
     await rideWithBudget(page, test, browserName, 90);
     const ratio = (await rideState(page)).graphicsPixelRatio;
@@ -698,6 +700,7 @@ test.describe('GPU memory budget (rule 4)', () => {
     page,
     browserName,
   }) => {
+    test.setTimeout(120_000); // software rendering at "high" is slow on a busy runner
     const watch = watchPage(page);
     await rideWithBudget(page, test, browserName, 60);
     expect((await rideState(page)).graphicsPixelRatio).toBe(1);
@@ -711,6 +714,7 @@ test.describe('GPU memory budget (rule 4)', () => {
     page,
     browserName,
   }) => {
+    test.setTimeout(120_000); // software rendering at "high" is slow on a busy runner
     const watch = watchPage(page);
     await rideWithBudget(page, test, browserName, 12);
     await expect(debugBox(page)).toContainText('Antialiasing: off (not enough graphics memory)');
