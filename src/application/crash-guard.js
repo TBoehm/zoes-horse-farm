@@ -8,14 +8,23 @@
 // closes (pagehide). A page that was hidden and killed later therefore never counts. Writes happen
 // on transitions, on a level change, and as a slow heartbeat (so the debug display can tell how
 // long the crashed session lasted).
+//
+// Two more cases keep the guard from crying wolf: after the page came back to the foreground the
+// mark is only set again after a grace time (Android often kills or reloads a tab right after an
+// app switch), and a leftover mark whose heartbeat is still fresh at the start belongs to a tab
+// that is alive (a second tab), not to a crash. The store writes its whole in-memory copy, so
+// every write of the guard first takes over what other tabs saved (`store.reload()`).
 import { field, registerSection } from './save-schema.js';
-import { GRAPHICS_LEVELS } from './graphics-levels.js';
+import { FOREGROUND_GRACE_S, GRAPHICS_LEVELS } from './graphics-levels.js';
 import { isPlainObject } from '../shared/math.js';
 
 export const CRASH_GUARD_SECTION = 'crashGuard';
 
 // Technical value (no game play): how often the heartbeat refreshes the "last seen" time.
 export const HEARTBEAT_INTERVAL_MS = 5000;
+
+// A leftover mark younger than this many heartbeat intervals at the start is a live tab.
+const LIVE_HEARTBEATS = 2;
 
 const MAX_TIME = Number.MAX_SAFE_INTEGER;
 
@@ -73,24 +82,39 @@ registerSection(CRASH_GUARD_SECTION, {
 
 /**
  * @param {object} deps
- * @param {{ get(section: string): object, update(section: string, fn: Function): object }} deps.store
+ * @param {{ get(section: string): object, update(section: string, fn: Function): object,
+ *   reload(): void }} deps.store `reload` takes over what other tabs saved (see local-store.js)
  * @param {{ setAutoLevel(level: string): void }} deps.settings settings service
  * @param {{ nowMs(): number, nowIso(): string }} deps.clock
  * @param {(input: { auto: boolean, level: string }) =>
  *   { level: string, persist: boolean, hint: boolean }} deps.decide what a loss of the 3D
  *   picture in the foreground means for the level (the same rule as for a lost WebGL context)
+ * @param {number} [deps.foregroundGraceMs] time after the page came back before it is marked again
  */
-export function createCrashGuard({ store, settings, clock, decide }) {
+export function createCrashGuard({
+  store,
+  settings,
+  clock,
+  decide,
+  foregroundGraceMs = FOREGROUND_GRACE_S * 1000,
+}) {
   const leases = new Set();
   let background = false;
+  let returnedAtMs = -Infinity; // when the page last came back to the foreground
   let latest = null; // { level, auto } of the most recent screen update
   let mirror = null; // what is persisted right now: { rendering, level, auto }
   let lastBeatMs = 0;
 
   const read = () => store.get(CRASH_GUARD_SECTION);
 
+  /** Changes the guard section only: other tabs' progress and settings are taken over first. */
+  function update(fn) {
+    store.reload();
+    return store.update(CRASH_GUARD_SECTION, fn);
+  }
+
   function write(changes) {
-    store.update(CRASH_GUARD_SECTION, (s) => ({ ...s, ...changes }));
+    update((s) => ({ ...s, ...changes }));
     if (mirror) {
       for (const key of ['rendering', 'level', 'auto']) {
         if (key in changes) mirror[key] = changes[key];
@@ -106,7 +130,8 @@ export function createCrashGuard({ store, settings, clock, decide }) {
     return mirror;
   };
 
-  const wantRendering = () => leases.size > 0 && !background;
+  const wantRendering = () =>
+    leases.size > 0 && !background && clock.nowMs() - returnedAtMs >= foregroundGraceMs;
 
   /** Brings the persisted mark in line with what the screens do right now. */
   function sync() {
@@ -123,7 +148,8 @@ export function createCrashGuard({ store, settings, clock, decide }) {
       write({ level: latest.level, auto: latest.auto });
     } else if (now - lastBeatMs >= HEARTBEAT_INTERVAL_MS) {
       lastBeatMs = now;
-      write({ lastSeen: now });
+      // also restates the mark: another tab may have cleared it while this one still draws
+      write({ rendering: true, level: latest.level, auto: latest.auto, lastSeen: now });
     }
   }
 
@@ -153,20 +179,19 @@ export function createCrashGuard({ store, settings, clock, decide }) {
       return lease;
     },
 
-    /** Every screen stopped drawing. */
-    markIdle() {
-      leases.clear();
-      sync();
-    },
-
     /** The page goes to the background or closes: whatever happens next is not a crash. */
     markBackground() {
       background = true;
       sync();
     },
 
-    /** The page is visible again: a screen that is still drawing is marked again. */
+    /**
+     * The page is visible again: a screen that is still drawing is marked again, but only after
+     * the grace time (the next frame of a lease notices it): a tab that the system kills or
+     * reloads right after an app switch is no crash of the game.
+     */
     resume() {
+      if (background) returnedAtMs = clock.nowMs();
       background = false;
       sync();
     },
@@ -174,7 +199,9 @@ export function createCrashGuard({ store, settings, clock, decide }) {
     /**
      * Start of the app, before the first ride: looks at the mark of the previous run. A leftover
      * "rendering" mark is a crash; the level rule is applied (automatic: low is saved; manual
-     * above low: a hint is flagged for the next ride start).
+     * above low: a hint is flagged for the next ride start). A mark whose heartbeat is younger
+     * than two intervals belongs to a tab that is still drawing (a second tab): no crash, and the
+     * mark stays untouched.
      * @returns {{ crashed: false } | { crashed: true, level: string|null, auto: boolean,
      *   seconds: number }}
      */
@@ -182,6 +209,10 @@ export function createCrashGuard({ store, settings, clock, decide }) {
       const saved = read();
       mirror = null;
       if (!saved.rendering) return { crashed: false };
+      const sinceLastSeenMs = clock.nowMs() - saved.lastSeen;
+      if (sinceLastSeenMs >= 0 && sinceLastSeenMs < LIVE_HEARTBEATS * HEARTBEAT_INTERVAL_MS) {
+        return { crashed: false };
+      }
       const seconds = Math.max(0, Math.round((saved.lastSeen - saved.since) / 1000));
       const result = { crashed: true, level: saved.level, auto: saved.auto, seconds };
       let hint = false;
@@ -190,7 +221,7 @@ export function createCrashGuard({ store, settings, clock, decide }) {
         if (decision.persist) settings.setAutoLevel(decision.level);
         hint = decision.hint;
       }
-      store.update(CRASH_GUARD_SECTION, (s) => ({
+      update((s) => ({
         ...s,
         rendering: false,
         hintPending: s.hintPending || hint,
@@ -205,7 +236,7 @@ export function createCrashGuard({ store, settings, clock, decide }) {
     /** true once after a crash that calls for the "pick a lower level" hint. */
     takeHint() {
       if (!read().hintPending) return false;
-      store.update(CRASH_GUARD_SECTION, (s) => ({ ...s, hintPending: false }));
+      update((s) => ({ ...s, hintPending: false }));
       return true;
     },
 
@@ -214,7 +245,7 @@ export function createCrashGuard({ store, settings, clock, decide }) {
 
     /** Remembers a level that lost the 3D picture (e.g. after a regular WebGL context loss). */
     blockLevel(level) {
-      store.update(CRASH_GUARD_SECTION, (s) => ({
+      update((s) => ({
         ...s,
         blockedLevels: addBlockedLevel(s.blockedLevels, level),
       }));
@@ -222,7 +253,7 @@ export function createCrashGuard({ store, settings, clock, decide }) {
 
     /** The player selected "Automatic" anew: every level may be tried again. */
     clearBlockedLevels() {
-      store.update(CRASH_GUARD_SECTION, (s) => ({ ...s, blockedLevels: [] }));
+      update((s) => ({ ...s, blockedLevels: [] }));
     },
 
     /** The last detected crash for the debug display, or null. */

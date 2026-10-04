@@ -6,6 +6,7 @@ import {
   addBlockedLevel,
   createCrashGuard,
 } from './crash-guard.js';
+import { FOREGROUND_GRACE_S } from './graphics-levels.js';
 import { getSections } from './save-schema.js';
 import { createSettingsService } from './settings-service.js';
 import { fakeStore } from '../../tests/support/test-ports.js';
@@ -43,6 +44,7 @@ function setup({ guard: saved = {}, settings = {} } = {}) {
 }
 
 const MEDIUM_AUTO = { level: 'medium', auto: true };
+const GRACE_MS = FOREGROUND_GRACE_S * 1000;
 
 describe('crash guard: marking', () => {
   it('marks rendering with level, auto flag and start time', () => {
@@ -61,14 +63,6 @@ describe('crash guard: marking', () => {
     const { guard, state } = setup();
     const lease = guard.markRendering(MEDIUM_AUTO);
     lease.release();
-    expect(state().rendering).toBe(false);
-  });
-
-  it('markIdle releases every lease', () => {
-    const { guard, state } = setup();
-    guard.markRendering(MEDIUM_AUTO);
-    guard.markRendering(MEDIUM_AUTO);
-    guard.markIdle();
     expect(state().rendering).toBe(false);
   });
 
@@ -131,14 +125,65 @@ describe('crash guard: marking', () => {
 });
 
 describe('crash guard: background', () => {
-  it('goes clean in the background and marks again when the page is back', () => {
+  it('goes clean in the background and marks again when the page is back (after the grace)', () => {
     const { guard, state, advance } = setup();
-    guard.markRendering(MEDIUM_AUTO);
+    const lease = guard.markRendering(MEDIUM_AUTO);
     guard.markBackground();
     expect(state().rendering).toBe(false);
     advance(60_000);
     guard.resume();
-    expect(state()).toMatchObject({ rendering: true, level: 'medium', since: 1_060_000 });
+    advance(GRACE_MS);
+    lease.frame(MEDIUM_AUTO);
+    expect(state()).toMatchObject({
+      rendering: true,
+      level: 'medium',
+      since: 1_060_000 + GRACE_MS,
+    });
+  });
+
+  it('does not mark again right after the page is back, only once the grace time has passed', () => {
+    const { guard, state, advance } = setup();
+    const lease = guard.markRendering(MEDIUM_AUTO);
+    guard.markBackground();
+    advance(60_000);
+    guard.resume();
+    expect(state().rendering).toBe(false);
+    advance(GRACE_MS - 1);
+    lease.frame(MEDIUM_AUTO);
+    expect(state().rendering).toBe(false);
+    advance(1);
+    lease.frame(MEDIUM_AUTO);
+    expect(state().rendering).toBe(true);
+  });
+
+  it('a second resume (visibilitychange and pageshow) does not restart the grace time', () => {
+    const { guard, state, advance } = setup();
+    const lease = guard.markRendering(MEDIUM_AUTO);
+    guard.markBackground();
+    guard.resume();
+    advance(GRACE_MS - 1);
+    guard.resume();
+    advance(1);
+    lease.frame(MEDIUM_AUTO);
+    expect(state().rendering).toBe(true);
+  });
+
+  it('going to the background during the grace time keeps the mark clean', () => {
+    const { guard, state, advance } = setup();
+    const lease = guard.markRendering(MEDIUM_AUTO);
+    guard.markBackground();
+    guard.resume();
+    advance(GRACE_MS - 1);
+    guard.markBackground();
+    advance(10_000);
+    lease.frame(MEDIUM_AUTO);
+    expect(state().rendering).toBe(false);
+  });
+
+  it('the first page start has no grace: a screen is marked right away', () => {
+    const { guard, state } = setup();
+    guard.markRendering(MEDIUM_AUTO);
+    expect(state().rendering).toBe(true);
   });
 
   it('resume without a rendering screen stays clean', () => {
@@ -156,12 +201,15 @@ describe('crash guard: background', () => {
     expect(state().rendering).toBe(false);
   });
 
-  it('a screen opened in the background is marked when the page is back', () => {
-    const { guard, state } = setup();
+  it('a screen opened in the background is marked when the page is back (after the grace)', () => {
+    const { guard, state, advance } = setup();
     guard.markBackground();
-    guard.markRendering(MEDIUM_AUTO);
+    const lease = guard.markRendering(MEDIUM_AUTO);
     expect(state().rendering).toBe(false);
     guard.resume();
+    expect(state().rendering).toBe(false);
+    advance(GRACE_MS);
+    lease.frame(MEDIUM_AUTO);
     expect(state().rendering).toBe(true);
   });
 });
@@ -248,6 +296,30 @@ describe('crash guard: check of the previous run', () => {
     const { guard, state } = setup({ guard: { lastCrash } });
     guard.checkPreviousRun();
     expect(state().lastCrash).toEqual(lastCrash);
+  });
+
+  it('a mark with a fresh heartbeat is a live second tab, not a crash, and stays untouched', () => {
+    const fresh = HEARTBEAT_INTERVAL_MS * 2 - 1;
+    const { guard, store, state, writes, advance } = setup({
+      guard: crashed({ since: 1_000_000 - 60_000, lastSeen: 1_000_000 }),
+    });
+    advance(fresh);
+    expect(guard.checkPreviousRun()).toEqual({ crashed: false });
+    expect(state()).toMatchObject({ rendering: true, level: 'medium', hintPending: false });
+    expect(state().blockedLevels).toEqual([]);
+    expect(store.data.settings.graphicsLevel).toBe('medium');
+    expect(writes()).toBe(0);
+  });
+
+  it('a mark whose heartbeat is two intervals old is a crash', () => {
+    const { guard, advance } = setup({ guard: crashed({ since: 900_000, lastSeen: 1_000_000 }) });
+    advance(HEARTBEAT_INTERVAL_MS * 2);
+    expect(guard.checkPreviousRun()).toMatchObject({ crashed: true, seconds: 100 });
+  });
+
+  it('a heartbeat in the future (the clock was set back) does not hide a crash', () => {
+    const { guard } = setup({ guard: crashed({ since: 100_000, lastSeen: 2_000_000 }) });
+    expect(guard.checkPreviousRun().crashed).toBe(true);
   });
 
   it('a missing heartbeat gives zero seconds', () => {
@@ -366,5 +438,44 @@ describe('blocked levels (per device)', () => {
     expect(section.sanitize({ blockedLevels: ['low', 'low'] }, {}).blockedLevels).toEqual([]);
     expect(section.sanitize({ blockedLevels: ['x'] }, {}).blockedLevels).toEqual([]);
     expect(section.sanitize({ blockedLevels: 'low' }, {}).blockedLevels).toEqual([]);
+  });
+});
+
+describe('crash guard: several tabs', () => {
+  it('takes over what another tab saved before every write of its own section', () => {
+    const { guard, store, advance } = setup();
+    const lease = guard.markRendering(MEDIUM_AUTO);
+    // another tab saves progress; the store only sees it through reload()
+    const otherTab = { ...store.data.progress, jumps: 99 };
+    store.reload = () => {
+      store.data.progress = otherTab;
+    };
+    advance(HEARTBEAT_INTERVAL_MS);
+    lease.frame(MEDIUM_AUTO);
+    expect(store.data.progress.jumps).toBe(99);
+    expect(store.data.crashGuard.lastSeen).toBe(1_000_000 + HEARTBEAT_INTERVAL_MS);
+  });
+
+  it('reloads before every kind of write (marks, hint, blocked levels)', () => {
+    const { guard, store } = setup({ guard: { hintPending: true } });
+    let reloads = 0;
+    store.reload = () => {
+      reloads += 1;
+    };
+    const lease = guard.markRendering(MEDIUM_AUTO);
+    lease.release();
+    guard.takeHint();
+    guard.blockLevel('high');
+    guard.clearBlockedLevels();
+    expect(reloads).toBe(5);
+  });
+
+  it('the heartbeat marks rendering again when another tab cleared the mark', () => {
+    const { guard, state, advance } = setup();
+    const lease = guard.markRendering(MEDIUM_AUTO);
+    state().rendering = false; // another tab went to the background and wrote "clean"
+    advance(HEARTBEAT_INTERVAL_MS);
+    lease.frame(MEDIUM_AUTO);
+    expect(state().rendering).toBe(true);
   });
 });

@@ -138,8 +138,11 @@ test.describe('crash guard (rule 4)', () => {
     // background: whatever happens next is not a crash
     await setTabHidden(page, true);
     expect((await guardState(page)).rendering).toBe(false);
+    // back in the foreground: marked again only after a short grace time (an app switch often
+    // ends with the system killing or reloading the tab)
     await setTabHidden(page, false);
-    expect((await guardState(page)).rendering).toBe(true);
+    expect((await guardState(page)).rendering).toBe(false);
+    await expect.poll(async () => (await guardState(page)).rendering, { timeout: 8000 }).toBe(true);
     // leaving the ride: clean
     await quitRide(page);
     expect((await guardState(page)).rendering).toBe(false);

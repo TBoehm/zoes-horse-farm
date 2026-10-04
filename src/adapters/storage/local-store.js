@@ -125,6 +125,30 @@ export function createStore({
       emitter.emit(`change:${name}`, structuredClone(next));
       return structuredClone(next);
     },
+    /**
+     * Takes over what another tab saved meanwhile: the store writes its whole in-memory copy, so a
+     * writer that wants to change one section must not overwrite the others with stale data. Every
+     * stored section replaces the one in memory (sanitized; `change:<section>` is emitted for
+     * those that differ), sections missing in the storage keep their memory value, unknown
+     * sections are preserved. Unreadable or empty storage changes nothing.
+     */
+    reload() {
+      const stored = readRaw(backend, SAVE_KEY);
+      const changed = [];
+      for (const [name, value] of Object.entries(stored)) {
+        const section = getSections().get(name);
+        if (!section) {
+          raw[name] = value;
+          continue;
+        }
+        const next = section.sanitize(value, env);
+        if (JSON.stringify(next) !== JSON.stringify(data[name])) changed.push(name);
+        data[name] = next;
+        raw[name] = next;
+        sectionRefs.set(name, section);
+      }
+      for (const name of changed) emitter.emit(`change:${name}`, structuredClone(data[name]));
+    },
     /** Writes the current state (e.g. so initial values are fixed on first start). */
     flush() {
       return write();

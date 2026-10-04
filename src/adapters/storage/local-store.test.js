@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createStore, SAVE_KEY } from './local-store.js';
 import { field, objectSection, registerSection } from '../../application/save-schema.js';
+import { createCrashGuard, HEARTBEAT_INTERVAL_MS } from '../../application/crash-guard.js';
 
 function memoryStorage(initial = {}) {
   const map = new Map(Object.entries(initial));
@@ -107,6 +108,96 @@ describe('sections extended later (rule 47)', () => {
     expect(store.get('lateArea')).toEqual({ a: 1 });
     registerSection('lateArea', objectSection({ a: field.number(0, 9, 1), b: field.bool(true) }));
     expect(store.get('lateArea')).toEqual({ a: 1, b: true });
+  });
+});
+
+describe('several tabs (reload)', () => {
+  registerSection('tabProgress', objectSection({ jumps: field.number(0, 999, 0) }));
+  const open = (backend) => createStore({ backend, sessionBackend: memoryStorage(), env });
+  const saved = (backend) => JSON.parse(backend.getItem(SAVE_KEY));
+
+  it('takes over what another tab saved, so a later write does not overwrite it', () => {
+    const backend = memoryStorage();
+    const a = open(backend);
+    const b = open(backend);
+    b.update('tabProgress', (p) => ({ ...p, jumps: 42 }));
+    a.reload();
+    expect(a.get('tabProgress').jumps).toBe(42);
+    a.update('settings', (s) => ({ ...s, lang: 'en' }));
+    expect(saved(backend).tabProgress.jumps).toBe(42);
+    expect(saved(backend).settings.lang).toBe('en');
+  });
+
+  it('without a reload a write of the other tab is overwritten (the case reload is for)', () => {
+    const backend = memoryStorage();
+    const a = open(backend);
+    const b = open(backend);
+    b.update('tabProgress', (p) => ({ ...p, jumps: 42 }));
+    a.update('settings', (s) => ({ ...s, lang: 'en' }));
+    expect(saved(backend).tabProgress.jumps).toBe(0);
+  });
+
+  it('sanitizes what it takes over and emits a change only for sections that differ', () => {
+    const backend = memoryStorage();
+    const a = open(backend);
+    const b = open(backend);
+    b.update('tabProgress', (p) => ({ ...p, jumps: 7 }));
+    const changed = [];
+    a.onChange('tabProgress', () => changed.push('tabProgress'));
+    a.onChange('settings', () => changed.push('settings'));
+    backend.setItem(
+      SAVE_KEY,
+      JSON.stringify({ ...saved(backend), settings: { ...saved(backend).settings, lang: 'xx' } }),
+    );
+    a.reload();
+    expect(changed).toEqual(['tabProgress']);
+    expect(a.get('settings').lang).toBe('de');
+    a.reload();
+    expect(changed).toEqual(['tabProgress']);
+  });
+
+  it('keeps the memory when the storage is empty or unreadable, and unknown sections', () => {
+    const backend = memoryStorage();
+    const a = open(backend);
+    a.update('tabProgress', (p) => ({ ...p, jumps: 3 }));
+    backend.map.set(SAVE_KEY, '{broken');
+    a.reload();
+    expect(a.get('tabProgress').jumps).toBe(3);
+    backend.map.set(SAVE_KEY, JSON.stringify({ tabProgress: { jumps: 5 }, future: { x: 1 } }));
+    a.reload();
+    expect(a.get('tabProgress').jumps).toBe(5);
+    a.update('settings', (s) => ({ ...s, lang: 'en' }));
+    expect(saved(backend).future).toEqual({ x: 1 });
+    expect(open(null).reload()).toBeUndefined();
+  });
+
+  it('a crash guard heartbeat in one tab keeps the progress another tab saved', () => {
+    const backend = memoryStorage();
+    const a = open(backend);
+    const b = open(backend);
+    let nowMs = 1_000_000;
+    const clock = { nowMs: () => nowMs, nowIso: () => new Date(nowMs).toISOString() };
+    const guard = createCrashGuard({
+      store: a,
+      settings: { setAutoLevel() {} },
+      clock,
+      decide: () => ({ level: 'low', persist: false, hint: false }),
+    });
+    const lease = guard.markRendering({ level: 'medium', auto: true });
+    b.update('tabProgress', (p) => ({ ...p, jumps: 42 }));
+    nowMs += HEARTBEAT_INTERVAL_MS;
+    lease.frame({ level: 'medium', auto: true });
+    expect(saved(backend).tabProgress.jumps).toBe(42);
+    expect(saved(backend).crashGuard).toMatchObject({ rendering: true, lastSeen: nowMs });
+    lease.release();
+    // a second tab that starts now sees a clean save (no crash)
+    const second = createCrashGuard({
+      store: open(backend),
+      settings: { setAutoLevel() {} },
+      clock,
+      decide: () => ({ level: 'low', persist: false, hint: false }),
+    });
+    expect(second.checkPreviousRun()).toEqual({ crashed: false });
   });
 });
 
