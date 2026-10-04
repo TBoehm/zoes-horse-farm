@@ -15,6 +15,8 @@ import {
   testHooksRequested,
 } from './adapters/platform/test-hooks.js';
 import { systemClock } from './adapters/platform/clock.js';
+import { installPageLifecycle } from './adapters/platform/page-lifecycle.js';
+import { levelAfterContextLoss } from './adapters/view3d/quality.js';
 import {
   createErrorLog,
   debugRequested,
@@ -32,6 +34,7 @@ import {
 } from './adapters/ui/notices.js';
 import './application/settings-schema.js';
 import { createSettingsService } from './application/settings-service.js';
+import { createCrashGuard } from './application/crash-guard.js';
 import './adapters/ui/settings-sections.js';
 import { createRideScreen } from './adapters/ui/screens/ride-screen.js';
 import { registerProfile } from './adapters/ui/screens/profile/register.js';
@@ -70,7 +73,22 @@ function boot() {
   // The only writer of the settings section: screens and the engine call this service
   const settings = createSettingsService(store);
 
+  // Unclean exit during the 3D picture (rule 4, e.g. the browser closed the overloaded tab): the
+  // previous run counts like a lost WebGL context. Checked before the first screen so that the
+  // engine starts with the corrected level; a page that is hidden or closing is never a crash.
+  const crashGuard = createCrashGuard({
+    store,
+    settings,
+    clock: systemClock,
+    decide: levelAfterContextLoss,
+  });
+  crashGuard.checkPreviousRun();
+  // "Automatic" selected anew: levels that crashed on this device may be tried again
+  settings.onAutoSelected(() => crashGuard.clearBlockedLevels());
+  installPageLifecycle(crashGuard);
+
   const app = createApp({ root, store, settings, inputMode, clock: systemClock });
+  app.services.crashGuard = crashGuard;
   if (debugService) app.services.debug = debugService;
   app.register('menu', createMainMenuScreen);
   app.register('settings', createSettingsScreen);

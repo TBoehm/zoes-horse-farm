@@ -13,6 +13,7 @@ const SOUND_PREFIX = { music: 'music', sfx: 'sfx' };
  *   onChange(section: string, fn: Function): () => void }} store store port
  */
 export function createSettingsService(store) {
+  const autoSelectedListeners = new Set();
   const patch = (changes) => store.update('settings', (settings) => ({ ...settings, ...changes }));
 
   return {
@@ -29,6 +30,17 @@ export function createSettingsService(store) {
     setGraphicsAuto(deviceLevel) {
       if (deviceLevel !== null && !GRAPHICS_LEVELS.includes(deviceLevel)) return;
       patch({ graphicsAuto: true, graphicsLevel: deviceLevel });
+      for (const fn of [...autoSelectedListeners]) fn();
+    },
+
+    /**
+     * Called after "Automatic" was selected (also by the first-start device pick). The crash
+     * guard uses it to forget the blocked levels.
+     * @returns {() => void} unsubscribe
+     */
+    onAutoSelected(fn) {
+      autoSelectedListeners.add(fn);
+      return () => autoSelectedListeners.delete(fn);
     },
 
     /** The player picks a level: automatic graphics are off. */
