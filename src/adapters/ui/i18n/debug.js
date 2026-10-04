@@ -1,0 +1,33 @@
+// Texts of the debug box (`?debug`, SRT-008): for people who test on a real device.
+export default {
+  de: {
+    'debug.none': '–',
+    'debug.atSeconds': 'bei {s} s',
+    'debug.gpu': 'GPU: {gpu}',
+    'debug.level': 'Stufe: {level}',
+    'debug.levelAuto': 'Stufe: {level} (Auto)',
+    'debug.pixels': 'Pixel-Ratio: Gerät {device}, Bild {renderer}',
+    'debug.buffer': 'Zeichenfläche: {width} × {height}',
+    'debug.maxTexture': 'Größte Textur: {size}',
+    'debug.context': 'Grafik verloren: {lost}× ({lostAt}), zurück: {restored}× ({restoredAt})',
+    'debug.stages': 'Offene Schritte beim Stufenwechsel: {count}',
+    'debug.noErrors': 'Fehler: keine',
+    'debug.errors': 'Letzte Fehler ({count}):',
+    'debug.error': '{s} s · {message}',
+  },
+  en: {
+    'debug.none': '–',
+    'debug.atSeconds': 'at {s} s',
+    'debug.gpu': 'GPU: {gpu}',
+    'debug.level': 'Level: {level}',
+    'debug.levelAuto': 'Level: {level} (auto)',
+    'debug.pixels': 'Pixel ratio: device {device}, drawing {renderer}',
+    'debug.buffer': 'Canvas: {width} × {height}',
+    'debug.maxTexture': 'Largest texture: {size}',
+    'debug.context': 'Graphics lost: {lost}× ({lostAt}), back: {restored}× ({restoredAt})',
+    'debug.stages': 'Level change steps left: {count}',
+    'debug.noErrors': 'Errors: none',
+    'debug.errors': 'Last errors ({count}):',
+    'debug.error': '{s} s · {message}',
+  },
+};

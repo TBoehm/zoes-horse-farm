@@ -15,6 +15,8 @@ export const QUALITY_PRESETS = Object.freeze({
     // share of environment instances (trees, bushes, distant forest)
     envDensity: 0.2,
     envDetail: 'low',
+    // geometry detail and material type of horse and rider
+    characterDetail: 'low',
     grassTufts: 0,
     anisotropy: 1,
     normalMaps: false,
@@ -32,6 +34,7 @@ export const QUALITY_PRESETS = Object.freeze({
     envMap: true,
     envDensity: 0.55,
     envDetail: 'high',
+    characterDetail: 'medium',
     grassTufts: 0,
     anisotropy: 4,
     normalMaps: true,
@@ -48,6 +51,7 @@ export const QUALITY_PRESETS = Object.freeze({
     envMap: true,
     envDensity: 1,
     envDetail: 'high',
+    characterDetail: 'high',
     grassTufts: 1,
     anisotropy: 8,
     normalMaps: true,
@@ -248,6 +252,18 @@ export function createQualityGovernor({
  */
 export function canHintLowerLevel({ auto, level }) {
   return !auto && lowerLevel(level) !== level;
+}
+
+/**
+ * What a lost WebGL context means for the graphics level (rule 4). A loss shows that the device is
+ * overloaded, so the level has to go down: with "Automatic" on it goes to low (and is saved, the
+ * automatic stays on); a manually chosen level stays, the player only gets the hint to pick a
+ * lower one. Returns { level, persist, hint }.
+ */
+export function levelAfterContextLoss({ auto, level }) {
+  const lowered = lowerLevel(level) !== level;
+  if (auto) return { level: 'low', persist: lowered, hint: false };
+  return { level, persist: false, hint: canHintLowerLevel({ auto, level }) };
 }
 
 /**

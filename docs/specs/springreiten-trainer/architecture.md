@@ -127,9 +127,11 @@ ausstehenden unbewerteten 3-s-Wiederaufbau desselben Elements ab. Das HUD-Modell
 `services.ride` (`{ session, engine, screen }`, gesetzt vom Ritt-Bildschirm, beim Verlassen entfernt)
 ist **nur für den Test-Hook** (`adapters/platform/test-hooks.js`, nur mit `?testhooks`): er liest
 daraus einen Schnappschuss. Produktionscode liest es nicht.
-Der Test-Hook bietet außer Lesefunktionen `go(name, params)` sowie `loseContext()` /
-`restoreContext()` (simulierter WebGL-Kontextverlust über `WEBGL_lose_context`, Rückgabe `false`
-ohne Engine oder Erweiterung); der Schnappschuss enthält `contextLost`.
+Der Test-Hook bietet außer Lesefunktionen `go(name, params)`, `setAutoLevel(level)` (ändert die
+Stufe wie der Governor: Automatik bleibt an) sowie `loseContext()` / `restoreContext()`
+(simulierter WebGL-Kontextverlust über `WEBGL_lose_context`, Rückgabe `false` ohne Engine oder
+Erweiterung); der Schnappschuss enthält `contextLost` und `graphicsSettling` (ein Stufenwechsel
+läuft noch: Schritte ausstehend oder Shader werden kompiliert).
 
 ### Einstellungs-Dienst (application/settings-service.js)
 
@@ -301,7 +303,9 @@ Hinweis-Dauer `missingHintS`, `control.stickDeadZone`, `control.stickSteerFull`,
 Regel-Konstanten (Fehlerpunkte, Zeitfehler-Schritt, Sterne, Auszeichnungs-Schwellen) bleiben in
 ihren Domain-Modulen. Die Governor-Defaults (`GOVERNOR_DEFAULTS` in `view3d/quality.js`) sind
 Regel-4-Werte und bleiben dort; ebenso die Werte des Hinweises „Stufe zu hoch“
-(`LOW_FPS_HINT_DEFAULTS`: 5 s Fenster, 3 s Schonzeit, Grenze 30 fps).
+(`LOW_FPS_HINT_DEFAULTS`: 5 s Fenster, 3 s Schonzeit, Grenze 30 fps). Technische Werte der Grafik
+stehen im Adapter-Modul, nicht in `tuning.js`: `STAGE_GAP_FRAMES` (`view3d/quality-stages.js`),
+`COMPILE_HOLD_MAX_MS` (`engine.js`), `CONTEXT_RESTORE_TIMEOUT_MS` (`resilience.js`).
 
 ### Parcours (`src/domain/course/`, rein)
 
@@ -335,11 +339,18 @@ world.setAid(null | { elementId, dir, zone })       // Absprung-Hilfe
 world.setLines(null | { start, finish, labels: { start, finish } })  // Start-/Ziellinie; Texte vom Aufrufer übersetzt
 world.setFinishMarked(bool)
 world.setShadowFocus(x, z)                          // Schatten folgt dem Pferd
-world.setQuality('low'|'medium'|'high')            // fasst nur an, was sich wirklich ändert (Normal-
-                                                    // Maps, Anisotropie, Nebel nur bei Wertwechsel);
-                                                    // gibt Schatten-Map und PMREM-Ziel frei, wenn die
-                                                    // Stufe sie nicht braucht (baut sie später neu);
-                                                    // ändert NICHT die Pixel-Ratio (Sache der Engine)
+world.setQuality('low'|'medium'|'high', { gpu })     // alles auf einmal (Erstellung, Wechsel ohne laufenden
+                                                    // Ritt, Kontextverlust; gpu:false = kein PMREM-Render);
+                                                    // fasst nur an, was sich wirklich ändert; gibt
+                                                    // Schatten-Map und PMREM-Ziel frei, wenn die Stufe
+                                                    // sie nicht braucht (baut sie später neu); ändert
+                                                    // NICHT die Pixel-Ratio (Sache der Engine)
+world.applyQualityStage('shadows'|'materials'|'density', level)
+                                                    // ein Schritt des gestuften Wechsels (siehe
+                                                    // „Gestufter Stufenwechsel“); jeder Schritt liest den
+                                                    // echten Zustand und ist wiederholbar
+world.syncAnisotropy(level)                         // Anisotropie der Texturen; NUR aufrufen, solange nichts
+                                                    // gezeichnet wird (Textur-Neuupload)
 world.restoreAfterContextLoss()                     // nach wiederhergestelltem WebGL-Kontext: PMREM-
                                                     // Umgebungslicht neu rendern (altes Ziel nur
                                                     // vergessen, nicht disposen); Schatten-Map baut
@@ -400,6 +411,8 @@ audio.dispose()
 `low`: pixelRatio 1, keine Schatten, Lambert-Materialien, wenig Umgebung.
 `medium`: pixelRatio ≤ 1,5, Schatten 1024 (nur Pferd/Hindernisse), Standard-Materialien.
 `high`: pixelRatio ≤ 2, Schatten 2048, mehr Umgebung (Bäume, Gras-Instanzen), Nebel.
+Jede Stufe steht in `QUALITY_PRESETS` (`view3d/quality.js`); `characterDetail` (`low|medium|high`)
+bestimmt Geometrie und Material von Pferd und Reiter.
 Automatik: `src/adapters/view3d/quality.js` (`createQualityGovernor`), misst nur beim Reiten.
 Bei **manueller** Stufe über `low` (`canHintLowerLevel`) meldet `createLowFpsHint` (gleiche
 Messregeln, eine Instanz je Ritt bzw. freiem Modus) einmal „Grafik zu hoch“ (< 30 fps im 5-s-Mittel);
@@ -427,15 +440,72 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
   „Neu laden“ (`[data-action="reload"]`, `location.reload()`) erscheint und bekommt den Fokus. Kommt
   der Kontext doch noch, verschwinden beide wieder. Den Fokus im Pausenmenü bekommt immer der erste
   nutzbare Knopf (bei Verlust ist „Weiter“ gesperrt).
-- **Stufenwechsel:** `applyQuality` ändert Welt und Pferd (die Pixel-Ratio wird nur **vorgemerkt**)
-  und startet danach `renderer.compileAsync` (KHR_parallel_shader_compile). Währenddessen hält ein
-  `RenderGate` (höchstens 2,5 s) Simulation und Zeichnen an, das letzte Bild bleibt stehen. Die
-  Pixel-Ratio samt `resize` wendet erst die Schleife an, wenn das Gate offen ist, im selben Frame,
-  der wieder zeichnet: Ein Resize leert den Zeichenpuffer, bei geschlossenem Gate wäre der
-  Bildschirm sonst bis zu 2,5 s schwarz.
+- **Kontextverlust als Hinweis auf ein überlastetes Gerät (Regel 4):** Beim Verlust entscheidet die
+  reine Funktion `levelAfterContextLoss({ auto, level })` (`view3d/quality.js`) → `{ level, persist,
+  hint }`: Mit Automatik geht die Stufe auf `low` und wird über `settings.setAutoLevel` gespeichert
+  (Automatik bleibt an); bei manueller Stufe über `low` bleibt die Stufe und `hint` ist wahr. Die
+  Engine setzt die Stufe **schon beim Verlust** um (`applyAllNow({ gpu: false })`: nichts wird
+  gezeichnet, Aufrufe am verlorenen Kontext ignoriert der Browser, kein PMREM-Render), damit die
+  wiederhergestellte Szene gleich auf `low` zurückkommt und es später keinen zweiten Wechsel gibt.
+  Ein noch laufender gestufter Wechsel wird dabei abgeschlossen. Der Hinweis wartet in der Engine
+  (`engine.takeGraphicsHint()` liest und löscht ihn); der Ritt-Bildschirm zeigt ihn als Toast
+  `ride.graphicsContextLost`, sobald das Kind nach der Wiederherstellung fortsetzt (oder ein neuer
+  Ritt beginnt).
+- **Gestufter Stufenwechsel (`view3d/quality-stages.js`):** Ein Wechsel mitten im Ritt (Governor
+  oder manuell) geschieht nicht in einem Frame, sondern in kleinen Schritten, weil ein Frame mit
+  allen neuen Shadern, neuer Schatten-Map, neuem Zeichenpuffer und neu hochgeladenen Texturen den
+  Grafikprozess eines Tablets überlasten und so den Kontext kosten kann (Khronos
+  „HandlingContextLost“). Die reine Funktion `planQualityStages(from, to)` liefert die geordneten
+  Schritte `{ id, compile }`, jeder nur, wenn sich seine Werte unterscheiden:
+  `pixelRatio` (zuerst: Auflösung ist der größte Hebel und braucht keinen Shader) → `shadows`
+  (Schattenpass und -Map) → `materials` (Material-Typ, Normal-Maps, Nebel an/aus, Umgebungskarte:
+  alles Shader-Änderungen, ein Schritt mit einem Kompilieren) → `characters` (Pferd und Reiter) →
+  `density` (Instanzen, Geometrie-Detail der Umgebung, Nebel-Distanzen als Uniforms). Beim
+  Hochstufen gilt die umgekehrte Reihenfolge (Auflösung zuletzt).
+  `planQualityStagesFromState(applied, to)` plant ab dem Stand je Schritt (ein unterbrochener
+  Wechsel setzt fort; ein neues Ziel mitten im Wechsel erreicht nur die fehlenden Schritte).
+  `createStageQueue({ gapFrames: STAGE_GAP_FRAMES = 6 })` taktet: `tick()` je gezeichnetem Frame
+  liefert den nächsten Schritt frühestens nach 6 Frames (technischer Wert, nicht in `tuning.js`).
+  Die Engine wendet einen Schritt an (`applyStage`: `pixelRatio` → vorgemerkt, `characters` →
+  `horse.setQuality`, sonst `world.applyQualityStage`), startet bei `compile: true` die
+  Vorkompilierung (`renderer.compileAsync`, KHR_parallel_shader_compile) und wartet danach wieder
+  die Lücke ab; währenddessen hält der `RenderGate` (höchstens 2,5 s) Simulation und Zeichnen an,
+  das letzte Bild bleibt stehen. Jeder Schritt unterbricht die Governor-Messung. Ohne laufende
+  Schleife (Menü, Einstellungen vor dem Ritt) oder bei verlorenem Kontext wird alles auf einmal
+  angewendet (`applyAllNow`): es ist nichts sichtbar. `engine.settling` ist wahr, solange Schritte
+  ausstehen oder das Gate zu ist.
+- **Keine Texturen neu hochladen:** Ein Stufenwechsel ändert nie `texture.anisotropy`. three.js liest
+  den Wert nur beim Hochladen (r186 `WebGLTextures.js`, `uploadTexture` → `setTextureParameters`),
+  eine Änderung hieße `needsUpdate`, also `texImage2D` plus Mipmaps für jede Boden-, Sand- und
+  Holztextur: der teuerste Teil des alten Wechsels. Die Anisotropie der Stufe wird nur gesetzt, wenn
+  nichts gezeichnet wird: bei der Erstellung der Welt, bei `world.setQuality` und beim Start eines
+  Ritts (`engine.run(fn)` ruft `world.syncAnisotropy(level)`). Mitten im Ritt bleibt der alte Wert
+  (nur der Filter-Grad der Texturen, kein sichtbarer Bruch); die Stufe gilt voll ab dem nächsten Ritt.
+  Der Nebel ändert nur Distanzen am vorhandenen `Fog` (Uniform, kein Neukompilieren); ein neues
+  `Fog` entsteht nur beim Ein-/Ausschalten.
+- **Pixel-Ratio:** Die Engine merkt sie nur **vor** (Schritt `pixelRatio`); die Schleife wendet sie
+  erst an, wenn das Gate offen ist, im selben Frame, der wieder zeichnet: Ein Resize leert den
+  Zeichenpuffer, bei geschlossenem Gate wäre der Bildschirm sonst bis zu 2,5 s schwarz.
 - **Robustheit:** Jeder Schritt der Schleife (Resize, Ritt-Frame, Render) und der Einstellungs-
   Handler läuft in `try/catch`; Fehler werden begrenzt geloggt (`createErrorReporter`, einmal je
   Stelle und 5 s), die Schleife läuft weiter.
+
+### Diagnose-Box (`?debug`)
+
+Nur mit `?debug` in der Adresse (Erkennung `debugRequested` in `adapters/platform/debug-info.js`,
+wie `?testhooks`); ohne den Parameter wird nichts installiert und kein Element erzeugt. `main.js`
+legt dann `app.services.debug = { errorLog }` an und installiert `installErrorCapture` (schreibt
+`console.error`, `window`-`error` und `unhandledrejection` in `createErrorLog`, die letzten 5, je
+höchstens 160 Zeichen; `console.error` druckt weiter). Der Ritt-Bildschirm hängt unter die
+fps-Zeile (`.ride-hud`) die Box `[data-hud="debug"]` (`ui/debug-display.js`, `createDebugBox`): sie
+aktualisiert sich etwa zweimal pro Sekunde (eigener `createFpsMeter`-Takt, kein Objekt pro Frame
+im Ritt), auch im Pausenmenü und bei verlorenem Kontext. Der Text kommt aus der reinen Funktion
+`formatDebugText(info, errors, t)`; alle Wörter stehen in `ui/i18n/debug.js` (`debug.*`, DE + EN),
+eingesetzt werden nur Zahlen und technische Zeichenketten (GPU-Name, Fehlertexte). Die Zahlen
+liefert `engine.diagnostics()` (immer dasselbe Objekt): GPU (`WEBGL_debug_renderer_info`, sonst
+`RENDERER`), Stufe und Automatik, `devicePixelRatio`, Pixel-Ratio des Renderers, Zeichenpuffer,
+größte Textur, Anzahl Kontextverluste/-wiederherstellungen mit Sekunden seit Seitenstart und
+ausstehende Stufenwechsel-Schritte.
 
 ### fps-Anzeige (`ui/fps-display.js`)
 

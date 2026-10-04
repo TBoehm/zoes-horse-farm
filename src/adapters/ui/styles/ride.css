@@ -51,6 +51,20 @@
   display: none;
 }
 
+/* Diagnostics (?debug only): small text box under the fps line */
+.ride-debug {
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-family: ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  padding: 4px 8px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: min(100%, 34rem);
+}
+
 .hud-chip {
   background: rgba(255, 251, 243, 0.88);
   border-radius: 14px;

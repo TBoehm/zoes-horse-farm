@@ -60,8 +60,9 @@ export const SAVE_KEY = 'zoes-horse-farm.save';
 
 /**
  * Opens the app with the test hook; an optional save game is written once before the first load.
+ * `query`: more URL parameters, e.g. '&debug'.
  */
-export async function openGame(page, { save, lang } = {}) {
+export async function openGame(page, { save, lang, query = '' } = {}) {
   if (save || lang) {
     await page.addInitScript(
       ({ key, data, lang: l }) => {
@@ -73,7 +74,7 @@ export async function openGame(page, { save, lang } = {}) {
       { key: SAVE_KEY, data: save ?? {}, lang },
     );
   }
-  await page.goto('./?testhooks');
+  await page.goto(`./?testhooks${query}`);
 }
 
 /** Save game of a player who already named the horse (no name question). */

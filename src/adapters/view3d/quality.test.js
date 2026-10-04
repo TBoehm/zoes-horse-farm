@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   canHintLowerLevel,
+  levelAfterContextLoss,
   createLowFpsHint,
   createQualityGovernor,
   pickInitialLevel,
@@ -356,5 +357,56 @@ describe('canHintLowerLevel', () => {
 
   it('is false with "Automatic" on (the governor handles it)', () => {
     expect(canHintLowerLevel({ auto: true, level: 'high' })).toBe(false);
+  });
+});
+
+describe('levelAfterContextLoss (rule 4)', () => {
+  it('with "Automatic" on, a level above low goes to low and is saved', () => {
+    expect(levelAfterContextLoss({ auto: true, level: 'high' })).toEqual({
+      level: 'low',
+      persist: true,
+      hint: false,
+    });
+    expect(levelAfterContextLoss({ auto: true, level: 'medium' })).toEqual({
+      level: 'low',
+      persist: true,
+      hint: false,
+    });
+  });
+
+  it('with "Automatic" on at low nothing changes and nothing is saved', () => {
+    expect(levelAfterContextLoss({ auto: true, level: 'low' })).toEqual({
+      level: 'low',
+      persist: false,
+      hint: false,
+    });
+  });
+
+  it('a manual level above low stays and the player gets a hint', () => {
+    for (const level of ['medium', 'high']) {
+      expect(levelAfterContextLoss({ auto: false, level })).toEqual({
+        level,
+        persist: false,
+        hint: true,
+      });
+    }
+  });
+
+  it('a manual low level needs no hint: there is nothing lower to pick', () => {
+    expect(levelAfterContextLoss({ auto: false, level: 'low' })).toEqual({
+      level: 'low',
+      persist: false,
+      hint: false,
+    });
+  });
+
+  it('the hint follows the same rule as the "level too high" hint', () => {
+    for (const auto of [true, false]) {
+      for (const level of GRAPHICS_LEVELS) {
+        expect(levelAfterContextLoss({ auto, level }).hint).toBe(
+          canHintLowerLevel({ auto, level }),
+        );
+      }
+    }
   });
 });

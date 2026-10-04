@@ -27,6 +27,8 @@ export default {
     'ride.fpsLevelAuto': '{fps} fps · {level} (Auto)',
     'ride.fpsNone': '–',
     'ride.graphicsTooHigh': 'Die Grafik ist für dieses Gerät zu hoch. Wähle eine niedrigere Stufe.',
+    'ride.graphicsContextLost':
+      'Die Grafik war zu viel für dieses Gerät. Stell sie in den Einstellungen niedriger.',
     'pause.graphicsLost': 'Die Grafik ist kurz weg. Gleich geht es weiter.',
     'pause.graphicsReload': 'Bitte lade die Seite neu.',
     'pause.reload': 'Neu laden',
@@ -59,6 +61,8 @@ export default {
     'ride.fpsLevelAuto': '{fps} fps · {level} (auto)',
     'ride.fpsNone': '–',
     'ride.graphicsTooHigh': 'The graphics are too high for this device. Pick a lower level.',
+    'ride.graphicsContextLost':
+      'The graphics were too much for this device. Pick a lower level in the settings.',
     'pause.graphicsLost': 'The graphics are gone for a moment. Back in a second.',
     'pause.graphicsReload': 'Please reload the page.',
     'pause.reload': 'Reload',

@@ -7,6 +7,7 @@ import { getEngine } from '../../view3d/engine.js';
 import { canHintLowerLevel, createLowFpsHint } from '../../view3d/quality.js';
 import { createRestoreWatchdog } from '../../view3d/resilience.js';
 import { createFpsMeter, formatFpsText } from '../fps-display.js';
+import { createDebugBox } from '../debug-display.js';
 import { createInput } from '../../input/input.js';
 import { trapTab } from '../../input/focus-trap.js';
 import { createRideMode } from '../../../application/modes/index.js';
@@ -89,6 +90,16 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   );
   const el = h('section', { class: 'ride-screen' }, hud, feedbackEl, hint, controls, pauseMenu);
   hud.append(fpsEl);
+  // Diagnostics for real-device tests: only with `?debug` (the composition root provides the
+  // service then), under the fps line
+  const debugBox = services.debug
+    ? createDebugBox({
+        diagnostics: engine.diagnostics,
+        errorLog: services.debug.errorLog,
+        t,
+      })
+    : null;
+  if (debugBox) hud.append(debugBox.el);
   if (hudView) hud.append(hudView.el);
   const renderHud = (model = session.view.hud) => hudView?.render(model);
 
@@ -140,6 +151,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     hint.textContent = t('ride.pauseHint');
     renderLostNote();
     renderFps();
+    debugBox?.renderTexts();
     hudView?.renderTexts();
     renderHud();
     applyLines(session.view.lines); // the line labels are translated texts too
@@ -269,7 +281,19 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     services.audio?.setPaused(paused);
     if (paused) focusPauseMenu();
     // a focused menu button must not keep Space/Enter once the ride goes on
-    else if (el.contains(document.activeElement)) document.activeElement.blur();
+    else {
+      if (el.contains(document.activeElement)) document.activeElement.blur();
+      showContextLossHint();
+    }
+  }
+
+  /**
+   * After a lost graphics context with a manual level above low (rule 4): the toast tells the
+   * player to pick a lower level. Shown once the ride goes on (the pause menu covers the screen
+   * before), it is consumed from the engine so that it appears only once per loss.
+   */
+  function showContextLossHint() {
+    if (engine.takeGraphicsHint()) showFeedback('ride.graphicsContextLost', { long: true });
   }
 
   resumeBtn.addEventListener('click', () => setPaused(false));
@@ -302,6 +326,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   horse.onFootfall = (gait) => !paused && services.audio?.sfx.hoof(gait);
 
   function frame(dt, rawDt) {
+    debugBox?.frame(rawDt);
     if (showFps) {
       const value = fpsMeter.frame(rawDt); // restarts itself after a suspended tab
       if (value !== null) {
@@ -355,6 +380,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   restart();
   // The context may have been lost while no ride was running: start paused then
   if (engine.contextLost) onContextLost();
+  else showContextLossHint(); // a loss between two rides may have left a hint
   engine.run(frame);
 
   const instance = {

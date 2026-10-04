@@ -50,6 +50,7 @@ describe('installTestHooks', () => {
       screen: { paused: false },
       engine: {
         level: 'low',
+        settling: true,
         cameraRig: { mode: 'follow' },
         horse: { object: { position: { toArray: () => [1, 0, 2] } } },
       },
@@ -63,6 +64,7 @@ describe('installTestHooks', () => {
     });
     const snapshot = target.__zhfTest.ride();
     expect(snapshot.horse).toMatchObject({ x: 1, z: 2, speed: 3, gait: 'trot', jump: null });
+    expect(snapshot.graphicsSettling).toBe(true);
     expect(snapshot.rails).toEqual({ f1: [true] });
     horse.x = 99;
     expect(snapshot.horse.x).toBe(1);

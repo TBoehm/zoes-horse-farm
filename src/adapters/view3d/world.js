@@ -1,5 +1,5 @@
 // The 3D world: lights, sky, arena, environment, obstacles and markings.
-// Quality levels can be switched at runtime (the governor downgrades).
+// Quality levels can be switched at runtime (the governor downgrades), stage by stage.
 import * as THREE from 'three';
 import { QUALITY_PRESETS } from './quality.js';
 import { createSky, SKY_COLORS } from './sky.js';
@@ -115,64 +115,65 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
     );
   }
 
-  let preset = QUALITY_PRESETS.medium;
+  // The preset each stage group has reached: a level change is applied stage by stage (see
+  // quality-stages.js), so the groups can be at different levels for a short time. Meshes that
+  // are added later (obstacles, lines) get the state of the groups, not of a target level.
+  const stageState = {
+    shadows: QUALITY_PRESETS.medium,
+    materials: QUALITY_PRESETS.medium,
+    density: QUALITY_PRESETS.medium,
+  };
 
   function applyMeshes() {
-    const lambert = preset.material === 'lambert';
+    const lambert = stageState.materials.material === 'lambert';
+    const { shadows, shadowCasters } = stageState.shadows;
     for (const e of managed()) {
       e.mesh.material = lambert ? e.mats.lambert : e.mats.standard;
       const cast =
-        preset.shadows &&
-        (e.shadow === 'all' ? preset.shadowCasters === 'all' : e.shadow === 'obstacles');
+        shadows && (e.shadow === 'all' ? shadowCasters === 'all' : e.shadow === 'obstacles');
       e.mesh.castShadow = cast;
-      e.mesh.receiveShadow = preset.shadows && e.shadow !== 'none';
+      e.mesh.receiveShadow = shadows && e.shadow !== 'none';
     }
   }
 
-  /**
-   * Switches the quality level. Only what really differs between the levels is touched: a
-   * material needs a new shader only when its normal map is switched on/off (three.js rebuilds
-   * the programs for fog, environment map and shadow changes by itself), and a texture is only
-   * uploaded again when its anisotropy changes.
-   */
-  function setQuality(next) {
-    const p = QUALITY_PRESETS[next];
-    if (!p) return;
-    const before = preset;
-    preset = p;
-    // The pixel ratio is the engine's business: changing it clears the drawing buffer, which must
-    // not happen before the new shaders are ready (see engine.js)
+  // Each stage reads what is really there and changes only that, so a stage can be repeated and an
+  // interrupted switch can continue from any state.
 
-    // shadows: the map is freed when it is not used (2048² depth target on "high") and made again
-    // by three.js on the first shadow pass, or when its size changes
+  /** Shadow pass: the map is freed when it is not used (2048² depth target on "high"). */
+  function applyShadowStage(p) {
+    stageState.shadows = p;
     renderer.shadowMap.enabled = p.shadows;
     sun.castShadow = p.shadows;
     if (!p.shadows) {
       disposeShadowMap();
     } else if (sun.shadow.mapSize.x !== p.shadowMapSize) {
+      // three.js makes a new map on the first shadow pass
       sun.shadow.mapSize.set(p.shadowMapSize, p.shadowMapSize);
       disposeShadowMap();
     }
+    applyMeshes();
+  }
 
-    // materials: the Lambert variant has no normal map, so only the standard one is rebuilt
-    if (before.normalMaps !== p.normalMaps) {
-      for (const pair of pairs) {
-        pair.standard.normalMap = p.normalMaps ? pair.normalMap : null;
+  /**
+   * Everything that changes shader programs: material type, normal maps, fog on/off and the
+   * environment map. `gpu: false` (the context is lost) leaves the PMREM render to
+   * restoreAfterContextLoss.
+   */
+  function applyMaterialStage(p, gpu) {
+    stageState.materials = p;
+    // the Lambert variant has no normal map, so only the standard one is rebuilt
+    for (const pair of pairs) {
+      const normalMap = p.normalMaps ? pair.normalMap : null;
+      if (pair.standard.normalMap !== normalMap) {
+        pair.standard.normalMap = normalMap;
         pair.standard.needsUpdate = true;
-      }
-    }
-    const anisotropy = Math.min(p.anisotropy, renderer.capabilities.getMaxAnisotropy());
-    for (const t of [...arena.textures, ...environment.textures]) {
-      if (t && t.anisotropy !== anisotropy) {
-        t.anisotropy = anisotropy;
-        t.needsUpdate = true;
       }
     }
     applyMeshes();
 
     // lights: more sky light without an environment map
     if (p.envMap) {
-      scene.environment = buildEnvironmentMap();
+      if (gpu) scene.environment = buildEnvironmentMap();
       scene.environmentIntensity = 0.8;
       hemi.intensity = 0.6;
     } else {
@@ -181,13 +182,66 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       hemi.intensity = 1.5;
     }
 
-    // fog: a new Fog object makes three.js rebuild every material, so keep the old one if the
-    // values are the same
-    if (before.fog !== p.fog || (p.fog && !scene.fog)) {
-      scene.fog = p.fog ? new THREE.Fog(SKY_COLORS.horizon, p.fog.near, p.fog.far) : null;
-    }
+    // fog: a new Fog object makes three.js rebuild every material, so only add or remove it here
+    // (the distances are the density stage's business: they are uniforms)
+    if (p.fog && !scene.fog) scene.fog = new THREE.Fog(SKY_COLORS.horizon, p.fog.near, p.fog.far);
+    else if (!p.fog) scene.fog = null;
+  }
 
+  /** Scenery: instance counts, geometry detail and the fog distances (no shader change). */
+  function applyDensityStage(p) {
+    stageState.density = p;
+    if (scene.fog && p.fog) {
+      scene.fog.near = p.fog.near;
+      scene.fog.far = p.fog.far;
+    }
     environment.setDensity(p.envDensity, p.grassTufts, p.envDetail);
+  }
+
+  /**
+   * Applies the world's anisotropic filtering of a level. Only call it while nothing is drawn (at
+   * the start of a ride): three.js reads `texture.anisotropy` only when a texture is uploaded, so
+   * a change needs `needsUpdate` and uploads the texture again, which is the most expensive part
+   * of a level change (r186 WebGLTextures.js, uploadTexture → setTextureParameters). Textures
+   * whose value already fits are not touched.
+   */
+  function syncAnisotropy(level) {
+    const p = QUALITY_PRESETS[level];
+    if (!p) return;
+    const anisotropy = Math.min(p.anisotropy, renderer.capabilities.getMaxAnisotropy());
+    for (const t of [...arena.textures, ...environment.textures]) {
+      if (t && t.anisotropy !== anisotropy) {
+        t.anisotropy = anisotropy;
+        t.needsUpdate = true;
+      }
+    }
+  }
+
+  /**
+   * One stage of a level change ('shadows' | 'materials' | 'density', see quality-stages.js).
+   * The pixel ratio is the engine's business: changing it clears the drawing buffer, which must
+   * not happen before the new shaders are ready (see engine.js). Horse and rider are the
+   * engine's, too.
+   */
+  function applyQualityStage(id, level) {
+    const p = QUALITY_PRESETS[level];
+    if (!p) return;
+    if (id === 'shadows') applyShadowStage(p);
+    else if (id === 'materials') applyMaterialStage(p, true);
+    else if (id === 'density') applyDensityStage(p);
+  }
+
+  /**
+   * Switches to a level in one go (creation, a level change while no ride is drawing, a lost
+   * context): every stage and the anisotropy. Only what really differs is touched.
+   */
+  function setQuality(next, { gpu = true } = {}) {
+    const p = QUALITY_PRESETS[next];
+    if (!p) return;
+    applyShadowStage(p);
+    applyMaterialStage(p, gpu);
+    applyDensityStage(p);
+    syncAnisotropy(next);
   }
 
   /**
@@ -204,7 +258,7 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
   function restoreAfterContextLoss() {
     envTarget = null;
     envTexture = null;
-    if (preset.envMap) scene.environment = buildEnvironmentMap();
+    if (stageState.materials.envMap) scene.environment = buildEnvironmentMap();
   }
 
   // The sun never moves: its light-space axes and the scratch vectors are made once
@@ -293,6 +347,8 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       lines.setFinishMarked(on);
     },
     setQuality,
+    applyQualityStage,
+    syncAnisotropy,
     restoreAfterContextLoss,
     setShadowFocus(x, z) {
       shadowFocus.set(x, 0, z);

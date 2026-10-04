@@ -2,7 +2,17 @@
 import * as THREE from 'three';
 import { h } from '../ui/dom.js';
 import { createRenderer, resizeRenderer, setMaxPixelRatio } from './renderer.js';
-import { createQualityGovernor, pickInitialLevel, QUALITY_PRESETS } from './quality.js';
+import {
+  createQualityGovernor,
+  levelAfterContextLoss,
+  pickInitialLevel,
+  QUALITY_PRESETS,
+} from './quality.js';
+import {
+  createStageQueue,
+  planQualityStagesFromState,
+  QUALITY_STAGE_IDS,
+} from './quality-stages.js';
 import { createErrorReporter, createRenderGate, watchContextLoss } from './resilience.js';
 import { createEmitter } from '../../shared/events.js';
 import { createWorld } from './world.js';
@@ -103,22 +113,64 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     );
   }
 
+  // Level changes are applied stage by stage (quality-stages.js): `applied` is the level each
+  // stage has reached, the queue paces the remaining ones, one per few drawn frames.
+  const applied = Object.fromEntries(QUALITY_STAGE_IDS.map((id) => [id, level]));
+  const stageQueue = createStageQueue();
+
   /**
-   * Switches the level while the last picture stays on screen. The pixel ratio is NOT changed
-   * here: resizing the drawing buffer clears it, and with the render gate closed (shaders
-   * compiling, up to COMPILE_HOLD_MAX_MS) nothing would be drawn, so the screen would be black and
-   * the ride frozen. The new ratio is stored and applied by the frame loop in the very frame that
-   * draws again (the buffer is cleared and refilled before the browser shows it). Between the
-   * switch and that frame the old picture is simply a little too sharp or too soft.
+   * Applies one stage for `target`. The pixel ratio is NOT changed here: resizing the drawing
+   * buffer clears it, and with the render gate closed (shaders compiling, up to
+   * COMPILE_HOLD_MAX_MS) nothing would be drawn, so the screen would be black and the ride
+   * frozen. The new ratio is stored and applied by the frame loop in the very frame that draws
+   * again (the buffer is cleared and refilled before the browser shows it). Between the stage and
+   * that frame the old picture is simply a little too sharp or too soft.
+   */
+  function applyStage(id, target) {
+    guarded(`quality stage ${id}`, () => {
+      if (id === 'pixelRatio') pendingPixelRatio = QUALITY_PRESETS[target].pixelRatio;
+      else if (id === 'characters') horse.setQuality(QUALITY_PRESETS[target].characterDetail);
+      else world.applyQualityStage(id, target);
+    });
+    applied[id] = target;
+  }
+
+  /** Everything at once: for a switch nobody sees or that nothing is drawn for (see applyQuality). */
+  function applyAllNow({ gpu = true } = {}) {
+    stageQueue.clear();
+    guarded('quality switch', () => {
+      pendingPixelRatio = QUALITY_PRESETS[level].pixelRatio;
+      world.setQuality(level, { gpu });
+      horse.setQuality(QUALITY_PRESETS[level].characterDetail);
+    });
+    for (const id of QUALITY_STAGE_IDS) applied[id] = level;
+    governor.interrupt(); // the switch is no measurement
+  }
+
+  /**
+   * Switches to a level. While a ride draws, the change is split into stages spread over several
+   * frames, each followed by a shader precompile with the last picture staying on screen (see
+   * advanceStages). Without a running frame loop (menus) or with a lost context nothing is
+   * visible and nothing is drawn, so everything is applied at once.
    */
   function applyQuality(next) {
     level = next;
-    guarded('quality switch', () => {
-      pendingPixelRatio = QUALITY_PRESETS[next].pixelRatio;
-      world.setQuality(next);
-      horse.setQuality(next);
-    });
-    if (!contextWatch.lost) precompile();
+    if (!frameFn || contextWatch.lost) {
+      applyAllNow({ gpu: !contextWatch.lost });
+      if (!contextWatch.lost) precompile();
+      return;
+    }
+    stageQueue.plan(planQualityStagesFromState(applied, next));
+  }
+
+  /** Called after every drawn frame: starts the next stage when its time has come. */
+  function advanceStages() {
+    const stage = stageQueue.tick();
+    if (!stage) return;
+    // the target is read now: a switch during the staging changes where the remaining stages go
+    applyStage(stage.id, level);
+    governor.interrupt(); // frames around a stage are slower: not a measurement
+    if (stage.compile) precompile();
   }
 
   const governor = createQualityGovernor({
@@ -154,11 +206,34 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   // own listeners on the canvas, registered before ours, so it has already rebuilt its internal
   // state (initGLContext) when `onRestored` runs. We announce the loss so that the ride pauses,
   // rebuild what only lived on the GPU, and announce the restore.
+  // A loss shows that the device is overloaded: the level goes down right away, while nothing is
+  // drawn, so that the restored scene comes back already at the new level (no switch later). The
+  // calls on the lost context are ignored by the browser, and three.js resets all its resource
+  // bookkeeping in initGLContext on the restore (https://www.khronos.org/webgl/wiki/HandlingContextLost).
+  const contextStats = { lost: 0, restored: 0, lostAtS: null, restoredAtS: null };
+  let graphicsHintPending = false;
+  const secondsSinceStart = () => performance.now() / 1000;
   const contextWatch = watchContextLoss(canvas, {
     onLost() {
+      contextStats.lost += 1;
+      contextStats.lostAtS = secondsSinceStart();
+      guarded('context loss fallback', () => {
+        const decision = levelAfterContextLoss({
+          auto: settingsService.get().graphicsAuto,
+          level,
+        });
+        const changed = decision.level !== level;
+        level = decision.level;
+        if (changed) governor.setLevel(level);
+        applyAllNow({ gpu: false }); // also finishes a switch that was still in stages
+        if (decision.persist) settingsService.setAutoLevel(level); // "Automatic" stays on
+        graphicsHintPending = decision.hint;
+      });
       emitter.emit('contextLost');
     },
     onRestored() {
+      contextStats.restored += 1;
+      contextStats.restoredAtS = secondsSinceStart();
       guarded('context restore', () => {
         world.restoreAfterContextLoss();
         resize(true);
@@ -204,6 +279,41 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     } catch (err) {
       reportError('render', err);
     }
+    if (stageQueue.pending > 0 && !contextWatch.lost) guarded('quality stage', advanceStages);
+  }
+
+  // Debug overlay data (`?debug`): one object that is filled again at every call, so that the
+  // overlay needs no new object per update.
+  const diag = {
+    gpu: '',
+    level: '',
+    auto: false,
+    devicePixelRatio: 1,
+    pixelRatio: 1,
+    bufferWidth: 0,
+    bufferHeight: 0,
+    maxTextureSize: 0,
+    contextLost: 0,
+    contextRestored: 0,
+    lostAtS: null,
+    restoredAtS: null,
+    stagesPending: 0,
+  };
+  function diagnostics() {
+    if (!diag.gpu && !contextWatch.lost) diag.gpu = rendererString(renderer.getContext());
+    diag.level = level;
+    diag.auto = governor.auto;
+    diag.devicePixelRatio = window.devicePixelRatio || 1;
+    diag.pixelRatio = renderer.getPixelRatio();
+    diag.bufferWidth = canvas.width;
+    diag.bufferHeight = canvas.height;
+    diag.maxTextureSize = renderer.capabilities.maxTextureSize;
+    diag.contextLost = contextStats.lost;
+    diag.contextRestored = contextStats.restored;
+    diag.lostAtS = contextStats.lostAtS;
+    diag.restoredAtS = contextStats.restoredAtS;
+    diag.stagesPending = stageQueue.pending;
+    return diag;
   }
 
   return {
@@ -222,11 +332,36 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     },
     /** Events: 'contextLost', 'contextRestored'. Returns the unsubscribe function. */
     on: emitter.on,
+    /** true while a level change is still being applied (stages pending or shaders compiling). */
+    get settling() {
+      return stageQueue.pending > 0 || gate.blocked;
+    },
+    /**
+     * true once after a context loss with a manual level above low: the ride screen shows the
+     * hint to pick a lower level (rule 4). Reading it clears it.
+     */
+    takeGraphicsHint() {
+      const pending = graphicsHintPending;
+      graphicsHintPending = false;
+      return pending;
+    },
+    /** Values for the `?debug` overlay; the same object each time (do not keep it). */
+    diagnostics,
     /** Starts (fn) or stops (null) the frame loop; the canvas is visible only while it runs. */
     run(fn) {
       frameFn = fn;
       last = 0;
       canvas.hidden = !fn;
+      if (fn) {
+        // Nothing of the ride is on screen yet: the time to finish a switch that was still in
+        // stages and to give the textures the anisotropy of the level (an upload, never done in
+        // the middle of a ride, see world.syncAnisotropy)
+        if (stageQueue.pending > 0) {
+          applyAllNow();
+          precompile();
+        }
+        guarded('anisotropy', () => world.syncAnisotropy(level));
+      }
       renderer.setAnimationLoop(fn ? loop : null);
       if (fn) resize(true);
     },
