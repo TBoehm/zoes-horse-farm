@@ -45,7 +45,11 @@ Adresse, kleine Textbox oben links unter der fps-Zeile.
   ohne Textur-Neuupload und ohne großen Shader-Stau in einem Frame (Regel 4).
 - [ ] Mit `?debug` zeigt das Spiel GPU-Name, Stufe/Automatik, Pixel-Ratio und Zeichenflächen-Größe,
   Anzahl Kontextverluste/-wiederherstellungen und die letzten Fehlermeldungen.
-- [?] Auf dem Android-Tablet des Spieltests verschwindet das Bild nicht mehr (Nachweis nur am Gerät).
+- [ ] Vor jeder Stufe (Start, Wechsel, auch manuell „Hoch") schätzt das Spiel den Grafikspeicher und
+  senkt bei Überschreitung der Gerätegrenze erst die Auflösung, dann Schatten, dann Gras/Umgebung; die
+  `?debug`-Anzeige zeigt Schätzung und Grenze (Regel 4).
+- [?] Auf dem Android-Tablet des Spieltests verschwindet das Bild nicht mehr, auch nicht auf „Hoch"
+  (Nachweis nur am Gerät; Spieltest 2026-10-04: „Mittel" läuft gut, „Hoch" stürzt ab).
 
 ## Links
 Konzept Regel 4; SRT-007.
