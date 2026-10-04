@@ -114,6 +114,53 @@ describe('leg IK', () => {
     for (const x of h) expect(Number.isFinite(x)).toBe(true);
   });
 
+  describe('soft reach (airborne horse)', () => {
+    /** Largest change of any rotation while the hoof target comes in from out of reach. */
+    function worstStep(soft) {
+      let prev = null;
+      let worst = 0;
+      // the target rises 1 cm per step from 0.4 m below to 0.1 m above the rest hoof point
+      for (let dy = -0.4; dy <= 0.1; dy += 0.01) {
+        const r = solveHind(hind, hind.H.z, hind.H.y + dy, hind.t4, hind.t3, new Array(4), soft);
+        if (prev) for (let k = 0; k < 4; k++) worst = Math.max(worst, Math.abs(r[k] - prev[k]));
+        prev = r;
+      }
+      return worst;
+    }
+
+    it('without it the leg bends in one step when the target comes back into reach', () => {
+      expect(worstStep(0)).toBeGreaterThan(0.08);
+    });
+
+    it('with it the same sweep bends the joints more gently', () => {
+      expect(worstStep(0.08)).toBeLessThan(worstStep(0) * 0.7);
+    });
+
+    it('reaches targets that are well within reach exactly', () => {
+      const dz = 0.2;
+      const dy = 0.15;
+      const hard = solveFront(front, front.H.z + dz, front.H.y + dy, front.t4, 0, 0);
+      const soft = solveFront(
+        front,
+        front.H.z + dz,
+        front.H.y + dy,
+        front.t4,
+        0,
+        0,
+        undefined,
+        0.08,
+      );
+      for (let k = 0; k < 5; k++) expect(soft[k]).toBeCloseTo(hard[k], 6);
+    });
+
+    it('stays finite for targets far out of reach', () => {
+      const r = solveFront(front, front.H.z, front.H.y - 3, front.t4, 0, 0, undefined, 0.08);
+      for (const x of r) expect(Number.isFinite(x)).toBe(true);
+      const h = solveHind(hind, hind.H.z, hind.H.y - 3, hind.t4, hind.t3, undefined, 0.08);
+      for (const x of h) expect(Number.isFinite(x)).toBe(true);
+    });
+  });
+
   it('angle helpers', () => {
     expect(angD(0, -1)).toBeCloseTo(0);
     expect(angD(1, 0)).toBeCloseTo(Math.PI / 2);

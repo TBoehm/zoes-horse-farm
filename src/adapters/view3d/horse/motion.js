@@ -25,7 +25,7 @@ const LEAD_CHANGE = Object.freeze({ minTurn: 0.3, delay: 0.4, blendOmega: 7 });
 // starts in the middle, e.g. after a restart).
 const JUMP_IN = 0.5;
 const JUMP_OUT = [2.4, 3.0];
-const JUMP_SLEW = 14;
+const JUMP_SLEW = 11; // 14 made the quick tuck-in of a trot jump turn the forearm by 0.6 rad per frame
 // Landing events: progress of the landing phase when the forehand and the hindquarters touch down
 const LAND = Object.freeze({ front: 0.3, hind: 0.6, hindStrength: 0.65 });
 

@@ -72,17 +72,35 @@ export function makeHindRig(P, T, K, F, H) {
   };
 }
 
+/**
+ * Soft limit of the reach: a target distance up to `soft` short of the full stretch is kept, further
+ * out it is compressed so that it approaches the full stretch without ever touching it. With
+ * soft = 0 it is the hard clamp. A hard clamp locks the leg straight for as long as the hoof
+ * target is out of reach (the body is in the air during a jump) and then, when the target comes
+ * back, the knee bends by 40° or more in one frame (acos has an infinite slope at the full
+ * stretch). The compression keeps the slope bounded, so that a landing or a take-off bends the
+ * joints smoothly. The price is a hoof that stays up to a centimetre short of a target near the
+ * full stretch, which is why only an airborne horse uses it (the rest pose and the stance of the
+ * gaits are near the full stretch).
+ */
+function softReach(d, dMax, soft) {
+  if (soft <= 0) return Math.min(d, dMax);
+  const dSoft = dMax - soft;
+  if (d <= dSoft) return d;
+  return dSoft + soft * (1 - Math.exp(-(d - dSoft) / soft));
+}
+
 // Result of twoBone, reused: the solvers run four times per frame
 const IK = { t1: 0, mz: 0, my: 0, t2: 0, reach: true };
 
-function twoBone(rootZ, rootY, tz, ty, l1, l2, sigma) {
+function twoBone(rootZ, rootY, tz, ty, l1, l2, sigma, soft) {
   const dz = tz - rootZ;
   const dy = ty - rootY;
   let d = Math.hypot(dz, dy);
   const dMax = l1 + l2 - 1e-4;
   const dMin = Math.abs(l1 - l2) + 1e-4;
   const reach = d <= dMax;
-  d = clamp(d, dMin, dMax);
+  d = softReach(Math.max(d, dMin), dMax, soft);
   const c = (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d);
   const alpha = Math.acos(clamp(c, -1, 1));
   const base = angD(dz, dy);
@@ -110,10 +128,11 @@ export function scapulaSlide(dz) {
 
 /**
  * Solve a foreleg. hz/hy: hoof point (local), past: absolute pastern angle (angD, local),
- * knee: carpus flexion (rad, 0 = straight), scap: scapula rotation (angD delta).
+ * knee: carpus flexion (rad, 0 = straight), scap: scapula rotation (angD delta), soft: soft zone
+ * of the reach (m, see softReach).
  * Returns rotation.x for [scapula, humerus, forearm, cannon, pastern].
  */
-export function solveFront(rig, hz, hy, past, knee, scap, out = new Array(5)) {
+export function solveFront(rig, hz, hy, past, knee, scap, out = new Array(5), soft = 0) {
   const tsc = rig.tsc + scap;
   const sz = rig.A.z + rig.lsc * dirZ(tsc);
   const sy = rig.A.y + rig.lsc * dirY(tsc);
@@ -131,7 +150,7 @@ export function solveFront(rig, hz, hy, past, knee, scap, out = new Array(5)) {
     delta = (delta < 0 ? -1 : 1) * Math.acos(clamp(c, -1, 1));
   }
   const psi = Math.atan2(rig.l3 * Math.sin(delta), rig.l2 + rig.l3 * Math.cos(delta));
-  const ik = twoBone(sz, sy, fz, fy, rig.l1, L, rig.sigma);
+  const ik = twoBone(sz, sy, fz, fy, rig.l1, L, rig.sigma, soft);
   const t1 = ik.t1;
   const t2 = ik.t2 - psi;
   const t3 = t2 + delta;
@@ -151,12 +170,12 @@ export function solveFront(rig, hz, hy, past, knee, scap, out = new Array(5)) {
  * Solve a hind leg. cannon: absolute cannon angle (angD, local).
  * Returns rotation.x for [femur, tibia, cannon, pastern].
  */
-export function solveHind(rig, hz, hy, past, cannon, out = new Array(4)) {
+export function solveHind(rig, hz, hy, past, cannon, out = new Array(4), soft = 0) {
   const fz = hz - rig.l4 * dirZ(past);
   const fy = hy - rig.l4 * dirY(past);
   const kz = fz - rig.l3 * dirZ(cannon);
   const ky = fy - rig.l3 * dirY(cannon);
-  const ik = twoBone(rig.P.z, rig.P.y, kz, ky, rig.l1, rig.l2, rig.sigma);
+  const ik = twoBone(rig.P.z, rig.P.y, kz, ky, rig.l1, rig.l2, rig.sigma, soft);
   let t1 = ik.t1;
   let t2 = ik.t2;
   if (t1 > FEMUR_MAX) {

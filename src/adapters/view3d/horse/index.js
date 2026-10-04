@@ -37,7 +37,7 @@ import {
   createCoatUniforms,
   createVertexColorMaterial,
 } from './material.js';
-import { clamp, lerp } from './math.js';
+import { clamp, lerp, smoothstep } from './math.js';
 import { createLife, gestureHead, stepLife } from './life.js';
 import { createMotion, neckCarriage, stepMotion } from './motion.js';
 import { JUMP_KEYS, LEG_OFFSET, POSE_KEYS, POSE_SIZE, STOP_POSE, samplePoses } from './poses.js';
@@ -61,6 +61,11 @@ const MANE_SWING = 0.6;
 // then; the muzzle ends up about 0.15 m above the ground, 0.55 m in front of the forefeet
 const GRAZE = Object.freeze({ neck: [1.0, 0.5, 0.15], head: -0.85, chew: 0.03, chewRate: 1.7 });
 const GRAZE_NECK_SUM = GRAZE.neck[0] + GRAZE.neck[1] + GRAZE.neck[2];
+// Soft zone of the leg reach (m) while the horse is in the air, reached after the body has risen by
+// AIRBORNE_RAMP (m): see softReach in ik.js
+const AIRBORNE_SOFT_REACH = 0.08;
+const AIRBORNE_RAMP = 0.15;
+const AIRBORNE_RATE = 10; // 1/s, how fast the soft zone follows (no switch in one frame)
 const PI = POSE_KEYS.reduce((o, k, i) => ((o[k] = i), o), {});
 
 function rigPoint(a, parent) {
@@ -195,6 +200,7 @@ export function createHorse(options = {}) {
   const motion = createMotion({ rng });
   const life = createLife({ rng });
   const footfalls = [];
+  let airborne = 0; // 0..1, smoothed: how much the soft reach is used
   const headGesture = { yaw: 0, pitch: 0, neck: 0 };
   const maneBones = [1, 2, 3, 4, 5].map((k) => B[`mane${k}`]);
   const lidBones = [B.Llid, B.Rlid];
@@ -242,13 +248,14 @@ export function createHorse(options = {}) {
       applyQuality();
     },
     dispose() {
-      body.geometry.dispose();
-      tack?.geometry.dispose();
-      body.material.dispose();
-      tack?.material.dispose();
+      // through `release`, so that objects of a lost context are not freed with GL calls
+      release(body.geometry);
+      release(tack?.geometry);
+      release(body.material);
+      release(tack?.material);
       reins?.dispose();
       rider?.dispose();
-      skeleton.dispose();
+      release(skeleton.boneTexture);
       object.removeFromParent();
     },
   };
@@ -403,6 +410,11 @@ export function createHorse(options = {}) {
     B.spineRear.updateMatrix();
     mFront.multiplyMatrices(root.matrix, B.spineFront.matrix);
     mRear.multiplyMatrices(root.matrix, B.spineRear.matrix);
+    // Airborne (a jump): the ground target of a hoof is out of reach, and the IK must not lock the
+    // leg straight and bend it in a single frame when the target comes back (see softReach)
+    airborne += (smoothstep(0, AIRBORNE_RAMP, y) - airborne) * (1 - Math.exp(-AIRBORNE_RATE * dt));
+    if (airborne < 1e-3) airborne = 0;
+    const soft = AIRBORNE_SOFT_REACH * airborne;
     for (let leg = 0; leg < 4; leg++) {
       const front = leg < 2;
       const rigL = front ? frontRig : hindRig;
@@ -420,13 +432,13 @@ export function createHorse(options = {}) {
       const past = rigL.t4 + a * (1 - 0.7 * W) + L.sink * 6 * G - pastFold;
       if (front) {
         const scap = scapulaSlide(hz - rigL.H.z);
-        solveFront(rigL, hz, hy, past, flex, scap, rotOut);
+        solveFront(rigL, hz, hy, past, flex, scap, rotOut, soft);
         const bones = legBones[leg];
         for (let k = 0; k < 5; k++) bones[k].rotation.x = rotOut[k];
       } else {
         const sweep = hindSweep(rigL, hz, hy, past);
         const cannon = rigL.t3 + 0.85 * (sweep - a) + a - flex;
-        solveHind(rigL, hz, hy, past, cannon, rotOut);
+        solveHind(rigL, hz, hy, past, cannon, rotOut, soft);
         const bones = legBones[leg];
         for (let k = 0; k < 4; k++) bones[k].rotation.x = rotOut[k];
       }

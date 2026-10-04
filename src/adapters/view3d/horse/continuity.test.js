@@ -301,3 +301,80 @@ describe('full animation continuity at 60 fps (bones of the real horse)', () => 
     });
   }
 });
+
+// --- jumps from every gait, with the real height of the horse and the rider on top ---------------
+
+// The fast swing of the canter turns the carpus by about 0.5 rad per frame at the top speed, so a
+// leg joint may do that in a jump, too. Before the soft reach of the IK, the landing (the hoof
+// target comes back into reach and the straight leg bends in one frame) turned the forearm by
+// 0.8-0.9 rad.
+const JUMP_LEG_LIMIT = 0.6;
+const JUMP_RIDER_LIMIT = 0.15; // the rider's joints move calmly through the whole jump
+const RIDER_BONES = /^(pelvis|spine|chest|neck|head|(L|R)(upperArm|forearm|hand|thigh|shin|foot))$/;
+
+function jumpFrames(gait, speed, height, total = 1.0) {
+  const lead = 120;
+  const n = Math.round(total / FRAME);
+  const frames = [];
+  for (let i = 0; i < lead; i++) frames.push({ gait, speed, y: 0, jump: null });
+  for (let i = 0; i < n; i++) {
+    const s = i / n;
+    let phase = 'takeoff';
+    let progress = s / 0.2;
+    if (s >= 0.75) {
+      phase = 'landing';
+      progress = (s - 0.75) / 0.25;
+    } else if (s >= 0.2) {
+      phase = 'flight';
+      progress = (s - 0.2) / 0.55;
+    }
+    const jump = { phase, progress: Math.min(1, progress) };
+    frames.push({ gait, speed, y: height * Math.sin(Math.PI * s), jump });
+  }
+  for (let i = 0; i < 60; i++) frames.push({ gait, speed, y: 0, jump: null });
+  return { frames, from: lead - 1 };
+}
+
+describe('jumps from every gait: no pop in the take-off or the landing', () => {
+  const cases = [
+    ['walk', 1.2, 1.2],
+    ['trot', 3.5, 0.6],
+    ['trot', 4.5, 1.2],
+    ['canter', 5.2, 0.6],
+    ['canter', 5.2, 1.2],
+  ];
+  for (const [gait, speed, height] of cases) {
+    it(`${gait} at ${speed} m/s over ${height} m: legs and rider stay smooth`, () => {
+      const horse = createHorse({ quality: 'low', rng: createRng(3) });
+      const riderObjects = new Set();
+      horse.rider.object.traverse((o) => riderObjects.add(o));
+      const bones = [];
+      horse.object.traverse((o) => o.isBone && bones.push(o));
+      const prevQ = new Map();
+      const worst = { leg: { v: 0, w: '' }, rider: { v: 0, w: '' } };
+      const { frames, from } = jumpFrames(gait, speed, height);
+      frames.forEach((state, i) => {
+        horse.update(FRAME, { turnRate: 0, hop: null, refusal: null, ...state });
+        for (const b of bones) {
+          const q = prevQ.get(b);
+          prevQ.set(b, b.quaternion.clone());
+          if (!q || i < from) continue;
+          const angle = 2 * Math.acos(Math.min(1, Math.abs(q.dot(b.quaternion))));
+          const isRider = riderObjects.has(b);
+          const kind = isRider
+            ? RIDER_BONES.test(b.name)
+              ? 'rider'
+              : null
+            : LEG_BONES.test(b.name)
+              ? 'leg'
+              : null;
+          if (kind && angle > worst[kind].v)
+            worst[kind] = { v: angle, w: `${b.name} frame ${i - from}` };
+        }
+      });
+      horse.dispose();
+      expect(worst.leg.v, `leg bone ${worst.leg.w}`).toBeLessThanOrEqual(JUMP_LEG_LIMIT);
+      expect(worst.rider.v, `rider bone ${worst.rider.w}`).toBeLessThanOrEqual(JUMP_RIDER_LIMIT);
+    });
+  }
+});
