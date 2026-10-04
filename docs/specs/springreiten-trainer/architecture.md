@@ -1,6 +1,6 @@
 # Springreiten-Trainer – Architektur-Vertrag (technische Spec)
 
-Gilt für SRT-001 bis SRT-006. Fachliches „Was": `docs/features/springreiten-trainer/concept.md`
+Gilt für SRT-001 bis SRT-012. Fachliches „Was": `docs/features/springreiten-trainer/concept.md`
 (Regeln Rn) und die Tickets in `docs/features/springreiten-trainer/tasks/`. Dieses Dokument regelt
 das „Wie": Module, Schnittstellen, Koordinaten, Datei-Ownership. Abweichungen erst hier ändern.
 
@@ -65,7 +65,7 @@ erzwingt die Grenzen.
 
 | Pfad | Inhalt | Darf importieren |
 | --- | --- | --- |
-| `src/shared/` | reine Helfer ohne Seiteneffekte (Event-Emitter, `math.js`: `clamp`, `isPlainObject`) | nichts außer `shared` |
+| `src/shared/` | reine Helfer ohne Seiteneffekte (Event-Emitter, `math.js`: `clamp`, `isPlainObject`; `spring.js`: gedämpfte Feder; `reach.js`: weiche Reichweiten-Grenze einer Zwei-Knochen-Gliedmaße; siehe „Weiche Bewegung“) | nichts außer `shared` |
 | `src/domain/sim/` | Reit-/Sprung-Simulation, Spielwerte (`tuning.js`), Geometrie, seedbarer Zufall | `domain`, `shared` |
 | `src/domain/course/` | Parcours-Layouts, freie Aufstellung, Ritt-Zustandsautomat, Wertung (der geometrische Layout-Prüfer `layout-check.js` ist reines Test-Orakel und liegt in `tests/support/`) | `domain`, `shared` |
 | `src/domain/progress/` | Fortschritt, Bestleistung, Freischaltung, Auszeichnungen | `domain`, `shared` |
@@ -74,7 +74,8 @@ erzwingt die Grenzen.
 | `src/application/languages.js` | `LANGS` – die angebotenen Sprachen (einzige Quelle für Schema und UI) | – |
 | `src/application/graphics-levels.js` | `GRAPHICS_LEVELS` – die wählbaren Grafikstufen (einzige Quelle für Schema, Einstellungs-Dienst, Grafik-Presets und Pferd) | – |
 | `src/application/settings-service.js` | Anwendungsfälle für Einstellungen: der **einzige Schreiber** des Bereichs `settings` (siehe „Einstellungs-Dienst“) | `domain`, `application`, `shared` |
-| `src/application/settings-schema.js` | Registriert Einstellungsfelder (Grafik, Kamera, Hilfe, Klang) und die Bereiche `horse`/`progress` im Spielstand-Schema | `domain`, `application`, `shared` |
+| `src/application/settings-schema.js` | Registriert Einstellungsfelder (Grafik, Kamera, Hilfe, Klang, `controlsHelpSeen`) und die Bereiche `horse`/`progress` im Spielstand-Schema | `domain`, `application`, `shared` |
+| `src/application/start-flow.js` | Startablauf: welche Bildschirme vor dem Hauptmenü kommen (`startSequence`, `nextStartScreen`; siehe „Startablauf und Bedienungs-Tipps“) | `application` |
 | `src/application/ride-session.js` | Anwendungsfall „Ritt": Sim-Schritt, Ereignisse, Stangen-Wiederaufbau, Sprungzähler + Sofort-Auszeichnungen, Absprung-Hilfe, Rückmeldungen | `domain`, `application`, `shared` |
 | `src/application/modes/` | Modus-Strategien `free-mode.js`, `course-mode.js` (Uhr, HUD-Modell, Rittende-Ergebnis). **Modi speichern nichts**: nur die Ritt-Sitzung schreibt, und zwar über den Fortschritts-Dienst | `domain`, `application`, `shared` |
 | `src/application/progress-service.js` | Sprung zählen, Ritt abschließen, Fortschritt löschen (über Port `store`) | `domain`, `shared` |
@@ -83,9 +84,9 @@ erzwingt die Grenzen.
 | `src/adapters/input/` | Tastatur, Touch-Bedienung (nipplejs) → `InputState` | innen |
 | `src/adapters/view3d/` | Renderer, Grafikstufen, Welt, Hindernisse, Pferd/Reiter, Kamera, Engine | innen |
 | `src/adapters/audio/` | WebAudio-Synthese | innen |
-| `src/adapters/ui/` | App-Rahmen, Bildschirme (`screens/`, z. B. `screens/ride-screen.js`), Einstellungs-Abschnitte (`settings-sections.js`, `audio-wiring.js`), i18n + Texte, Styles | innen |
+| `src/adapters/ui/` | App-Rahmen, Bildschirme (`screens/`, z. B. `screens/ride-screen.js`), Einstellungs-Abschnitte (`settings-sections.js`, `audio-wiring.js`), Bedienungs-Tipps (`screens/controls-help.js`, `screens/help-content.js`), i18n + Texte, Styles (`styles/main.css` mit den Design-Tokens, `help.css`) | innen |
 | `src/main.js` | Composition Root (verdrahtet Store, Einstellungs-Dienst, App, Bildschirme; Startfehler → allgemeine Fehlermeldung) | alles |
-| `tests/support/` | Test-Hilfen, die nie in den Produktions-Build gelangen: `sim-utils.js`, `test-ports.js` (Fake-Store/-Uhr), `test-host.js`, `autopilot.js` (+ Fahrbarkeits-Test), `layout-check.js` (+ Test; Layout-Orakel für `courses.test.js`). Vitest-Include und ESLint-Override sind dafür eingerichtet | alles |
+| `tests/support/` | Test-Hilfen, die nie in den Produktions-Build gelangen: `sim-utils.js`, `test-ports.js` (Fake-Store/-Uhr), `test-host.js`, `autopilot.js` (+ Fahrbarkeits-Test), `layout-check.js` (+ Test; Layout-Orakel für `courses.test.js`), `color.js` (+ Test; WCAG-Kontrast), `scene-stats.js` (+ Test; Draw Calls und Dreiecke einer three.js-Szene ohne GL), `fake-canvas.js` (Canvas-Attrappe für Texturen in Node), `sequence-helper.js` (geskriptete Ritte für die Kontinuitätstests). Vitest-Include und ESLint-Override sind dafür eingerichtet | alles |
 
 ### Ports (als Parameter injiziert)
 
@@ -135,6 +136,11 @@ läuft noch: Schritte ausstehend, Pixel-Ratio vorgemerkt oder Shader werden komp
 `graphicsPixelRatio` (Pixel-Ratio des Renderers). `?testhooks&gpubudget=<MB>` ersetzt das
 GPU-Speicher-Budget der Engine (`gpuBudgetOverride` in `test-hooks.js`; `main.js` legt es als
 `app.services.gpuBudgetOverrideMB` ab; ohne `?testhooks` wirkungslos).
+Die Smoke-Hilfen (`tests/smoke/helpers.js`) kennen den Startablauf: `openMenu(page)` überspringt
+Namensfrage und Bedienungs-Tipps („Verstanden“, `[data-action="help-done"]`) bis zum Hauptmenü;
+`openGame(page, { save, lang, helpSeen = true })` schreibt einen übergebenen Spielstand mit
+`controlsHelpSeen: helpSeen` (ein Spielstand gilt als „Hilfe gesehen“, ohne Spielstand beginnt die
+App von vorn). Lokal braucht der Smoke-Test ein Chromium (`PW_CHROMIUM_PATH`, siehe README).
 
 ### Einstellungs-Dienst (application/settings-service.js)
 
@@ -148,11 +154,62 @@ settings.setAutoLevel(level)                // Governor senkt die Stufe, Automat
 settings.setCamera('follow'|'rider')        // CAMERA_MODES in settings-schema.js
 settings.setAid('free'|'course', on)
 settings.setShowFps(on)                     // fps-Anzeige im Ritt (Regel 4, 44); Standard aus
+settings.markControlsHelpSeen()             // Bedienungs-Tipps mit „Verstanden“ geschlossen (Regel 56, 44)
 settings.setVolume('music'|'sfx', v) ; settings.setMuted('music'|'sfx', m)
 settings.onChange(fn) → unsubscribe
 ```
 Kein Adapter ruft `store.update('settings', …)` direkt auf (Einstellungs-Bildschirm, Audio-
-Verdrahtung, Ritt-Bildschirm/Kamera, Vorstart-Hilfe-Schalter, Engine/Grafik-Governor).
+Verdrahtung, Ritt-Bildschirm/Kamera, Vorstart-Hilfe-Schalter, Bedienungs-Tipps, Engine/Grafik-Governor).
+
+### Startablauf und Bedienungs-Tipps (SRT-012, Regeln 43, 53, 56)
+
+```js
+startSequence(store)    // z. B. ['namePrompt', 'controlsHelp', 'menu']; das Hauptmenü ist immer der letzte Schritt
+nextStartScreen(store)  // erster noch offener Schritt der Folge
+```
+`application/start-flow.js` ist rein (nur Port `store`). Jeder Schritt, der erledigt ist, fällt aus
+der Folge: `namePrompt` solange die Namensfrage unbeantwortet ist (`needsNamePrompt`), `controlsHelp`
+solange `settings.controlsHelpSeen` falsch ist (auch bei einem bestehenden Spielstand, der die Hilfe
+nie geschlossen hat; ein alter Spielstand ohne das Feld bekommt `false`). Deshalb fragt jeder Bildschirm
+beim Schließen nur nach „dem nächsten“ (`app.go(nextStartScreen(store))`); `main.js` startet mit
+`app.go(nextStartScreen(store))`, die Namensfrage hat keinen `params.next` mehr.
+
+Bildschirm `controlsHelp` (`adapters/ui/screens/controls-help.js`, registriert über
+`registerControlsHelp(app)`):
+- Inhalt als reine Daten in `help-content.js` (`KEYBOARD_ROWS`, `TOUCH_ROWS`, `HELP_MODES`,
+  `defaultHelpMode(touch)`, `rowsFor(mode)`); der Bildschirm zeigt nur an. Tastatur: Tastenkappen
+  (`<kbd class="keycap">`, Alternativen mit „/“), Touch: Symbole, die den Ritt-Buttons gleichen
+  (`help-glyph-stick|gallop|jump|small`, Farben aus den Touch-Tokens). Beim Öffnen gilt die aktuelle
+  Eingabeart (`inputMode.touch`), eine Auswahlgruppe (`choiceGroup`) schaltet auf die andere um.
+  Texte in `ui/i18n/help.js` (`help.*`, `menu.help`, `pause.help`, DE + EN), Styles in `styles/help.css`.
+- „Verstanden“ (`[data-action="help-done"]`) ruft `settings.markControlsHelpSeen()`. Mit
+  `params.fromPause` (aus der Pause über `app.push('controlsHelp', { fromPause: true })` geöffnet)
+  folgt `app.pop()` zurück ins noch offene Pausenmenü, sonst `app.go(nextStartScreen(store))`.
+  Aus der Pause hat der Bildschirm keine Musik (`music: !params.fromPause`).
+- Menü-Eintrag `help` (`registerMenuEntry`, `order: 45`, Text `menu.help`) im Hauptmenü; im Pausenmenü
+  steht der Knopf `[data-action="help"]` (`pause.help`, `btn-secondary`) unter „Einstellungen“.
+  Auf niedrigen Querformat-Bildschirmen ordnet `ride.css` die Pause-Knöpfe in zwei Spalten.
+
+### Farbsprache der Buttons (SRT-010, Regel 57)
+
+Alle Farben sind Design-Tokens im ersten `:root`-Block von `ui/styles/main.css`; Bildschirm-Styles
+nutzen nur diese Tokens, keine eigenen Hex-Werte für Buttons. Rollen:
+
+| Rolle | Klasse | Tokens |
+| --- | --- | --- |
+| Weitermachen (Standard) | `.btn` | `--c-positive` / `--c-positive-ink` / `--c-positive-dark` (3D-Kante) |
+| Zurückhaltend | `.btn-secondary` | `--c-neutral-bg` / `--c-neutral-ink` (Schrift und Rahmen) / `--c-neutral-press` |
+| Löschen | `.btn-danger` (`profile.css`) | `--c-danger` / `--c-danger-ink` / `--c-danger-dark` |
+| Auswahl | `.btn-choice` | `--c-choice-bg` / `--c-choice-ink` / `--c-choice-edge`; aktiv: `--c-choice-on` / `-ink` / `-edge` |
+| Touch im Ritt | `.touch-btn` | `--c-touch-jump`, `--c-touch-ink`, `--c-touch-gallop-led`, `--c-touch-small` |
+| Überschriften | – | `--c-brand` (nie ein Button oder etwas darin) |
+
+Regeln: Weitermachen ist gefüllt, zurückhaltend flach mit Rahmen (die Art ist auch ohne Farbe an der
+Form erkennbar), rot nur für Löschen (`reset-section.js`: „Fortschritt löschen“ und dessen
+Bestätigung). Jedes Schrift-/Flächen-Paar der Tokens erreicht 4,5 : 1: `ui/styles/palette.test.js`
+liest die Tokens aus `main.css` und prüft sie mit `tests/support/color.js` (`contrastRatio`,
+WCAG 2.x); Rahmen und Flächen gegen die Panel-Farbe brauchen 3 : 1. Der Smoke-Test
+`tests/smoke/colors.spec.js` liest die berechneten Farben auf allen Bildschirmen mit Buttons.
 
 ## Schnittstellen
 
@@ -176,7 +233,7 @@ Ein JSON-Objekt unter `localStorage['zoes-horse-farm.save']`:
 {
   version: 1,
   settings: { lang, graphicsAuto, graphicsLevel, camera, aidFree, aidCourse, showFps,
-              musicVolume, musicMuted, sfxVolume, sfxMuted },
+              controlsHelpSeen, musicVolume, musicMuted, sfxVolume, sfxMuted },
   horse:    { name: null|string, nameAnswered: bool, coat, marking },
   progress: { unlocked: 1..5, courses: { '1': { faults, timeCs, stars } }, jumps,
               finishedRides, badges: { [badgeId]: ISO-Datum } },
@@ -392,20 +449,40 @@ world.restoreAfterContextLoss()                     // nach wiederhergestelltem 
                                                     // Schatten-Map nur vergessen, nicht disposen);
                                                     // die Schatten-Map baut three.js neu
 world.gpuObjects()                                  // alles mit GPU-Ressourcen (für createGpuEpoch)
-world.update(dt, camera)                            // Himmel, Umgebung, Ringe, Linien (je Frame)
+world.emitHoofDust(x, y, z, strength)               // Hufstaub an einem Aufsetzpunkt (Weltkoordinaten); nur wenn
+                                                    // strength >= 0.3 (kein Schritt), der Punkt auf dem Sand des
+                                                    // Reitplatzes liegt (isOnArenaSand, 0,2 m vom Zaun) und die
+                                                    // Stufe Staub hat (Preset hoofDust)
+world.update(dt, camera)                            // Himmel, Umgebung, Wind, Tiere, Staub, Ringe, Linien (je
+                                                    // Frame); die grasenden Pferde laufen nur, solange die
+                                                    // Koppel im Blickfeld ist
 world.dispose()
-const horse = createHorse({ coat, marking, quality });  // → { object, earAnchor, ... }
+const horse = createHorse({ coat, marking, quality, rider = true, tack = true, castShadow = null, rng });
+                                                     // → { object, earAnchor, ... }; rider/tack = false und
+                                                     // castShadow = false: das grasende Pferd der Koppel
 horse.object                                         // THREE.Group, schaut nach +Z
 horse.update(dt, sim.horse)                          // Gangart-/Sprung-Animation (Gangart 'back':
-                                                     // Zweitakt-Diagonale rückwärts, Huf läuft im Stand nach vorn)
+                                                     // Zweitakt-Diagonale rückwärts, Huf läuft im Stand nach vorn);
+                                                     // state.graze 0..1 senkt Hals und Kopf zum Gras (Koppelpferde);
+                                                     // gibt horse.footfalls zurück
 horse.setAppearance({ coat, marking })
 horse.setQuality(level)
 horse.earAnchor                                      // Object3D für Reiter-Sicht
-horse.onFootfall = (gait, leg) => {}                 // für Hufschlag
+horse.onFootfall = (gait, leg) => {}                 // für Hufschlag (nur 'step'-Ereignisse)
+horse.footfalls                                      // Aufsetzer des letzten update(): [{ kind: 'step'|'landing',
+                                                     // leg 0..3 (LF, RF, LH, RH), gait, strength 0..1, x, y, z }]
+                                                     // im lokalen Raum von horse.object; Array und Ereignisse werden
+                                                     // vom nächsten update() wiederverwendet (nicht aufbewahren)
+horse.footfallWorld(event, out)                      // Aufsetzpunkt in Weltkoordinaten (mit der AKTUELLEN Lage von
+                                                     // horse.object: erst nach dem Platzieren aufrufen)
+engine.emitHoofDust()                                // je Footfall world.emitHoofDust; der Ritt-Bildschirm ruft es
+                                                     // nach horse.update und placeHorse
 horse.dispose()
 ```
+Aufsetzer: `step` je Hufschlag mit Stärke je Gangart (`STEP_STRENGTH`: Schritt 0,12, Trab 0,5, Galopp 0,8,
+Rückwärts 0,1), `landing` paarweise je Sprung (Vorderhand Stärke 1, Hinterhand 0,65).
 Die öffentliche Pferd-API enthält keine interne Bewegungs-Zustandsstruktur (nur über Tests der
-reinen Module `motion.js`, `gaits.js` erreichbar). Die Geschwindigkeitsschwellen der Gangarten
+reinen Module `motion.js`, `gaits.js`, `legs.js` erreichbar). Die Geschwindigkeitsschwellen der Gangarten
 (`view3d/horse/gaits.js`) werden aus `TUNING.speeds` abgeleitet, nicht kopiert; die Standard-Optik
 (`DEFAULT_APPEARANCE`) kommt aus `domain/horse/appearance.js`.
 
@@ -447,15 +524,140 @@ audio.dispose()
 
 `low`: pixelRatio 1, keine Schatten, Lambert-Materialien, wenig Umgebung.
 `medium`: pixelRatio ≤ 1,5, Schatten 1024 (nur Pferd/Hindernisse), Standard-Materialien.
-`high`: pixelRatio ≤ 2, Schatten 2048, mehr Umgebung (Bäume, Gras-Instanzen), Nebel.
+`high`: pixelRatio ≤ 2, Schatten 2048, mehr Umgebung (Bäume, Gras-Büschel), Nebel.
 Jede Stufe steht in `QUALITY_PRESETS` (`view3d/quality.js`, mit `level`-Name); `characterDetail` (`low|medium|high`)
 bestimmt Geometrie und Material von Pferd und Reiter.
+Die Details von SRT-011 (Regel 3) sind eigene Preset-Schlüssel, die Stufen unterscheiden sich so:
+
+| Schlüssel | low | medium | high |
+| --- | --- | --- | --- |
+| `grassTufts` (Anteil der 11 000 Büschel; der größte Dreieckskosten-Posten) | 0 | 0 | 1 |
+| `flowers` (Anteil der Wiesenblumen) | 0 | 0,45 | 1 |
+| `decor` (Wimpelkette, Blumenkübel, Blumenkästen an den Ständern, Koppelzaun und -Requisiten; < 1: jeder zweite Wimpel) | 0 | 0,5 | 1 |
+| `grazingHorses` (Pferde auf der Koppel) | 0 | 2 | 2 |
+| `hoofDust` | aus | an | an |
+| `birds` / `butterflies` (Anteil) | 0 / 0 | 0,5 / 0 | 1 / 1 |
+| `wind` (Bäume, Büsche, Gras, Blumen wiegen sich) | aus | an | an |
+
+`low` behält Draw Calls und Dreiecke von vor SRT-011 (nichts Neues wird gezeichnet oder hochgeladen).
+`windyGrass` entfällt, `wind` ersetzt es. Die Zahlen prüft `view3d/world-budget.test.js`.
 Automatik: `src/adapters/view3d/quality.js` (`createQualityGovernor`), misst nur beim Reiten.
 Bei **manueller** Stufe über `low` (`canHintLowerLevel`) meldet `createLowFpsHint` (gleiche
 Messregeln, eine Instanz je Ritt bzw. freiem Modus) einmal „Grafik zu hoch“ (< 30 fps im 5-s-Mittel);
 auf `low` wird weder gemessen noch gezeigt (es gibt nichts Niedrigeres). „Neu starten“ im Parcours
 ist ein neuer Ritt (Konzept-Regel 39): `reset()` erlaubt den Hinweis erneut. Der Ritt-Bildschirm
 zeigt ihn als Toast (`feedback`-Element, 5 s Echtzeit, auch bei wenigen fps), die Stufe bleibt.
+
+### Umgebung, Tiere und Details (SRT-011, Regel 3)
+
+Alles prozedural (keine Assets). Reine Planung (`*-plan.js`, `flight-paths.js`, `decor-plan.js`,
+`world-layout.js`) liegt getrennt von den three.js-Meshes und hat eigene Tests; Zufall kommt aus einem
+seedbaren `rng` (`createRng` aus `textures.js`), also bleibt das Bild bei jedem Start gleich.
+- **Wind** (`plant-shaders.js`): `createWind()` → `{ time, strength }` (Uniforms `windTime`,
+  `windStrength`). `createWorld` erzeugt **einen** Wind und reicht ihn an Umgebung, Arena und Hindernisse;
+  `environment.update` zählt `wind.time`, `environment.setDensity(…, { wind })` setzt `strength` auf 1 oder 0.
+  Die Patches erweitern three.js-Materialien per `onBeforeCompile` im Vertex-Shader (keine CPU-Arbeit):
+  `patchTreeWind`, `patchBushWind` (nur die Standard-Materialien; das Lambert-Material von `low` bleibt
+  frei vom Wind-Code), `patchTuftWind`, `patchBlossoms(material, wind, { base })` (Blumen biegen sich
+  oberhalb von `base`, der Kübel nicht), `patchBunting`, `patchWings(material, wind, { rate, amplitude, glide })`.
+- **Wiesenblumen** (`meadow-plan.js` `planMeadow`, `FLOWER_COLORS`; `flower-geometry.js`; `meadow.js`
+  `createMeadow`): ein `InstancedMesh` in Flecken abseits von allem, was `isBlocked` meldet (Sand, Wege,
+  Gebäude, Bänke, Koppel); `setDensity(anteil)` zeichnet die ersten Instanzen (über alle Flecken verteilt).
+  Geometrie und Blumenkasten tragen das Attribut `petal` für `patchBlossoms`.
+- **Vögel und Schmetterlinge** (`wildlife.js` `createWildlife`, `flight-paths.js`): wenige
+  Instanzen, Flügelschlag im Shader; die Flugbahnen sind geschlossene Funktionen der Zeit
+  (`planFlocks`, `flockPose`, `birdPose`, `planButterflies`, `butterflyPose`, Grenzen `BIRD_LIMITS`),
+  pro Frame werden nur die Instanzmatrizen geschrieben. Schmetterlinge schweben über Blumenflecken
+  (`butterflyAnchors`).
+- **Dekoration** (`decor-plan.js`: `planBunting`, `planPots`, `planPaddockProps`, `planPaddockKeepOut`;
+  `arena-decor.js` `createArenaDecor` mit zwei Meshes; `arena.js`: `createArena({ …, wind })`,
+  `setDetail(decor)`): Wimpelkette am Reitplatzzaun, Blumenkübel am Tor, Koppelzaun (Stil `paddock`) und
+  Requisiten der Koppel (Unterstand, Tränke, Raufe). Blumenkästen an den Hindernisständern liegen in
+  `obstacles.js` (`setDecor(on)`, ein `InstancedMesh` `planters`, je Hindernis eine Blütenfarbe).
+- **Koppel** (`world-layout.js`): `PADDOCK` (Mitte, `width`, `depth`, `rotation`) westlich des Reitplatzes,
+  `paddockPoint(u, v)` (Anteile der halben Breite/Tiefe → Weltpunkt), `paddockContains(x, z, margin)`,
+  `planPaddockFence()`; der Bereich steht in `BLOCKED`, damit dort keine Pflanzen wachsen.
+  `isOnArenaSand(x, z, margin)` entscheidet, wo Hufe stauben (nur innerhalb des Reitplatzzauns).
+- **Grasende Pferde** (`horse/grazing.js` `createGrazingHorses({ quality, area, count, coats, rng,
+  release })`, Verhalten rein in `horse/grazing-logic.js`): `createHorse` ohne Reiter, Sattelzeug und
+  Schatten; Zustände `graze`/`look`/`turn`/`walk` (`stepGrazer`), gesteuert über `state.graze` und die
+  normale Gangart-Animation. Geplant wird die **Körpermitte**: das ganze Pferd liegt in jeder Pose
+  innerhalb `GRAZING.bodyRadius` darum (`HORSE_EXTENT` ist am Modell gemessen und in `grazing.test.js`
+  gegengeprüft), also bleibt es im Zaun und aus den Requisiten (`area.avoid`, Kreise aus
+  `planPaddockKeepOut`); der Objekt-Ursprung liegt `GRAZING.bodyOffset` vor der Mitte. `low`/`medium`
+  nutzen das Pferdemodell `low`, `high` das Modell `medium`. `world.update` bewegt sie nur, solange die
+  Koppel im Blickfeld ist.
+- **Hufstaub** (`dust.js`): `createDust({ quality, release, rng })` → ein `THREE.Points` (ein Draw Call),
+  Pool als einfache Arrays (`createDustPool`, rein getestet), Größe nach Stufe (`low` 0, `medium` 36,
+  `high` 90 Teilchen). Verdrahtung: `engine.emitHoofDust()` → `world.emitHoofDust` (siehe View).
+- **Details zurückhalten** (`detail-hold.js` `createDetailHold`, `quality-stages.js` `sameMaterialStage`):
+  Zwischen dem Schritt `materials` und dem Schritt `density` eines Stufenwechsels ändern sich die
+  Shader aller sichtbaren Meshes. Die optionalen Detail-Meshes (Eintrag `detail: true` in
+  `environment`/`obstacles`) werden dann ausgeblendet (`sync(meshes, ready)`), damit nichts mit Shadern
+  kompiliert wird, die der nächste Schritt wegwirft; `restore()` zeigt sie wieder und läuft vor Code,
+  der die Sichtbarkeit selbst bestimmt (`density`-Schritt, `setObstacles`).
+- **Budget** (`world-budget.test.js`, `tests/support/scene-stats.js`): baut die Welt je Stufe ohne WebGL
+  (`tests/support/fake-canvas.js` für die Texturen) und prüft Draw Calls und Dreiecke: `low` höchstens so
+  viel wie vor SRT-011, nur eine Handvoll Draw Calls mehr je Stufe, Budgets je Stufe (low 60 Calls /
+  60 000 Dreiecke, medium 100 / 90 000, high 150 / 250 000), Details erscheinen und verschwinden
+  sauber, `dispose()` und der Kontextverlust-Pfad (`gpuObjects`) kennen alle neuen Objekte.
+
+### Weiche Bewegung von Pferd und Reiter (SRT-011, Regel 24)
+
+Ziel: kein sichtbares Springen von Frame zu Frame bei Gangwechsel, Galoppwechsel, Sprung, Verweigerung,
+Rückwärtsrichten und Halt. Bausteine, alle rein (ohne three.js) und einzeln getestet:
+- **Federn** (`src/shared/spring.js`): `createSpring`, `stepSpring(s, ziel, omega, zeta, dt)` ist die
+  geschlossene Lösung der gedämpften Schwingung für ein konstantes Ziel, also für jedes `dt` stabil und
+  bildratenunabhängig (ein Schritt wird auf `MAX_SPRING_DT` begrenzt); `snapSpring` setzt ohne Geschwindigkeit.
+  Genutzt für Haar, Glättung von Parametern und für Reiter (Hände, Kopf, Pferdeschwanz, Sitz).
+- **Haar-Ketten und Lebenszeichen des Pferdes** (`horse/spring.js`: `createHairChain`, `stepHairChain`,
+  `kickChain`, `smoothTo`, Beschleunigungsschätzer `createAccelEstimator`/`stepAccelEstimator`;
+  `horse/life.js`: `createLife`, `stepLife`, `gestureHead`): Schweif, Mähne und Schopf folgen als
+  unterdämpfte Federketten der echten Beschleunigung des Körpers (Anfahren, Bremsen, Kurven, Auf und Ab,
+  Landung) und dem Wind; dazu Atmung mit Nüstern (`uFlare`), Lidschlag (`uBlink`, Lid-Knochen) und
+  Schweifschlagen. `index.js` begrenzt die Mähne (`MANE_PRESS`, `MANE_SWING`), damit sie nicht in den
+  Hals kippt.
+- **Zeitplaner** (`horse/schedule.js`: `blinkCurve`, `createBlinkScheduler`, `createGestureScheduler`,
+  `IDLE_GESTURES`, `createRandomTimer`): zufällige Abstände für Lidschlag (nach Messwerten ca. 8–19 pro
+  Minute, bei Aufmerksamkeit seltener), Leerlauf-Gesten im Halt (Kopfschütteln, Werfen, Scharren) und
+  Schweifschläge; der `rng` wird injiziert (`createHorse({ rng })`), Tests sind deterministisch.
+- **Hufmodell** (`horse/legs.js`: `createLegModel`, `blendGait`, `stepLegs`, `allPlanted`; `horse/gaits.js`
+  `swingEnds`): jedes Bein hat **einen** Hufpfad, dessen Phase sich beim Gangwechsel allmählich
+  angleicht (keine Pose-Überblendung zweier Gangarten); im Stand ist der Huf am Boden verankert (rutscht
+  nie), im Schwung läuft der Pfad stetig vom Abheben zum Aufsetzen; beim Halt treten die Beine einzeln
+  gerade. Die Aufsetzer (`falls`) speisen `horse.footfalls` (Staub, Klang).
+- **Weiche Reichweite** (`src/shared/reach.js` `softReach(d, dMax, soft)`; `horse/ik.js`: `solveFront`/
+  `solveHind` mit Parameter `soft`, `scapulaSlide`; `view3d/rider-reach.js` `limbReach` für die Arme):
+  statt einer harten Grenze am vollen Strecken (Knie springt um 40° in einem Frame) wird das letzte
+  Stück der Reichweite komprimiert. Am Boden eine kleine Zone (`GROUND_SOFT_REACH`), in der Luft eine
+  große (`AIRBORNE_SOFT_REACH`), geglättet über `AIRBORNE_RAMP`.
+- **Gelenk-Begrenzer** (`horse/joint-limit.js`: `createJointLimiter`, `snapJoint`, `limitJoint`):
+  begrenzt Winkelgeschwindigkeit und -beschleunigung der Beingelenke; glatte Bewegung läuft unverändert
+  und ohne Verzögerung durch, nur ein Knick der IK wird über wenige Frames verteilt (`LEG_JOINT_LIMIT`,
+  auf dem Boden doppelt so viel Spielraum, damit der Huf nicht rutscht).
+- **Hals und Mähne** (`horse/neck.js`: Halsprofil `NECK`, `neckCurve`, `maneAnchors`; gemeinsam für
+  Geometrie und Skelett).
+- **Reiter** (`rider.js`, `createRider({ quality, release })`; `lateUpdate(dt)` wird vom Pferd nach dem
+  Aktualisieren der Matrizen aufgerufen):
+  - Details je Stufe (`rider-details.js`: `addFace` mit Augen, Brauen, Nase, Lächeln, Ohren, Wangen;
+    `addChinStrap`; `addPonytail` mit Haarschleife; `addJacketDetails` mit Knöpfen, Plastron,
+    Kragenspitzen, Paspel). `low` bekommt nur das Nötigste, `medium`/`high` mehr und feiner; alles ist an
+    vorhandene Knochen gewichtet und im einen Rider-Mesh zusammengeführt (kein zusätzlicher Draw Call).
+  - Pferdeschwanz-Kette (`rider-ponytail.js`: `createPonytail`, `stepPonytail`, `ponytailTarget`,
+    `PONY_SEGMENTS` = 3): Federn hinter der Kopfbewegung im Kopfraum (Auf und Ab, Beschleunigung, Kurven).
+  - Blick (`rider-look.js`: `createHeadLook`, `stepHeadLook`, `lookTarget`): in die Kurve, beim Absprung
+    zum Hindernis, im Flug nach vorn, im Halt ein ruhiger Blick umher; gefedert, springt nie.
+  - Leben (`rider-life.js`: `breathing`, `createPat`, `stepPat`): Atmung mit leichter Schulterbewegung
+    und ein Klopfen auf den Pferdehals, wenn das Pferd nach einem Sprung steht.
+  - Sitz: `horse/seat.js` `createSeatFilter()` glättet den ruhigen Teil von `riderSeatParts` mit
+    kritisch gedämpften Federn (jeder Sitzwechsel ist sprungfrei, der unmittelbare Teil kommt ungefiltert
+    dazu); `crestRelease(J, jumpWeight)`: die Hände gleiten im Flug am Hals vor und kommen bei der
+    Landung zurück.
+- **Tests** (Regel 24): `horse/continuity.test.js` und `rider-continuity.test.js` fahren geskriptete Ritte
+  (`tests/support/sequence-helper.js`: `runScript`, `createDeltaTracker`, `SEQUENCES`) mit 60 fps durch
+  das echte Pferd bzw. den Reiter und prüfen die ersten und zweiten Differenzen (Winkel, Positionen,
+  Hufe am Boden) auf einen sinnvollen Höchstwert. Dazu je Baustein ein eigener Test
+  (`spring`, `reach`, `joint-limit`, `legs`, `life`, `schedule`, `grazing(-logic)`, `rider-*`).
 
 ### Engine, Stufenwechsel und Kontextverlust (`view3d/engine.js`, `view3d/resilience.js`)
 
@@ -529,7 +731,9 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
   `pixelRatio` (zuerst: Auflösung ist der größte Hebel und braucht keinen Shader) → `shadows`
   (Schattenpass und -Map) → `materials` (Material-Typ, Normal-Maps, Nebel an/aus, Umgebungskarte:
   alles Shader-Änderungen, ein Schritt mit einem Kompilieren) → `characters` (Pferd und Reiter) →
-  `density` (Instanzen, Geometrie-Detail der Umgebung, Nebel-Distanzen als Uniforms). Beim
+  `density` (Instanzen, Geometrie-Detail der Umgebung, die Details der Stufe (Blumen, Wimpel, Kübel
+  und Kästen, Koppelpferde, Staub, Vögel, Schmetterlinge, Wind) und Nebel-Distanzen als Uniforms;
+  `compile: true`, weil neu erscheinende Details eigene Shader mitbringen). Beim
   Hochstufen gilt die umgekehrte Reihenfolge (Auflösung zuletzt).
   `planQualityStagesFromState(applied, to)` plant ab dem Stand je Schritt (ein unterbrochener
   Wechsel setzt fort; ein neues Ziel mitten im Wechsel erreicht nur die fehlenden Schritte).
@@ -574,8 +778,10 @@ nachstellen kann.
   Schatten-Map (three r186 `WebGLShadowMap`, PCF: RGBA8 + 32-Bit-Tiefen-Textur = 8 B/Texel, also
   2048² = 32 MiB), PMREM-Umgebungskarte (r186 `PMREMGenerator`, 256er Würfel im cubeUV-Layout
   768 × 1024 in Half-Float-RGBA ≈ 6 MiB), Texturen mit Mipmaps (× 4/3; Normal-Maps nur wenn die Stufe
-  sie nutzt), Szenerie (Instanzen/LOD) und eine Grundlast (Geometrie, Programme, Pferd,
-  Compositor). `antialias` ist das Attribut des **echten** Kontexts.
+  sie nutzt), Szenerie und ihre Details (Instanzen/LOD, Büschel, Blumen, Dekoration, Tiere nach den
+  Preset-Schlüsseln `envDensity`, `grassTufts`, `flowers`, `decor`, `birds`/`butterflies`), Koppelpferde
+  (`grazingHorses`, je nach `characterDetail`), Hufstaub, Pferd-/Reiter-Vertices (`characterDetail`) und
+  eine Grundlast (Geometrie, Programme, Pferd, Compositor). `antialias` ist das Attribut des **echten** Kontexts.
 - Der GPU-Name für das Budget kommt aus einem Wegwerf-Kontext (`probeRendererString`, vor dem
   Renderer, weil dessen Attribute von der Stufe abhängen). Er nutzt dieselbe `powerPreference`
   (`'high-performance'`) wie der echte Kontext, damit ein Laptop mit zwei GPUs dieselbe liefert
@@ -587,7 +793,9 @@ nachstellen kann.
   darum die vorsichtigen Standardwerte.
 - `fitPresetToBudget(preset, ctx, budgetMB)` (rein) passt eine Stufe an, solange die Schätzung das
   Budget übersteigt, in dieser Reihenfolge: 1. Pixel-Ratio (größte noch passende, in 0,05-Schritten,
-  nicht unter 1), 2. Schatten-Map 2048 → 1024, 3. Gras-Büschel aus, dann Umgebungsdichte auf 0,55.
+  nicht unter 1), 2. Schatten-Map 2048 → 1024, 3. „Gras und Umgebung“ (`SCENERY_STEPS`) in dieser Reihenfolge, je
+  Schritt nur wenn die Schätzung noch zu hoch ist: Gras-Büschel aus, Blumen (mit den Schmetterlingen
+  darüber) aus, Koppelpferde aus, Vögel aus, Dekoration (`decor`) aus, dann Umgebungsdichte auf 0,55.
   Der Look der Stufe bleibt sonst („Hoch“ behält seine Effekte bei kleinerer Auflösung). Ergebnis:
   `{ preset (dasselbe Objekt, wenn nichts zu ändern ist; sonst eingefrorene Kopie mit `level`),
   estimateMB, requestedMB, budgetMB, fits, capped }`; passt auch nach allen Stufen nichts, läuft
@@ -639,4 +847,8 @@ zurückgesetzt (Platzhalter, bis der nächste Mittelwert da ist).
 ## Arbeitsweise
 
 TDD für `domain` und `application` (Test zuerst). Adapter: reine Hilfsfunktionen mit Tests,
-Verhalten im Browser per Smoke-Test (`tests/smoke/`).
+Verhalten im Browser per Smoke-Test (`tests/smoke/`, u. a. `colors.spec.js` für die Button-Farben und
+`help.spec.js` für die Bedienungs-Tipps). Adapter-Tests ohne Browser laufen in Node: three.js-Szenen
+über `tests/support/scene-stats.js` und `fake-canvas.js` (Draw Calls, Dreiecke, Texturen ohne GL),
+Bewegung über `tests/support/sequence-helper.js` (Kontinuität von Frame zu Frame), Farben über
+`tests/support/color.js`.

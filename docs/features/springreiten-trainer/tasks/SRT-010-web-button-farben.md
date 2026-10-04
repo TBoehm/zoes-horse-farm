@@ -1,7 +1,7 @@
 ---
 id: SRT-010
 title: Button-Farben – Grün für Weiter, Rot nur für Löschen
-status: ready-for-dev
+status: in-review
 platform: web
 feature: docs/features/springreiten-trainer/concept.md
 priority: p1
@@ -39,15 +39,26 @@ Die Farbe eines Buttons passt zu seiner Bedeutung: Grün heißt weiter, Rot nur 
 Kein Design-Werkzeug; Farben und Rollen laut Tabelle oben.
 
 ## Akzeptanzkriterien
-- [ ] Alle Buttons zum Weitermachen (Hauptmenü-Einträge, „Los", „Weiter", „Nochmal", „Nächster
-  Parcours", „Los geht's", „Okay") sind grün mit weißer Schrift (Regel 57).
-- [ ] Zurückhaltende Buttons („Zurück", „Abbrechen", „Überspringen", „Neu starten", „Zur Auswahl",
-  „Einstellungen" in der Pause, Abbruch des Ritts) sind hell mit Rahmen (Regel 57).
-- [ ] Nur „Fortschritt löschen" und dessen Bestätigung „Löschen" sind rot (Regel 57).
-- [ ] Kein Button-Text unterschreitet 4,5 : 1 Kontrast, geprüft per Test gegen die Farb-Tokens
-  (Regel 57).
-- [ ] Die Button-Arten unterscheiden sich auch ohne Farbe (Form: gefüllt/umrandet) (Regel 57).
-- [ ] Touch-Button „Springen" ist nicht mehr rot; „Galopp an" bleibt klar erkennbar (Regeln 10, 57).
+- [x] Alle Buttons zum Weitermachen (Hauptmenü-Einträge, „Los", „Weiter", „Nochmal", „Nächster
+  Parcours", „Los geht's", „Okay") sind grün mit weißer Schrift (Regel 57). (Nachweis:
+  tests/smoke/colors.spec.js › main menu: every entry is green, none is red / name question / pause
+  menu / pre-start card and results screen follow the same colors / controls help)
+- [x] Zurückhaltende Buttons („Zurück", „Abbrechen", „Überspringen", „Neu starten", „Zur Auswahl",
+  „Einstellungen" in der Pause, Abbruch des Ritts) sind hell mit Rahmen (Regel 57). (Nachweis:
+  colors.spec.js › settings: "Back" is outlined … / pause menu: "Resume" is green, the other
+  entries are outlined / name question: "Skip" is outlined)
+- [x] Nur „Fortschritt löschen" und dessen Bestätigung „Löschen" sind rot (Regel 57). (Nachweis:
+  colors.spec.js prüft auf jedem Bildschirm alle sichtbaren Buttons, rot nur `reset` und
+  `reset-confirm`)
+- [x] Kein Button-Text unterschreitet 4,5 : 1 Kontrast, geprüft per Test gegen die Farb-Tokens
+  (Regel 57). (Nachweis: src/adapters/ui/styles/palette.test.js › button palette › … text reaches
+  4.5:1 / every color token used in the style sheets is defined)
+- [x] Die Button-Arten unterscheiden sich auch ohne Farbe (Form: gefüllt/umrandet) (Regel 57).
+  (Nachweis: palette.test.js › the border of the outlined button is visible on the panel (3:1);
+  zurückhaltende Buttons sind flach mit Rahmen, gefüllte haben die 3D-Kante)
+- [x] Touch-Button „Springen" ist nicht mehr rot; „Galopp an" bleibt klar erkennbar (Regeln 10, 57).
+  (Nachweis: colors.spec.js › touch jump button › is blue, never red; „Galopp an" grün mit
+  Leuchtpunkt, tests/smoke/ride.spec.js)
 
 ## Links
 Konzept Regel 57; Recherche Material 3 „Color roles", Apple HIG „Buttons", WCAG 2.2 SC 1.4.3/1.4.11.

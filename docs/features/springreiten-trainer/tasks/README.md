@@ -13,9 +13,9 @@ Konzept: [../concept.md](../concept.md)
 | [SRT-007](SRT-007-web-spieltest-feedback.md) | Spieltest-Feedback – Rückwärtsrichten, Lenkung, Grafikwechsel, fps-Anzeige | in-review | web | p1 | M | SRT-002, SRT-003 |
 | [SRT-008](SRT-008-web-grafik-verschwindet.md) | 3D-Bild verschwindet nach wenigen Sekunden (Android-Tablet) | in-review | web | p1 | M | SRT-007 |
 | [SRT-009](SRT-009-web-lenkung-wendiger.md) | Lenkung wendiger – Kurven etwa 50 % enger, schneller einlenken | in-review | web | p1 | S | SRT-007 |
-| [SRT-010](SRT-010-web-button-farben.md) | Button-Farben – Grün für Weiter, Rot nur für Löschen | ready-for-dev | web | p1 | S | SRT-001 |
-| [SRT-011](SRT-011-web-details-animationen.md) | Mehr Details und geschmeidigere Animationen – Umgebung, Pferd, Reiter | ready-for-dev | web | p1 | L | SRT-002, SRT-003, SRT-008 |
-| [SRT-012](SRT-012-web-bedienungs-tipps.md) | Bedienungs-Tipps – beim ersten Start und jederzeit wieder aufrufbar | ready-for-dev | web | p1 | M | SRT-001, SRT-007 |
+| [SRT-010](SRT-010-web-button-farben.md) | Button-Farben – Grün für Weiter, Rot nur für Löschen | in-review | web | p1 | S | SRT-001 |
+| [SRT-011](SRT-011-web-details-animationen.md) | Mehr Details und geschmeidigere Animationen – Umgebung, Pferd, Reiter | in-review | web | p1 | L | SRT-002, SRT-003, SRT-008 |
+| [SRT-012](SRT-012-web-bedienungs-tipps.md) | Bedienungs-Tipps – beim ersten Start und jederzeit wieder aufrufbar | in-review | web | p1 | M | SRT-001, SRT-007 |
 
 Empfohlene Reihenfolge: SRT-001 → SRT-002 → SRT-003 → SRT-004 → SRT-005 → SRT-006.
 Umsetzung je Ticket mit `/implement-feature <ID>`.

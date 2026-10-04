@@ -28,6 +28,9 @@ Audio-Zustand; dazu als Aktionen `go(screen, params)` zum Springen auf einen Bil
 `restoreContext()` für einen simulierten Grafikverlust; `&gpubudget=MB` setzt die Grafikspeicher-Grenze
 für Tests). Ohne den Parameter existiert der Hook nicht. Die Smoke-Tests (`tests/smoke/`) nutzen ihn und warten auf
 Zustände statt auf feste Zeiten, weil der Software-Renderer in CI langsam ist (wenige fps).
+Beim ersten Start zeigt die App nach der Frage nach dem Pferdenamen die Bedienungs-Tipps (Tastatur
+oder Touch, auch im Hauptmenü und im Pausemenü wieder aufrufbar); die Smoke-Hilfen (`openMenu`,
+`openGame`) überspringen beides, ein übergebener Spielstand gilt als „Tipps gesehen“.
 
 ## Auf echten Geräten testen
 
