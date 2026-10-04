@@ -13,6 +13,8 @@ import {
 } from './textures.js';
 import { makeSignQuad } from './arena.js';
 import { releaseNow } from './resilience.js';
+import { buildPlanterGeometry } from './flower-geometry.js';
+import { createWind, patchBlossoms } from './plant-shaders.js';
 import {
   POLE_RADIUS,
   POLE_GEOM_LENGTH,
@@ -34,9 +36,13 @@ import {
 
 const STRIPES = 11; // odd: white ends
 const MAX_POLES = 128;
+const MAX_PLANTERS = 128; // flower boxes: two per stand row
+const PLANTER_OFFSET = 0.12; // box centre outside the centre of the stand (m)
 
 // obstacle colors (pole stripes, stand sections, plank)
 const OBSTACLE_COLORS = [0xc62828, 0x1e56b8, 0x2e7d32, 0xef8f00, 0x6a3fa0, 0x00838f];
+// blossom colors of the flower boxes: one per obstacle, so that its boxes match
+const PLANTER_COLORS = [0xe9719f, 0xf2cf2e, 0xd8453b, 0x8a5bc8, 0xf08a3c, 0x4f7fe0];
 
 /** Pole geometries (along X, centered): white and colored stripes separately. */
 function buildPoleGeometries(radialSegments = 10) {
@@ -382,9 +388,10 @@ function createHighlight(release) {
 // --- Manager --------------------------------------------------------------------------
 
 /**
- * materialFactory(kind, params) → { standard, lambert }. Returns the obstacle manager.
+ * materialFactory(kind, params) → { standard, lambert }; wind from createWind() moves the flowers.
+ * Returns the obstacle manager. `setDecor(on)` shows or hides the flower boxes at the stands.
  */
-export function createObstacles({ materialFactory, release = releaseNow }) {
+export function createObstacles({ materialFactory, release = releaseNow, wind = createWind() }) {
   const group = new THREE.Group();
   group.name = 'obstacles';
   const staticMats = materialFactory('obstacle-static', { vertexColors: true, roughness: 0.55 });
@@ -406,6 +413,25 @@ export function createObstacles({ materialFactory, release = releaseNow }) {
   colorPoles.name = 'poles-colored';
   colorPoles.setColorAt(0, new THREE.Color(1, 1, 1));
 
+  // flower boxes at the feet of the stands: one instanced mesh, kept for the life of the manager
+  // (the instances are rewritten with every course); hidden while `decor` is off
+  const planterMats = materialFactory('planters', {
+    vertexColors: true,
+    roughness: 0.85,
+    side: THREE.DoubleSide,
+  });
+  patchBlossoms(planterMats.standard, wind);
+  patchBlossoms(planterMats.lambert, wind);
+  const planterGeometry = buildPlanterGeometry();
+  const planters = new THREE.InstancedMesh(planterGeometry, planterMats.standard, MAX_PLANTERS);
+  planters.name = 'planters';
+  planters.count = 0;
+  planters.frustumCulled = false;
+  planters.setColorAt(0, new THREE.Color(1, 1, 1));
+  planters.receiveShadow = false;
+  group.add(planters);
+  let decor = false;
+
   let staticMesh = null;
   let boardMesh = null;
   let atlas = null;
@@ -421,6 +447,7 @@ export function createObstacles({ materialFactory, release = releaseNow }) {
     { mesh: whitePoles, mats: poleMats, shadow: 'obstacles' },
     { mesh: colorPoles, mats: poleMats, shadow: 'obstacles' },
     { mesh: null, mats: boardMats, shadow: 'none' },
+    { mesh: planters, mats: planterMats, shadow: 'none' },
   ];
 
   const mat = new THREE.Matrix4();
@@ -462,8 +489,38 @@ export function createObstacles({ materialFactory, release = releaseNow }) {
     poles = [];
     whitePoles.count = 0;
     colorPoles.count = 0;
+    planters.count = 0;
+    planters.visible = false;
     highlight.hide();
     shownHighlight = null;
+  }
+
+  /** One flower box at each foot of every stand row, in the blossom colour of its obstacle. */
+  function placePlanters(obstacles) {
+    let n = 0;
+    const c = new THREE.Color();
+    const m = new THREE.Matrix4();
+    const local = new THREE.Matrix4();
+    obstacles.forEach((obstacle, oi) => {
+      c.set(PLANTER_COLORS[oi % PLANTER_COLORS.length]);
+      for (const element of obstacle.elements) {
+        const base = localMatrix(element);
+        for (const z of standRows(element)) {
+          for (const sx of [-1, 1]) {
+            if (n >= MAX_PLANTERS) return;
+            local.makeTranslation(sx * (STAND_X + PLANTER_OFFSET), 0, z);
+            m.multiplyMatrices(base, local);
+            planters.setMatrixAt(n, m);
+            planters.setColorAt(n, c);
+            n += 1;
+          }
+        }
+      }
+    });
+    planters.count = n;
+    planters.visible = decor && n > 0;
+    planters.instanceMatrix.needsUpdate = true;
+    if (planters.instanceColor) planters.instanceColor.needsUpdate = true;
   }
 
   function setObstacles(obstacles, { flags = false } = {}) {
@@ -508,6 +565,7 @@ export function createObstacles({ materialFactory, release = releaseNow }) {
     });
     whitePoles.count = poles.length;
     colorPoles.count = poles.length;
+    placePlanters(obstacles || []);
     whitePoles.instanceMatrix.needsUpdate = true;
     colorPoles.instanceMatrix.needsUpdate = true;
     if (colorPoles.instanceColor) colorPoles.instanceColor.needsUpdate = true;
@@ -607,6 +665,11 @@ export function createObstacles({ materialFactory, release = releaseNow }) {
     getElement(id) {
       return elements.get(id)?.element ?? null;
     },
+    /** Shows or hides the flower boxes at the stands (the detail levels medium and high). */
+    setDecor(on) {
+      decor = Boolean(on);
+      planters.visible = decor && planters.count > 0;
+    },
     highlight(elementId, number) {
       const key = elementId ? `${elementId}|${number ?? ''}` : null;
       // called every frame: only rebuild the ring and badge when something changed
@@ -630,6 +693,8 @@ export function createObstacles({ materialFactory, release = releaseNow }) {
       poleGeoms.colored.dispose();
       whitePoles.dispose();
       colorPoles.dispose();
+      planterGeometry.dispose();
+      planters.dispose();
     },
   };
 }

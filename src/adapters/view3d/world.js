@@ -6,6 +6,7 @@ import { createSky, SKY_COLORS } from './sky.js';
 import { createArena, createCourseLines } from './arena.js';
 import { createEnvironment, SITE } from './environment.js';
 import { createObstacles } from './obstacles.js';
+import { createWind } from './plant-shaders.js';
 import { createAidMarker } from './aid-marker.js';
 import { collectGpuObjects, releaseNow } from './resilience.js';
 
@@ -61,12 +62,19 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
   const sky = createSky({ sunDirection });
   scene.add(sky.group);
 
-  // arena, environment, obstacles, markings
-  const arena = createArena({ materialFactory, path: SITE.path, pathFence: SITE.pathFence });
+  // arena, environment, obstacles, markings; one wind moves the trees, the grass, the flowers, the
+  // bunting and the animals of all of them
+  const wind = createWind();
+  const arena = createArena({
+    materialFactory,
+    path: SITE.path,
+    pathFence: SITE.pathFence,
+    wind,
+  });
   scene.add(arena.group);
-  const environment = createEnvironment({ materialFactory });
+  const environment = createEnvironment({ materialFactory, wind });
   scene.add(environment.group);
-  const obstacles = createObstacles({ materialFactory, release });
+  const obstacles = createObstacles({ materialFactory, release, wind });
   scene.add(obstacles.group);
   const lines = createCourseLines({ materialFactory, release });
   scene.add(lines.group);
@@ -191,14 +199,26 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
     else if (!p.fog) scene.fog = null;
   }
 
-  /** Scenery: instance counts, geometry detail and the fog distances (no shader change). */
+  /**
+   * Scenery: instance counts, geometry detail, the details of a level (flowers, birds, butterflies,
+   * bunting, paddock, flower boxes, wind) and the fog distances. Meshes that appear here bring
+   * their own shader programs; the engine compiles after this stage.
+   */
   function applyDensityStage(p) {
     stageState.density = p;
     if (scene.fog && p.fog) {
       scene.fog.near = p.fog.near;
       scene.fog.far = p.fog.far;
     }
-    environment.setDensity(p.envDensity, p.grassTufts, p.envDetail);
+    environment.setDensity(p.envDensity, p.grassTufts, p.envDetail, {
+      flowers: p.flowers,
+      birds: p.birds,
+      butterflies: p.butterflies,
+      wind: p.wind,
+    });
+    const decor = p.decor ?? 0;
+    arena.setDetail(decor);
+    obstacles.setDecor(decor > 0);
   }
 
   /**

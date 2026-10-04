@@ -74,7 +74,16 @@ describe('planning a change between two levels', () => {
     expect(byId.shadows.compile).toBe(true);
     expect(byId.materials.compile).toBe(true);
     expect(byId.characters.compile).toBe(true);
-    expect(byId.density.compile).toBe(false);
+    expect(byId.density.compile).toBe(true);
+  });
+
+  it('plans the density stage alone when only a detail of the scenery differs', () => {
+    for (const key of ['grassTufts', 'flowers', 'decor', 'birds', 'butterflies']) {
+      const changed = { ...QUALITY_PRESETS.medium, [key]: 0.9 };
+      expect(ids(planChange('medium', changed)), key).toEqual(['density']);
+    }
+    const calm = { ...QUALITY_PRESETS.medium, wind: false };
+    expect(ids(planChange('medium', calm))).toEqual(['density']);
   });
 
   it('never touches the textures: there is no anisotropy stage', () => {

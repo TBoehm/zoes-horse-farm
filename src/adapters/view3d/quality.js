@@ -18,10 +18,18 @@ export const QUALITY_PRESETS = Object.freeze({
     envDetail: 'low',
     // geometry detail and material type of horse and rider
     characterDetail: 'low',
+    // share of the grass tufts, of the meadow flowers and of the bunting (SRT-011); low gets none
+    // of these: it keeps the draw calls and triangles it had before
     grassTufts: 0,
+    flowers: 0,
+    decor: 0,
+    // share of the birds and butterflies in the sky and over the flowers
+    birds: 0,
+    butterflies: 0,
     anisotropy: 1,
     normalMaps: false,
-    windyGrass: false,
+    // trees, bushes, grass and flowers sway in the wind (vertex shader)
+    wind: false,
   }),
   medium: Object.freeze({
     level: 'medium',
@@ -37,10 +45,14 @@ export const QUALITY_PRESETS = Object.freeze({
     envDensity: 0.55,
     envDetail: 'high',
     characterDetail: 'medium',
-    grassTufts: 0,
+    grassTufts: 0.5,
+    flowers: 0.45,
+    decor: 0.5,
+    birds: 0.5,
+    butterflies: 0,
     anisotropy: 4,
     normalMaps: true,
-    windyGrass: false,
+    wind: true,
   }),
   high: Object.freeze({
     level: 'high',
@@ -56,9 +68,13 @@ export const QUALITY_PRESETS = Object.freeze({
     envDetail: 'high',
     characterDetail: 'high',
     grassTufts: 1,
+    flowers: 1,
+    decor: 1,
+    birds: 1,
+    butterflies: 1,
     anisotropy: 8,
     normalMaps: true,
-    windyGrass: true,
+    wind: true,
   }),
 });
 
@@ -128,9 +144,15 @@ const GPU_MEMORY_MODEL = Object.freeze({
   textureMipFactor: 4 / 3,
   // geometry and instance buffers, shader programs, the skinned horse, the compositor's share
   baselineMB: 16,
-  // instance matrices/colours and LOD geometry of the scenery at full density, and of the tufts
+  // instance matrices/colours and LOD geometry of the scenery at full density, of the 11 000 grass
+  // tufts (76 bytes each, with a safety factor) and of the 3 600 meadow flowers
   sceneryFullMB: 2,
-  tuftMB: 1,
+  tuftMB: 2,
+  flowerMB: 0.5,
+  // bunting, flower pots, paddock fence and props, flower boxes at the jumps (at full decor)
+  decorMB: 0.5,
+  // birds and butterflies: a few dozen instances
+  wildlifeMB: 0.1,
   // the pixel ratio is lowered in these steps; the shadow map and the scenery have floors
   ratioStep: 0.05,
   shadowMapFloor: 1024,
@@ -157,7 +179,8 @@ const GPU_BUDGET_MODEL = Object.freeze({
 
 /**
  * GPU memory (MiB) a level needs, estimated from the drawing buffer, shadow map, environment map,
- * textures and scenery.
+ * textures and scenery (trees, grass tufts, flowers, decoration and animals scale with the preset's
+ * `envDensity`, `grassTufts`, `flowers`, `decor`, `birds` and `butterflies`).
  * ctx: { cssWidth, cssHeight, devicePixelRatio, pixelRatio (cap, default: the preset's),
  *   antialias (of the real context, default: the preset's), textures: [{ width, height, normal }] }
  */
@@ -186,8 +209,19 @@ export function estimateGpuMemoryMB(
     if (t.normal && !preset.normalMaps) continue; // only uploaded when a material uses it
     bytes += t.width * t.height * m.textureBytesPerTexel * m.textureMipFactor;
   }
+  return bytes / MIB + m.baselineMB + sceneryMB(preset);
+}
+
+/** Instance buffers and extra geometry of the scenery details of a preset (MiB). */
+function sceneryMB(preset) {
+  const m = GPU_MEMORY_MODEL;
+  const wildlife = Math.max(preset.birds ?? 0, preset.butterflies ?? 0);
   return (
-    bytes / MIB + m.baselineMB + preset.envDensity * m.sceneryFullMB + preset.grassTufts * m.tuftMB
+    preset.envDensity * m.sceneryFullMB +
+    preset.grassTufts * m.tuftMB +
+    (preset.flowers ?? 0) * m.flowerMB +
+    (preset.decor ?? 0) * m.decorMB +
+    wildlife * m.wildlifeMB
   );
 }
 
@@ -210,8 +244,8 @@ const roundDownTo = (value, step) => Number((Math.floor(value / step + 1e-9) * s
 
 /**
  * Fits a preset into the budget. When the estimate is too high, the levers are used in this order
- * until it fits: pixel ratio (down to 1), shadow map size (down to 1024), then grass tufts and the
- * density of the scenery. The level's look otherwise stays ("high" keeps its effects at a lower
+ * until it fits: pixel ratio (down to 1), shadow map size (down to 1024), then grass tufts, flowers
+ * and the density of the scenery. The level's look otherwise stays ("high" keeps its effects at a lower
  * resolution).
  * Returns { preset (the same object when nothing changes), estimateMB, requestedMB, budgetMB,
  * fits, capped: { pixelRatio: { from, to } | null, shadowMapSize: { from, to } | null,
@@ -253,9 +287,13 @@ export function fitPresetToBudget(preset, ctx, budgetMB) {
     fitted.shadowMapSize = m.shadowMapFloor;
   }
 
-  // 3. scenery: tufts first, then the density of trees and bushes
+  // 3. scenery: tufts and flowers first, then the density of trees and bushes
   if (estimate(fitted) > budgetMB && fitted.grassTufts > 0) {
     fitted.grassTufts = 0;
+    capped.scenery = true;
+  }
+  if (estimate(fitted) > budgetMB && fitted.flowers > 0) {
+    fitted.flowers = 0;
     capped.scenery = true;
   }
   if (estimate(fitted) > budgetMB && fitted.envDensity > m.envDensityFloor) {

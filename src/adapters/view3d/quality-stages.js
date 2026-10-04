@@ -48,11 +48,25 @@ const STAGES = Object.freeze([
     compile: true,
     key: (p) => p.characterDetail,
   }),
-  // instance counts and geometry detail of the scenery, fog distance (a uniform)
+  // instance counts and geometry detail of the scenery, its details (flowers, bunting, flower
+  // boxes, birds, butterflies, wind) and the fog distance (a uniform). Details that appear for the
+  // first time bring shader programs with them (flowers, wings, bunting, swaying trees), so the
+  // engine compiles after this stage, too.
   Object.freeze({
     id: 'density',
-    compile: false,
-    key: (p) => `${p.envDensity}|${p.envDetail}|${p.grassTufts}|${fogKey(p)}`,
+    compile: true,
+    key: (p) =>
+      [
+        p.envDensity,
+        p.envDetail,
+        p.grassTufts,
+        p.flowers,
+        p.decor,
+        p.birds,
+        p.butterflies,
+        p.wind,
+        fogKey(p),
+      ].join('|'),
   }),
 ]);
 
