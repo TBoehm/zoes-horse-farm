@@ -23,8 +23,10 @@ Entwickler-Demoseiten (nicht ausgeliefert) laufen über den Dev-Server unter `/d
 
 Test-Hook für Browser-Tests: Mit `?testhooks` in der URL (z. B. `http://localhost:4173/?testhooks`)
 stellt die App `window.__zhfTest` bereit (aktueller Bildschirm, Zustand des laufenden Rittes, Speicher,
-Audio-Zustand; nur lesend, dazu `go(screen, params)` zum Springen auf einen Bildschirm). Ohne den
-Parameter existiert der Hook nicht. Die Smoke-Tests (`tests/smoke/`) nutzen ihn und warten auf
+Audio-Zustand; dazu als Aktionen `go(screen, params)` zum Springen auf einen Bildschirm,
+`setAutoLevel(level)` für einen Stufenwechsel wie durch die Automatik und `loseContext()` /
+`restoreContext()` für einen simulierten Grafikverlust; `&gpubudget=MB` setzt die Grafikspeicher-Grenze
+für Tests). Ohne den Parameter existiert der Hook nicht. Die Smoke-Tests (`tests/smoke/`) nutzen ihn und warten auf
 Zustände statt auf feste Zeiten, weil der Software-Renderer in CI langsam ist (wenige fps).
 
 ## Auf echten Geräten testen

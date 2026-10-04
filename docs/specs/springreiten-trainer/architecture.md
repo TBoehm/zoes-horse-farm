@@ -519,7 +519,7 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
   das letzte Bild bleibt stehen. Jeder Schritt unterbricht die Governor-Messung. Ohne laufende
   Schleife (Menü, Einstellungen vor dem Ritt) oder bei verlorenem Kontext wird alles auf einmal
   angewendet (`applyAllNow`): es ist nichts sichtbar. `engine.settling` ist wahr, solange Schritte
-  ausstehen oder das Gate zu ist.
+  ausstehen, eine Pixel-Ratio auf das Anwenden wartet oder das Gate zu ist.
 - **Keine Texturen neu hochladen:** Ein Stufenwechsel ändert nie `texture.anisotropy`. three.js liest
   den Wert nur beim Hochladen (r186 `WebGLTextures.js`, `uploadTexture` → `setTextureParameters`),
   eine Änderung hieße `needsUpdate`, also `texImage2D` plus Mipmaps für jede Boden-, Sand- und
@@ -554,9 +554,9 @@ nachstellen kann.
   sie nutzt), Szenerie (Instanzen/LOD) und eine Grundlast (Geometrie, Programme, Pferd,
   Compositor). `antialias` ist das Attribut des **echten** Kontexts.
 - Der GPU-Name für das Budget kommt aus einem Wegwerf-Kontext (`probeRendererString`, vor dem
-  Renderer, weil dessen Attribute von der Stufe abhängen). Er wird mit denselben Attributen wie der
-  echte Kontext erzeugt (`powerPreference: 'high-performance'`, `antialias: false`, `depth: false`),
-  damit ein Laptop mit zwei GPUs dieselbe liefert.
+  Renderer, weil dessen Attribute von der Stufe abhängen). Er nutzt dieselbe `powerPreference`
+  (`'high-performance'`) wie der echte Kontext, damit ein Laptop mit zwei GPUs dieselbe liefert
+  (sonst schlank: `antialias: false`, `depth: false`).
 - `gpuBudgetMB({ deviceMemory, isTouch, rendererString })` (MiB): Touch 40 MiB je GiB
   `deviceMemory`, begrenzt auf 96…320, ohne Angabe 160; Desktop 64 je GiB, 256…1024, ohne Angabe
   512; schwache GPU (`WEAK_GPU`) × 0,75. `navigator.deviceMemory` ist auf 0,25…8 GiB gerundet und

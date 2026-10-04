@@ -108,7 +108,7 @@ export function pickInitialLevel(info = {}) {
 
 const MIB = 1024 * 1024;
 
-export const GPU_MEMORY_MODEL = Object.freeze({
+const GPU_MEMORY_MODEL = Object.freeze({
   // Default framebuffer: RGBA8 colour and 24-bit depth (stencil is off, so 4 bytes per pixel with
   // padding). The browser keeps two colour buffers (the one that is shown and the one that is
   // drawn). With `antialias: true` the browser also allocates multisampled colour and depth
@@ -138,7 +138,7 @@ export const GPU_MEMORY_MODEL = Object.freeze({
 });
 
 /** Textures of the world today (grass colour, sand colour, sand normal map), 512² each. */
-export const DEFAULT_TEXTURES = Object.freeze([
+const DEFAULT_TEXTURES = Object.freeze([
   Object.freeze({ width: 512, height: 512, normal: false }),
   Object.freeze({ width: 512, height: 512, normal: false }),
   Object.freeze({ width: 512, height: 512, normal: true }),
@@ -149,7 +149,7 @@ export const DEFAULT_TEXTURES = Object.freeze([
 // desktop with 32 GiB also says 8 and Firefox/Safari say nothing. Phones and tablets share their
 // memory with the system and get a small share (Chrome and Firefox on Android lose the context
 // or the tab when the GPU process grows too far); a weak GPU gets less again.
-export const GPU_BUDGET_MODEL = Object.freeze({
+const GPU_BUDGET_MODEL = Object.freeze({
   touch: Object.freeze({ perGiB: 40, min: 96, max: 320, unknown: 160 }),
   desktop: Object.freeze({ perGiB: 64, min: 256, max: 1024, unknown: 512 }),
   weakGpuFactor: 0.75,

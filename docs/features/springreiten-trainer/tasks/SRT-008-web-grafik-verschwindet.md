@@ -1,7 +1,7 @@
 ---
 id: SRT-008
 title: 3D-Bild verschwindet nach wenigen Sekunden (Android-Tablet)
-status: in-progress
+status: in-review
 platform: web
 feature: docs/features/springreiten-trainer/concept.md
 priority: p1
@@ -36,18 +36,18 @@ Kein Design-Werkzeug. Hinweise als Toast wie bestehende Meldungen. Diagnose nur 
 Adresse, kleine Textbox oben links unter der fps-Zeile.
 
 ## Akzeptanzkriterien
-- [ ] Nach einem Kontextverlust mit „Automatisch" steht die Stufe nach der Wiederherstellung auf
-  Niedrig (gespeichert), das Spiel ist weiter spielbar (Regel 4).
-- [ ] Nach einem Kontextverlust mit manueller Stufe über Niedrig erscheint ein Hinweis, die Grafik
-  niedriger zu stellen (Regel 4).
-- [ ] Das automatische Herunterstufen während des Ritts löst keinen Kontextverlust aus: es geschieht
+- [x] Nach einem Kontextverlust mit „Automatisch" steht die Stufe nach der Wiederherstellung auf
+  Niedrig (gespeichert), das Spiel ist weiter spielbar (Regel 4). (Nachweis: src/adapters/view3d/quality.test.js › levelAfterContextLoss; tests/smoke/graphics.spec.js › context loss fallback (rule 4) › "Automatic": the level goes to low (saved, automatic stays on) and the ride goes on; Verlust im Hintergrund zählt nicht (Smoke-Tests zu Hintergrund und Schonzeit))
+- [x] Nach einem Kontextverlust mit manueller Stufe über Niedrig erscheint ein Hinweis, die Grafik
+  niedriger zu stellen (Regel 4). (Nachweis: quality.test.js › a manual level above low stays and the player gets a hint; graphics.spec.js › a manual level above low stays and a hint asks for a lower one once the ride goes on)
+- [x] Das automatische Herunterstufen während des Ritts löst keinen Kontextverlust aus: es geschieht
   in kleinen Schritten über mehrere Frames (z. B. erst Auflösung, dann Schatten, dann Material),
-  ohne Textur-Neuupload und ohne großen Shader-Stau in einem Frame (Regel 4).
-- [ ] Mit `?debug` zeigt das Spiel GPU-Name, Stufe/Automatik, Pixel-Ratio und Zeichenflächen-Größe,
-  Anzahl Kontextverluste/-wiederherstellungen und die letzten Fehlermeldungen.
-- [ ] Vor jeder Stufe (Start, Wechsel, auch manuell „Hoch") schätzt das Spiel den Grafikspeicher und
+  ohne Textur-Neuupload und ohne großen Shader-Stau in einem Frame (Regel 4). (Nachweis: src/adapters/view3d/quality-stages.test.js (Reihenfolge, keine Anisotropie-Stufe, Precompile je Shader-Stufe, Stage-Queue); graphics.spec.js › staged downgrade during a ride › a governor-style change medium → low is applied over several frames, the picture stays / the real governor on a slow device lowers the level without losing the picture)
+- [x] Mit `?debug` zeigt das Spiel GPU-Name, Stufe/Automatik, Pixel-Ratio und Zeichenflächen-Größe,
+  Anzahl Kontextverluste/-wiederherstellungen und die letzten Fehlermeldungen. (Nachweis: src/adapters/ui/debug-display.test.js, src/adapters/platform/debug-info.test.js; graphics.spec.js › debug box (?debug) › shows GPU, level, pixel ratios, buffer, context counts and the last errors / is not there without ?debug)
+- [x] Vor jeder Stufe (Start, Wechsel, auch manuell „Hoch") schätzt das Spiel den Grafikspeicher und
   senkt bei Überschreitung der Gerätegrenze erst die Auflösung, dann Schatten, dann Gras/Umgebung; die
-  `?debug`-Anzeige zeigt Schätzung und Grenze (Regel 4).
+  `?debug`-Anzeige zeigt Schätzung und Grenze (Regel 4). (Nachweis: quality.test.js › estimateGpuMemoryMB / gpuBudgetMB / fitPresetToBudget (Reihenfolge, monoton) / chooseAntialias; graphics.spec.js › GPU memory budget (rule 4) (5 Tests) und debug box › shows the GPU memory estimate against the budget)
 - [?] Auf dem Android-Tablet des Spieltests verschwindet das Bild nicht mehr, auch nicht auf „Hoch"
   (Nachweis nur am Gerät; Spieltest 2026-10-04: „Mittel" läuft gut, „Hoch" stürzt ab).
 

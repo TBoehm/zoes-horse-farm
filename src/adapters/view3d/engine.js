@@ -42,8 +42,8 @@ function rendererString(gl) {
 function probeRendererString() {
   try {
     const probe = document.createElement('canvas');
-    // the same attributes as the real renderer's context (see renderer.js), so that a dual-GPU
-    // laptop hands out the same (high-performance) GPU: the budget is based on its name
+    // the same powerPreference as the real renderer (see renderer.js), so that a dual-GPU laptop
+    // hands out the same GPU: the budget is based on its name
     const attributes = { powerPreference: 'high-performance', antialias: false, depth: false };
     const gl = probe.getContext('webgl2', attributes) ?? probe.getContext('webgl', attributes);
     const name = gl ? rendererString(gl) : '';

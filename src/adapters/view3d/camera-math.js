@@ -1,6 +1,7 @@
 // Pure helpers of the camera rig (no three.js).
 import { clamp } from '../../shared/math.js';
 import { TUNING } from '../../domain/sim/tuning.js';
+import { wrapAngle } from '../../domain/sim/geometry.js';
 
 // Camera heading constants (technical, no game play): the camera heading trails the horse so that
 // quick turns sweep the view calmly. At a constant turn rate ω an exponential follower lags by
@@ -13,16 +14,6 @@ export const RIDER_HEADING_STIFFNESS = 12;
 // camera would whip around through 180° once the cap is lifted. It only limits sudden jumps of
 // the horse heading (refusal evasion, fence slide). Derived from the tuning so that it follows.
 export const FOLLOW_HEADING_MAX_RATE = TUNING.control.turnInPlace * 1.2;
-
-const TWO_PI = Math.PI * 2;
-
-/** Wraps an angle into (−π, π]. */
-export function wrapAngle(angle) {
-  let a = angle % TWO_PI;
-  if (a > Math.PI) a -= TWO_PI;
-  else if (a <= -Math.PI) a += TWO_PI;
-  return a;
-}
 
 /**
  * Eases a heading (radians) towards `target` like an exponential follower (`stiffness` in 1/s),

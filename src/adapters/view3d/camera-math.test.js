@@ -4,9 +4,9 @@ import {
   FOLLOW_HEADING_STIFFNESS,
   followHeading,
   RIDER_HEADING_STIFFNESS,
-  wrapAngle,
 } from './camera-math.js';
 import { TUNING } from '../../domain/sim/tuning.js';
+import { wrapAngle } from '../../domain/sim/geometry.js';
 
 const DT = 1 / 60;
 

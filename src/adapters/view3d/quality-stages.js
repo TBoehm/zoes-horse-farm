@@ -11,7 +11,7 @@ import { presetFor } from './quality.js';
 
 // Frames between two stages. A technical value (no game play): a few frames give the GPU process
 // time to finish the work of the last stage (uploads, shader links) before the next one starts.
-export const STAGE_GAP_FRAMES = 6;
+const STAGE_GAP_FRAMES = 6;
 
 const fogKey = (p) => (p.fog ? `${p.fog.near}/${p.fog.far}` : 'none');
 
@@ -73,7 +73,6 @@ const UP_ORDER = Object.freeze([...QUALITY_STAGE_IDS].reverse());
 
 // A preset object from a level name, or the object itself (a preset fitted to the GPU budget is a
 // copy that keeps its `level`)
-const resolvePreset = presetFor;
 
 function rankOf(preset) {
   return GRAPHICS_LEVELS.indexOf(preset?.level);
@@ -85,13 +84,13 @@ function rankOf(preset) {
  * The order is the downgrade order, or its reverse when every stage that has to change goes up.
  */
 export function planQualityStagesFromState(applied, to) {
-  const target = resolvePreset(to);
+  const target = presetFor(to);
   if (!target) return [];
   const targetRank = rankOf(target);
   let goingUp = targetRank >= 0;
   const needed = new Set();
   for (const stage of STAGES) {
-    const current = resolvePreset(applied?.[stage.id]);
+    const current = presetFor(applied?.[stage.id]);
     if (current && stage.key(current) === stage.key(target)) continue;
     needed.add(stage.id);
     const currentRank = current ? rankOf(current) : -1;
