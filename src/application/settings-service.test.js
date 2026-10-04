@@ -36,6 +36,28 @@ describe('settings service', () => {
   });
 
   describe('graphics', () => {
+    it('tells the listeners when the player selects automatic graphics', () => {
+      const { service } = setup({ graphicsAuto: false, graphicsLevel: 'high' });
+      let calls = 0;
+      const off = service.onAutoSelected(() => (calls += 1));
+      service.setGraphicsAuto('low');
+      expect(calls).toBe(1);
+      service.setGraphicsLevel('medium');
+      service.setAutoLevel('low');
+      expect(calls).toBe(1);
+      off();
+      service.setGraphicsAuto('low');
+      expect(calls).toBe(1);
+    });
+
+    it('does not tell the listeners about an invalid automatic selection', () => {
+      const { service } = setup({});
+      let calls = 0;
+      service.onAutoSelected(() => (calls += 1));
+      service.setGraphicsAuto('ultra');
+      expect(calls).toBe(0);
+    });
+
     it('automatic: auto on, level is the device level', () => {
       const { service, store } = setup({ graphicsAuto: false, graphicsLevel: 'high' });
       service.setGraphicsAuto('low');

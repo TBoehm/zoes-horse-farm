@@ -6,12 +6,16 @@ import { createFpsMeter } from './fps-display.js';
 
 const round = (n, digits = 2) => (Number.isFinite(n) ? Number(n.toFixed(digits)) : n);
 
+// "2026-10-04T13:05:07.123Z" → "2026-10-04 13:05" (the zone is part of the translated text)
+const formatCrashTime = (iso) => String(iso).slice(0, 16).replace('T', ' ');
+
 /**
  * Text of the box. `info` is engine.diagnostics(), `errors` the entries of the error log (oldest
  * first). Every word comes from `t` (keys debug.*); only numbers and the technical strings (GPU
- * name, error messages) are inserted.
+ * name, error messages) are inserted. `lastCrash` is the unexpected end of an earlier run that the
+ * crash guard detected at the start ({ level, auto, seconds, at }), or null.
  */
-export function formatDebugText(info, errors, t) {
+export function formatDebugText(info, errors, t, lastCrash = null) {
   const at = (seconds) =>
     seconds === null || seconds === undefined
       ? t('debug.none')
@@ -51,6 +55,16 @@ export function formatDebugText(info, errors, t) {
       restoredAt: at(info.restoredAtS),
     }),
   ];
+  lines.push(
+    lastCrash
+      ? t('debug.crash', {
+          level: t(`graphics.${lastCrash.level}`),
+          mode: t(lastCrash.auto ? 'debug.crashAuto' : 'debug.crashManual'),
+          s: Math.round(lastCrash.seconds),
+          at: formatCrashTime(lastCrash.at),
+        })
+      : t('debug.noCrash'),
+  );
   if (info.shadowCap) {
     lines.push(t('debug.capShadow', { from: info.shadowCap.from, to: info.shadowCap.to }));
   }
@@ -71,13 +85,14 @@ export function formatDebugText(info, errors, t) {
 /**
  * The box: `el` goes into the ride HUD, `frame(rawDt)` is called every frame and redraws about
  * twice per second, `renderTexts()` after a language change.
- * @param {{ diagnostics: () => object, errorLog: { entries: object[] }, t: Function }} deps
+ * @param {{ diagnostics: () => object, errorLog: { entries: object[] },
+ *   lastCrash?: object|null, t: Function }} deps
  */
-export function createDebugBox({ diagnostics, errorLog, t }) {
+export function createDebugBox({ diagnostics, errorLog, lastCrash = null, t }) {
   const el = h('div', { class: 'ride-debug', dataset: { hud: 'debug' } });
   const meter = createFpsMeter({ intervalS: 0.5, maxFrameS: Infinity });
   function render() {
-    el.textContent = formatDebugText(diagnostics(), errorLog.entries, t);
+    el.textContent = formatDebugText(diagnostics(), errorLog.entries, t, lastCrash);
   }
   render();
   return {
