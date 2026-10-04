@@ -212,8 +212,11 @@ input.touch.setGallop(bool) // Galopp-Umschalter setzen (Touch)
 ```
 Tastatur: `gallop = shiftHeld && !shiftLatched`. Ein fokussiertes Bedienelement (Button, Eingabefeld,
 Schieberegler) **behält seine Tasten** (Leertaste/Enter/Pfeile): die Tastatur ignoriert Ereignisse,
-deren Ziel ein solches Element ist. Touch: Galopp-Umschalter; Joystick-Totzone aus
-`TUNING.control.stickDeadZone`.
+deren Ziel ein solches Element ist. Touch: Galopp-Umschalter. Joystick (`joystick-mapping.js`, rein): skalierte
+**radiale** Totzone (`TUNING.control.stickDeadZone`; Länge des Stick-Vektors, Richtung bleibt, Rest auf
+0..1 umgerechnet) und Lenk-Verstärkung: volle Lenkung ab `TUNING.control.stickSteerFull` (≤ 2/3
+seitlicher Auslenkung), schräg nach vorn gehalten lenkt damit deutlich. Tempo = umgerechnete
+Vertikalkomponente (ganz nach unten = −1).
 
 ### Reit-Simulation (`src/domain/sim/`, rein, deterministisch mit injiziertem RNG)
 
@@ -247,7 +250,7 @@ Der Aufprall auf Ständer/Hindernis ohne Sprung lässt das Pferd seitlich auswei
 Galopp unter `trotMin` (Absprung-Anlauf), beschleunigt das Pferd mit `control.gallopEndTrotUp`
 bis in den Arbeitstrab statt in den Schritt zu fallen; Zaun/Verweigerung halten an.
 Spielwerte (Tempi, Abstände, Toleranzen, Risiko-Kurven, Parcours-Bau `TUNING.course`: Galoppsprung, Landung/Absprung, freie Strecke, Oxer-Tiefen, Wiederaufbau-Verzögerung `rebuildDelayS`,
-Hinweis-Dauer `missingHintS`, `control.stickDeadZone`) nur in `src/domain/sim/tuning.js`;
+Hinweis-Dauer `missingHintS`, `control.stickDeadZone`, `control.stickSteerFull`, Lenkraten `control.turn*`) nur in `src/domain/sim/tuning.js`;
 Regel-Konstanten (Fehlerpunkte, Zeitfehler-Schritt, Sterne, Auszeichnungs-Schwellen) bleiben in
 ihren Domain-Modulen. Die Governor-Defaults (`GOVERNOR_DEFAULTS` in `view3d/quality.js`) sind
 Regel-4-Werte und bleiben dort.
