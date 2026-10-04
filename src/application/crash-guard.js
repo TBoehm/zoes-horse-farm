@@ -13,8 +13,9 @@
 // mark is only set again after a grace time (Android often kills or reloads a tab right after an
 // app switch), and a leftover mark whose heartbeat is still fresh at the start belongs to a tab
 // that is alive (a second tab), not to a crash; the tab id tells the two apart (see
-// checkPreviousRun). The store writes its whole in-memory copy, so
-// every write of the guard first takes over what other tabs saved (`store.reload()`).
+// checkPreviousRun). The store writes its whole in-memory copy, so the guard never uses `update`:
+// it writes only its own section through (`store.updateThrough`), which keeps what other tabs
+// saved in the storage and never touches this tab's in-memory state of the other sections.
 import { field, registerSection } from './save-schema.js';
 import { FOREGROUND_GRACE_S, GRAPHICS_LEVELS } from './graphics-levels.js';
 import { isPlainObject } from '../shared/math.js';
@@ -85,8 +86,9 @@ registerSection(CRASH_GUARD_SECTION, {
 
 /**
  * @param {object} deps
- * @param {{ get(section: string): object, update(section: string, fn: Function): object,
- *   reload(): void }} deps.store `reload` takes over what other tabs saved (see local-store.js)
+ * @param {{ get(section: string): object, updateThrough(section: string, fn: Function): object
+ *   }} deps.store `updateThrough` changes one section against the stored one and writes only that
+ *   section (see local-store.js)
  * @param {{ setAutoLevel(level: string): void }} deps.settings settings service
  * @param {{ nowMs(): number, nowIso(): string }} deps.clock
  * @param {(input: { auto: boolean, level: string }) =>
@@ -114,11 +116,8 @@ export function createCrashGuard({
 
   const read = () => store.get(CRASH_GUARD_SECTION);
 
-  /** Changes the guard section only: other tabs' progress and settings are taken over first. */
-  function update(fn) {
-    store.reload();
-    return store.update(CRASH_GUARD_SECTION, fn);
-  }
+  /** Changes the guard section only; other sections (here and in the storage) stay untouched. */
+  const update = (fn) => store.updateThrough(CRASH_GUARD_SECTION, fn);
 
   function write(changes) {
     update((s) => ({ ...s, ...changes }));

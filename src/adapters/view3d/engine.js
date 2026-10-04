@@ -301,7 +301,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
 
   /**
    * One real frame for the level automatic: `measuring` = riding and the page visible, `busy` = a
-   * jump is in progress (the upgrade never starts a step then). With a test feed
+   * jump or approach is in progress (the upgrade never starts a step then). With a test feed
    * (`__zhfTest.setFrameFeed`) the fed frame times replace the real ones.
    */
   function qualityFrame(rawDt, measuring, busy = false) {

@@ -26,10 +26,10 @@ function setup({ guard: saved = {}, settings = {}, tabId = null } = {}) {
   let nowMs = 1_000_000;
   const clock = { nowMs: () => nowMs, nowIso: () => new Date(nowMs).toISOString() };
   let writes = 0;
-  const update = store.update;
-  store.update = (section, fn) => {
+  const updateThrough = store.updateThrough;
+  store.updateThrough = (section, fn) => {
     if (section === CRASH_GUARD_SECTION) writes += 1;
-    return update(section, fn);
+    return updateThrough(section, fn);
   };
   const guard = createCrashGuard({
     store,
@@ -493,32 +493,20 @@ describe('blocked levels (per device)', () => {
 });
 
 describe('crash guard: several tabs', () => {
-  it('takes over what another tab saved before every write of its own section', () => {
-    const { guard, store, advance } = setup();
-    const lease = guard.markRendering(MEDIUM_AUTO);
-    // another tab saves progress; the store only sees it through reload()
-    const otherTab = { ...store.data.progress, jumps: 99 };
-    store.reload = () => {
-      store.data.progress = otherTab;
-    };
-    advance(HEARTBEAT_INTERVAL_MS);
-    lease.frame(MEDIUM_AUTO);
-    expect(store.data.progress.jumps).toBe(99);
-    expect(store.data.crashGuard.lastSeen).toBe(1_000_000 + HEARTBEAT_INTERVAL_MS);
-  });
-
-  it('reloads before every kind of write (marks, hint, blocked levels)', () => {
+  it('writes only its own section through (never plain update, which saves everything)', () => {
     const { guard, store } = setup({ guard: { hintPending: true } });
-    let reloads = 0;
-    store.reload = () => {
-      reloads += 1;
+    const sections = [];
+    store.update = (section) => {
+      sections.push(section);
+      throw new Error('plain update must not be used for guard writes');
     };
     const lease = guard.markRendering(MEDIUM_AUTO);
     lease.release();
     guard.takeHint();
     guard.blockLevel('high');
     guard.clearBlockedLevels();
-    expect(reloads).toBe(5);
+    expect(sections).toEqual([]);
+    expect(store.data.crashGuard.blockedLevels).toEqual([]);
   });
 
   it('the heartbeat marks rendering again when another tab cleared the mark', () => {

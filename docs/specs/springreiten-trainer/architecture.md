@@ -91,9 +91,9 @@ erzwingt die Grenzen.
 
 ### Ports (als Parameter injiziert)
 
-- `store`: `{ get(section), update(section, fn), reload(), onChange(section, fn) }` – Adapter: `adapters/storage`.
-  `update` gibt den **bereinigten** neuen Bereich zurück (nicht, was die Funktion geliefert hat).
-  `reload()` übernimmt, was ein anderer Tab inzwischen gespeichert hat (siehe unten).
+- `store`: `{ get(section), update(section, fn), updateThrough(section, fn), onChange(section, fn) }` – Adapter:
+  `adapters/storage`. `update` gibt den **bereinigten** neuen Bereich zurück (nicht, was die Funktion geliefert hat).
+  `updateThrough` ändert nur einen Bereich gegen den gespeicherten Stand (siehe unten).
 - `clock`: `{ nowIso(), nowMs() }` für Auszeichnungs-Datum und Zeitspannen (Absturzwächter); Zeit im Spiel
   kommt als `dt`.
 - `rng`: `() => number` in [0, 1) – Domain nutzt nie `Math.random()` direkt.
@@ -260,7 +260,7 @@ const store = createStore({ backend = localStorage, sessionBackend = sessionStor
 store.get('settings')                 // bereinigte Kopie (Defaults für Fehlendes/Ungültiges)
 store.update('settings', s => ({...s, lang: 'en'}))  // speichert sofort, gibt den bereinigten Bereich zurück
 store.flush()                         // aktuellen Stand schreiben (erster Start)
-store.reload()                        // Stand anderer Tabs übernehmen (vor Schreibzugriffen im Hintergrund)
+store.updateThrough('crashGuard', fn)  // nur diesen Bereich gegen den gespeicherten Stand ändern und durchschreiben
 store.canSave                         // false, wenn Schreiben scheitert
 store.shouldShowSaveNotice()          // true höchstens einmal je Sitzung (sessionStorage)
 store.onChange(section, fn)
@@ -268,11 +268,15 @@ store.onSaveFailed(fn)
 ```
 `createStore({ backend, sessionBackend, env, noticeMarker })`: `env.defaultLang` = Startsprache;
 `noticeMarker` = Ersatz-Merker in `history.state`, falls auch sessionStorage fehlt.
-Der Store schreibt immer seine **ganze** In-Memory-Kopie; ein zweiter Tab würde mit veralteten Bereichen
-den Fortschritt des ersten überschreiben. Wer ohne Nutzeraktion schreibt (Absturzwächter: Herzschlag,
-Übergänge), ruft darum vor dem Schreiben `store.reload()`: jeder gespeicherte Bereich ersetzt den im
-Speicher (bereinigt; `change:<Bereich>` nur, wenn er sich unterscheidet), fehlende Bereiche behalten ihren
-Wert, unbekannte bleiben erhalten; leerer oder unlesbarer Speicher ändert nichts.
+`update` schreibt immer die **ganze** In-Memory-Kopie; ein zweiter Tab würde mit veralteten Bereichen den
+Fortschritt des ersten überschreiben. Wer ohne Nutzeraktion schreibt (Absturzwächter: Herzschlag, Übergänge),
+nutzt darum `updateThrough(bereich, fn)`: `fn` bekommt den **gespeicherten** Bereich (bereinigt; ohne lesbaren
+Spielstand den Wert im Speicher), im gespeicherten JSON wird nur dieser Bereich ersetzt (andere und unbekannte
+Bereiche bleiben, wie sie dort stehen), im Speicher ändert sich nur dieser Bereich. Der In-Memory-Stand der
+anderen Bereiche bleibt unangetastet (nicht gespeicherter Fortschritt dieses Tabs geht nach einem
+fehlgeschlagenen Speichern nicht verloren, ein veralteter anderer Tab wird nicht übernommen) und es gibt kein
+`change:<anderer Bereich>`, also auch keine Einstellungsänderung mitten im Ritt. Schlägt das Schreiben fehl
+oder gibt es keinen Speicher, bleibt der neue Wert nur im Speicher (Regel 46, `saveFailed`).
 Neue Einstellungsfelder: `addSettingsFields({...})`; „Fortschritt löschen" =
 `progress-service.resetProgress(store)` (nur Regel-48-Felder).
 Jeder Bereich hat einen Sanitizer in `save-schema.js` (Feld für Feld, ungültig → Default,
@@ -967,7 +971,7 @@ ganze Seite ist weg. Der Absturzwächter merkt sich darum im Spielstand, dass ge
 gezeichnet wird, und wertet eine übrig gebliebene Markierung beim nächsten Start wie einen Verlust im
 Vordergrund. Er ist reine Anwendungslogik über den Ports `store` und `clock` (`nowMs`, `nowIso`) und
 dem Einstellungs-Dienst; die Entscheidung über die Stufe bekommt er als Parameter. Der `store` muss
-`reload()` haben (siehe „Ports“).
+`updateThrough()` haben (siehe „Ports“).
 
 ```js
 const guard = createCrashGuard({ store, settings, clock, decide, tabId });  // decide = levelAfterContextLoss
@@ -1001,8 +1005,9 @@ addBlockedLevel(blocked, level)    // rein: eindeutig, von low nach high geordne
 - **Markierung:** `rendering` ist wahr, solange ein Lease besteht und die Seite nicht im Hintergrund ist
   (`sync()`). Geschrieben wird nur bei Übergängen (an/aus), bei einer Änderung von Stufe oder Automatik und
   als langsamer **Herzschlag** (`lastSeen` alle `HEARTBEAT_INTERVAL_MS` = 5 s, technischer Wert), nie pro Frame.
-  Ein im Hintergrund beendeter Tab zählt nie als Absturz. Jeder Schreibzugriff ruft vorher `store.reload()`
-  und ändert nur den Bereich `crashGuard`: der Fortschritt eines zweiten Tabs wird nicht überschrieben. Der
+  Ein im Hintergrund beendeter Tab zählt nie als Absturz. Jeder Schreibzugriff geht über
+  `store.updateThrough('crashGuard', …)` und ändert nur den Bereich `crashGuard`: der Fortschritt eines zweiten
+  Tabs wird nicht überschrieben, der eigene In-Memory-Stand anderer Bereiche bleibt unberührt. Der
   Herzschlag bestätigt auch `rendering`, `level` und `auto` neu (ein anderer Tab kann die Markierung
   gelöscht haben).
 - **Schonfrist nach der Rückkehr:** `resume()` markiert nicht sofort wieder, sondern erst `FOREGROUND_GRACE_S`
@@ -1034,6 +1039,10 @@ addBlockedLevel(blocked, level)    // rein: eindeutig, von low nach high geordne
   `ride.graphicsContextLost`-Toast nur, wenn die Stufe dann immer noch manuell über `low` steht
   (`canHintLowerLevel`). `main.js` legt `app.services.crashGuard` und `app.services.startupCrash` ab (die
   Engine nimmt daraus `lastChange = { kind: 'crash' }` für die Diagnose).
+- **Bekannte Grenzen der Tab-Erkennung:** Chrome „Tab duplizieren“ kopiert `sessionStorage`, das Duplikat hat also
+  dieselbe Tab-Kennung wie das Original; ein Duplikat eines noch zeichnenden Tabs kann dessen frische
+  Markierung darum als Absturz zählen. Eine Markierung ohne Tab-Kennung aus der Vorversion mit frischem
+  Herzschlag gilt einmalig als zeichnender Tab (kein Absturz).
 - **Verdrahtung in `main.js`:** `createCrashGuard({ store, settings, clock: systemClock, decide:
   levelAfterContextLoss, tabId: getTabId() })`, `settings.onAutoSelected(() => crashGuard.clearBlockedLevels())` und
   `installPageLifecycle(crashGuard)`. Die Engine fragt `crashGuard.blockedLevels()` für das Hochstufen und
