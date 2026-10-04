@@ -5,12 +5,14 @@ import { createRenderer, resizeRenderer, setMaxPixelRatio } from './renderer.js'
 import {
   chooseAntialias,
   createQualityGovernor,
+  estimateGpuMemoryMB,
   fitPresetToBudget,
   gpuBudgetMB,
   levelAfterContextLoss,
-  pickInitialLevel,
   QUALITY_PRESETS,
+  startupCrashChange,
 } from './quality.js';
+import { createUpgradeGovernor, nextUpgradeLevel } from './quality-upgrade.js';
 import {
   createStageQueue,
   planQualityStagesFromState,
@@ -78,12 +80,9 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   canvas.hidden = true;
   app.layers.scene.append(canvas);
 
-  // Graphics level (rule 4): on first start, or on "Automatic" without a level, pick one that
-  // fits the device
+  // Graphics level (rule 4): the saved one; "Automatic" starts at low on the first start and
+  // climbs from there while the device has room to spare (see the upgrade governor below)
   const gpuName = probeRendererString();
-  if (!settingsService.get().graphicsLevel) {
-    settingsService.setGraphicsAuto(pickInitialLevel(deviceInfo(gpuName, inputMode)));
-  }
   const settings = settingsService.get();
   let level = settings.graphicsLevel;
 
@@ -155,11 +154,13 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
    * Compiles the shaders for the current scene state without blocking: the frame loop waits (at
    * most COMPILE_HOLD_MAX_MS) and the last picture stays on screen. WebGLRenderer.compileAsync
    * uses KHR_parallel_shader_compile where the browser has it
-   * (https://threejs.org/docs/#api/en/renderers/WebGLRenderer.compileAsync).
+   * (https://threejs.org/docs/#api/en/renderers/WebGLRenderer.compileAsync). Only what is visible
+   * is compiled (world.compileRoot): the programs of hidden details would take GPU memory for
+   * nothing (rule 4).
    */
   function precompile() {
     guarded('shader precompile', () =>
-      gate.hold(renderer.compileAsync(world.scene, camera), COMPILE_HOLD_MAX_MS),
+      gate.hold(renderer.compileAsync(world.compileRoot, camera, world.scene), COMPILE_HOLD_MAX_MS),
     );
   }
 
@@ -177,13 +178,14 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
    * again (the buffer is cleared and refilled before the browser shows it). Between the stage and
    * that frame the old picture is simply a little too sharp or too soft.
    */
-  function applyStage(id, target) {
+  function applyStage(stage, target) {
+    const { id } = stage;
     guarded(`quality stage ${id}`, () => {
       if (id === 'pixelRatio') pendingPixelRatio = target.pixelRatio;
       else if (id === 'characters') horse.setQuality(target.characterDetail);
       else world.applyQualityStage(id, target);
     });
-    applied[id] = target;
+    for (const covered of stage.covers) applied[covered] = target;
   }
 
   /** Everything at once, for a switch nobody sees or that nothing is drawn for (applyQuality). */
@@ -205,7 +207,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
       }
     });
     for (const id of QUALITY_STAGE_IDS) applied[id] = targetPreset;
-    governor.interrupt(); // the switch is no measurement
+    interruptQuality(); // the switch is no measurement
   }
 
   /**
@@ -216,6 +218,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
    */
   function applyQuality(next) {
     level = next;
+    upgrade.noteChange(); // every change, up or down, is followed by a cooldown
     if (!frameFn || contextWatch.lost) {
       applyAllNow({ gpu: !contextWatch.lost });
       if (!contextWatch.lost) precompile();
@@ -231,29 +234,103 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     const stage = stageQueue.tick();
     if (!stage) return;
     // the target is read now: a switch during the staging changes where the remaining stages go
-    applyStage(stage.id, targetPreset);
-    governor.interrupt(); // frames around a stage are slower: not a measurement
+    applyStage(stage, targetPreset);
+    interruptQuality(); // frames around a stage are slower: not a measurement
     if (stage.compile) precompile();
   }
 
-  const governor = createQualityGovernor({
+  // Automatic level changes (rule 4). Down: the downgrade governor, below 50 fps. Up: the upgrade
+  // governor, with plenty of reserve. Both are paced by the same rules and use applyQuality (the
+  // staged, memory-first change). The session remembers what it must not climb back to.
+  const leftByFps = new Set(); // levels the automatic stepped down from because of a low frame rate
+  // why the automatic changed the level last: { kind, fps? } (debug box). A crash at the previous
+  // start already lowered the level (crash guard, before the engine).
+  let lastChange = startupCrashChange(app.services.startupCrash);
+  // the crash guard is created by the composition root (absent in a bare test setup)
+  const guard = () => app.services.crashGuard ?? null;
+
+  /** The unreduced estimate of a level for this device against its budget (rule 4, b). */
+  const fitsBudget = (candidate) =>
+    estimateGpuMemoryMB(QUALITY_PRESETS[candidate], {
+      ...viewSize(),
+      antialias: contextAntialias, // the real context: it cannot change any more
+      textures: worldInfo.textures,
+    }) <= budgetMB;
+
+  const downgrade = createQualityGovernor({
     level,
     auto: settings.graphicsAuto,
-    onChange: (next) => {
+    onChange: (next, fps) => {
+      leftByFps.add(level); // not to be climbed to again in this session
+      lastChange = { kind: 'down', fps };
       applyQuality(next);
       settingsService.setAutoLevel(next); // governor downgrade: "Automatic" stays on
     },
   });
+  const upgrade = createUpgradeGovernor({
+    chooseTarget: () =>
+      nextUpgradeLevel({
+        level,
+        blocked: guard()?.blockedLevels() ?? [],
+        left: leftByFps,
+        fits: fitsBudget,
+      }),
+  });
+
+  /** Frames around a stage, a pause or a menu are no measurement for either governor. */
+  function interruptQuality() {
+    downgrade.interrupt();
+    upgrade.interrupt();
+  }
+
+  /** The upgrade governor found room to spare: one level up, saved ("Automatic" stays on). */
+  function climbTo({ level: next, fps }) {
+    lastChange = { kind: 'up', fps };
+    applyQuality(next);
+    downgrade.setLevel(next); // keeps the downgrade governor in step (no onChange)
+    settingsService.setAutoLevel(next);
+  }
+
+  function qualityStep(dt, measuring, busy) {
+    const before = level;
+    downgrade.frame(dt, measuring);
+    if (level !== before) return; // stepped down in this frame
+    const climb = upgrade.frame(dt, measuring && downgrade.auto, busy);
+    if (climb) climbTo(climb);
+  }
+
+  /**
+   * One real frame for the level automatic: `measuring` = riding and the page visible, `busy` = a
+   * jump or approach is in progress (the upgrade never starts a step then). With a test feed
+   * (`__zhfTest.setFrameFeed`) the fed frame times replace the real ones.
+   */
+  function qualityFrame(rawDt, measuring, busy = false) {
+    const feed = app.services.frameFeed;
+    if (!feed) {
+      qualityStep(rawDt, measuring, busy);
+      return;
+    }
+    for (let i = 0; i < feed.repeat; i += 1) {
+      qualityStep(feed.dt, measuring, busy);
+      if (measuring) feed.fedSeconds += feed.dt;
+    }
+  }
+
+  // The ride screen drives the level automatic with these two calls only
+  const governor = { frame: qualityFrame, interrupt: interruptQuality };
 
   settingsService.onChange((s) => {
     guarded('settings change', () => {
-      if (s.graphicsAuto !== governor.auto) governor.setAuto(s.graphicsAuto);
+      if (s.graphicsAuto !== downgrade.auto) downgrade.setAuto(s.graphicsAuto);
       if (s.graphicsLevel !== level) {
-        governor.setLevel(s.graphicsLevel);
+        downgrade.setLevel(s.graphicsLevel);
         applyQuality(s.graphicsLevel);
       }
     });
   });
+  // "Automatic" selected anew: the levels stepped down from may be tried again (the crash guard
+  // forgets its blocked levels itself)
+  settingsService.onAutoSelected(() => leftByFps.clear());
 
   function resize(force = false) {
     const w = canvas.clientWidth || window.innerWidth;
@@ -299,8 +376,14 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
           sinceVisibilityChangeS: secondsSinceStart() - visibilityChangedAtS,
         });
         const changed = decision.level !== level;
+        // a regular loss at this level: the automatic must not climb back to it (saved)
+        if (decision.counted) guard()?.blockLevel(level);
         level = decision.level;
-        if (changed) governor.setLevel(level);
+        if (changed) {
+          downgrade.setLevel(level);
+          upgrade.noteChange();
+          lastChange = { kind: 'loss' };
+        }
         applyAllNow({ gpu: false }); // also finishes a switch that was still in stages
         if (decision.persist) settingsService.setAutoLevel(level); // "Automatic" stays on
         graphicsHintPending = decision.hint;
@@ -383,12 +466,15 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     sceneryCapped: false,
     antialias: false,
     antialiasDropped: false,
+    blockedLevels: [],
+    leftLevels: [],
+    lastChange: null,
   };
   function diagnostics() {
     if (!diag.gpu && !contextWatch.lost) diag.gpu = rendererString(renderer.getContext());
     diag.budgetGpu = gpuName; // the name the budget was based on (the probe context)
     diag.level = level;
-    diag.auto = governor.auto;
+    diag.auto = downgrade.auto;
     diag.devicePixelRatio = window.devicePixelRatio || 1;
     diag.pixelRatio = renderer.getPixelRatio();
     diag.bufferWidth = canvas.width;
@@ -406,6 +492,9 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     diag.sceneryCapped = fitInfo?.capped.scenery ?? false;
     diag.antialias = contextAntialias;
     diag.antialiasDropped = antialiasWanted && !antialiasChosen; // the budget said no
+    diag.blockedLevels = guard()?.blockedLevels() ?? [];
+    diag.leftLevels = [...leftByFps];
+    diag.lastChange = lastChange;
     return diag;
   }
 

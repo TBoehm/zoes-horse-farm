@@ -14,15 +14,16 @@ function safeStorage(getter) {
   }
 }
 
-function readRaw(backend, key) {
-  if (!backend) return {};
+/** The stored save as a plain object, or null when there is none or it cannot be read. */
+function readStored(backend, key) {
+  if (!backend) return null;
   try {
     const text = backend.getItem(key);
-    if (!text) return {};
+    if (!text) return null;
     const parsed = JSON.parse(text);
-    return isPlainObject(parsed) ? parsed : {};
+    return isPlainObject(parsed) ? parsed : null;
   } catch {
-    return {};
+    return null;
   }
 }
 
@@ -67,7 +68,7 @@ export function createStore({
   noticeMarker = historyNoticeMarker(),
 } = {}) {
   const emitter = createEmitter();
-  const raw = readRaw(backend, SAVE_KEY);
+  const raw = readStored(backend, SAVE_KEY) ?? {};
   const data = {};
   let canSave = probe(backend);
   let noticeShownInMemory = false;
@@ -79,14 +80,15 @@ export function createStore({
     sectionRefs.set(name, section);
   }
 
-  function write() {
+  /** Writes `content` (a whole save object) as the stored save; false when that fails. */
+  function persist(content) {
     if (!backend) {
       canSave = false;
       return false;
     }
-    const version = Math.max(Number.isFinite(raw.version) ? raw.version : 0, SAVE_VERSION);
+    const version = Math.max(Number.isFinite(content.version) ? content.version : 0, SAVE_VERSION);
     try {
-      backend.setItem(SAVE_KEY, JSON.stringify({ ...raw, version }));
+      backend.setItem(SAVE_KEY, JSON.stringify({ ...content, version }));
       canSave = true;
       return true;
     } catch {
@@ -95,6 +97,8 @@ export function createStore({
       return false;
     }
   }
+
+  const write = () => persist(raw);
 
   function sectionOf(name) {
     const section = getSections().get(name);
@@ -122,6 +126,29 @@ export function createStore({
       data[name] = next;
       raw[name] = next;
       write();
+      emitter.emit(`change:${name}`, structuredClone(next));
+      return structuredClone(next);
+    },
+    /**
+     * Changes ONE section against what is stored right now and writes only that section through.
+     * For writers that run without a user action (the crash guard's heartbeat): `update` writes the
+     * whole in-memory copy, which would overwrite what another tab saved meanwhile with stale data.
+     * Here `fn` gets the stored section (the memory value when the storage has none or cannot be
+     * read), the stored JSON is rewritten with only this section replaced (other and unknown
+     * sections stay as stored), and only this section changes in memory. The in-memory state of the
+     * other sections is never touched (unsaved progress of this tab survives a failed save, a stale
+     * other tab is not pulled in) and no change event is emitted for them. A failed write keeps the
+     * new value in memory only (rule 46).
+     */
+    updateThrough(name, fn) {
+      const section = sectionOf(name);
+      const stored = readStored(backend, SAVE_KEY);
+      const base = stored ?? raw;
+      const current = stored && name in stored ? section.sanitize(stored[name], env) : data[name];
+      const next = section.sanitize(fn(structuredClone(current)), env);
+      data[name] = next;
+      raw[name] = next;
+      persist({ ...base, [name]: next });
       emitter.emit(`change:${name}`, structuredClone(next));
       return structuredClone(next);
     },

@@ -25,7 +25,7 @@ function patchMaterial(
   key,
   { declarations = '', afterBegin = '', afterColor = '' },
 ) {
-  material.onBeforeCompile = (shader) => {
+  const onBeforeCompile = (shader) => {
     shader.uniforms.windTime = wind.time;
     shader.uniforms.windStrength = wind.strength;
     let vertex = shader.vertexShader
@@ -35,8 +35,33 @@ function patchMaterial(
       vertex = vertex.replace('#include <color_vertex>', `#include <color_vertex>\n${afterColor}`);
     shader.vertexShader = vertex;
   };
-  material.customProgramCacheKey = () => key;
+  const customProgramCacheKey = () => key;
+  material.userData.windPatch = { onBeforeCompile, customProgramCacheKey, on: true };
+  material.onBeforeCompile = onBeforeCompile;
+  material.customProgramCacheKey = customProgramCacheKey;
   return material;
+}
+
+/**
+ * Switches the wind code of a patched material on or off (rule 4: wind only on "high"). Off, the
+ * material builds the plain three.js program (the one it had before the details existed, which
+ * other plain materials share); on, the patched one. Returns true if the program changes: the
+ * caller must dispose the material then, so that the old program is freed before the new one
+ * is built (a material keeps every program it has ever had until it is disposed).
+ */
+export function setWindPatch(material, on) {
+  const patch = material.userData.windPatch;
+  if (!patch || patch.on === Boolean(on)) return false;
+  patch.on = Boolean(on);
+  if (on) {
+    material.onBeforeCompile = patch.onBeforeCompile;
+    material.customProgramCacheKey = patch.customProgramCacheKey;
+  } else {
+    // back to the prototype's (the plain program key)
+    delete material.onBeforeCompile;
+    delete material.customProgramCacheKey;
+  }
+  return true;
 }
 
 /**

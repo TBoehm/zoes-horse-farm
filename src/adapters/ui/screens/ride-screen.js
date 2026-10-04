@@ -106,6 +106,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     ? createDebugBox({
         diagnostics: engine.diagnostics,
         errorLog: services.debug.errorLog,
+        lastCrash: services.crashGuard?.lastCrash() ?? null,
         t,
       })
     : null;
@@ -307,6 +308,19 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     if (engine.takeGraphicsHint()) showFeedback('ride.graphicsContextLost', { long: true });
   }
 
+  /**
+   * After an unexpected end of the previous run with a manual level above low (rule 4, crash
+   * guard): the same hint, once. Not when the player has lowered the level since.
+   */
+  function showCrashHint() {
+    if (
+      services.crashGuard?.takeHint() &&
+      canHintLowerLevel({ auto: autoGraphics, level: engine.level })
+    ) {
+      showFeedback('ride.graphicsContextLost', { long: true });
+    }
+  }
+
   resumeBtn.addEventListener('click', () => setPaused(false));
   restartBtn.addEventListener('click', () => {
     restart();
@@ -339,6 +353,8 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   horse.onFootfall = (gait) => !paused && services.audio?.sfx.hoof(gait);
 
   function frame(dt, rawDt) {
+    // also while paused: the scene is still drawn then
+    drawLease?.frame({ level: engine.level, auto: autoGraphics });
     debugBox?.frame(rawDt);
     if (showFps) {
       const value = fpsMeter.frame(rawDt); // restarts itself after a suspended tab
@@ -379,7 +395,9 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     world.setAid(view.aid);
     cameraRig.update(dt, view.horse, horse.earAnchor);
     world.update(dt, engine.camera);
-    governor.frame(rawDt, !document.hidden);
+    // the level automatic climbs only between obstacles: the session says when a jump is in
+    // progress or an obstacle is being approached (rule 4)
+    governor.frame(rawDt, !document.hidden, view.jumping || view.approaching);
     if (
       lowFpsHint.frame(
         rawDt,
@@ -395,6 +413,10 @@ export function createRideScreen(ctx, params = {}, { rng }) {
   // The context may have been lost while no ride was running: start paused then
   if (engine.contextLost) onContextLost();
   else showContextLossHint(); // a loss between two rides may have left a hint
+  showCrashHint();
+  // From here the scene is drawn: an unexpected end now counts as overload at the next start
+  const drawLease =
+    services.crashGuard?.markRendering({ level: engine.level, auto: autoGraphics }) ?? null;
   engine.run(frame);
 
   const instance = {
@@ -408,6 +430,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     },
     destroy() {
       engine.run(null);
+      drawLease?.release();
       offLang();
       offMode();
       offRotate();

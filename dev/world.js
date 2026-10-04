@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createRenderer, resizeRenderer } from '../src/adapters/view3d/renderer.js';
 import { createWorld } from '../src/adapters/view3d/world.js';
-import { pickInitialLevel } from '../src/adapters/view3d/quality.js';
+import { AUTO_START_LEVEL } from '../src/application/graphics-levels.js';
 import { COMBI_DISTANCE } from '../src/domain/sim/tuning.js';
 
 const params = new URLSearchParams(location.search);
@@ -12,13 +12,8 @@ const renderer = createRenderer(canvas, { antialias: params.get('aa') !== '0' })
 const gl = renderer.getContext();
 const dbg = gl.getExtension('WEBGL_debug_renderer_info');
 const rendererString = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '';
-const autoLevel = pickInitialLevel({
-  hardwareConcurrency: navigator.hardwareConcurrency,
-  deviceMemory: navigator.deviceMemory,
-  isTouch: matchMedia('(pointer: coarse)').matches,
-  rendererString,
-  screenPixels: screen.width * screen.height * devicePixelRatio ** 2,
-});
+// "Automatic" starts at low in the game (rule 4)
+const autoLevel = AUTO_START_LEVEL;
 let level = params.get('q') || autoLevel;
 const world = createWorld(renderer, { quality: level });
 

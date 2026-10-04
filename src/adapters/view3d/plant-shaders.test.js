@@ -8,6 +8,7 @@ import {
   patchBlossoms,
   patchBunting,
   patchWings,
+  setWindPatch,
 } from './plant-shaders.js';
 
 const SHADERS = {
@@ -141,5 +142,33 @@ describe('the vertex shader patches', () => {
     expect(a.uniforms.windTime).toBe(b.uniforms.windTime);
     wind.time.value = 12.5;
     expect(b.uniforms.windTime.value).toBe(12.5);
+  });
+});
+
+describe('setWindPatch', () => {
+  const patched = () => patchTreeWind(new THREE.MeshStandardMaterial(), createWind());
+
+  it('switches the wind code off and on again, and tells when the program changes', () => {
+    const material = patched();
+    const plainKey = new THREE.MeshStandardMaterial().customProgramCacheKey();
+    expect(material.userData.windPatch.on).toBe(true);
+    expect(material.customProgramCacheKey()).toBe('wind-tree-v1');
+    expect(setWindPatch(material, false)).toBe(true);
+    expect(material.userData.windPatch.on).toBe(false);
+    // the plain program key: shared with materials that never had the code
+    expect(material.customProgramCacheKey()).toBe(plainKey);
+    const shader = { uniforms: {}, vertexShader: SHADERS.standard };
+    material.onBeforeCompile(shader, {});
+    expect(shader.vertexShader).toBe(SHADERS.standard);
+    expect(setWindPatch(material, true)).toBe(true);
+    expect(material.customProgramCacheKey()).toBe('wind-tree-v1');
+    expect(compile(material, 'standard').vertexShader).toContain('treeK');
+  });
+
+  it('reports no change when the state already is the wanted one, or there is no patch', () => {
+    const material = patched();
+    expect(setWindPatch(material, true)).toBe(false);
+    expect(setWindPatch(new THREE.MeshStandardMaterial(), false)).toBe(false);
+    expect(new THREE.MeshStandardMaterial().userData.windPatch).toBeUndefined();
   });
 });

@@ -1,11 +1,37 @@
 import { describe, expect, it } from 'vitest';
 import './settings-schema.js';
 import { getSections } from './save-schema.js';
+import { AUTO_START_LEVEL, GRAPHICS_LEVELS } from './graphics-levels.js';
 import { resetProgress } from './progress-service.js';
 import { fakeStore } from '../../tests/support/test-ports.js';
 
 const settings = getSections().get('settings');
 const SOUND_FIELDS = ['musicVolume', 'musicMuted', 'sfxVolume', 'sfxMuted'];
+
+describe('graphics settings fields (rule 4)', () => {
+  it('first start: automatic, at the lowest level (the automatic works its way up)', () => {
+    expect(settings.defaults({})).toMatchObject({
+      graphicsAuto: true,
+      graphicsLevel: AUTO_START_LEVEL,
+    });
+    expect(AUTO_START_LEVEL).toBe('low');
+  });
+
+  it('a saved automatic level is kept for the next start', () => {
+    for (const level of GRAPHICS_LEVELS) {
+      expect(settings.sanitize({ graphicsAuto: true, graphicsLevel: level }, {})).toMatchObject({
+        graphicsAuto: true,
+        graphicsLevel: level,
+      });
+    }
+  });
+
+  it('a missing or invalid level falls back to the start level', () => {
+    for (const graphicsLevel of [undefined, null, 'ultra', 3]) {
+      expect(settings.sanitize({ graphicsLevel }, {}).graphicsLevel).toBe(AUTO_START_LEVEL);
+    }
+  });
+});
 
 describe('sound settings fields', () => {
   it('default to half volume, not muted', () => {

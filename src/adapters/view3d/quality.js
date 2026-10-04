@@ -1,6 +1,6 @@
-// Graphics quality levels (concept rules 3, 4): device pick, downgrade governor and presets.
-// Pure, no three.js.
-import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
+// Graphics quality levels (concept rules 3, 4): presets, GPU memory budget and the downgrade
+// governor (the upgrade governor is in quality-upgrade.js). Pure, no three.js.
+import { FOREGROUND_GRACE_S, GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
 
 export const QUALITY_PRESETS = Object.freeze({
   low: Object.freeze({
@@ -18,12 +18,17 @@ export const QUALITY_PRESETS = Object.freeze({
     envDetail: 'low',
     // geometry detail and material type of horse and rider
     characterDetail: 'low',
-    // share of the grass tufts, of the meadow flowers and of the bunting (SRT-011); low gets none
-    // of these: it keeps the draw calls and triangles it had before. The tufts are the biggest
-    // triangle cost of all details (11 000 instances), so only high has them.
+    // Details of SRT-011 (rules 3 and 4). Low gets none of them: it keeps the draw calls and
+    // triangles it had before. Medium gets only what is cheap and adds no shader program of its own
+    // beyond the static bunting: the paddock fence and props and every second pennant, no wind,
+    // no flowers, animals or dust (SRT-013: the tablet lost its context with the full set). The
+    // tufts are the biggest triangle cost of all details (11 000 instances), so only high has them.
+    // share of the grass tufts, of the meadow flowers and of the bunting (and paddock decoration)
     grassTufts: 0,
     flowers: 0,
     decor: 0,
+    // flower boxes at the stands (their own shader program: only high)
+    planters: false,
     // grazing horses in the paddock (0 = none) and hoof dust on the sand
     grazingHorses: 0,
     hoofDust: false,
@@ -50,15 +55,16 @@ export const QUALITY_PRESETS = Object.freeze({
     envDetail: 'high',
     characterDetail: 'medium',
     grassTufts: 0,
-    flowers: 0.45,
+    flowers: 0,
     decor: 0.5,
-    grazingHorses: 2,
-    hoofDust: true,
-    birds: 0.5,
+    planters: false,
+    grazingHorses: 0,
+    hoofDust: false,
+    birds: 0,
     butterflies: 0,
     anisotropy: 4,
     normalMaps: true,
-    wind: true,
+    wind: false,
   }),
   high: Object.freeze({
     level: 'high',
@@ -76,6 +82,7 @@ export const QUALITY_PRESETS = Object.freeze({
     grassTufts: 1,
     flowers: 1,
     decor: 1,
+    planters: true,
     grazingHorses: 2,
     hoofDust: true,
     birds: 1,
@@ -92,35 +99,8 @@ export function presetFor(levelOrPreset) {
   return levelOrPreset && typeof levelOrPreset === 'object' ? levelOrPreset : undefined;
 }
 
-const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render|mesa offscreen/i;
 const WEAK_GPU =
   /intel.*(hd|uhd)\s*graphics|mali-[gt]?[0-7]\d\b|adreno.*\b[1-5]\d\d\b|powervr|videocore/i;
-const STRONG_GPU = /nvidia|geforce|rtx|radeon\s*(rx|pro)|apple m[1-9]|iris xe|arc\b/i;
-
-/**
- * Initial level for the device (rule 4: "automatic" picks on first start).
- * info: { hardwareConcurrency, deviceMemory, isTouch, rendererString, screenPixels }
- */
-export function pickInitialLevel(info = {}) {
-  const cores = Number(info.hardwareConcurrency) || 4;
-  const memory = Number(info.deviceMemory) || null; // only Chrome/Edge report this
-  const renderer = String(info.rendererString || '');
-  const pixels = Number(info.screenPixels) || 1920 * 1080;
-
-  if (SOFTWARE_RENDERER.test(renderer)) return 'low';
-  if (cores <= 2 || (memory !== null && memory <= 2)) return 'low';
-
-  if (info.isTouch) {
-    // tablets/phones: at most medium; weak devices low
-    if (cores <= 4 || (memory !== null && memory <= 4) || WEAK_GPU.test(renderer)) return 'low';
-    return 'medium';
-  }
-
-  if (WEAK_GPU.test(renderer)) return pixels > 2560 * 1440 ? 'low' : 'medium';
-  if (cores >= 8 && (memory === null || memory >= 8)) return 'high';
-  if (STRONG_GPU.test(renderer) && cores >= 6) return 'high';
-  return 'medium';
-}
 
 // ---------------------------------------------------------------------------------------------
 // GPU memory budget (rule 4). Browsers do not tell how much GPU memory a page may use, so the
@@ -279,7 +259,13 @@ const SCENERY_STEPS = Object.freeze([
   { drop: (p) => zero(p, 'flowers', 'butterflies') },
   { drop: (p) => zero(p, 'grazingHorses') },
   { drop: (p) => zero(p, 'birds') },
-  { drop: (p) => zero(p, 'decor') },
+  {
+    drop(p) {
+      const had = p.planters;
+      p.planters = false;
+      return zero(p, 'decor') || Boolean(had);
+    },
+  },
   {
     drop(p, m) {
       if (!(p.envDensity > m.envDensityFloor)) return false;
@@ -387,11 +373,12 @@ export function lowerLevel(level) {
 }
 
 // Measuring values of the frame-rate checks below. They are no game-play values (those belong to
-// TUNING), so they stay here: the downgrade governor and the "level too high" hint measure the
-// same way (rule 4): only while riding, not in the first 3 s, and a frame longer than
-// maxFrameS is a real interruption (suspend). Slower frames still count: a very slow device must
-// be able to step down. Pauses/hidden tabs are reported via measuring=false.
-const GOVERNOR_DEFAULTS = Object.freeze({
+// TUNING), so they stay here: the downgrade governor, the upgrade governor (quality-upgrade.js) and
+// the "level too high" hint measure the same way (rule 4): only while riding, not in the first
+// 3 s, and a frame longer than maxFrameS is a real interruption (suspend). Slower frames still
+// count: a very slow device must be able to step down. Pauses/hidden tabs are reported via
+// measuring=false.
+export const GOVERNOR_DEFAULTS = Object.freeze({
   windowS: 5, // moving average
   minFps: 50,
   graceS: 3, // grace period after an interruption
@@ -406,25 +393,32 @@ const LOW_FPS_HINT_DEFAULTS = Object.freeze({
   maxFps: 30, // a manually chosen level below this average gets a hint
 });
 
-/** Moving average over the last `windowS` seconds of frame durations. */
-function createFrameWindow(windowS) {
+/**
+ * Moving average over the last `windowS` seconds of frame durations. Frames longer than `slowS`
+ * are counted as slow ones (the upgrade governor wants few of them); the default counts none.
+ */
+export function createFrameWindow(windowS, slowS = Infinity) {
   // queue of measured frame durations
   let samples = [];
   let head = 0;
   let sum = 0;
+  let slow = 0;
   const length = () => samples.length - head;
   return {
     clear() {
       samples.length = 0; // in place: this is called every frame while nothing is measured
       head = 0;
       sum = 0;
+      slow = 0;
     },
     push(dt) {
       samples.push(dt);
       sum += dt;
+      if (dt > slowS) slow += 1;
       // drop old frames while the rest still covers the whole window
       while (length() > 1 && sum - samples[head] >= windowS) {
         sum -= samples[head];
+        if (samples[head] > slowS) slow -= 1;
         head += 1;
       }
       if (head > 512) {
@@ -439,6 +433,11 @@ function createFrameWindow(windowS) {
     averageFps() {
       const n = length();
       return n > 0 && sum > 0 ? n / sum : null;
+    },
+    /** Share (0..1) of the frames in the window that were slower than `slowS`. */
+    slowShare() {
+      const n = length();
+      return n > 0 ? slow / n : 0;
     },
   };
 }
@@ -461,6 +460,7 @@ function createFrameClock(now) {
  * frame(dtSeconds, measuring): measuring = the player is riding (pre-start, ride, free mode) and
  * the window is visible. Returns the current level.
  * now: optional clock in ms; only used when frame() is called without dt.
+ * onChange(level, fps): the new level and the average frame rate that made the governor step down.
  */
 export function createQualityGovernor({
   level = 'medium',
@@ -506,7 +506,7 @@ export function createQualityGovernor({
       current = lowerLevel(current);
       cooldown = cfg.cooldownS;
       frames.clear();
-      onChange(current);
+      onChange(current, fps);
     }
     return current;
   }
@@ -547,8 +547,9 @@ export function canHintLowerLevel({ auto, level }) {
 
 // A context loss within this many seconds of the page going to the background or coming back is
 // not counted as overload (technical value, no game play): Android browsers often drop the
-// context on an app switch, and right after the return the page is still waking up.
-export const CONTEXT_LOSS_GRACE_S = 3;
+// context on an app switch, and right after the return the page is still waking up. The crash
+// guard uses the same time (FOREGROUND_GRACE_S).
+export const CONTEXT_LOSS_GRACE_S = FOREGROUND_GRACE_S;
 
 /**
  * What a lost WebGL context means for the graphics level (rule 4). A loss in the foreground shows
@@ -557,7 +558,9 @@ export const CONTEXT_LOSS_GRACE_S = 3;
  * hint to pick a lower one. A loss while the page is hidden, or within CONTEXT_LOSS_GRACE_S of a
  * visibility change, says nothing about the device: nothing changes then.
  * `visible`: the page is in the foreground; `sinceVisibilityChangeS`: seconds since it last went
- * to the background or came back (Infinity: never). Returns { level, persist, hint }.
+ * to the background or came back (Infinity: never). Returns { level, persist, hint, counted }:
+ * `counted` tells that the loss shows an overloaded device (then the level it happened at must not
+ * be climbed to again by the automatic, whatever the loss did to the level itself).
  */
 export function levelAfterContextLoss({
   auto,
@@ -566,11 +569,22 @@ export function levelAfterContextLoss({
   sinceVisibilityChangeS = Infinity,
 }) {
   if (!visible || sinceVisibilityChangeS < CONTEXT_LOSS_GRACE_S) {
-    return { level, persist: false, hint: false };
+    return { level, persist: false, hint: false, counted: false };
   }
   const lowered = lowerLevel(level) !== level;
-  if (auto) return { level: 'low', persist: lowered, hint: false };
-  return { level, persist: false, hint: canHintLowerLevel({ auto, level }) };
+  if (auto) return { level: 'low', persist: lowered, hint: false, counted: true };
+  return { level, persist: false, hint: canHintLowerLevel({ auto, level }), counted: true };
+}
+
+/**
+ * The "last change" of the debug box when the previous run crashed (crash guard): the automatic
+ * level was lowered to low at the start. A crash at low (or without a known level) or of a manual
+ * level changed nothing, so there is nothing to report. Returns { kind: 'crash' } or null.
+ */
+export function startupCrashChange(startupCrash) {
+  if (!startupCrash?.crashed || !startupCrash.auto) return null;
+  if (!startupCrash.level || startupCrash.level === 'low') return null;
+  return { kind: 'crash' };
 }
 
 /**

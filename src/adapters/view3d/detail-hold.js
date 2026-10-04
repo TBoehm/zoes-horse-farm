@@ -9,7 +9,7 @@
 // is given.
 
 /**
- * createDetailHold() → { sync(meshes, ready), restore(), size }.
+ * createDetailHold() → { sync(meshes, ready), restore(), has(mesh), size }.
  * `sync(meshes, ready)`: with ready = false, every visible mesh is hidden and remembered; with
  * ready = true the remembered ones are shown again.
  * `restore()`: shows the remembered ones again at once. Call it before code that decides the
@@ -37,6 +37,10 @@ export function createDetailHold() {
       }
     },
     restore,
+    /** Is this mesh held back now? (Hidden for a moment, not for good.) */
+    has(mesh) {
+      return held.has(mesh);
+    },
     /** Number of meshes that are held back now. */
     get size() {
       return held.size;

@@ -14,7 +14,8 @@ import { presetFor } from './quality.js';
 const STAGE_GAP_FRAMES = 6;
 
 const fogKey = (p) => (p.fog ? `${p.fog.near}/${p.fog.far}` : 'none');
-const materialsKey = (p) => `${p.material}|${p.normalMaps}|${p.fog !== null}|${p.envMap}`;
+const materialsKey = (p) =>
+  `${p.material}|${p.normalMaps}|${p.fog !== null}|${p.envMap}|${Boolean(p.wind)}`;
 
 /**
  * The stages in the order of a downgrade (cheapest lever for the GPU first). `key` reduces a
@@ -29,15 +30,16 @@ const STAGES = Object.freeze([
     compile: false,
     key: (p) => String(p.pixelRatio),
   }),
-  // shadow pass, shadow map target (2048² depth texture on "high"), shadow defines of the shaders
+  // shadow pass, shadow map target (2048² depth texture on "high"), shadow defines of the shaders.
+  // When the materials stage is needed as well, both are applied as one stage (MERGED_STAGE_ID)
   Object.freeze({
     id: 'shadows',
     compile: true,
     key: (p) => `${p.shadows}|${p.shadowMapSize}|${p.shadowCasters ?? ''}`,
   }),
-  // material type (Lambert ↔ standard), normal maps, fog and environment map: all of these change
-  // the shader programs, so they are one stage with one compile (separate stages would compile
-  // intermediate programs that are replaced right away)
+  // material type (Lambert ↔ standard), normal maps, fog, environment map and the wind code of the
+  // scenery: all of these change the shader programs, so they are one stage with one compile
+  // (separate stages would compile intermediate programs that are replaced right away)
   Object.freeze({
     id: 'materials',
     compile: true,
@@ -67,7 +69,7 @@ const STAGES = Object.freeze([
         p.hoofDust,
         p.birds,
         p.butterflies,
-        p.wind,
+        p.planters,
         fogKey(p),
       ].join('|'),
   }),
@@ -91,9 +93,28 @@ export function sameMaterialStage(a, b) {
 /** Ids of all stages, in the order of a downgrade. */
 export const QUALITY_STAGE_IDS = Object.freeze(STAGES.map((s) => s.id));
 
+// `covers`: the stage ids a descriptor stands for (the applied level is recorded for each of them)
 const DESCRIPTORS = Object.freeze(
-  Object.fromEntries(STAGES.map((s) => [s.id, Object.freeze({ id: s.id, compile: s.compile })])),
+  Object.fromEntries(
+    STAGES.map((s) => [
+      s.id,
+      Object.freeze({ id: s.id, compile: s.compile, covers: Object.freeze([s.id]) }),
+    ]),
+  ),
 );
+
+/**
+ * The stage that does the shadows and the materials stage in one go. Both of them change the
+ * shader programs of everything visible (shadow defines, material type), so two stages would
+ * compile a set of programs that the second one throws away at once: a waste of GPU time and, at
+ * the peak, of GPU memory (rule 4). Used only when both are needed.
+ */
+export const MERGED_STAGE_ID = 'shadowsAndMaterials';
+const MERGED = Object.freeze({
+  id: MERGED_STAGE_ID,
+  compile: true,
+  covers: Object.freeze(['shadows', 'materials']),
+});
 // A downgrade steps down the resolution first; a climb ends with it (the most expensive step last)
 const UP_ORDER = Object.freeze([...QUALITY_STAGE_IDS].reverse());
 
@@ -123,7 +144,20 @@ export function planQualityStagesFromState(applied, to) {
     if (currentRank < 0 || currentRank >= targetRank) goingUp = false;
   }
   const order = goingUp ? UP_ORDER : QUALITY_STAGE_IDS;
-  return order.filter((id) => needed.has(id)).map((id) => DESCRIPTORS[id]);
+  const list = [];
+  for (const id of order) {
+    if (!needed.has(id)) continue;
+    if (
+      (id === 'shadows' || id === 'materials') &&
+      needed.has('shadows') &&
+      needed.has('materials')
+    ) {
+      if (!list.includes(MERGED)) list.push(MERGED); // at the place of the first of the two
+      continue;
+    }
+    list.push(DESCRIPTORS[id]);
+  }
+  return list;
 }
 
 /**

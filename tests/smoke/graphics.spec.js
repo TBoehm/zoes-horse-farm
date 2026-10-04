@@ -483,7 +483,8 @@ test.describe('staged downgrade during a ride (rule 4)', () => {
           setTimeout(() => resolve(settlingFrames), 60_000);
         }),
     );
-    // five stages with a gap of several frames each: never a single frame
+    // four stages (shadows and materials in one) with a gap of several frames each: never a
+    // single frame
     expect(frames).toBeGreaterThanOrEqual(5);
 
     const ride = await rideState(page);
@@ -499,6 +500,79 @@ test.describe('staged downgrade during a ride (rule 4)', () => {
     await keys.set('a', true);
     await page.waitForFunction((h) => window.__zhfTest.ride().horse.heading !== h, heading);
     await keys.releaseAll();
+    expect(await canvasScreenshotSize(page)).toBeGreaterThan(30_000);
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a downgrade frees GPU programs and buffers first: the peak never exceeds the value before (SRT-013)', async ({
+    page,
+    browserName,
+  }) => {
+    test.setTimeout(150_000);
+    const watch = watchPage(page);
+    // counts the live shader programs and buffers of every WebGL2 context (created minus deleted)
+    await page.addInitScript(() => {
+      const gl = window.WebGL2RenderingContext?.prototype;
+      if (!gl) return;
+      const live = { programs: 0, buffers: 0 };
+      const peak = { programs: 0, buffers: 0 };
+      for (const [kind, key] of [
+        ['Program', 'programs'],
+        ['Buffer', 'buffers'],
+      ]) {
+        const create = gl[`create${kind}`];
+        gl[`create${kind}`] = function (...args) {
+          const object = create.apply(this, args);
+          live[key] += 1;
+          peak[key] = Math.max(peak[key], live[key]);
+          return object;
+        };
+        const remove = gl[`delete${kind}`];
+        gl[`delete${kind}`] = function (object, ...rest) {
+          if (object) live[key] -= 1;
+          return remove.call(this, object, ...rest);
+        };
+      }
+      window.__gpuCount = {
+        live,
+        peak,
+        resetPeak() {
+          peak.programs = live.programs;
+          peak.buffers = live.buffers;
+        },
+      };
+    });
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'high' } },
+    });
+    await startFreeRide(page);
+    expect(await rideForward(page)).toBeGreaterThan(0.5);
+    const settle = () =>
+      page.waitForFunction(() => !window.__zhfTest.ride().graphicsSettling, null, {
+        timeout: 90_000,
+        polling: 250,
+      });
+    await settle();
+    const counts = () => page.evaluate(() => ({ ...window.__gpuCount.live }));
+    const peaks = () => page.evaluate(() => ({ ...window.__gpuCount.peak }));
+
+    // high → medium → low, the way the governor steps down: each step ends with fewer programs
+    // and buffers than it started with, and never goes above the start in between
+    let before = await counts();
+    expect(before.programs).toBeGreaterThan(0);
+    for (const level of ['medium', 'low']) {
+      await page.evaluate(() => window.__gpuCount.resetPeak());
+      await page.evaluate((next) => window.__zhfTest.setAutoLevel(next), level);
+      await page.waitForFunction((l) => window.__zhfTest.ride().graphicsLevel === l, level);
+      await settle();
+      const peak = await peaks();
+      const after = await counts();
+      expect(peak.programs, `${level}: programs`).toBeLessThanOrEqual(before.programs);
+      expect(peak.buffers, `${level}: buffers`).toBeLessThanOrEqual(before.buffers);
+      expect(after.programs, `${level}: programs left`).toBeLessThan(before.programs);
+      expect(after.buffers, `${level}: buffers left`).toBeLessThan(before.buffers);
+      before = after;
+    }
     expect(await canvasScreenshotSize(page)).toBeGreaterThan(30_000);
     expect(watch.errors).toEqual([]);
   });

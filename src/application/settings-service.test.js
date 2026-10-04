@@ -36,22 +36,26 @@ describe('settings service', () => {
   });
 
   describe('graphics', () => {
-    it('automatic: auto on, level is the device level', () => {
-      const { service, store } = setup({ graphicsAuto: false, graphicsLevel: 'high' });
-      service.setGraphicsAuto('low');
-      expect(store.data.settings).toMatchObject({ graphicsAuto: true, graphicsLevel: 'low' });
+    it('tells the listeners when the player selects automatic graphics', () => {
+      const { service } = setup({ graphicsAuto: false, graphicsLevel: 'high' });
+      let calls = 0;
+      const off = service.onAutoSelected(() => (calls += 1));
+      service.setGraphicsAuto();
+      expect(calls).toBe(1);
+      service.setGraphicsLevel('medium');
+      service.setAutoLevel('low');
+      expect(calls).toBe(1);
+      off();
+      service.setGraphicsAuto();
+      expect(calls).toBe(1);
     });
 
-    it('automatic without a known device level resets the level to null', () => {
-      const { service, store } = setup({ graphicsAuto: false, graphicsLevel: 'high' });
-      service.setGraphicsAuto(null);
-      expect(store.data.settings).toMatchObject({ graphicsAuto: true, graphicsLevel: null });
-    });
-
-    it('automatic ignores an unknown device level', () => {
-      const { service, store } = setup({ graphicsAuto: false, graphicsLevel: 'high' });
-      service.setGraphicsAuto('ultra');
-      expect(store.data.settings).toMatchObject({ graphicsAuto: false, graphicsLevel: 'high' });
+    it('automatic starts at low, whatever level was set before (rule 4)', () => {
+      for (const level of ['low', 'medium', 'high']) {
+        const { service, store } = setup({ graphicsAuto: false, graphicsLevel: level });
+        service.setGraphicsAuto();
+        expect(store.data.settings).toMatchObject({ graphicsAuto: true, graphicsLevel: 'low' });
+      }
     });
 
     it('manual level: auto off, level saved', () => {
@@ -67,13 +71,15 @@ describe('settings service', () => {
       expect(store.data.settings).toMatchObject({ graphicsAuto: true, graphicsLevel: 'low' });
     });
 
-    it('governor downgrade keeps auto on and only changes the level', () => {
+    it('the governor changes the level (down or up): automatic stays on', () => {
       const { service, store } = setup({ graphicsAuto: true, graphicsLevel: 'high' });
       service.setAutoLevel('medium');
       expect(store.data.settings).toMatchObject({ graphicsAuto: true, graphicsLevel: 'medium' });
+      service.setAutoLevel('high');
+      expect(store.data.settings).toMatchObject({ graphicsAuto: true, graphicsLevel: 'high' });
     });
 
-    it('governor downgrade ignores an unknown level', () => {
+    it('the governor ignores an unknown level', () => {
       const { service, store } = setup({ graphicsAuto: true, graphicsLevel: 'high' });
       service.setAutoLevel('ultra');
       expect(store.data.settings.graphicsLevel).toBe('high');

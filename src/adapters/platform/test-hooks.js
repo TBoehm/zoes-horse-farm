@@ -2,7 +2,8 @@
 // Only installed when the URL contains `?testhooks`; the game itself never uses it. The helpers
 // return plain copies of the state; `go` (jumps to a screen, e.g. to look at the results screen
 // without riding a whole course), `setAutoLevel` (a governor-style level change) and
-// `loseContext` / `restoreContext` (simulated WebGL context loss) are the only actions.
+// `loseContext` / `restoreContext` (simulated WebGL context loss) and `setFrameFeed` (replaces the
+// frame times the graphics automatic measures) are the only actions.
 
 const round = (n, digits = 3) => (Number.isFinite(n) ? Number(n.toFixed(digits)) : n);
 
@@ -18,6 +19,17 @@ export function gpuBudgetOverride(search = globalThis.location?.search ?? '') {
   if (!testHooksRequested(search)) return null;
   const value = Number(new URLSearchParams(search).get('gpubudget'));
   return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * A feed for the frame times of the graphics automatic: every real frame counts as `repeat` frames
+ * of `dt` seconds, so that a browser test does not have to wait through the warm-up and windows of
+ * the governors (3 s, 10 s, 20 s) at the slow software renderer. The engine counts what it
+ * measured in `fedSeconds`. null for an invalid feed.
+ */
+function createFrameFeed({ dt, repeat = 1 } = {}) {
+  if (!(Number.isFinite(dt) && dt > 0) || !Number.isInteger(repeat) || repeat < 1) return null;
+  return { dt, repeat, fedSeconds: 0 };
 }
 
 function snapshotObstacles(obstacles) {
@@ -106,5 +118,10 @@ export function installTestHooks({ app, store, inputMode, target = window }) {
     // when there is no engine or the browser does not offer the extension.
     loseContext: () => contextLoss('loseContext'),
     restoreContext: () => contextLoss('restoreContext'),
+    // Frame times for the graphics automatic (null: the real ones again), see createFrameFeed
+    setFrameFeed: (feed) => {
+      app.services.frameFeed = feed ? createFrameFeed(feed) : null;
+    },
+    frameFeed: () => (app.services.frameFeed ? { ...app.services.frameFeed } : null),
   };
 }

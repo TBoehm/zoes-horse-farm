@@ -8,9 +8,9 @@ import {
   presetFor,
   levelAfterContextLoss,
   CONTEXT_LOSS_GRACE_S,
+  startupCrashChange,
   createLowFpsHint,
   createQualityGovernor,
-  pickInitialLevel,
   lowerLevel,
   QUALITY_PRESETS,
 } from './quality.js';
@@ -22,55 +22,6 @@ function run(gov, seconds, fps, measuring = true) {
   const n = Math.round(seconds * fps);
   for (let i = 0; i < n; i += 1) gov.frame(dt, measuring);
 }
-
-describe('pickInitialLevel', () => {
-  it('picks low for software renderers', () => {
-    for (const r of [
-      'Google SwiftShader',
-      'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)',
-      'llvmpipe (LLVM 15.0.7, 256 bits)',
-      'Microsoft Basic Render Driver',
-    ]) {
-      expect(
-        pickInitialLevel({ hardwareConcurrency: 16, deviceMemory: 8, rendererString: r }),
-      ).toBe('low');
-    }
-  });
-
-  it('picks high for a strong desktop', () => {
-    expect(
-      pickInitialLevel({
-        hardwareConcurrency: 12,
-        deviceMemory: 8,
-        isTouch: false,
-        rendererString: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060)',
-        screenPixels: 2560 * 1440,
-      }),
-    ).toBe('high');
-  });
-
-  it('touch devices get at most medium, weak ones low', () => {
-    expect(
-      pickInitialLevel({
-        hardwareConcurrency: 8,
-        deviceMemory: 8,
-        isTouch: true,
-        rendererString: 'Apple GPU',
-      }),
-    ).toBe('medium');
-    expect(
-      pickInitialLevel({ hardwareConcurrency: 4, isTouch: true, rendererString: 'Mali-G52' }),
-    ).toBe('low');
-  });
-
-  it('weak desktop gets medium or low', () => {
-    expect(
-      pickInitialLevel({ hardwareConcurrency: 4, rendererString: 'Intel(R) UHD Graphics 620' }),
-    ).toBe('medium');
-    expect(pickInitialLevel({ hardwareConcurrency: 2 })).toBe('low');
-    expect(pickInitialLevel({})).toBe('medium');
-  });
-});
 
 describe('lowerLevel', () => {
   it('goes down one level, never below low', () => {
@@ -92,24 +43,30 @@ describe('QUALITY_PRESETS', () => {
     expect(QUALITY_PRESETS.low.material).toBe('lambert');
   });
 
-  it('adds the details of SRT-011 level by level: none on low, the most on high', () => {
+  it('adds the details of SRT-011 level by level: none on low, the cheap ones on medium, all on high', () => {
     const { low, medium, high } = QUALITY_PRESETS;
-    for (const key of ['grassTufts', 'flowers', 'decor', 'birds', 'butterflies']) {
+    for (const key of ['grassTufts', 'flowers', 'decor', 'birds', 'butterflies', 'grazingHorses']) {
       expect(low[key], `low ${key}`).toBe(0);
       expect(medium[key], `medium ${key}`).toBeLessThanOrEqual(high[key]);
       expect(high[key], `high ${key}`).toBeGreaterThan(0);
     }
-    expect(low.wind).toBe(false);
-    expect(medium.wind).toBe(true);
-    expect(high.wind).toBe(true);
-    // moderate flowers and birds on medium, butterflies only on high
-    expect(medium.flowers).toBeGreaterThan(0);
-    expect(medium.flowers).toBeLessThan(high.flowers);
-    // the grass tufts are the biggest triangle cost: medium has none (ticket SRT-011)
-    expect(medium.grassTufts).toBe(0);
-    expect(medium.birds).toBeGreaterThan(0);
-    expect(medium.butterflies).toBe(0);
-    expect(high.butterflies).toBeGreaterThan(0);
+    for (const key of ['planters', 'hoofDust', 'wind']) {
+      expect(low[key], `low ${key}`).toBe(false);
+      expect(high[key], `high ${key}`).toBe(true);
+    }
+  });
+
+  it('keeps the expensive details on high only (rule 4, SRT-013): wind, flowers, animals, dust', () => {
+    const { medium } = QUALITY_PRESETS;
+    expect(medium.wind).toBe(false);
+    for (const key of ['grassTufts', 'flowers', 'birds', 'butterflies', 'grazingHorses']) {
+      expect(medium[key], key).toBe(0);
+    }
+    expect(medium.hoofDust).toBe(false);
+    expect(medium.planters).toBe(false);
+    // what medium keeps is the cheap static decoration: the paddock and every second pennant
+    expect(medium.decor).toBeGreaterThan(0);
+    expect(medium.decor).toBeLessThan(1);
   });
 
   it('antialiasing is off on low and on above', () => {
@@ -130,7 +87,7 @@ describe('createQualityGovernor', () => {
     run(gov, 0.2, 40);
     expect(gov.level).toBe('medium');
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange).toHaveBeenCalledWith('medium');
+    expect(onChange).toHaveBeenCalledWith('medium', expect.any(Number));
   });
 
   it('stays at 50 fps or more', () => {
@@ -206,7 +163,7 @@ describe('createQualityGovernor', () => {
     run(gov, 3, 1 / 0.6); // grace period
     run(gov, 6, 1 / 0.6);
     expect(gov.level).toBe('medium');
-    expect(onChange).toHaveBeenCalledWith('medium');
+    expect(onChange).toHaveBeenCalledWith('medium', expect.any(Number));
   });
 
   it('a single long frame does not reset the window of a slow device', () => {
@@ -270,7 +227,7 @@ describe('createQualityGovernor', () => {
       gov.frame(undefined, true);
     }
     expect(gov.level).toBe('low');
-    expect(onChange).toHaveBeenCalledWith('low');
+    expect(onChange).toHaveBeenCalledWith('low', expect.any(Number));
   });
 
   it('reports the moving average', () => {
@@ -392,11 +349,13 @@ describe('levelAfterContextLoss (rule 4)', () => {
       level: 'low',
       persist: true,
       hint: false,
+      counted: true,
     });
     expect(levelAfterContextLoss({ auto: true, level: 'medium' })).toEqual({
       level: 'low',
       persist: true,
       hint: false,
+      counted: true,
     });
   });
 
@@ -405,6 +364,7 @@ describe('levelAfterContextLoss (rule 4)', () => {
       level: 'low',
       persist: false,
       hint: false,
+      counted: true,
     });
   });
 
@@ -414,6 +374,7 @@ describe('levelAfterContextLoss (rule 4)', () => {
         level,
         persist: false,
         hint: true,
+        counted: true,
       });
     }
   });
@@ -423,6 +384,7 @@ describe('levelAfterContextLoss (rule 4)', () => {
       level: 'low',
       persist: false,
       hint: false,
+      counted: true,
     });
   });
 
@@ -433,6 +395,7 @@ describe('levelAfterContextLoss (rule 4)', () => {
           level,
           persist: false,
           hint: false,
+          counted: false,
         });
       }
     }
@@ -444,8 +407,21 @@ describe('levelAfterContextLoss (rule 4)', () => {
       level: 'high',
       persist: false,
       hint: false,
+      counted: false,
     });
     expect(levelAfterContextLoss({ auto: false, level: 'high', ...justBack }).hint).toBe(false);
+  });
+
+  it('names a crash as the reason only when the automatic level really was lowered', () => {
+    const crash = { crashed: true, auto: true, seconds: 5 };
+    expect(startupCrashChange({ ...crash, level: 'medium' })).toEqual({ kind: 'crash' });
+    expect(startupCrashChange({ ...crash, level: 'high' })).toEqual({ kind: 'crash' });
+    // already at low (or unknown), manual, or no crash: no change was made
+    expect(startupCrashChange({ ...crash, level: 'low' })).toBeNull();
+    expect(startupCrashChange({ ...crash, level: null })).toBeNull();
+    expect(startupCrashChange({ ...crash, level: 'high', auto: false })).toBeNull();
+    expect(startupCrashChange({ crashed: false })).toBeNull();
+    expect(startupCrashChange(undefined)).toBeNull();
   });
 
   it('a loss in the foreground after the grace time counts as before', () => {
@@ -454,6 +430,7 @@ describe('levelAfterContextLoss (rule 4)', () => {
       level: 'low',
       persist: true,
       hint: false,
+      counted: true,
     });
     expect(levelAfterContextLoss({ auto: false, level: 'high', ...settled }).hint).toBe(true);
   });
@@ -520,8 +497,9 @@ describe('estimateGpuMemoryMB', () => {
   it('counts the grazing horses by their model, the dust and the vertices of horse and rider', () => {
     const cost = (preset, key, off) =>
       estimateGpuMemoryMB(preset, TABLET) - estimateGpuMemoryMB({ ...preset, [key]: off }, TABLET);
-    // two horses of the low model (167 KB) on medium, of the medium model (430 KB) on high
-    expect(cost(QUALITY_PRESETS.medium, 'grazingHorses', 0)).toBeCloseTo((2 * 167) / 1024, 5);
+    // two horses of the low model (167 KB) on a medium with horses, of the medium model (430 KB) on high
+    const withHorses = { ...QUALITY_PRESETS.medium, grazingHorses: 2 };
+    expect(cost(withHorses, 'grazingHorses', 0)).toBeCloseTo((2 * 167) / 1024, 5);
     expect(cost(QUALITY_PRESETS.high, 'grazingHorses', 0)).toBeCloseTo((2 * 430) / 1024, 5);
     expect(cost(QUALITY_PRESETS.high, 'grazingHorses', 1)).toBeCloseTo(430 / 1024, 5);
     expect(cost(QUALITY_PRESETS.high, 'hoofDust', false)).toBeCloseTo(0.01, 5);
@@ -562,6 +540,13 @@ describe('estimateGpuMemoryMB', () => {
         estimateGpuMemoryMB(without, TABLET),
       );
     }
+  });
+
+  it('medium costs only a little more than before the details (122.99 MB at commit 5e240fc)', () => {
+    const BEFORE_MEDIUM_MB = 122.99; // the same estimate computed by the code at 5e240fc
+    const now = estimateGpuMemoryMB(QUALITY_PRESETS.medium, TABLET);
+    expect(now).toBeGreaterThanOrEqual(BEFORE_MEDIUM_MB - 0.01);
+    expect(now - BEFORE_MEDIUM_MB).toBeLessThan(1);
   });
 
   it('copes with presets that know none of the newer details', () => {
@@ -718,6 +703,7 @@ describe('fitPresetToBudget', () => {
     expect(tiny.preset.butterflies).toBe(0);
     expect(tiny.preset.birds).toBe(0);
     expect(tiny.preset.decor).toBe(0);
+    expect(tiny.preset.planters).toBe(false);
     expect(tiny.preset.envDensity).toBe(0.55);
     expect(tiny.preset.pixelRatio).toBe(1);
     expect(tiny.preset.shadowMapSize).toBe(1024);

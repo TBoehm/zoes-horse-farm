@@ -13,7 +13,7 @@ import {
 const IDLE = { speed: 0, gait: 'halt', turnRate: 0, y: 0, jump: null, hop: null, refusal: null };
 
 export function createMyHorseScreen(ctx) {
-  const { t, h, store, app } = ctx;
+  const { t, h, store, app, settings, services } = ctx;
   const horseData = store.get('horse');
   const engine = getEngine(ctx);
   const { horse, camera, world } = engine;
@@ -109,7 +109,15 @@ export function createMyHorseScreen(ctx) {
   horse.object.position.set(0, 0, 0);
   horse.object.rotation.y = 0;
   let angle = 0.9;
+  // The preview draws the scene too: an unexpected end here counts for the crash guard (rule 4)
+  let autoGraphics = settings.get().graphicsAuto;
+  const offSettings = settings.onChange((s) => (autoGraphics = s.graphicsAuto));
+  const drawLease = services.crashGuard?.markRendering({
+    level: engine.level,
+    auto: autoGraphics,
+  });
   engine.run((dt) => {
+    drawLease?.frame({ level: engine.level, auto: autoGraphics });
     angle += dt * 0.25;
     const w = window.innerWidth;
     const hgt = window.innerHeight;
@@ -130,6 +138,8 @@ export function createMyHorseScreen(ctx) {
     screenClass: 'screen-horse',
     destroy() {
       engine.run(null);
+      drawLease?.release();
+      offSettings();
       camera.clearViewOffset();
     },
   };

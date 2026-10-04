@@ -1,7 +1,7 @@
 // Settings use cases on top of the store port: every settings write of the UI goes through here,
 // so values are validated in one place (rule 47) and the adapters stay free of rules.
 import { clamp } from '../shared/math.js';
-import { GRAPHICS_LEVELS } from './graphics-levels.js';
+import { AUTO_START_LEVEL, GRAPHICS_LEVELS } from './graphics-levels.js';
 import { LANGS } from './languages.js';
 import { CAMERA_MODES } from './settings-schema.js';
 
@@ -13,6 +13,7 @@ const SOUND_PREFIX = { music: 'music', sfx: 'sfx' };
  *   onChange(section: string, fn: Function): () => void }} store store port
  */
 export function createSettingsService(store) {
+  const autoSelectedListeners = new Set();
   const patch = (changes) => store.update('settings', (settings) => ({ ...settings, ...changes }));
 
   return {
@@ -23,12 +24,20 @@ export function createSettingsService(store) {
       if (LANGS.includes(lang)) patch({ lang });
     },
 
+    /** Automatic graphics: on, starting at the lowest level (rule 4); the governor climbs from there. */
+    setGraphicsAuto() {
+      patch({ graphicsAuto: true, graphicsLevel: AUTO_START_LEVEL });
+      for (const fn of [...autoSelectedListeners]) fn();
+    },
+
     /**
-     * Automatic graphics: `deviceLevel` ('low'|'medium'|'high'|null) is the level for this device.
+     * Called after "Automatic" was selected. The crash guard uses it to forget the blocked levels,
+     * the engine to forget the levels it stepped down from.
+     * @returns {() => void} unsubscribe
      */
-    setGraphicsAuto(deviceLevel) {
-      if (deviceLevel !== null && !GRAPHICS_LEVELS.includes(deviceLevel)) return;
-      patch({ graphicsAuto: true, graphicsLevel: deviceLevel });
+    onAutoSelected(fn) {
+      autoSelectedListeners.add(fn);
+      return () => autoSelectedListeners.delete(fn);
     },
 
     /** The player picks a level: automatic graphics are off. */
@@ -36,7 +45,7 @@ export function createSettingsService(store) {
       if (GRAPHICS_LEVELS.includes(level)) patch({ graphicsAuto: false, graphicsLevel: level });
     },
 
-    /** Frame-rate governor lowers the level: automatic graphics stay on. */
+    /** The governor changes the level (down or up): automatic graphics stay on. */
     setAutoLevel(level) {
       if (GRAPHICS_LEVELS.includes(level)) patch({ graphicsLevel: level });
     },

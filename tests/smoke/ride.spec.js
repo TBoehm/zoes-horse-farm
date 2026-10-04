@@ -256,7 +256,7 @@ test.describe('free riding (SRT-002)', () => {
     browserName,
   }) => {
     await openGameMenu(page, test, browserName);
-    // first start: automatic, with a level that fits the device (rule 4)
+    // first start: automatic, at the lowest level (rule 4, SRT-014)
     const first = await storeSection(page, 'settings');
     await page.locator('[data-entry="settings"]').click();
     await expect(page.locator('[data-name="graphics"]')).toHaveCount(4);
@@ -264,7 +264,7 @@ test.describe('free riding (SRT-002)', () => {
       'aria-checked',
       'true',
     );
-    expect(first.graphicsAuto).toBe(true);
+    expect(first).toMatchObject({ graphicsAuto: true, graphicsLevel: 'low' });
     // a manual choice is saved, automatic is off, and it is used in the ride
     await page.locator('[data-name="graphics"][data-value="medium"]').click();
     expect(await storeSection(page, 'settings')).toMatchObject({
@@ -295,11 +295,11 @@ test.describe('free riding (SRT-002)', () => {
     const settings = await storeSection(page, 'settings');
     expect(settings.camera).toBe('follow');
     expect(settings.graphicsAuto).toBe(true);
-    expect(['low', 'medium', 'high']).toContain(settings.graphicsLevel);
+    expect(settings.graphicsLevel).toBe('low'); // an invalid level falls back to the start level
     expect(watch.errors).toEqual([]);
   });
 
-  test('a first start without a graphics level in the save picks one', async ({
+  test('a first start without a graphics level in the save starts at low', async ({
     page,
     browserName,
   }) => {
@@ -307,9 +307,7 @@ test.describe('free riding (SRT-002)', () => {
       save: { ...NAMED, settings: { lang: 'de' } },
     });
     await startFreeRide(page);
-    expect(['low', 'medium', 'high']).toContain(
-      (await storeSection(page, 'settings')).graphicsLevel,
-    );
+    expect((await storeSection(page, 'settings')).graphicsLevel).toBe('low');
   });
 });
 

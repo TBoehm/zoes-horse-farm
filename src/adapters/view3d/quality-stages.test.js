@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createStageQueue,
+  MERGED_STAGE_ID,
   planQualityStagesFromState,
   QUALITY_STAGE_IDS,
   sameMaterialStage,
@@ -20,11 +21,10 @@ describe('planning a change between two levels', () => {
     for (const level of GRAPHICS_LEVELS) expect(planChange(level, level)).toEqual([]);
   });
 
-  it('steps down resolution first, then shadows, materials, characters and scenery', () => {
+  it('steps down resolution first, then shadows and materials in one stage, characters and scenery', () => {
     expect(ids(planChange('medium', 'low'))).toEqual([
       'pixelRatio',
-      'shadows',
-      'materials',
+      MERGED_STAGE_ID,
       'characters',
       'density',
     ]);
@@ -35,20 +35,35 @@ describe('planning a change between two levels', () => {
     expect(ids(planChange('low', 'medium'))).toEqual([
       'density',
       'characters',
-      'materials',
-      'shadows',
+      MERGED_STAGE_ID,
       'pixelRatio',
     ]);
   });
 
-  it('leaves out stages whose values do not differ (medium ↔ high keeps the materials)', () => {
+  it('leaves out stages whose values do not differ (medium ↔ high keeps the fog and the shadows on)', () => {
+    // the wind code of high is part of the materials stage, the shadow map size of the shadows stage
     expect(ids(planChange('high', 'medium'))).toEqual([
       'pixelRatio',
-      'shadows',
+      MERGED_STAGE_ID,
       'characters',
       'density',
     ]);
-    expect(ids(planChange('medium', 'high'))).not.toContain('materials');
+    const calm = { ...QUALITY_PRESETS.high, wind: false };
+    expect(ids(planChange('high', { ...calm, shadowMapSize: 2048 }))).toEqual(['materials']);
+    expect(ids(planChange('high', { ...calm, shadowMapSize: 1024 }))).toEqual([MERGED_STAGE_ID]);
+  });
+
+  it('does shadows and materials in one stage only when both are needed', () => {
+    const noShadows = { ...QUALITY_PRESETS.medium, shadows: false };
+    expect(ids(planChange('medium', noShadows))).toEqual(['shadows']);
+    const lambert = { ...QUALITY_PRESETS.medium, material: 'lambert' };
+    expect(ids(planChange('medium', lambert))).toEqual(['materials']);
+    const both = { ...noShadows, material: 'lambert' };
+    const plan = planChange('medium', both);
+    expect(ids(plan)).toEqual([MERGED_STAGE_ID]);
+    // the merged stage records the level for both stages it covers
+    expect(plan[0].covers).toEqual(['shadows', 'materials']);
+    expect(plan[0].compile).toBe(true);
   });
 
   it('accepts preset objects as well as level names', () => {
@@ -72,8 +87,7 @@ describe('planning a change between two levels', () => {
   it('marks the stages that change shaders for a precompile', () => {
     const byId = Object.fromEntries(planChange('medium', 'low').map((s) => [s.id, s]));
     expect(byId.pixelRatio.compile).toBe(false);
-    expect(byId.shadows.compile).toBe(true);
-    expect(byId.materials.compile).toBe(true);
+    expect(byId[MERGED_STAGE_ID].compile).toBe(true);
     expect(byId.characters.compile).toBe(true);
     expect(byId.density.compile).toBe(true);
   });
@@ -83,13 +97,16 @@ describe('planning a change between two levels', () => {
       const changed = { ...QUALITY_PRESETS.medium, [key]: 0.9 };
       expect(ids(planChange('medium', changed)), key).toEqual(['density']);
     }
-    const calm = { ...QUALITY_PRESETS.medium, wind: false };
-    expect(ids(planChange('medium', calm))).toEqual(['density']);
+    const boxes = { ...QUALITY_PRESETS.medium, planters: true };
+    expect(ids(planChange('medium', boxes))).toEqual(['density']);
+    // the wind code changes the shader programs of the scenery: the materials stage
+    const windy = { ...QUALITY_PRESETS.medium, wind: true };
+    expect(ids(planChange('medium', windy))).toEqual(['materials']);
     // grazing horses and hoof dust belong to the scenery stage
-    const empty = { ...QUALITY_PRESETS.medium, grazingHorses: 0 };
-    expect(ids(planChange('medium', empty))).toEqual(['density']);
-    const dustless = { ...QUALITY_PRESETS.medium, hoofDust: false };
-    expect(ids(planChange('medium', dustless))).toEqual(['density']);
+    const horses = { ...QUALITY_PRESETS.medium, grazingHorses: 2 };
+    expect(ids(planChange('medium', horses))).toEqual(['density']);
+    const dusty = { ...QUALITY_PRESETS.medium, hoofDust: true };
+    expect(ids(planChange('medium', dusty))).toEqual(['density']);
   });
 
   it('never touches the textures: there is no anisotropy stage', () => {
@@ -97,7 +114,7 @@ describe('planning a change between two levels', () => {
       for (const to of GRAPHICS_LEVELS) {
         expect(ids(planChange(from, to))).not.toContain('anisotropy');
         for (const id of ids(planChange(from, to))) {
-          expect(QUALITY_STAGE_IDS).toContain(id);
+          expect([...QUALITY_STAGE_IDS, MERGED_STAGE_ID]).toContain(id);
         }
       }
     }
@@ -123,6 +140,13 @@ describe('planQualityStagesFromState', () => {
       'characters',
       'density',
     ]);
+    // both shader stages still to do: one stage
+    const early = { ...applied('medium'), pixelRatio: 'low' };
+    expect(ids(planQualityStagesFromState(early, 'low'))).toEqual([
+      MERGED_STAGE_ID,
+      'characters',
+      'density',
+    ]);
   });
 
   it('turns around when the target changes back during a switch (pending stages fall away)', () => {
@@ -139,8 +163,7 @@ describe('planQualityStagesFromState', () => {
     expect(ids(planQualityStagesFromState(applied('low'), 'high'))).toEqual([
       'density',
       'characters',
-      'materials',
-      'shadows',
+      MERGED_STAGE_ID,
       'pixelRatio',
     ]);
   });
@@ -222,7 +245,9 @@ describe('sameMaterialStage', () => {
   const { low, medium, high } = QUALITY_PRESETS;
 
   it('tells whether two presets need the same shader programs', () => {
-    expect(sameMaterialStage(medium, high)).toBe(true);
+    // the wind code of high is a shader variant
+    expect(sameMaterialStage(medium, high)).toBe(false);
+    expect(sameMaterialStage(medium, { ...high, wind: false })).toBe(true);
     expect(sameMaterialStage(low, medium)).toBe(false);
     expect(sameMaterialStage(high, low)).toBe(false);
   });
@@ -230,7 +255,8 @@ describe('sameMaterialStage', () => {
   it('agrees with the plan: the materials stage is planned exactly when it is false', () => {
     for (const from of GRAPHICS_LEVELS) {
       for (const to of GRAPHICS_LEVELS) {
-        const planned = ids(planChange(from, to)).includes('materials');
+        const plan = planChange(from, to);
+        const planned = plan.some((stage) => stage.covers.includes('materials'));
         expect(planned, `${from} → ${to}`).toBe(
           !sameMaterialStage(QUALITY_PRESETS[from], QUALITY_PRESETS[to]),
         );

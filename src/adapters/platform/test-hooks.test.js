@@ -131,3 +131,39 @@ describe('context loss hooks', () => {
     expect(install({ engine: engineWith(null) }).restoreContext()).toBe(false);
   });
 });
+
+describe('frame feed hook (graphics automatic)', () => {
+  const install = (services) => {
+    const target = {};
+    installTestHooks({ app: fakeApp(services), store: { get: () => ({}) }, inputMode: {}, target });
+    return target.__zhfTest;
+  };
+
+  it('replaces the frame times the graphics automatic measures, and clears them again', () => {
+    const services = {};
+    const hooks = install(services);
+    expect(hooks.frameFeed()).toBeNull();
+    hooks.setFrameFeed({ dt: 1 / 60, repeat: 30 });
+    expect(services.frameFeed).toEqual({ dt: 1 / 60, repeat: 30, fedSeconds: 0 });
+    services.frameFeed.fedSeconds = 12.5; // the engine counts what it measured
+    expect(hooks.frameFeed()).toEqual({ dt: 1 / 60, repeat: 30, fedSeconds: 12.5 });
+    hooks.setFrameFeed(null);
+    expect(services.frameFeed).toBeNull();
+    expect(hooks.frameFeed()).toBeNull();
+  });
+
+  it('one frame counts as one measured frame unless told otherwise', () => {
+    const services = {};
+    install(services).setFrameFeed({ dt: 0.02 });
+    expect(services.frameFeed).toMatchObject({ dt: 0.02, repeat: 1 });
+  });
+
+  it('ignores an invalid feed', () => {
+    const services = {};
+    const hooks = install(services);
+    for (const feed of [{ dt: 0 }, { dt: -1 }, { dt: 'x' }, { dt: 0.02, repeat: 0 }, {}]) {
+      hooks.setFrameFeed(feed);
+      expect(services.frameFeed).toBeNull();
+    }
+  });
+});

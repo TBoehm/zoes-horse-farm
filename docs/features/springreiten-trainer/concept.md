@@ -73,8 +73,8 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
    gewählten Stufe MÜSSEN im Mittel mindestens 50 fps erreicht werden. Zielgeräte sind PC, Tablet und
    Handy mit aktuellen Versionen von Chrome, Safari (inklusive iPad/iPhone), Firefox und Edge.
    Detailreichtum (Spieltest 2026-10-04: „viel zu wenig Details"), gestuft nach Grafikstufe; „Niedrig"
-   DARF dafür nicht langsamer werden als bisher, und die Speicher-Abschätzung (Regel 4) MUSS die
-   neuen Details mitzählen:
+   DARF dafür nicht langsamer werden als bisher, „Mittel" nur geringfügig (Regel 4), und die
+   Speicher-Abschätzung (Regel 4) MUSS die neuen Details mitzählen:
    - Umgebung: Blumen auf den Wiesen, Bäume, Büsche und Gras bewegen sich leicht im Wind, Vögel am
      Himmel, Schmetterlinge über den Blumen, Schmuck am Reitplatz (Blumenkästen an den Hindernissen,
      Wimpelketten), eine Koppel mit grasenden Pferden; Sand staubt unter den Hufen.
@@ -83,17 +83,27 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
    - Reiter: Gesicht (Augen, Nase, Mund), Kinnriemen am Helm, Zopf schwingt nach, der Kopf schaut in
      die Kurve.
 4. Das Spiel MUSS drei Grafikstufen (Niedrig, Mittel, Hoch) und die Einstellung „Automatisch" haben.
-   - WENN das Spiel zum ersten Mal startet, MUSS „Automatisch" aktiv sein und eine Stufe passend zum
-     Gerät gewählt werden.
+   - WENN das Spiel zum ersten Mal startet, MUSS „Automatisch" aktiv sein und mit Niedrig beginnen
+     (Spieltest 2026-10-04: lieber sicher starten und sich hocharbeiten).
    - SOLANGE „Automatisch" aktiv ist: WENN die durchschnittliche Bildrate über 5 Sekunden unter
      50 fps liegt, MUSS das Spiel eine Stufe heruntergehen (nicht unter Niedrig); nach einer
      Anpassung MUSS es mindestens 10 Sekunden bis zur nächsten Anpassung warten. Gemessen wird nur,
      während geritten wird (Vorstart, Ritt, freier Modus), nicht in Pause, Menüs oder bei
      verstecktem/minimiertem Fenster und nicht in den ersten 3 Sekunden danach.
-   - Die automatisch gewählte Stufe MUSS gespeichert werden und beim nächsten Start gelten; die
-     Automatik stuft nie hoch.
+   - SOLANGE „Automatisch" aktiv ist, MUSS das Spiel dynamisch während des Reitens hochstufen, wenn
+     genug Reserve da ist: WENN die Bildrate über 10 Sekunden im Mittel mindestens 57 fps beträgt
+     und kaum langsame Bilder enthält (gemessen wie oben), MUSS es einen kleinen Schritt Richtung
+     nächster Stufe gehen (nicht über Hoch); nach jeder Anpassung (hoch oder runter) MUSS es
+     mindestens 20 Sekunden warten, bevor es wieder hochstuft. Ein Schritt nach oben DARF nicht
+     während eines Sprungs (Absprung, Flug, Landung) beginnen. Nie hochgestuft wird auf eine Stufe,
+     (a) bei der auf diesem Gerät schon einmal die 3D-Darstellung verloren ging oder das Spiel
+     abstürzte (gesperrt, gespeichert, bis „Automatisch" neu gewählt wird), (b) deren geschätzter
+     Grafikspeicher nicht in die vorsichtige Grenze für das Gerät passt, (c) von der die Automatik
+     im laufenden Spiel schon einmal wegen zu niedriger Bildrate heruntergestuft hat.
+   - Die automatisch erreichte Stufe MUSS gespeichert werden und beim nächsten Start gelten.
    - WENN das Kind eine Stufe manuell wählt, MUSS diese gelten und die Automatik aus sein, bis
-     wieder „Automatisch" gewählt wird (dann neue Wahl passend zum Gerät).
+     wieder „Automatisch" gewählt wird (dann beginnt sie wieder bei Niedrig, gesperrte Stufen werden
+     freigegeben).
    - Ein Wechsel der Grafikstufe MUSS ohne Neustart wirken; danach MUSS das Spiel weiter steuerbar
      und spielbar sein. FALLS die 3D-Darstellung verloren geht (Grafikspeicher vom Gerät
      zurückgesetzt), DANN MUSS das Spiel pausieren und nach der Wiederherstellung weiterspielbar sein.
@@ -103,7 +113,19 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
      Hintergrund ist oder kurz nach der Rückkehr, zählt nicht als Überlastung (Stufe und Hinweis
      bleiben unverändert). Ein automatisches Herunterstufen
      während des Ritts DARF die Darstellung nicht verlieren lassen: es MUSS in kleinen, für das Gerät
-     verkraftbaren Schritten geschehen.
+     verkraftbaren Schritten geschehen und dabei zuerst Grafikspeicher freigeben, bevor Neues
+     aufgebaut wird.
+   - WENN das Spiel beim letzten Mal während der 3D-Darstellung unerwartet beendet wurde (z. B. der
+     Browser hat den Tab wegen Überlastung geschlossen oder neu geladen), MUSS das beim nächsten
+     Start wie ein Verlust der 3D-Darstellung zählen: bei „Automatisch" Stufe Niedrig (gespeichert),
+     bei manuell gewählter Stufe über Niedrig ein Hinweis, die Grafik niedriger zu stellen. Ein
+     normales Schließen, Wechseln in eine andere App, ein Beenden im Hintergrund oder in den ersten
+     3 Sekunden nach der Rückkehr zählt nicht.
+   - „Mittel" MUSS auf Geräten, die vor den zusätzlichen Details (Regel 3, SRT-011) „Mittel"
+     flüssig darstellten, weiterhin flüssig laufen: die zusätzlichen Umgebungsdetails auf „Mittel"
+     DÜRFEN die Grafikspeicher-Abschätzung, die Zahl der Shader-Programme und der Draw Calls
+     gegenüber dem Stand davor nur geringfügig erhöhen; aufwendige Details (z. B. Wind, Blumen,
+     grasende Pferde, Vögel) gibt es nur auf „Hoch".
    - Bevor eine Stufe angewendet wird (Start und jeder Wechsel, auch manuell „Hoch"), MUSS das Spiel
      den Grafikspeicher dieser Stufe abschätzen und mit einer vorsichtigen Grenze für das Gerät
      vergleichen; passt sie nicht, MUSS es zuerst die Auflösung, dann die Schattenqualität, dann die
@@ -445,7 +467,8 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 ## Grenzfälle
 
 - **Erster Start / leerer Speicher:** Frage nach dem Pferdenamen (Regel 43), dann
-  Bedienungs-Tipps (Regel 56), Parcours 1 offen, Browsersprache, Grafikstufe automatisch.
+  Bedienungs-Tipps (Regel 56), Parcours 1 offen, Browsersprache, Grafikstufe automatisch (Start
+  bei Niedrig, Regel 4).
 - **Speichern nicht möglich:** Regel 46.
 - **Defekte oder alte Speicherdaten:** Regel 47.
 - **Safari löscht Daten nach längerer Nichtnutzung:** bekannte Grenze (Regel 44).
@@ -470,6 +493,13 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
   Hinweis (Regel 4).
 - **Grafikstufe im Ritt gewechselt / 3D-Darstellung kurz verloren:** weiter spielbar bzw. Pause
   (Regel 4).
+- **Tab vom Browser beendet (Absturz) während der 3D-Darstellung:** beim nächsten Start wie ein
+  Kontextverlust; die Stufe wird gesperrt (Regel 4). Ein Ende im Hintergrund oder in den ersten
+  3 Sekunden nach der Rückkehr zählt nicht.
+- **Zwei Tabs gleichzeitig mit 3D-Darstellung:** ein noch laufender anderer Tab gilt nicht als
+  Absturz; die Absturz-Erkennung überschreibt keinen Spielstand des anderen Tabs (Regel 4).
+- **Automatik stuft hoch und wieder herunter:** eine Stufe, von der wegen Ruckelns
+  heruntergestuft wurde, wird im laufenden Spiel nicht wieder versucht (Regel 4).
 - **Rückwärts gegen Hindernis, Zaun oder über Start-/Ziellinie:** Pferd hält an, Linien zählen
   nicht (Regel 9).
 

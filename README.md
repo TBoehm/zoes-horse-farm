@@ -24,9 +24,10 @@ Entwickler-Demoseiten (nicht ausgeliefert) laufen über den Dev-Server unter `/d
 Test-Hook für Browser-Tests: Mit `?testhooks` in der URL (z. B. `http://localhost:4173/?testhooks`)
 stellt die App `window.__zhfTest` bereit (aktueller Bildschirm, Zustand des laufenden Rittes, Speicher,
 Audio-Zustand; dazu als Aktionen `go(screen, params)` zum Springen auf einen Bildschirm,
-`setAutoLevel(level)` für einen Stufenwechsel wie durch die Automatik und `loseContext()` /
-`restoreContext()` für einen simulierten Grafikverlust; `&gpubudget=MB` setzt die Grafikspeicher-Grenze
-für Tests). Ohne den Parameter existiert der Hook nicht. Die Smoke-Tests (`tests/smoke/`) nutzen ihn und warten auf
+`setAutoLevel(level)` für einen Stufenwechsel wie durch die Automatik, `loseContext()` /
+`restoreContext()` für einen simulierten Grafikverlust und `setFrameFeed({ dt, repeat })`, das der
+Grafik-Automatik eingespeiste Bildzeiten statt der echten liefert; `&gpubudget=MB` setzt die
+Grafikspeicher-Grenze für Tests). Ohne den Parameter existiert der Hook nicht. Die Smoke-Tests (`tests/smoke/`) nutzen ihn und warten auf
 Zustände statt auf feste Zeiten, weil der Software-Renderer in CI langsam ist (wenige fps).
 Beim ersten Start zeigt die App nach der Frage nach dem Pferdenamen die Bedienungs-Tipps (Tastatur
 oder Touch, auch im Hauptmenü und im Pausemenü wieder aufrufbar); die Smoke-Hilfen (`openMenu`,
@@ -40,9 +41,12 @@ aktualisiert sich etwa zweimal pro Sekunde und zeigt: GPU-Name, Grafikstufe (mit
 Automatik an ist), Pixel-Ratio von Gerät und Renderer, Größe der Zeichenfläche (Buffer), größte
 Textur, Antialiasing, die geschätzte GPU-Speicher-Nutzung gegen das Budget (mit Hinweis, wenn
 Auflösung, Schatten oder Umgebung dafür verkleinert wurden), die Zahl der Grafik-Verluste und
--Wiederherstellungen (mit Sekunden seit Seitenstart) und die letzten Fehler. Damit lässt sich
-nachvollziehen, warum das Spiel auf einem Gerät eine niedrigere Stufe nimmt oder die Grafik
-verliert. Ein Grafik-Verlust im Hintergrund (App-Wechsel) oder kurz nach der Rückkehr zählt nicht
+-Wiederherstellungen (mit Sekunden seit Seitenstart), den letzten Absturz (Stufe, Dauer, Zeit), die
+gesperrten Stufen, die wegen Ruckelns verlassenen Stufen, den Grund des letzten automatischen
+Stufenwechsels (hoch/runter bei so vielen fps, Grafik verloren, Absturz) und die letzten Fehler. Damit
+lässt sich nachvollziehen, warum das Spiel auf einem Gerät eine niedrigere Stufe nimmt, wieder
+hochstuft oder die Grafik verliert. Die Automatik beginnt beim ersten Start bei „Niedrig“ und stuft
+beim Reiten selbst hoch, wenn das Gerät genug Reserve zeigt. Ein Grafik-Verlust im Hintergrund (App-Wechsel) oder kurz nach der Rückkehr zählt nicht
 als Überlastung. Ohne `?debug` gibt es die Box nicht. Alles Weitere zur Box steht in der
 [technischen Spec](docs/specs/springreiten-trainer/architecture.md) (Abschnitt „Diagnose-Box“).
 
