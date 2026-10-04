@@ -18,12 +18,17 @@ export const QUALITY_PRESETS = Object.freeze({
     envDetail: 'low',
     // geometry detail and material type of horse and rider
     characterDetail: 'low',
-    // share of the grass tufts, of the meadow flowers and of the bunting (SRT-011); low gets none
-    // of these: it keeps the draw calls and triangles it had before. The tufts are the biggest
-    // triangle cost of all details (11 000 instances), so only high has them.
+    // Details of SRT-011 (rules 3 and 4). Low gets none of them: it keeps the draw calls and
+    // triangles it had before. Medium gets only what is cheap and adds no shader program of its own
+    // beyond the static bunting: the paddock fence and props and every second pennant, no wind,
+    // no flowers, animals or dust (SRT-013: the tablet lost its context with the full set). The
+    // tufts are the biggest triangle cost of all details (11 000 instances), so only high has them.
+    // share of the grass tufts, of the meadow flowers and of the bunting (and paddock decoration)
     grassTufts: 0,
     flowers: 0,
     decor: 0,
+    // flower boxes at the stands (their own shader program: only high)
+    planters: false,
     // grazing horses in the paddock (0 = none) and hoof dust on the sand
     grazingHorses: 0,
     hoofDust: false,
@@ -50,15 +55,16 @@ export const QUALITY_PRESETS = Object.freeze({
     envDetail: 'high',
     characterDetail: 'medium',
     grassTufts: 0,
-    flowers: 0.45,
+    flowers: 0,
     decor: 0.5,
-    grazingHorses: 2,
-    hoofDust: true,
-    birds: 0.5,
+    planters: false,
+    grazingHorses: 0,
+    hoofDust: false,
+    birds: 0,
     butterflies: 0,
     anisotropy: 4,
     normalMaps: true,
-    wind: true,
+    wind: false,
   }),
   high: Object.freeze({
     level: 'high',
@@ -76,6 +82,7 @@ export const QUALITY_PRESETS = Object.freeze({
     grassTufts: 1,
     flowers: 1,
     decor: 1,
+    planters: true,
     grazingHorses: 2,
     hoofDust: true,
     birds: 1,
@@ -279,7 +286,13 @@ const SCENERY_STEPS = Object.freeze([
   { drop: (p) => zero(p, 'flowers', 'butterflies') },
   { drop: (p) => zero(p, 'grazingHorses') },
   { drop: (p) => zero(p, 'birds') },
-  { drop: (p) => zero(p, 'decor') },
+  {
+    drop(p) {
+      const had = p.planters;
+      p.planters = false;
+      return zero(p, 'decor') || Boolean(had);
+    },
+  },
   {
     drop(p, m) {
       if (!(p.envDensity > m.envDensityFloor)) return false;

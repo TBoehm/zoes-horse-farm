@@ -2,13 +2,13 @@
 // Quality levels can be switched at runtime (the governor downgrades), stage by stage.
 import * as THREE from 'three';
 import { presetFor, QUALITY_PRESETS } from './quality.js';
-import { sameMaterialStage } from './quality-stages.js';
+import { MERGED_STAGE_ID, sameMaterialStage } from './quality-stages.js';
 import { createDetailHold } from './detail-hold.js';
 import { createSky, SKY_COLORS } from './sky.js';
 import { createArena, createCourseLines } from './arena.js';
 import { createEnvironment, SITE } from './environment.js';
 import { createObstacles } from './obstacles.js';
-import { createWind } from './plant-shaders.js';
+import { createWind, setWindPatch } from './plant-shaders.js';
 import { createAidMarker } from './aid-marker.js';
 import { createDust } from './dust.js';
 import { createGrazingHorses } from './horse/grazing.js';
@@ -91,7 +91,7 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
     wind,
   });
   scene.add(arena.group);
-  const environment = createEnvironment({ materialFactory, wind });
+  const environment = createEnvironment({ materialFactory, wind, release });
   scene.add(environment.group);
   const obstacles = createObstacles({ materialFactory, release, wind });
   scene.add(obstacles.group);
@@ -167,6 +167,53 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
   // first (density stage, new obstacles) and calls applyMeshes after it.
   const detailHold = createDetailHold();
 
+  /**
+   * Frees the GPU programs of materials (rule 4). three.js keeps every program a material has ever
+   * been drawn with until the material is disposed, so a switch to other shaders (material type,
+   * wind code, fog, shadows) that only sets `needsUpdate` would hold the old and the new programs
+   * at the same time. A disposed material is no problem to use again: three.js builds its program
+   * anew with the next compile.
+   */
+  function freePrograms(materials) {
+    for (const material of new Set(materials)) release(material);
+  }
+  const pairMaterials = () => pairs.flatMap((pair) => [pair.standard, pair.lambert]);
+  /** Every material of the scene, also those of the horses, the rider and the dust. */
+  function sceneMaterials() {
+    const found = new Set(pairMaterials());
+    scene.traverse((object) => {
+      if (!object.material) return;
+      for (const m of Array.isArray(object.material) ? object.material : [object.material]) {
+        found.add(m);
+      }
+    });
+    return found;
+  }
+
+  // The meshes of the optional details whose GPU buffers were given back after they were hidden
+  const freedDetails = new WeakSet();
+
+  /**
+   * Gives the GPU buffers of detail meshes that are hidden for good back (flowers, birds, tufts,
+   * flower boxes ... of a level that does not have them): hiding a mesh does not free its
+   * geometry, and an instanced mesh keeps its instance buffers. A mesh that is only held back
+   * for a moment (see detail-hold.js) keeps them; one that is shown again is uploaded again by
+   * three.js.
+   */
+  function freeHiddenDetails() {
+    for (const e of managed()) {
+      if (!e.detail) continue;
+      const { mesh } = e;
+      if (mesh.visible || detailHold.has(mesh)) {
+        freedDetails.delete(mesh);
+      } else if (!freedDetails.has(mesh)) {
+        freedDetails.add(mesh);
+        release(mesh.geometry);
+        if (mesh.isInstancedMesh) release(mesh);
+      }
+    }
+  }
+
   function applyMeshes() {
     const lambert = stageState.materials.material === 'lambert';
     const { shadows, shadowCasters } = stageState.shadows;
@@ -183,6 +230,7 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
         .map((e) => e.mesh),
       sameMaterialStage(stageState.materials, stageState.density),
     );
+    freeHiddenDetails();
   }
 
   // Each stage reads what is really there and changes only that, so a stage can be repeated and an
@@ -191,6 +239,8 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
   /** Shadow pass: the map is freed when it is not used (2048² depth target on "high"). */
   function applyShadowStage(p) {
     stageState.shadows = p;
+    // the shadow code is part of every program: the old ones go before the new ones are built
+    if (renderer.shadowMap.enabled !== p.shadows) freePrograms(sceneMaterials());
     renderer.shadowMap.enabled = p.shadows;
     sun.castShadow = p.shadows;
     if (!p.shadows) {
@@ -209,15 +259,37 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
    * restoreAfterContextLoss.
    */
   function applyMaterialStage(p, gpu) {
-    stageState.materials = p;
+    // What changes, read from what is really there. Whatever is given back goes first (the
+    // environment map's render target, the programs of the shaders that are left), then the new
+    // state is set up; nothing is built before the old is gone (rule 4).
+    const stale = new Set();
+    const lambertNow = stageState.materials.material === 'lambert';
+    if (lambertNow !== (p.material === 'lambert')) pairMaterials().forEach((m) => stale.add(m));
+    // fog and the environment map are part of the program of every material in the scene
+    const sceneWide = () => sceneMaterials().forEach((m) => stale.add(m));
+    if (!p.envMap && scene.environment) {
+      sceneWide();
+      scene.environment = null;
+      disposeEnvironmentMap(); // after it is detached; built again when going back up
+    }
+    if (!p.fog && scene.fog) {
+      sceneWide();
+      scene.fog = null;
+    }
+    if (p.fog && !scene.fog) sceneWide();
+    if (p.envMap && !scene.environment) sceneWide();
+    // the wind code of the scenery (high only): without it the plain program is used again
+    for (const m of pairMaterials()) if (setWindPatch(m, p.wind)) stale.add(m);
     // the Lambert variant has no normal map, so only the standard one is rebuilt
     for (const pair of pairs) {
       const normalMap = p.normalMaps ? pair.normalMap : null;
       if (pair.standard.normalMap !== normalMap) {
         pair.standard.normalMap = normalMap;
-        pair.standard.needsUpdate = true;
+        stale.add(pair.standard);
       }
     }
+    stageState.materials = p;
+    freePrograms(stale);
     applyMeshes();
 
     // lights: more sky light without an environment map
@@ -226,15 +298,12 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
       scene.environmentIntensity = 0.8;
       hemi.intensity = 0.6;
     } else {
-      scene.environment = null;
-      disposeEnvironmentMap(); // after it is detached; built again when going back up
       hemi.intensity = 1.5;
     }
 
-    // fog: a new Fog object makes three.js rebuild every material, so only add or remove it here
-    // (the distances are the density stage's business: they are uniforms)
+    // fog: a new Fog object makes three.js rebuild every material, so only add it here (the
+    // distances are the density stage's business: they are uniforms)
     if (p.fog && !scene.fog) scene.fog = new THREE.Fog(SKY_COLORS.horizon, p.fog.near, p.fog.far);
-    else if (!p.fog) scene.fog = null;
   }
 
   /**
@@ -257,7 +326,7 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
     });
     const decor = p.decor ?? 0;
     arena.setDetail(decor);
-    obstacles.setDecor(decor > 0);
+    obstacles.setDecor(Boolean(p.planters));
     dust.setQuality(p.hoofDust ? (p.level === 'high' ? 'high' : 'medium') : 'low');
     syncGrazing(p);
     applyMeshes(); // holds the details back if the materials stage is not at this level yet
@@ -324,7 +393,8 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
   }
 
   /**
-   * One stage of a level change ('shadows' | 'materials' | 'density', see quality-stages.js).
+   * One stage of a level change ('shadows' | 'materials' | 'shadowsAndMaterials' | 'density', see
+   * quality-stages.js).
    * The pixel ratio is the engine's business: changing it clears the drawing buffer, which must
    * not happen before the new shaders are ready (see engine.js). Horse and rider are the
    * engine's, too.
@@ -334,7 +404,10 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
     if (!p) return;
     if (id === 'shadows') applyShadowStage(p);
     else if (id === 'materials') applyMaterialStage(p, true);
-    else if (id === 'density') applyDensityStage(p);
+    else if (id === MERGED_STAGE_ID) {
+      applyShadowStage(p);
+      applyMaterialStage(p, true);
+    } else if (id === 'density') applyDensityStage(p);
   }
 
   /**
@@ -369,6 +442,27 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
     if (stageState.materials.envMap) scene.environment = buildEnvironmentMap();
   }
 
+  /**
+   * What the engine compiles after a stage: the visible objects only. renderer.compileAsync(scene)
+   * would also build the programs of every hidden mesh (it walks the whole graph, not just the
+   * visible part, r186 WebGLRenderer.compile), i.e. the flowers, birds and flower boxes of a level
+   * that does not show them. The root answers the walk with the visible objects, plus the hoof
+   * dust of a level that has it (its points are hidden between two puffs, and the first puff
+   * should not stall the frame with a compile). Pass it as the scene to compile, with the real
+   * scene as the target: renderer.compileAsync(world.compileRoot, camera, world.scene).
+   */
+  const compileRoot = {
+    traverse(fn) {
+      scene.traverseVisible(fn);
+      if (stageState.density.hoofDust) dust.object.children.forEach((o) => !o.visible && fn(o));
+    },
+    // WebGLRenderer.compile gathers the lights of `scene` a second time when it is not the target
+    // scene: the lights are the target's (the real scene's), so there is nothing to add here
+    // (they would count twice and the programs would be built for two sets of lights, which the
+    // real render never uses)
+    traverseVisible() {},
+  };
+
   // The sun never moves: its light-space axes and the scratch vectors are made once
   const lightFwd = sunDirection.clone().negate();
   const lightRight = new THREE.Vector3()
@@ -401,6 +495,7 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
 
   return {
     scene,
+    compileRoot,
     setObstacles(list, { flags = false } = {}) {
       detailHold.restore();
       obstacles.setObstacles(list, { flags });

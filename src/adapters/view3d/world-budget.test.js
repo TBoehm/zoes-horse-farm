@@ -5,8 +5,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { installFakeCanvas } from '../../../tests/support/fake-canvas.js';
 import { createWorld } from './world.js';
-import { QUALITY_PRESETS } from './quality.js';
+import { estimateGpuMemoryMB, QUALITY_PRESETS } from './quality.js';
 import { sceneStats } from '../../../tests/support/scene-stats.js';
+import { createGpuTracker } from '../../../tests/support/gpu-tracker.js';
 import { collectGpuObjects } from './resilience.js';
 import { PADDOCK, paddockContains } from './world-layout.js';
 import { planPaddockKeepOut } from './decor-plan.js';
@@ -35,17 +36,25 @@ const OBSTACLES = [
 // stand rows: vertical 1, oxer 2, cross 1, vertical 1 + oxer 2, oxer 2 → 9 rows, two stands each
 const STANDS = 18;
 
-// What the world cost before SRT-011 (same course, measured at the commit before the change).
-// "low" must never get more than this (acceptance criterion of SRT-011); a deliberate change of
-// the base scenery updates these numbers.
+// What the world cost before SRT-011 (same course, measured at the commit before the change,
+// 5e240fc). "low" must never get more than this (acceptance criterion of SRT-011), "medium" only a
+// little more (SRT-013: the tablet lost its context with the full set of details); a deliberate
+// change of the base scenery updates these numbers. `programs`: distinct shader programs of what is
+// drawn (tests/support/gpu-tracker.js); `memoryMB`: estimateGpuMemoryMB on the tablet of
+// quality.test.js.
 const BEFORE = Object.freeze({
-  low: { calls: 17, triangles: 23924 },
-  medium: { calls: 17, triangles: 48796 },
-  high: { calls: 18, triangles: 94846 },
+  low: { calls: 17, triangles: 23924, programs: 10, memoryMB: 30.79 },
+  medium: { calls: 17, triangles: 48796, programs: 11, memoryMB: 122.99 },
+  high: { calls: 18, triangles: 94846, programs: 12, memoryMB: 148.89 },
 });
+const TABLET = { cssWidth: 1280, cssHeight: 800, devicePixelRatio: 1.5 };
 
-// "A handful" of additional draw calls per level; the limit leaves room for the hoof dust (+1)
+// "A handful" of additional draw calls on high; the limit leaves room for the hoof dust (+1)
 const HANDFUL_OF_CALLS = 10;
+// What medium may add to what it was before the details: a couple of draw calls (the paddock props
+// and the bunting), one shader program (the bunting is double-sided), a few per cent of triangles
+// and under a megabyte of memory
+const MEDIUM_EXTRA = Object.freeze({ calls: 2, programs: 1, triangles: 1.1, memoryMB: 1 });
 
 // Budgets per level from the research (three.js forum, mobile practice): ~100 draw calls on mobile
 const BUDGET = Object.freeze({
@@ -107,12 +116,20 @@ describe('the world per level', () => {
       showLevel(world, level);
       stats[level] = sceneStats(world.scene);
       names[level] = visibleNames(world);
+      // a fresh tracker per level: what a ride at this level has on the GPU
+      const tracker = createGpuTracker({ scene: world.scene, renderer });
+      tracker.compile(world.compileRoot);
+      stats[level].programs = tracker.snapshot().programs;
     }
   });
 
   it('low draws no more calls and triangles than before the details were added', () => {
     expect(stats.low.calls).toBeLessThanOrEqual(BEFORE.low.calls);
     expect(stats.low.triangles).toBeLessThanOrEqual(BEFORE.low.triangles);
+  });
+
+  it('low has no more shader programs than before', () => {
+    expect(stats.low.programs).toBeLessThanOrEqual(BEFORE.low.programs);
   });
 
   it('low shows none of the new details', () => {
@@ -130,6 +147,22 @@ describe('the world per level', () => {
     }
   });
 
+  it('medium stays close to what it was before the details (SRT-013, commit 5e240fc)', () => {
+    const before = BEFORE.medium;
+    expect(stats.medium.calls).toBeLessThanOrEqual(before.calls + MEDIUM_EXTRA.calls);
+    expect(stats.medium.triangles).toBeLessThanOrEqual(before.triangles * MEDIUM_EXTRA.triangles);
+    expect(stats.medium.programs).toBeLessThanOrEqual(before.programs + MEDIUM_EXTRA.programs);
+    const memory = estimateGpuMemoryMB(QUALITY_PRESETS.medium, TABLET);
+    expect(memory).toBeLessThanOrEqual(before.memoryMB + MEDIUM_EXTRA.memoryMB);
+  });
+
+  it('high stays below the budget with its details, and costs more programs than medium', () => {
+    expect(stats.high.programs).toBeGreaterThan(stats.medium.programs);
+    expect(estimateGpuMemoryMB(QUALITY_PRESETS.high, TABLET)).toBeGreaterThan(
+      estimateGpuMemoryMB(QUALITY_PRESETS.medium, TABLET),
+    );
+  });
+
   it('the levels get richer: low < medium < high', () => {
     expect(stats.low.triangles).toBeLessThan(stats.medium.triangles);
     expect(stats.medium.triangles).toBeLessThan(stats.high.triangles);
@@ -139,45 +172,56 @@ describe('the world per level', () => {
     expect(stats.high.triangles).toBeGreaterThan(BEFORE.high.triangles);
   });
 
-  it('medium adds flowers, birds, bunting, flower boxes, the paddock and the props', () => {
-    for (const name of ['flowers', 'birds', 'bunting', 'decor-props', 'planters']) {
+  it('medium adds only the static bunting and the paddock props (cheap, rule 4)', () => {
+    for (const name of ['bunting', 'decor-props']) {
       expect(names.medium.has(name), name).toBe(true);
     }
-    expect(names.medium.has('butterflies')).toBe(false);
+    for (const name of ['flowers', 'birds', 'butterflies', 'planters', 'grass-tufts']) {
+      expect(names.medium.has(name), name).toBe(false);
+    }
   });
 
-  it('only high has butterflies', () => {
-    expect(names.high.has('butterflies')).toBe(true);
-    for (const name of ['flowers', 'birds', 'bunting', 'decor-props', 'planters']) {
+  it('high has all the details, also the butterflies', () => {
+    for (const name of ['flowers', 'birds', 'butterflies', 'bunting', 'decor-props', 'planters']) {
       expect(names.high.has(name), name).toBe(true);
     }
   });
 
-  it('adds only a handful of draw calls per level', () => {
-    // 7 on medium and 8 on high today; the hoof dust adds one more while it is alive
-    expect(stats.medium.calls - BEFORE.medium.calls).toBeLessThanOrEqual(HANDFUL_OF_CALLS);
+  it('adds only a handful of draw calls on high', () => {
+    // 8 on high today; the hoof dust adds one more while it is alive
     expect(stats.high.calls - BEFORE.high.calls).toBeLessThanOrEqual(HANDFUL_OF_CALLS);
   });
 
-  it('keeps medium well below twice its old triangle count (no grass tufts there)', () => {
-    expect(stats.medium.triangles).toBeLessThanOrEqual(BEFORE.medium.triangles * 1.8);
+  it('has the wind only on high: medium builds the plain programs of the trees and bushes', () => {
+    const windy = (level) => {
+      showLevel(world, level);
+      return ['trees-deciduous', 'bushes'].map((name) => {
+        const material = world.scene.getObjectByName(name).material;
+        return material.customProgramCacheKey().startsWith('wind-');
+      });
+    };
+    expect(windy('high')).toEqual([true, true]);
+    expect(windy('medium')).toEqual([false, false]);
+    expect(windy('low')).toEqual([false, false]);
+    showLevel(world, 'high');
   });
 
-  it('thins the details out on medium: fewer flowers, birds and pennants than on high, no grass tufts', () => {
+  it('thins the bunting out on medium: every second pennant, no grass tufts', () => {
     const count = (name, level) => {
       showLevel(world, level);
       const mesh = world.scene.getObjectByName(name);
       return mesh.isInstancedMesh ? mesh.count : mesh.geometry.drawRange.count;
     };
-    for (const name of ['flowers', 'birds', 'bunting']) {
-      const medium = count(name, 'medium');
-      const high = count(name, 'high');
-      expect(medium, name).toBeGreaterThan(0);
-      expect(medium, name).toBeLessThan(high);
-    }
+    const medium = count('bunting', 'medium');
+    const high = count('bunting', 'high');
+    expect(medium).toBeGreaterThan(0);
+    expect(medium).toBeLessThan(high);
     // the grass tufts are the biggest cost of the details and only high has them
     expect(count('grass-tufts', 'medium')).toBe(0);
     expect(count('grass-tufts', 'high')).toBeGreaterThan(0);
+    // the flowers and the birds are high only
+    expect(count('flowers', 'medium')).toBe(0);
+    expect(count('birds', 'medium')).toBe(0);
     showLevel(world, 'high');
   });
 
@@ -222,10 +266,12 @@ describe('the flower boxes at the stands', () => {
     planters = world.scene.getObjectByName('planters');
   });
 
-  it('stand at every foot of every stand, hidden on low', () => {
+  it('stand at every foot of every stand, shown on high only', () => {
     expect(planters.count).toBe(STANDS);
     expect(planters.visible).toBe(false);
     showLevel(world, 'medium');
+    expect(planters.visible).toBe(false);
+    showLevel(world, 'high');
     expect(planters.visible).toBe(true);
     showLevel(world, 'low');
     expect(planters.visible).toBe(false);
@@ -324,7 +370,8 @@ describe('a staged level change and the shader programs', () => {
     showLevel(world, 'medium');
     const before = shownDetails(world);
     expect(before.length).toBeGreaterThan(0);
-    world.applyQualityStage('density', testPreset('high'));
+    // the same shader programs (no wind code), more details: nothing is held back
+    world.applyQualityStage('density', { ...testPreset('high'), wind: false });
     expect(shownDetails(world)).toEqual(DETAILS);
     world.dispose();
   });
@@ -332,7 +379,7 @@ describe('a staged level change and the shader programs', () => {
   it('does not show the flower boxes of a new course while the stages are out of step', () => {
     installFakeCanvas();
     const world = buildWorld('low');
-    showLevel(world, 'medium');
+    showLevel(world, 'high');
     world.applyQualityStage('materials', testPreset('low'));
     world.setObstacles(OBSTACLES);
     expect(shownDetails(world)).toEqual([]);
@@ -421,16 +468,16 @@ describe('grazing horses and hoof dust', () => {
   };
   const dustOf = (world) => world.scene.getObjectByName('hoof-dust');
 
-  it('has no grazing horses and no dust on low, two horses on medium and high', () => {
+  it('has no grazing horses and no dust on low and medium, two horses and the dust on high', () => {
     installFakeCanvas();
     const world = buildWorld('low');
     expect(horsesOf(world)).toHaveLength(0);
     expect(dustOf(world)).toBeUndefined();
-    for (const level of ['medium', 'high', 'low', 'high']) {
+    for (const level of ['medium', 'high', 'low', 'high', 'medium']) {
       showLevel(world, level);
-      const wanted = level === 'low' ? 0 : 2;
+      const wanted = level === 'high' ? 2 : 0;
       expect(horsesOf(world), level).toHaveLength(wanted);
-      expect(Boolean(dustOf(world)), level).toBe(level !== 'low');
+      expect(Boolean(dustOf(world)), level).toBe(level === 'high');
     }
     world.dispose();
   });
@@ -442,20 +489,20 @@ describe('grazing horses and hoof dust', () => {
       showLevel(world, level);
       return sceneStats(world.scene).calls;
     };
-    const medium = calls('medium');
-    // two horses are in the medium budget (see BEFORE.medium); no puff yet, so no dust call
-    expect(medium - BEFORE.medium.calls).toBeLessThanOrEqual(HANDFUL_OF_CALLS);
+    const high = calls('high');
+    // two horses are in the high budget (see BEFORE.high); no puff yet, so no dust call
+    expect(high - BEFORE.high.calls).toBeLessThanOrEqual(HANDFUL_OF_CALLS);
     world.emitHoofDust(0, 0, 0, 1);
     world.update(0.016, camera);
-    expect(sceneStats(world.scene).calls).toBe(medium + 1);
+    expect(sceneStats(world.scene).calls).toBe(high + 1);
     for (let i = 0; i < 200; i += 1) world.update(0.016, camera);
-    expect(sceneStats(world.scene).calls).toBe(medium);
+    expect(sceneStats(world.scene).calls).toBe(high);
     world.dispose();
   });
 
   it('keeps the horses inside the paddock and away from the props', () => {
     installFakeCanvas();
-    const world = worldAt('medium');
+    const world = worldAt('high');
     const group = world.scene.getObjectByName('paddock-horses');
     const keepOut = planPaddockKeepOut();
     for (let i = 0; i < 60 * 240; i += 1) {
@@ -472,7 +519,7 @@ describe('grazing horses and hoof dust', () => {
 
   it('animates the horses only while the paddock is in view', () => {
     installFakeCanvas();
-    const world = worldAt('medium');
+    const world = worldAt('high');
     const group = world.scene.getObjectByName('paddock-horses');
     const state = () => JSON.stringify(group.children.map((h) => h.position.toArray()));
     const before = state();

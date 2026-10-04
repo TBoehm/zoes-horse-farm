@@ -17,6 +17,17 @@ describe('createDetailHold', () => {
     expect(hold.size).toBe(0);
   });
 
+  it('tells which meshes are held for a moment (and not hidden for good)', () => {
+    const hold = createDetailHold();
+    const held = mesh(true);
+    const hidden = mesh(false);
+    hold.sync([held, hidden], false);
+    expect(hold.has(held)).toBe(true);
+    expect(hold.has(hidden)).toBe(false);
+    hold.restore();
+    expect(hold.has(held)).toBe(false);
+  });
+
   it('does nothing when the stages are in step', () => {
     const hold = createDetailHold();
     const shown = mesh(true);
