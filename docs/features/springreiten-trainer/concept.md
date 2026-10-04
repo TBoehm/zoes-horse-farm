@@ -83,17 +83,27 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
    - Reiter: Gesicht (Augen, Nase, Mund), Kinnriemen am Helm, Zopf schwingt nach, der Kopf schaut in
      die Kurve.
 4. Das Spiel MUSS drei Grafikstufen (Niedrig, Mittel, Hoch) und die Einstellung „Automatisch" haben.
-   - WENN das Spiel zum ersten Mal startet, MUSS „Automatisch" aktiv sein und eine Stufe passend zum
-     Gerät gewählt werden.
+   - WENN das Spiel zum ersten Mal startet, MUSS „Automatisch" aktiv sein und mit Niedrig beginnen
+     (Spieltest 2026-10-04: lieber sicher starten und sich hocharbeiten).
    - SOLANGE „Automatisch" aktiv ist: WENN die durchschnittliche Bildrate über 5 Sekunden unter
      50 fps liegt, MUSS das Spiel eine Stufe heruntergehen (nicht unter Niedrig); nach einer
      Anpassung MUSS es mindestens 10 Sekunden bis zur nächsten Anpassung warten. Gemessen wird nur,
      während geritten wird (Vorstart, Ritt, freier Modus), nicht in Pause, Menüs oder bei
      verstecktem/minimiertem Fenster und nicht in den ersten 3 Sekunden danach.
-   - Die automatisch gewählte Stufe MUSS gespeichert werden und beim nächsten Start gelten; die
-     Automatik stuft nie hoch.
+   - SOLANGE „Automatisch" aktiv ist, MUSS das Spiel dynamisch während des Reitens hochstufen, wenn
+     genug Reserve da ist: WENN die Bildrate über 10 Sekunden im Mittel mindestens 57 fps beträgt
+     und kaum langsame Bilder enthält (gemessen wie oben), MUSS es einen kleinen Schritt Richtung
+     nächster Stufe gehen (nicht über Hoch); nach jeder Anpassung (hoch oder runter) MUSS es
+     mindestens 20 Sekunden warten, bevor es wieder hochstuft. Ein Schritt nach oben DARF nicht
+     während eines Sprungs (Absprung, Flug, Landung) beginnen. Nie hochgestuft wird auf eine Stufe,
+     (a) bei der auf diesem Gerät schon einmal die 3D-Darstellung verloren ging oder das Spiel
+     abstürzte (gesperrt, gespeichert, bis „Automatisch" neu gewählt wird), (b) deren geschätzter
+     Grafikspeicher nicht in die vorsichtige Grenze für das Gerät passt, (c) von der die Automatik
+     im laufenden Spiel schon einmal wegen zu niedriger Bildrate heruntergestuft hat.
+   - Die automatisch erreichte Stufe MUSS gespeichert werden und beim nächsten Start gelten.
    - WENN das Kind eine Stufe manuell wählt, MUSS diese gelten und die Automatik aus sein, bis
-     wieder „Automatisch" gewählt wird (dann neue Wahl passend zum Gerät).
+     wieder „Automatisch" gewählt wird (dann beginnt sie wieder bei Niedrig, gesperrte Stufen werden
+     freigegeben).
    - Ein Wechsel der Grafikstufe MUSS ohne Neustart wirken; danach MUSS das Spiel weiter steuerbar
      und spielbar sein. FALLS die 3D-Darstellung verloren geht (Grafikspeicher vom Gerät
      zurückgesetzt), DANN MUSS das Spiel pausieren und nach der Wiederherstellung weiterspielbar sein.
@@ -456,7 +466,8 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
 ## Grenzfälle
 
 - **Erster Start / leerer Speicher:** Frage nach dem Pferdenamen (Regel 43), dann
-  Bedienungs-Tipps (Regel 56), Parcours 1 offen, Browsersprache, Grafikstufe automatisch.
+  Bedienungs-Tipps (Regel 56), Parcours 1 offen, Browsersprache, Grafikstufe automatisch (Start
+  bei Niedrig, Regel 4).
 - **Speichern nicht möglich:** Regel 46.
 - **Defekte oder alte Speicherdaten:** Regel 47.
 - **Safari löscht Daten nach längerer Nichtnutzung:** bekannte Grenze (Regel 44).
