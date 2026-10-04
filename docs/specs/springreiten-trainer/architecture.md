@@ -91,8 +91,9 @@ erzwingt die Grenzen.
 
 ### Ports (als Parameter injiziert)
 
-- `store`: `{ get(section), update(section, fn), onChange(section, fn) }` – Adapter: `adapters/storage`.
+- `store`: `{ get(section), update(section, fn), reload(), onChange(section, fn) }` – Adapter: `adapters/storage`.
   `update` gibt den **bereinigten** neuen Bereich zurück (nicht, was die Funktion geliefert hat).
+  `reload()` übernimmt, was ein anderer Tab inzwischen gespeichert hat (siehe unten).
 - `clock`: `{ nowIso(), nowMs() }` für Auszeichnungs-Datum und Zeitspannen (Absturzwächter); Zeit im Spiel
   kommt als `dt`.
 - `rng`: `() => number` in [0, 1) – Domain nutzt nie `Math.random()` direkt.
@@ -113,6 +114,7 @@ const out = session.step(dt, input);     // input = InputState ohne pause/camera
 session.dispose()                        // stops the store listener (settings cache)
 session.view  // { horse, rails, fallDirs (Map elementId → ±1, last fall direction), aid: null|{elementId, dir, zone}, highlight, finishMarked,
               //   jumping (bool: ein Sprung läuft: Absprung, Flug, Landung; die Grafik-Automatik steigt dann nicht),
+              //   approaching (bool: ein Hindernis wird angeritten, `sim.approach` ≠ null; ebenso),
               //   lines, hud: mode-spezifisches Modell (reine Daten) }
 ```
 Weitere Application-Dienste: `progress-service.js` (recordJump, finishRide, resetProgress),
@@ -258,6 +260,7 @@ const store = createStore({ backend = localStorage, sessionBackend = sessionStor
 store.get('settings')                 // bereinigte Kopie (Defaults für Fehlendes/Ungültiges)
 store.update('settings', s => ({...s, lang: 'en'}))  // speichert sofort, gibt den bereinigten Bereich zurück
 store.flush()                         // aktuellen Stand schreiben (erster Start)
+store.reload()                        // Stand anderer Tabs übernehmen (vor Schreibzugriffen im Hintergrund)
 store.canSave                         // false, wenn Schreiben scheitert
 store.shouldShowSaveNotice()          // true höchstens einmal je Sitzung (sessionStorage)
 store.onChange(section, fn)
@@ -265,6 +268,11 @@ store.onSaveFailed(fn)
 ```
 `createStore({ backend, sessionBackend, env, noticeMarker })`: `env.defaultLang` = Startsprache;
 `noticeMarker` = Ersatz-Merker in `history.state`, falls auch sessionStorage fehlt.
+Der Store schreibt immer seine **ganze** In-Memory-Kopie; ein zweiter Tab würde mit veralteten Bereichen
+den Fortschritt des ersten überschreiben. Wer ohne Nutzeraktion schreibt (Absturzwächter: Herzschlag,
+Übergänge), ruft darum vor dem Schreiben `store.reload()`: jeder gespeicherte Bereich ersetzt den im
+Speicher (bereinigt; `change:<Bereich>` nur, wenn er sich unterscheidet), fehlende Bereiche behalten ihren
+Wert, unbekannte bleiben erhalten; leerer oder unlesbarer Speicher ändert nichts.
 Neue Einstellungsfelder: `addSettingsFields({...})`; „Fortschritt löschen" =
 `progress-service.resetProgress(store)` (nur Regel-48-Felder).
 Jeder Bereich hat einen Sanitizer in `save-schema.js` (Feld für Feld, ungültig → Default,
@@ -582,7 +590,7 @@ verlassene Stufen frei (`onAutoSelected`). Eine manuell gewählte Stufe wird nie
 - Die Engine fasst beides hinter einer Fassade zusammen (`governor = { frame, interrupt }`, vom
   Ritt-Bildschirm genutzt): `governor.frame(rawDt, measuring, busy)` füttert erst den Herunterstufer und,
   wenn der in diesem Frame nichts geändert hat, den Hochstufer; `measuring` heißt Ritt, Vorstart oder
-  freier Modus bei sichtbarer Seite, `busy` ist `view.jumping`. Mit einem Test-Feed (`setFrameFeed`) ersetzen
+  freier Modus bei sichtbarer Seite, `busy` ist `view.jumping || view.approaching`. Mit einem Test-Feed (`setFrameFeed`) ersetzen
   die eingespeisten Bildzeiten die echten.
 
 Bei **manueller** Stufe über `low` (`canHintLowerLevel`) meldet `createLowFpsHint` (gleiche
@@ -608,8 +616,9 @@ upgrade.noteChange()                // Stufe hat sich geändert (runter, hoch, V
 nextUpgradeLevel({ level, blocked, left, fits })  // die Stufe darüber oder null
 ```
 - `frame` läuft nur, wenn das Fenster voll ist, der Cooldown vorbei ist, der Mittelwert ≥ `minFps` und der
-  Ruckler-Anteil ≤ `maxSlowShare` ist. `busy` (ein Sprung läuft, `view.jumping`) hält den Schritt an,
-  das Fenster bleibt: der Schritt folgt gleich nach dem Sprung. Erst dann ruft er `chooseTarget()`; gibt
+  Ruckler-Anteil ≤ `maxSlowShare` ist. `busy` (ein Sprung läuft oder ein Hindernis wird angeritten, `view.jumping || view.approaching`) hält
+  den Schritt an, das Fenster bleibt: der Schritt folgt gleich nach dem Sprung. Ein Stufenschritt kann die
+  Frames für Sekunden bremsen (Shader-Kompilierung), darum beginnt er auch nicht kurz vor dem Absprung. Erst dann ruft er `chooseTarget()`; gibt
   das null, beginnt das Fenster neu (nächster Versuch nach vollen 10 s).
 - `nextUpgradeLevel` kennt nur die **nächste** Stufe (nie über `high`, eine gesperrte wird nicht
   übersprungen) und lässt sie aus, wenn sie in `blocked` steht (Absturzwächter: dort ging die 3D-Darstellung
@@ -622,7 +631,8 @@ nextUpgradeLevel({ level, blocked, left, fits })  // die Stufe darüber oder nul
 - Hochgestuft wird über `applyQuality` (der gestufte, speicherschonende Wechsel, siehe unten) und
   `settings.setAutoLevel`; die Engine hält den Herunterstufer mit `downgrade.setLevel` im Gleichschritt.
   Das Diagnose-Feld `lastChange` (`{ kind: 'up'|'down'|'loss'|'crash', fps? }`) nennt den Grund der
-  letzten automatischen Änderung (`'crash'` schon beim Start, wenn der Absturzwächter die Stufe senkte).
+  letzten automatischen Änderung (`'crash'` schon beim Start, aber nur wenn der Absturzwächter die automatische Stufe wirklich senkte, also
+  nicht bei einem Absturz auf `low`: `startupCrashChange(startupCrash)` in `quality.js`).
 
 ### Umgebung, Tiere und Details (SRT-011, Regel 3)
 
@@ -635,8 +645,8 @@ seedbaren `rng` (`createRng` aus `textures.js`), also bleibt das Bild bei jedem 
   Wind gibt es nur auf `high` (Preset `wind`). Die Patches erweitern three.js-Materialien per
   `onBeforeCompile` im Vertex-Shader (keine CPU-Arbeit) und merken sich ihren Code in
   `material.userData.windPatch`; `setWindPatch(material, on)` schaltet ihn ab (zurück auf das schlichte
-  three.js-Programm, das andere schlichte Materialien mitbenutzen) oder wieder an, `hasWindPatch(material)`
-  fragt ihn ab. Ändert sich das Programm, gibt `setWindPatch` `true` zurück und die Welt gibt das Material
+  three.js-Programm, das andere schlichte Materialien mitbenutzen) oder wieder an (der Zustand steht in
+  `material.userData.windPatch.on`). Ändert sich das Programm, gibt `setWindPatch` `true` zurück und die Welt gibt das Material
   frei (`dispose`), damit das alte Programm vor dem neuen weg ist (siehe „Gestufter Stufenwechsel“):
   `patchTreeWind`, `patchBushWind` (nur die Standard-Materialien; das Lambert-Material von `low` bleibt
   frei vom Wind-Code), `patchTuftWind`, `patchBlossoms(material, wind, { base })` (Blumen biegen sich
@@ -956,17 +966,18 @@ Schließt der Browser einen überlasteten Tab, läuft die Behandlung eines Konte
 ganze Seite ist weg. Der Absturzwächter merkt sich darum im Spielstand, dass gerade die 3D-Darstellung
 gezeichnet wird, und wertet eine übrig gebliebene Markierung beim nächsten Start wie einen Verlust im
 Vordergrund. Er ist reine Anwendungslogik über den Ports `store` und `clock` (`nowMs`, `nowIso`) und
-dem Einstellungs-Dienst; die Entscheidung über die Stufe bekommt er als Parameter.
+dem Einstellungs-Dienst; die Entscheidung über die Stufe bekommt er als Parameter. Der `store` muss
+`reload()` haben (siehe „Ports“).
 
 ```js
 const guard = createCrashGuard({ store, settings, clock, decide });  // decide = levelAfterContextLoss
+// optional: foregroundGraceMs (Standard FOREGROUND_GRACE_S · 1000)
 const previous = guard.checkPreviousRun();   // beim Start, VOR dem ersten Bildschirm und der Engine
 // → { crashed: false } | { crashed: true, level: string|null, auto: bool, seconds }
 const lease = guard.markRendering({ level, auto });  // ein Bildschirm beginnt, die Szene zu zeichnen
 lease.frame({ level, auto })       // jeden Frame (billig, schreibt nur bei Bedarf), auch in der Pause
 lease.release()                    // der Bildschirm zeichnet nicht mehr
-guard.markIdle()                   // alle Leases beenden
-guard.markBackground() / guard.resume()   // Seite versteckt oder schließt / wieder sichtbar
+guard.markBackground() / guard.resume()   // Seite versteckt oder schließt / wieder sichtbar (resume: Schonfrist)
 guard.takeHint()                   // true genau einmal nach einem Absturz mit manueller Stufe über low
 guard.blockedLevels()              // Stufen, auf denen die 3D-Darstellung verloren ging oder das Spiel abstürzte
 guard.blockLevel(level)            // z. B. nach einem regulären Kontextverlust (Engine)
@@ -990,12 +1001,23 @@ addBlockedLevel(blocked, level)    // rein: eindeutig, von low nach high geordne
 - **Markierung:** `rendering` ist wahr, solange ein Lease besteht und die Seite nicht im Hintergrund ist
   (`sync()`). Geschrieben wird nur bei Übergängen (an/aus), bei einer Änderung von Stufe oder Automatik und
   als langsamer **Herzschlag** (`lastSeen` alle `HEARTBEAT_INTERVAL_MS` = 5 s, technischer Wert), nie pro Frame.
-  Ein im Hintergrund beendeter Tab zählt nie als Absturz.
+  Ein im Hintergrund beendeter Tab zählt nie als Absturz. Jeder Schreibzugriff ruft vorher `store.reload()`
+  und ändert nur den Bereich `crashGuard`: der Fortschritt eines zweiten Tabs wird nicht überschrieben. Der
+  Herzschlag bestätigt auch `rendering`, `level` und `auto` neu (ein anderer Tab kann die Markierung
+  gelöscht haben).
+- **Schonfrist nach der Rückkehr:** `resume()` markiert nicht sofort wieder, sondern erst `FOREGROUND_GRACE_S`
+  (3 s, `application/graphics-levels.js`, technischer Wert; `CONTEXT_LOSS_GRACE_S` in `quality.js` ist
+  dieselbe Konstante) nach dem Wechsel in den Vordergrund (der nächste `lease.frame` setzt die Markierung):
+  Android beendet oder lädt einen Tab oft direkt nach dem App-Wechsel neu, das ist kein Absturz des Spiels.
+  Ein zweites `resume()` (`visibilitychange` und `pageshow`) startet die Frist nicht neu; der erste
+  Seitenstart hat keine Schonfrist.
 - **Seiten-Lebenszyklus** (`installPageLifecycle(guard, { doc, win })` → entfernt die Listener):
   `visibilitychange` (versteckt → `markBackground`, sichtbar → `resume`), `pagehide` (auch bei Neuladen und
   normalem Schließen → `markBackground`) und `pageshow` (sichtbar → `resume`).
 - **Start** (`checkPreviousRun`, in `main.js` vor `createApp`): Eine übrig gebliebene Markierung ist ein
-  Absturz. Mit Stufe wird `decide({ auto, level })` angewandt (dieselbe Regel wie beim Kontextverlust:
+  Absturz, **außer** ihr Herzschlag `lastSeen` ist jünger als zwei Intervalle (`2 · HEARTBEAT_INTERVAL_MS`,
+  10 s): dann zeichnet noch ein anderer Tab, es ist kein Absturz und die Markierung bleibt unverändert
+  (bekannte Grenze: ein Absturz mit Neuladen innerhalb von 10 s wird so nicht erkannt). Mit Stufe wird `decide({ auto, level })` angewandt (dieselbe Regel wie beim Kontextverlust:
   Automatik → `settings.setAutoLevel('low')`; manuell über `low` → `hintPending`); jede abgestürzte Stufe
   kommt in `blockedLevels` (auch auf `low`, auch bei manueller Wahl), `lastCrash` wird mit `clock.nowIso()`
   gesetzt. `takeHint()` löscht den Hinweis; der Ritt-Bildschirm zeigt ihn (`showCrashHint`) als
