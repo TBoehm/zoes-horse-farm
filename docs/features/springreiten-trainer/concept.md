@@ -87,6 +87,11 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
    - Ein Wechsel der Grafikstufe MUSS ohne Neustart wirken; danach MUSS das Spiel weiter steuerbar
      und spielbar sein. FALLS die 3D-Darstellung verloren geht (Grafikspeicher vom Gerät
      zurückgesetzt), DANN MUSS das Spiel pausieren und nach der Wiederherstellung weiterspielbar sein.
+     Ein solcher Verlust zeigt, dass das Gerät überlastet ist: SOLANGE „Automatisch" aktiv ist, MUSS
+     die Stufe danach auf Niedrig gehen (gespeichert); bei manuell gewählter Stufe über Niedrig MUSS
+     ein Hinweis erscheinen, die Grafik niedriger zu stellen. Ein automatisches Herunterstufen
+     während des Ritts DARF die Darstellung nicht verlieren lassen: es MUSS in kleinen, für das Gerät
+     verkraftbaren Schritten geschehen.
    - WENN eine manuell gewählte Stufe über 5 Sekunden im Mittel unter 30 fps läuft (gemessen wie
      oben), MUSS das Spiel einmal je Ritt bzw. freiem Modus einen kurzen Hinweis zeigen, dass die
      Grafik für das Gerät zu hoch ist; die Stufe bleibt.
