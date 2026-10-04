@@ -92,24 +92,30 @@ describe('QUALITY_PRESETS', () => {
     expect(QUALITY_PRESETS.low.material).toBe('lambert');
   });
 
-  it('adds the details of SRT-011 level by level: none on low, the most on high', () => {
+  it('adds the details of SRT-011 level by level: none on low, the cheap ones on medium, all on high', () => {
     const { low, medium, high } = QUALITY_PRESETS;
-    for (const key of ['grassTufts', 'flowers', 'decor', 'birds', 'butterflies']) {
+    for (const key of ['grassTufts', 'flowers', 'decor', 'birds', 'butterflies', 'grazingHorses']) {
       expect(low[key], `low ${key}`).toBe(0);
       expect(medium[key], `medium ${key}`).toBeLessThanOrEqual(high[key]);
       expect(high[key], `high ${key}`).toBeGreaterThan(0);
     }
-    expect(low.wind).toBe(false);
-    expect(medium.wind).toBe(true);
-    expect(high.wind).toBe(true);
-    // moderate flowers and birds on medium, butterflies only on high
-    expect(medium.flowers).toBeGreaterThan(0);
-    expect(medium.flowers).toBeLessThan(high.flowers);
-    // the grass tufts are the biggest triangle cost: medium has none (ticket SRT-011)
-    expect(medium.grassTufts).toBe(0);
-    expect(medium.birds).toBeGreaterThan(0);
-    expect(medium.butterflies).toBe(0);
-    expect(high.butterflies).toBeGreaterThan(0);
+    for (const key of ['planters', 'hoofDust', 'wind']) {
+      expect(low[key], `low ${key}`).toBe(false);
+      expect(high[key], `high ${key}`).toBe(true);
+    }
+  });
+
+  it('keeps the expensive details on high only (rule 4, SRT-013): wind, flowers, animals, dust', () => {
+    const { medium } = QUALITY_PRESETS;
+    expect(medium.wind).toBe(false);
+    for (const key of ['grassTufts', 'flowers', 'birds', 'butterflies', 'grazingHorses']) {
+      expect(medium[key], key).toBe(0);
+    }
+    expect(medium.hoofDust).toBe(false);
+    expect(medium.planters).toBe(false);
+    // what medium keeps is the cheap static decoration: the paddock and every second pennant
+    expect(medium.decor).toBeGreaterThan(0);
+    expect(medium.decor).toBeLessThan(1);
   });
 
   it('antialiasing is off on low and on above', () => {
@@ -520,8 +526,9 @@ describe('estimateGpuMemoryMB', () => {
   it('counts the grazing horses by their model, the dust and the vertices of horse and rider', () => {
     const cost = (preset, key, off) =>
       estimateGpuMemoryMB(preset, TABLET) - estimateGpuMemoryMB({ ...preset, [key]: off }, TABLET);
-    // two horses of the low model (167 KB) on medium, of the medium model (430 KB) on high
-    expect(cost(QUALITY_PRESETS.medium, 'grazingHorses', 0)).toBeCloseTo((2 * 167) / 1024, 5);
+    // two horses of the low model (167 KB) on a medium with horses, of the medium model (430 KB) on high
+    const withHorses = { ...QUALITY_PRESETS.medium, grazingHorses: 2 };
+    expect(cost(withHorses, 'grazingHorses', 0)).toBeCloseTo((2 * 167) / 1024, 5);
     expect(cost(QUALITY_PRESETS.high, 'grazingHorses', 0)).toBeCloseTo((2 * 430) / 1024, 5);
     expect(cost(QUALITY_PRESETS.high, 'grazingHorses', 1)).toBeCloseTo(430 / 1024, 5);
     expect(cost(QUALITY_PRESETS.high, 'hoofDust', false)).toBeCloseTo(0.01, 5);
@@ -562,6 +569,13 @@ describe('estimateGpuMemoryMB', () => {
         estimateGpuMemoryMB(without, TABLET),
       );
     }
+  });
+
+  it('medium costs only a little more than before the details (122.99 MB at commit 5e240fc)', () => {
+    const BEFORE_MEDIUM_MB = 122.99; // the same estimate computed by the code at 5e240fc
+    const now = estimateGpuMemoryMB(QUALITY_PRESETS.medium, TABLET);
+    expect(now).toBeGreaterThanOrEqual(BEFORE_MEDIUM_MB - 0.01);
+    expect(now - BEFORE_MEDIUM_MB).toBeLessThan(1);
   });
 
   it('copes with presets that know none of the newer details', () => {
@@ -718,6 +732,7 @@ describe('fitPresetToBudget', () => {
     expect(tiny.preset.butterflies).toBe(0);
     expect(tiny.preset.birds).toBe(0);
     expect(tiny.preset.decor).toBe(0);
+    expect(tiny.preset.planters).toBe(false);
     expect(tiny.preset.envDensity).toBe(0.55);
     expect(tiny.preset.pixelRatio).toBe(1);
     expect(tiny.preset.shadowMapSize).toBe(1024);

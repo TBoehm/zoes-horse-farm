@@ -155,11 +155,13 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
    * Compiles the shaders for the current scene state without blocking: the frame loop waits (at
    * most COMPILE_HOLD_MAX_MS) and the last picture stays on screen. WebGLRenderer.compileAsync
    * uses KHR_parallel_shader_compile where the browser has it
-   * (https://threejs.org/docs/#api/en/renderers/WebGLRenderer.compileAsync).
+   * (https://threejs.org/docs/#api/en/renderers/WebGLRenderer.compileAsync). Only what is visible
+   * is compiled (world.compileRoot): the programs of hidden details would take GPU memory for
+   * nothing (rule 4).
    */
   function precompile() {
     guarded('shader precompile', () =>
-      gate.hold(renderer.compileAsync(world.scene, camera), COMPILE_HOLD_MAX_MS),
+      gate.hold(renderer.compileAsync(world.compileRoot, camera, world.scene), COMPILE_HOLD_MAX_MS),
     );
   }
 
@@ -177,13 +179,14 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
    * again (the buffer is cleared and refilled before the browser shows it). Between the stage and
    * that frame the old picture is simply a little too sharp or too soft.
    */
-  function applyStage(id, target) {
+  function applyStage(stage, target) {
+    const { id } = stage;
     guarded(`quality stage ${id}`, () => {
       if (id === 'pixelRatio') pendingPixelRatio = target.pixelRatio;
       else if (id === 'characters') horse.setQuality(target.characterDetail);
       else world.applyQualityStage(id, target);
     });
-    applied[id] = target;
+    for (const covered of stage.covers) applied[covered] = target;
   }
 
   /** Everything at once, for a switch nobody sees or that nothing is drawn for (applyQuality). */
@@ -231,7 +234,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     const stage = stageQueue.tick();
     if (!stage) return;
     // the target is read now: a switch during the staging changes where the remaining stages go
-    applyStage(stage.id, targetPreset);
+    applyStage(stage, targetPreset);
     governor.interrupt(); // frames around a stage are slower: not a measurement
     if (stage.compile) precompile();
   }

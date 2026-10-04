@@ -22,6 +22,7 @@ import { createWind, patchTreeWind, patchBushWind, patchTuftWind } from './plant
 import { createMeadow } from './meadow.js';
 import { createWildlife } from './wildlife.js';
 import { butterflyAnchors } from './meadow-plan.js';
+import { releaseNow } from './resilience.js';
 
 const TUFT_TOTAL = 11000; // grass tufts at full density
 const BUTTERFLY_PATCHES = 7; // flower patches the butterflies hover over
@@ -393,10 +394,16 @@ function makeInstanced(geometry, material, items, rng, { scale = [0.85, 1.3], ti
 
 /**
  * Environment. materialFactory(kind, params) → { standard, lambert }; `wind` (createWind()) is the
- * wind of the whole world (the arena and the obstacles share it).
+ * wind of the whole world (the arena and the obstacles share it). `release`: frees a GPU object
+ * that the environment replaces while it runs (see createGpuEpoch in resilience.js).
  * setDensity(envDensity, grassTufts, detail, details) sets the instance counts per quality level.
  */
-export function createEnvironment({ materialFactory, seed = 11, wind = createWind() }) {
+export function createEnvironment({
+  materialFactory,
+  seed = 11,
+  wind = createWind(),
+  release = releaseNow,
+}) {
   const rng = createRng(seed);
   const group = new THREE.Group();
   group.name = 'environment';
@@ -577,7 +584,12 @@ export function createEnvironment({ materialFactory, seed = 11, wind = createWin
      */
     setDensity(density, tufts, detail = 'high', details = {}) {
       for (const m of scalable) {
-        if (m.userData.lods) m.geometry = m.userData.lods[detail] || m.userData.lods.high;
+        if (m.userData.lods) {
+          const next = m.userData.lods[detail] || m.userData.lods.high;
+          // the geometry of the level that is left gives its GPU buffers back right away
+          if (next !== m.geometry) release(m.geometry);
+          m.geometry = next;
+        }
         m.count = instanceCount(m.userData.total, m.userData.priority, density);
       }
       tuftMesh.count = Math.round(tuftMesh.userData.total * tufts);
