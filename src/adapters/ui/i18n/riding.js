@@ -22,6 +22,11 @@ export default {
     'feedback.knockdown': 'Stange gefallen!',
     'feedback.refusal': 'Verweigert!',
     'ride.jumps': 'Sprünge: {count}',
+    'ride.fps': '{fps} fps',
+    'ride.fpsAuto': '(Auto)',
+    'ride.graphicsTooHigh': 'Die Grafik ist für dieses Gerät zu hoch. Wähle eine niedrigere Stufe.',
+    'pause.graphicsLost': 'Die Grafik war kurz weg. Gleich geht es weiter.',
+    'settings.showFps': 'fps anzeigen',
   },
   en: {
     'menu.free': 'Free Riding',
@@ -45,5 +50,10 @@ export default {
     'feedback.knockdown': 'Pole down!',
     'feedback.refusal': 'Refused!',
     'ride.jumps': 'Jumps: {count}',
+    'ride.fps': '{fps} fps',
+    'ride.fpsAuto': '(auto)',
+    'ride.graphicsTooHigh': 'The graphics are too high for this device. Pick a lower level.',
+    'pause.graphicsLost': 'The graphics were gone for a moment. Back in a second.',
+    'settings.showFps': 'Show fps',
   },
 };

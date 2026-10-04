@@ -1,7 +1,8 @@
 // Test hook for browser tests (smoke tests, manual play-tests): `window.__zhfTest`.
 // Only installed when the URL contains `?testhooks`; the game itself never uses it. The helpers
-// return plain copies of the state; `go` is the only action (jumps to a screen, e.g. to look at
-// the results screen without riding a whole course).
+// return plain copies of the state; `go` (jumps to a screen, e.g. to look at the results screen
+// without riding a whole course) and `loseContext` / `restoreContext` (simulated WebGL context
+// loss) are the only actions.
 
 const round = (n, digits = 3) => (Number.isFinite(n) ? Number(n.toFixed(digits)) : n);
 
@@ -34,6 +35,7 @@ function snapshotRide(ride, app) {
     paused: ride.screen.paused,
     cameraMode: ride.engine.cameraRig.mode,
     graphicsLevel: ride.engine.level,
+    contextLost: ride.engine.contextLost,
     horse: {
       x: round(horse.x),
       z: round(horse.z),
@@ -58,8 +60,25 @@ function snapshotRide(ride, app) {
   };
 }
 
+/**
+ * Returns a function that calls loseContext / restoreContext of the engine's WebGL context
+ * (false if that is not possible). A lost context hands out no extensions any more, so the
+ * extension is kept from the first call.
+ */
+function createContextLossControl(app) {
+  let extension = null;
+  return (method) => {
+    extension ??=
+      app.services.engine?.renderer.getContext().getExtension('WEBGL_lose_context') ?? null;
+    if (!extension) return false;
+    extension[method]();
+    return true;
+  };
+}
+
 /** Installs `window.__zhfTest` (read-only helpers) for browser tests. */
 export function installTestHooks({ app, store, inputMode, target = window }) {
+  const contextLoss = createContextLossControl(app);
   target.__zhfTest = {
     screen: () => app.current,
     stack: () => app.stack,
@@ -68,5 +87,9 @@ export function installTestHooks({ app, store, inputMode, target = window }) {
     audio: () => app.services.audio?.getState?.() ?? null,
     touchMode: () => inputMode.touch,
     go: (name, params) => app.go(name, params),
+    // Simulates a lost / restored WebGL context (WEBGL_lose_context) to test rule 4. Returns false
+    // when there is no engine or the browser does not offer the extension.
+    loseContext: () => contextLoss('loseContext'),
+    restoreContext: () => contextLoss('restoreContext'),
   };
 }

@@ -68,3 +68,49 @@ describe('installTestHooks', () => {
     expect(snapshot.horse.x).toBe(1);
   });
 });
+
+describe('context loss hooks', () => {
+  const engineWith = (extension) => ({
+    renderer: { getContext: () => ({ getExtension: () => extension }) },
+  });
+  const install = (services) => {
+    const target = {};
+    installTestHooks({ app: fakeApp(services), store: { get: () => ({}) }, inputMode: {}, target });
+    return target.__zhfTest;
+  };
+
+  it('calls WEBGL_lose_context of the engine context', () => {
+    const calls = [];
+    const hooks = install({
+      engine: engineWith({
+        loseContext: () => calls.push('lose'),
+        restoreContext: () => calls.push('restore'),
+      }),
+    });
+    expect(hooks.loseContext()).toBe(true);
+    expect(hooks.restoreContext()).toBe(true);
+    expect(calls).toEqual(['lose', 'restore']);
+  });
+
+  it('can restore although the lost context no longer hands out the extension', () => {
+    const calls = [];
+    const extension = {
+      loseContext: () => calls.push('lose'),
+      restoreContext: () => calls.push('restore'),
+    };
+    let lost = false;
+    const engine = {
+      renderer: { getContext: () => ({ getExtension: () => (lost ? null : extension) }) },
+    };
+    const hooks = install({ engine });
+    hooks.loseContext();
+    lost = true;
+    expect(hooks.restoreContext()).toBe(true);
+    expect(calls).toEqual(['lose', 'restore']);
+  });
+
+  it('returns false without an engine or without the extension', () => {
+    expect(install({}).loseContext()).toBe(false);
+    expect(install({ engine: engineWith(null) }).restoreContext()).toBe(false);
+  });
+});

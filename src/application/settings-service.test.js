@@ -109,6 +109,30 @@ describe('settings service', () => {
     });
   });
 
+  describe('fps display', () => {
+    it('switches the display on and off', () => {
+      const { service, store } = setup({ showFps: false });
+      service.setShowFps(true);
+      expect(store.data.settings.showFps).toBe(true);
+      service.setShowFps(false);
+      expect(store.data.settings.showFps).toBe(false);
+    });
+
+    it('ignores non-boolean values', () => {
+      const { service, store } = setup({ showFps: true });
+      service.setShowFps('no');
+      service.setShowFps(0);
+      service.setShowFps(undefined);
+      expect(store.data.settings.showFps).toBe(true);
+    });
+
+    it('leaves the other settings alone', () => {
+      const { service, store } = setup({ camera: 'rider', graphicsLevel: 'low' });
+      service.setShowFps(true);
+      expect(store.data.settings).toMatchObject({ camera: 'rider', graphicsLevel: 'low' });
+    });
+  });
+
   describe('sound', () => {
     it('sets the volume per channel', () => {
       const { service, store } = setup({});

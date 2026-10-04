@@ -3,11 +3,17 @@ import * as THREE from 'three';
 import { h } from '../ui/dom.js';
 import { createRenderer, resizeRenderer, setMaxPixelRatio } from './renderer.js';
 import { createQualityGovernor, pickInitialLevel, QUALITY_PRESETS } from './quality.js';
+import { createErrorReporter, createRenderGate, watchContextLoss } from './resilience.js';
+import { createEmitter } from '../../shared/events.js';
 import { createWorld } from './world.js';
 import { TUNING } from '../../domain/sim/tuning.js';
 import { DEFAULT_APPEARANCE } from '../../domain/horse/appearance.js';
 import { createHorse } from './horse/index.js';
 import { createCameraRig } from './camera.js';
+
+// Longest time the frame loop waits for the shaders of a new quality level (or of a restored
+// context) before it draws anyway.
+const COMPILE_HOLD_MAX_MS = 2500;
 
 function rendererString(gl) {
   try {
@@ -68,12 +74,39 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   const horse = createHorse({ ...DEFAULT_APPEARANCE, quality: level });
   world.scene.add(horse.object);
 
+  const emitter = createEmitter();
+  const gate = createRenderGate();
+  const reportError = createErrorReporter();
+  /** Runs one part of the engine; an exception is logged and never breaks the loop or input. */
+  function guarded(where, fn) {
+    try {
+      fn();
+    } catch (err) {
+      reportError(where, err);
+    }
+  }
+
+  /**
+   * Compiles the shaders for the current scene state without blocking: the frame loop waits (at
+   * most COMPILE_HOLD_MAX_MS) and the last picture stays on screen. WebGLRenderer.compileAsync
+   * uses KHR_parallel_shader_compile where the browser has it
+   * (https://threejs.org/docs/#api/en/renderers/WebGLRenderer.compileAsync).
+   */
+  function precompile() {
+    guarded('shader precompile', () =>
+      gate.hold(renderer.compileAsync(world.scene, camera), COMPILE_HOLD_MAX_MS),
+    );
+  }
+
   function applyQuality(next) {
     level = next;
-    setMaxPixelRatio(renderer, QUALITY_PRESETS[next].pixelRatio);
-    world.setQuality(next);
-    horse.setQuality(next);
-    resize(true);
+    guarded('quality switch', () => {
+      setMaxPixelRatio(renderer, QUALITY_PRESETS[next].pixelRatio);
+      world.setQuality(next);
+      horse.setQuality(next);
+      resize(true);
+    });
+    if (!contextWatch.lost) precompile();
   }
 
   const governor = createQualityGovernor({
@@ -86,11 +119,13 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   });
 
   settingsService.onChange((s) => {
-    if (s.graphicsAuto !== governor.auto) governor.setAuto(s.graphicsAuto);
-    if (s.graphicsLevel !== level) {
-      governor.setLevel(s.graphicsLevel);
-      applyQuality(s.graphicsLevel);
-    }
+    guarded('settings change', () => {
+      if (s.graphicsAuto !== governor.auto) governor.setAuto(s.graphicsAuto);
+      if (s.graphicsLevel !== level) {
+        governor.setLevel(s.graphicsLevel);
+        applyQuality(s.graphicsLevel);
+      }
+    });
   });
 
   function resize(force = false) {
@@ -101,7 +136,26 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
       camera.updateProjectionMatrix();
     }
   }
-  window.addEventListener('resize', () => resize());
+  window.addEventListener('resize', () => guarded('resize', () => resize()));
+  // WebGL context loss (rule 4): the device took the graphics memory away (typical on phones and
+  // tablets, e.g. under memory pressure or when the tab was in the background). three.js has its
+  // own listeners on the canvas, registered before ours, so it has already rebuilt its internal
+  // state (initGLContext) when `onRestored` runs. We announce the loss so that the ride pauses,
+  // rebuild what only lived on the GPU, and announce the restore.
+  const contextWatch = watchContextLoss(canvas, {
+    onLost() {
+      emitter.emit('contextLost');
+    },
+    onRestored() {
+      guarded('context restore', () => {
+        world.restoreAfterContextLoss();
+        resize(true);
+      });
+      precompile();
+      emitter.emit('contextRestored');
+    },
+  });
+
   applyQuality(level);
 
   let frameFn = null;
@@ -110,9 +164,25 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     const dt = last ? Math.min(TUNING.sim.maxDt, (time - last) / 1000) : 1 / 60;
     const rawDt = last ? (time - last) / 1000 : 1 / 60;
     last = time;
-    resize();
-    frameFn?.(dt, rawDt);
-    renderer.render(world.scene, camera);
+    // shaders are compiling: keep the last picture, do not simulate (no hidden time passes)
+    if (gate.blocked) return;
+    // each step on its own: a failing step is logged and the others still run (no closures here,
+    // this runs every frame)
+    try {
+      resize();
+    } catch (err) {
+      reportError('resize', err);
+    }
+    try {
+      frameFn?.(dt, rawDt);
+    } catch (err) {
+      reportError('frame', err);
+    }
+    try {
+      renderer.render(world.scene, camera);
+    } catch (err) {
+      reportError('render', err);
+    }
   }
 
   return {
@@ -125,6 +195,12 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     get level() {
       return level;
     },
+    /** true while the WebGL context is lost (the ride is paused by the ride screen). */
+    get contextLost() {
+      return contextWatch.lost;
+    },
+    /** Events: 'contextLost', 'contextRestored'. Returns the unsubscribe function. */
+    on: emitter.on,
     /** Starts (fn) or stops (null) the frame loop; the canvas is visible only while it runs. */
     run(fn) {
       frameFn = fn;
