@@ -8,6 +8,9 @@ export function watchPage(page) {
   const forbidden = [];
   page.on('console', (msg) => {
     if (msg.type() === 'error' || /Missing text/.test(msg.text())) errors.push(msg.text());
+    // Chromium logs WebGL errors (e.g. deleting a handle of a lost context) only as warnings,
+    // WebKit as errors: count both, so that Chromium catches what WebKit would
+    else if (/WebGL: INVALID_/.test(msg.text())) errors.push(`[${msg.type()}] ${msg.text()}`);
   });
   page.on('pageerror', (err) => errors.push(String(err)));
   page.on('request', (req) => {
@@ -110,6 +113,22 @@ export const setTabHidden = (page, hidden) =>
     });
     document.dispatchEvent(new Event('visibilitychange'));
   }, hidden);
+
+/**
+ * The tab comes back to the foreground and the WebGL context is lost in the same task, so that no
+ * frame (seconds long with a software renderer) can pass in between. Returns what loseContext()
+ * returns.
+ */
+export const showTabAndLoseContext = (page) =>
+  page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+    return window.__zhfTest.loseContext();
+  });
 
 /** Waits until a ride is running (optionally in a given mode) and returns its state. */
 export async function waitForRide(page, mode) {

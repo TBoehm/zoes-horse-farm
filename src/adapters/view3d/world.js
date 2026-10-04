@@ -7,6 +7,7 @@ import { createArena, createCourseLines } from './arena.js';
 import { createEnvironment, SITE } from './environment.js';
 import { createObstacles } from './obstacles.js';
 import { createAidMarker } from './aid-marker.js';
+import { collectGpuObjects, releaseNow } from './resilience.js';
 
 const SHADOW_HALF = 24; // half extent of the shadow camera (m)
 const SUN_DISTANCE = 90;
@@ -27,9 +28,10 @@ function createMaterialPair(params) {
 
 /**
  * createWorld(renderer, { quality }) → world API (see architecture.md, section View).
- * `quality`: a level name or a preset object.
+ * `quality`: a level name or a preset object. `release`: frees GPU objects that the world replaces
+ * while it runs (see createGpuEpoch in resilience.js).
  */
-export function createWorld(renderer, { quality = 'medium' } = {}) {
+export function createWorld(renderer, { quality = 'medium', release = releaseNow } = {}) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SKY_COLORS.horizon);
   const pairs = [];
@@ -64,9 +66,9 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
   scene.add(arena.group);
   const environment = createEnvironment({ materialFactory });
   scene.add(environment.group);
-  const obstacles = createObstacles({ materialFactory });
+  const obstacles = createObstacles({ materialFactory, release });
   scene.add(obstacles.group);
-  const lines = createCourseLines({ materialFactory });
+  const lines = createCourseLines({ materialFactory, release });
   scene.add(lines.group);
   const aid = createAidMarker();
   scene.add(aid.mesh);
@@ -98,14 +100,14 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
   }
 
   function disposeEnvironmentMap() {
-    envTarget?.dispose();
+    release(envTarget);
     envTarget = null;
     envTexture = null;
   }
 
   function disposeShadowMap() {
     if (!sun.shadow.map) return;
-    sun.shadow.map.dispose();
+    release(sun.shadow.map);
     sun.shadow.map = null;
   }
 
@@ -251,14 +253,16 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
    * data on the next render. Not restorable is what only lived on the GPU: the PMREM environment
    * map is the result of a render pass, so it comes back empty and must be rendered again. The
    * old target is only forgotten, not disposed: disposing it would run dispose listeners of the
-   * pre-restore textures and delete handles that belong to the lost context. The shadow map stays
-   * as it is (three.js rebuilds its framebuffer lazily).
+   * pre-restore textures and delete handles that belong to the lost context (`release` knows
+   * that, see createGpuEpoch). The same goes for the shadow map, which three.js makes anew on
+   * the next shadow pass: an old one that is kept would be uploaded again but could never be
+   * freed without GL errors.
    * Source: onContextRestore in three r186 src/renderers/WebGLRenderer.js (calls initGLContext,
    * which resets properties, textures, geometries, programs and the shadow map object).
    */
   function restoreAfterContextLoss() {
-    envTarget = null;
-    envTexture = null;
+    disposeEnvironmentMap();
+    disposeShadowMap();
     if (stageState.materials.envMap) scene.environment = buildEnvironmentMap();
   }
 
@@ -380,6 +384,10 @@ export function createWorld(renderer, { quality = 'medium' } = {}) {
       obstacles.update(dt, camera);
       lines.update(dt);
       aid.update(dt);
+    },
+    /** Everything that has GPU resources now; handed to createGpuEpoch.contextLost. */
+    gpuObjects() {
+      return collectGpuObjects(scene, [envTarget]);
     },
     dispose() {
       obstacles.dispose();

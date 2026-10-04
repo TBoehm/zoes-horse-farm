@@ -11,6 +11,7 @@ import {
   rideCourseOne,
   rideState,
   setTabHidden,
+  showTabAndLoseContext,
   startFreeRide,
   storeSection,
   waitForRide,
@@ -385,8 +386,8 @@ test.describe('context loss fallback (rule 4)', () => {
     await startFreeRide(page);
 
     await setTabHidden(page, true);
-    await setTabHidden(page, false);
-    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    // back and lost in one task: the grace time cannot run out in between (slow CI frames)
+    expect(await showTabAndLoseContext(page)).toBe(true);
     await page.waitForFunction(() => window.__zhfTest.ride().contextLost);
     expect((await rideState(page)).graphicsLevel).toBe('medium');
     expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);

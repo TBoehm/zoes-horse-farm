@@ -16,7 +16,12 @@ import {
   planQualityStagesFromState,
   QUALITY_STAGE_IDS,
 } from './quality-stages.js';
-import { createErrorReporter, createRenderGate, watchContextLoss } from './resilience.js';
+import {
+  createErrorReporter,
+  createGpuEpoch,
+  createRenderGate,
+  watchContextLoss,
+} from './resilience.js';
 import { createEmitter } from '../../shared/events.js';
 import { createWorld } from './world.js';
 import { TUNING } from '../../domain/sim/tuning.js';
@@ -120,9 +125,15 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   setMaxPixelRatio(renderer, firstPreset.pixelRatio);
   let pendingPixelRatio = null;
 
-  const world = createWorld(renderer, { quality: firstPreset });
+  // Objects that lived on the GPU of a lost context are never released with GL calls (rule 4)
+  const gpuEpoch = createGpuEpoch();
+  const world = createWorld(renderer, { quality: firstPreset, release: gpuEpoch.release });
   worldInfo.textures = world.textureSizes();
-  const horse = createHorse({ ...DEFAULT_APPEARANCE, quality: firstPreset.characterDetail });
+  const horse = createHorse({
+    ...DEFAULT_APPEARANCE,
+    quality: firstPreset.characterDetail,
+    release: gpuEpoch.release,
+  });
   world.scene.add(horse.object);
 
   const emitter = createEmitter();
@@ -275,6 +286,8 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     onLost() {
       contextStats.lost += 1;
       contextStats.lostAtS = secondsSinceStart();
+      // first of all: what is on the GPU now is gone, whatever the fallback below rebuilds
+      guarded('context loss bookkeeping', () => gpuEpoch.contextLost(world.gpuObjects()));
       guarded('context loss fallback', () => {
         const decision = levelAfterContextLoss({
           auto: settingsService.get().graphicsAuto,
@@ -294,6 +307,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     onRestored() {
       contextStats.restored += 1;
       contextStats.restoredAtS = secondsSinceStart();
+      gpuEpoch.contextRestored();
       guarded('context restore', () => {
         world.restoreAfterContextLoss();
         resize(true);

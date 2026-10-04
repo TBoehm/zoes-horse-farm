@@ -388,9 +388,10 @@ world.textureSizes()                                // [{ width, height, normal 
 world.syncAnisotropy(level | preset)                // Anisotropie der Texturen; NUR aufrufen, solange nichts
                                                     // gezeichnet wird (Textur-Neuupload)
 world.restoreAfterContextLoss()                     // nach wiederhergestelltem WebGL-Kontext: PMREM-
-                                                    // Umgebungslicht neu rendern (altes Ziel nur
-                                                    // vergessen, nicht disposen); Schatten-Map baut
-                                                    // three.js selbst neu
+                                                    // Umgebungslicht neu rendern (altes Ziel und alte
+                                                    // Schatten-Map nur vergessen, nicht disposen);
+                                                    // die Schatten-Map baut three.js neu
+world.gpuObjects()                                  // alles mit GPU-Ressourcen (für createGpuEpoch)
 world.update(dt, camera)                            // Himmel, Umgebung, Ringe, Linien (je Frame)
 world.dispose()
 const horse = createHorse({ coat, marking, quality });  // → { object, earAnchor, ... }
@@ -495,6 +496,28 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
   (`engine.takeGraphicsHint()` liest und löscht ihn); der Ritt-Bildschirm zeigt ihn als Toast
   `ride.graphicsContextLost`, sobald das Kind nach der Wiederherstellung fortsetzt (oder ein neuer
   Ritt beginnt).
+- **GPU-Objekte vor einem Kontextverlust werden nie mit GL-Aufrufen freigegeben
+  (`createGpuEpoch`, `collectGpuObjects` in `view3d/resilience.js`):** three.js (r186) hängt die
+  `dispose`-Listener an Objekte, sobald sie hochgeladen werden, und zwar in die damaligen
+  Verwaltungsinstanzen (`WebGLTextures`, `WebGLGeometries`, `WebGLAttributes`). Nach der
+  Wiederherstellung (`initGLContext`) gibt es neue Instanzen, die alten Listener bleiben. Wird ein
+  Objekt von vor dem Verlust danach verworfen (z. B. `obstacles.setObstacles` beim nächsten Ritt),
+  löschen sie Handles des verlorenen Kontexts: `INVALID_OPERATION: delete: object does not belong
+  to this context` (WebKit: error, Chromium: warning). Regel: Die Engine ruft beim Verlust
+  `gpuEpoch.contextLost(world.gpuObjects())` (Geometrien, Materialien samt Texturen, Skelett-
+  Texturen, Schatten-Maps, Umgebungs-Ziel – alles, was gezeichnet und damit hochgeladen wurde) und
+  beim Wiederherstellen `contextRestored()`. Jede Stelle, die zur Laufzeit GPU-Objekte ersetzt
+  (Pferd/Reiter bei Stufenwechsel, Hindernisse, Linien, Hervorhebung, Schatten-Map,
+  Umgebungs-Ziel), gibt sie über `release(objekt)` statt `objekt.dispose()` frei (Option
+  `release`, Standard `releaseNow`). `release` ruft `dispose()` nur auf, wenn das Objekt nicht
+  markiert und der Kontext nicht gerade verloren ist; sonst wird es nur vergessen (der GPU-Speicher
+  ging mit dem Kontext). Ohne Verlust ändert sich nichts. Nach einem Verlust sind neu gebaute
+  Objekte unmarkiert und werden normal freigegeben. Bekannte Grenze: Ein Objekt, das den Verlust
+  überlebt und neu hochgeladen wird, bleibt beim späteren `release` auf der GPU (eine
+  Generation pro Verlust); Schatten-Map und Umgebungs-Ziel sind davon ausgenommen, weil
+  `restoreAfterContextLoss` sie verwirft und three.js sie neu baut. Der Smoke-Test zählt
+  `WebGL: INVALID_*`-Meldungen aller Typen (`watchPage`), damit Chromium findet, was WebKit als
+  Fehler meldet.
 - **Gestufter Stufenwechsel (`view3d/quality-stages.js`):** Ein Wechsel mitten im Ritt (Governor
   oder manuell) geschieht nicht in einem Frame, sondern in kleinen Schritten, weil ein Frame mit
   allen neuen Shadern, neuer Schatten-Map, neuem Zeichenpuffer und neu hochgeladenen Texturen den

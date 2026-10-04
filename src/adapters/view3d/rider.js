@@ -17,6 +17,7 @@ import {
 import { clamp, smoothstep } from './horse/math.js';
 import { riderSeat } from './horse/seat.js';
 import { createVertexColorMaterial } from './horse/material.js';
+import { releaseNow } from './resilience.js';
 
 const SIDES = [1, -1];
 const boneNames = (p) =>
@@ -324,7 +325,7 @@ function buildRiderGeometry(index, level) {
 }
 
 /** Rider from bind pose; update() applies the seat and IK. */
-export function createRider({ quality = 'medium' } = {}) {
+export function createRider({ quality = 'medium', release = releaseNow } = {}) {
   let level = quality;
   const object = new THREE.Group();
   object.name = 'rider';
@@ -431,8 +432,8 @@ export function createRider({ quality = 'medium' } = {}) {
     setQuality(l) {
       if (l === level) return;
       level = l;
-      mesh.geometry.dispose();
-      mesh.material.dispose();
+      release(mesh.geometry);
+      release(mesh.material);
       mesh.geometry = buildRiderGeometry(index, level);
       mesh.material = createVertexColorMaterial(level, 0.7);
       mesh.castShadow = level !== 'low';

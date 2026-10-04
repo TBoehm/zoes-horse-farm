@@ -42,6 +42,84 @@ export function watchContextLoss(canvas, { onLost, onRestored } = {}) {
   };
 }
 
+/** Frees a GPU object right away (the normal case, as long as no context was ever lost). */
+export function releaseNow(object) {
+  object?.dispose();
+}
+
+/**
+ * Tells which GPU objects must not be released with GL calls any more (rule 4).
+ *
+ * three.js (r186) registers 'dispose' listeners in the bookkeeping instances that exist when an
+ * object is uploaded. A restored context gets new instances (initGLContext), but the old
+ * listeners stay on the objects: disposing an object that was uploaded before the loss would
+ * delete handles of the lost context ("INVALID_OPERATION: delete: object does not belong to this
+ * context", seen in WebKit; Chromium logs it as a warning). The GPU memory went away with the
+ * context, so such an object is only forgotten. `contextLost(objects)` is called with everything
+ * that lived on the GPU at that moment (collectGpuObjects), `release(object)` replaces
+ * `object.dispose()` wherever the view frees GPU objects while it runs. Without a loss nothing
+ * changes: every object is disposed. While the context is lost no GL call is made at all.
+ * Known limit: an object that survives a loss and is uploaded again stays on the GPU when it is
+ * released later (one generation of rebuilt objects per loss), which is the price of never
+ * logging a GL error.
+ */
+export function createGpuEpoch() {
+  const stale = new WeakSet();
+  let lost = false;
+  return {
+    get lost() {
+      return lost;
+    },
+    contextLost(objects = []) {
+      lost = true;
+      for (const object of objects) if (object) stale.add(object);
+    },
+    contextRestored() {
+      lost = false;
+    },
+    isStale(object) {
+      return stale.has(object);
+    },
+    /** Disposes the object unless its GPU resources belong to a lost context. */
+    release(object) {
+      if (!object || lost || stale.has(object)) return;
+      object.dispose();
+    },
+  };
+}
+
+const hasTexture = (value) => Boolean(value && value.isTexture);
+
+/**
+ * Everything of a scene that can have GPU resources: geometries, materials with their textures,
+ * instanced meshes, skeleton bone textures, shadow maps and the scene's environment texture.
+ * An object that is on the GPU was drawn, so it hangs in the scene; `extras` are render targets
+ * and other things held outside of it. Plain duck typing: no three.js import.
+ */
+export function collectGpuObjects(scene, extras = []) {
+  const found = new Set();
+  const add = (object) => {
+    if (object) found.add(object);
+  };
+  const addMaterial = (material) => {
+    if (!material) return;
+    add(material);
+    for (const value of Object.values(material)) if (hasTexture(value)) add(value);
+  };
+  scene.traverse((node) => {
+    add(node.geometry);
+    if (Array.isArray(node.material)) node.material.forEach(addMaterial);
+    else addMaterial(node.material);
+    if (node.isInstancedMesh) add(node);
+    add(node.skeleton?.boneTexture);
+    add(node.shadow?.map);
+  });
+  if (hasTexture(scene.environment)) add(scene.environment);
+  if (hasTexture(scene.background)) add(scene.background);
+  extras.forEach(add);
+  return [...found];
+}
+
 /**
  * Holds back the frame loop while shaders compile (after a quality switch or a restored context),
  * so that the page stays responsive instead of stalling inside the first draw call. The gate

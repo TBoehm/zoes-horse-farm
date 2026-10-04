@@ -24,6 +24,7 @@ import { JUMP_KEYS, LEG_OFFSET, POSE_KEYS, POSE_SIZE, STOP_POSE, samplePoses } f
 import { EAR_ANCHOR, REST, SADDLE_SEAT, createSkeletonBones } from './skeleton.js';
 import { createReins } from './reins.js';
 import { GRAPHICS_LEVELS } from '../../../application/graphics-levels.js';
+import { releaseNow } from '../resilience.js';
 
 /** Distance body centre → simulation reference point (ground below the forelegs). */
 const ORIGIN_OFFSET_Z = REST.front.hoof[2];
@@ -42,7 +43,8 @@ function earFlick(t, k) {
 }
 
 export function createHorse(options = {}) {
-  const { quality: q0 = 'medium', rider: withRider = true } = options;
+  // `release` frees GPU objects that are replaced on a quality change (see createGpuEpoch)
+  const { quality: q0 = 'medium', rider: withRider = true, release = releaseNow } = options;
   let level = GRAPHICS_LEVELS.includes(q0) ? q0 : 'medium';
   let appearance = normalizeAppearance(options);
 
@@ -100,7 +102,7 @@ export function createHorse(options = {}) {
   // rider on the saddle
   let rider = null;
   if (withRider) {
-    rider = createRider({ quality: level });
+    rider = createRider({ quality: level, release });
     rider.object.position.set(
       SADDLE_SEAT.x - REST.root[0],
       SADDLE_SEAT.y - REST.root[1],
@@ -123,10 +125,10 @@ export function createHorse(options = {}) {
   const restLocal = [1, -1].map((s) => reinRestPoint(s).sub(new THREE.Vector3(...REST.spineFront)));
 
   function applyQuality() {
-    body.geometry.dispose();
-    tack.geometry.dispose();
-    body.material.dispose();
-    tack.material.dispose();
+    release(body.geometry);
+    release(tack.geometry);
+    release(body.material);
+    release(tack.material);
     body.geometry = buildBodyGeometry(skel.index, level);
     tack.geometry = buildTackGeometry(skel.index, level);
     body.material = createCoatMaterial(level, uniforms);
