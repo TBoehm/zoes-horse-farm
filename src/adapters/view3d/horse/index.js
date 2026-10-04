@@ -336,6 +336,7 @@ export function createHorse(options = {}) {
 
     // --- world matrices, ear anchor, reins -----------------------------------------------
     object.updateMatrixWorld(true);
+    rider?.lateUpdate(dt);
     object.matrixWorld.decompose(tmpA, qObj, tmpB);
     B.head.matrixWorld.decompose(tmpA, qHead, tmpB);
     eX.set(pitch * 0.4, 0, -roll * 0.5);
