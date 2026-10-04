@@ -4,7 +4,7 @@
 // gait weights are critically damped springs, the legs keep their own phase and plant their hooves
 // (legs.js), jump and refusal weights follow smooth progress curves.
 import { GAITS, GAIT_KEYS, approach, blendedFrequency, bodySample, bump } from './gaits.js';
-import { blendGait, createLegModel, stepLegs } from './legs.js';
+import { allPlanted, blendGait, createLegModel, stepLegs } from './legs.js';
 import { clamp, smoothstep } from './math.js';
 import { jumpParam } from './poses.js';
 import { createGestureScheduler } from './schedule.js';
@@ -236,7 +236,7 @@ export function stepMotion(m, dt, state) {
       m.hopWeight < 0.01 &&
       m.stopWeight < 0.01 &&
       m.runoutWeight < 0.01 &&
-      m.legs.every((l) => l.inStance && !l.squaring);
+      allPlanted(m.legs);
     const g = m.gesture.step(dt, calm);
     if (g.id === 'paw' && g.weight > 0) scrapeHoof(m.legs[g.leg], g);
   }

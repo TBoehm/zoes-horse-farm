@@ -485,27 +485,28 @@ export function createHorse(options = {}) {
         z: legZ[leg] + m.legs[leg].dz - ORIGIN_OFFSET_Z,
       });
     }
-    for (const [legs, power, reach] of [
-      [[0, 1], m.landing.front, 0.12],
-      [[2, 3], m.landing.hind, 0.1],
-    ]) {
-      if (power <= 0) continue;
-      for (const leg of legs) {
-        footfalls.push({
-          kind: 'landing',
-          leg,
-          gait: state.gait,
-          strength: power,
-          x: legX[leg],
-          y: groundY,
-          z: legZ[leg] + reach - ORIGIN_OFFSET_Z,
-        });
-      }
-    }
+    pushLanding(0, m.landing.front, 0.12, state.gait, groundY);
+    pushLanding(2, m.landing.hind, 0.1, state.gait, groundY);
     if (api.onFootfall) {
       for (const e of footfalls) if (e.kind === 'step') api.onFootfall(state.gait, e.leg);
     }
     return footfalls;
+  }
+
+  /** Landing of the legs first and first + 1 (strength 0 = nothing). */
+  function pushLanding(first, power, reach, gait, groundY) {
+    if (power <= 0) return;
+    for (let leg = first; leg < first + 2; leg++) {
+      footfalls.push({
+        kind: 'landing',
+        leg,
+        gait,
+        strength: power,
+        x: legX[leg],
+        y: groundY,
+        z: legZ[leg] + reach - ORIGIN_OFFSET_Z,
+      });
+    }
   }
 
   return api;

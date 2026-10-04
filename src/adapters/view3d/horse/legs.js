@@ -189,7 +189,7 @@ export function stepLegs(model, input, dt, falls) {
     leg.c = lifted ? 1 - Math.min(1, leg.y / 0.02) : 1;
   }
   // bring a leg that stands away from the neutral position square, one at a time
-  if (!moving && v < SQUARE.maxSpeed && model.legs.every((l) => l.inStance && !l.squaring)) {
+  if (!moving && v < SQUARE.maxSpeed && allPlanted(model.legs)) {
     let worst = -1;
     let best = SQUARE.minOffset;
     for (let i = 0; i < 4; i++) {
@@ -206,6 +206,12 @@ export function stepLegs(model, input, dt, falls) {
       leg.squareFrom = leg.dz;
     }
   }
+}
+
+/** Do all legs stand on the ground (no step, no square-up step in progress)? */
+export function allPlanted(legs) {
+  for (const l of legs) if (!l.inStance || l.squaring) return false;
+  return true;
 }
 
 function stepSquare(leg, dt, baseSink) {
