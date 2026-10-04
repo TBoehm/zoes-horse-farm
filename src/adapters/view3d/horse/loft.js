@@ -34,6 +34,22 @@ export function curveFrames(curve, xAxis = new THREE.Vector3(1, 0, 0)) {
   };
 }
 
+/** Parameter u ∈ [0, 1] of the point on a curve that is nearest to `point` (sampled). */
+export function nearestU(curve, point, n = 400) {
+  let best = 0;
+  let bd = Infinity;
+  const p = new THREE.Vector3();
+  for (let i = 0; i <= n; i++) {
+    curve.getPointAt(i / n, p);
+    const d = p.distanceToSquared(point);
+    if (d < bd) {
+      bd = d;
+      best = i / n;
+    }
+  }
+  return best;
+}
+
 /** Frames along a straight line from p0 to p1. */
 export function lineFrames(p0, p1, xAxis = new THREE.Vector3(1, 0, 0)) {
   const t = new THREE.Vector3().subVectors(p1, p0).normalize();
@@ -188,6 +204,7 @@ export class Loft {
  */
 export function buildShell(builder, loft, opts) {
   const { nu, nv, map, thickness, inset = 0.002, closedV = false, attrs = null } = opts;
+  // weights(u, a, point, su, sv) → [[bone, w], ...]; by default those of the loft
   const weightsOf = opts.weights || ((u, a, p) => loft.def.weights(u, a, p));
   const cols = closedV ? nv : nv + 1;
   const outer = [];
@@ -201,7 +218,7 @@ export function buildShell(builder, loft, opts) {
       const [u, a] = map(su, sv);
       const base = loft.point(u, a);
       const nrm = loft.normal(u, a);
-      const w = weightsOf(u, a, base);
+      const w = weightsOf(u, a, base, su, sv);
       const th = thickness(su, sv);
       const po = base.clone().addScaledVector(nrm, th);
       const pi = base.clone().addScaledVector(nrm, inset);
