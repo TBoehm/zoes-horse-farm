@@ -80,7 +80,8 @@ function drawnRole(button) {
   return 'positive';
 }
 
-const isRed = ([r, g, b]) => r > g + 60 && r > b + 60;
+// a real red: the red channel dominates both others (terracotta and danger are red, amber is not)
+const isRed = ([r, g, b]) => r > 2 * g && r > 2 * b;
 
 /**
  * Every visible button has the fill of its role, the buttons with a known meaning have the right
