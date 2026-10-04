@@ -11,12 +11,14 @@ import {
   ellipsoidData,
   lerp,
   lineFrames,
+  nearestU,
   oval,
   smoothstep,
   table,
   torusData,
 } from './loft.js';
-import { EAR, HEAD, REST, SIDES, headPoint } from './skeleton.js';
+import { MANE_BLEND, MANE_SPLIT, MANE_U, NECK, neckCurve, neckJoints } from './neck.js';
+import { EAR, EYE, HEAD, REST, SIDES, headPoint, lidPole } from './skeleton.js';
 
 const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const TAU = Math.PI * 2;
@@ -37,6 +39,8 @@ export const DETAIL = {
     forelock: [3, 2],
     ear: [4, 5],
     eye: [6, 4],
+    lid: [0, 0],
+    wrap: [0, 0],
     hoof: [2, 7],
     pad: [6, 6],
     saddle: [5, 6],
@@ -55,6 +59,8 @@ export const DETAIL = {
     forelock: [6, 4],
     ear: [6, 7],
     eye: [10, 6],
+    lid: [8, 4],
+    wrap: [3, 12],
     hoof: [3, 11],
     pad: [10, 10],
     saddle: [9, 10],
@@ -73,6 +79,8 @@ export const DETAIL = {
     forelock: [9, 6],
     ear: [8, 10],
     eye: [14, 8],
+    lid: [12, 6],
+    wrap: [5, 18],
     hoof: [4, 15],
     pad: [16, 16],
     saddle: [14, 14],
@@ -172,41 +180,9 @@ function makeTorso() {
 
 // ------------------------------------------------------------------------------------------
 // Neck and head
-const NECK_PTS = [
-  [0, 1.25, 0.46],
-  [0, 1.42, 0.74],
-  [0, 1.66, 1.0],
-  [0, 1.9, 1.245],
-  [0, 2.05, 1.41],
-];
-const NECK = table([
-  // u, half width, crest, throat, top taper
-  [0.0, 0.22, 0.32, 0.36, 0.72],
-  [0.15, 0.2, 0.28, 0.35, 0.66],
-  [0.4, 0.155, 0.21, 0.23, 0.6],
-  [0.65, 0.12, 0.165, 0.15, 0.55],
-  [0.85, 0.104, 0.135, 0.14, 0.55],
-  [1.0, 0.098, 0.11, 0.13, 0.62],
-]);
-
-function nearestU(curve, point, n = 400) {
-  let best = 0;
-  let bd = Infinity;
-  const p = new THREE.Vector3();
-  for (let i = 0; i <= n; i++) {
-    curve.getPointAt(i / n, p);
-    const d = p.distanceToSquared(point);
-    if (d < bd) {
-      bd = d;
-      best = i / n;
-    }
-  }
-  return best;
-}
-
 function makeNeck() {
-  const curve = new THREE.CatmullRomCurve3(NECK_PTS.map(V), false, 'centripetal');
-  const joints = [...REST.neck, REST.head].map((p) => nearestU(curve, V(p)));
+  const curve = neckCurve();
+  const joints = neckJoints();
   const len = curve.getLength();
   return new Loft({
     frame: curveFrames(curve),
@@ -328,6 +304,11 @@ function makeLeg(front, side) {
     while (i < ju.length - 2 && u > ju[i + 1]) i++;
     return i + clamp((u - ju[i]) / (ju[i + 1] - ju[i]), 0, 1);
   };
+  // inverse of toK: section position k (segment + fraction) → curve parameter
+  const kToU = (k) => {
+    const i = Math.min(ju.length - 2, Math.floor(k));
+    return lerp(ju[i], ju[i + 1], clamp(k - i, 0, 1));
+  };
   const p = side > 0 ? 'L' : 'R';
   const bones = front
     ? [`${p}scapula`, `${p}humerus`, `${p}forearm`, `${p}fcannon`, `${p}fpastern`]
@@ -342,7 +323,7 @@ function makeLeg(front, side) {
     },
     weights: (u) => chainWeights(u, ju.slice(1, 5), bones, blends),
   });
-  return { loft, ju };
+  return { loft, ju, kToU };
 }
 
 function addHoof(builder, front, side, nh, radial) {
@@ -391,6 +372,30 @@ function addHoof(builder, front, side, nh, radial) {
     builder.tri(top, rl[(j + 1) % radial], rl[j]);
   }
   builder.endPart(start);
+}
+
+// ------------------------------------------------------------------------------------------
+// Eyelids (medium, high): an upper lid per eye, a skin-coloured hemispherical cap on its own bone.
+// At rest the lid is open (pole up and back); closing turns it about the hinge axis (index.js).
+function addEyelids(builder, D) {
+  const r = 0.0265; // a little more than the longest radius of the eye (0.025)
+  const cap = new THREE.SphereGeometry(r, D.lid[0], D.lid[1], 0, TAU, 0, Math.PI / 2);
+  const p = Array.from(cap.attributes.position.array);
+  const idx = Array.from(cap.index.array);
+  cap.dispose();
+  const up = new THREE.Vector3(0, 1, 0);
+  for (const side of SIDES) {
+    const q = new THREE.Quaternion().setFromUnitVectors(up, lidPole(side, EYE.openAngle));
+    const m = new THREE.Matrix4().compose(EYE.center(side), q, new THREE.Vector3(1, 1, 1));
+    const bone = side > 0 ? 'Llid' : 'Rlid';
+    builder.addIndexed(
+      p,
+      idx,
+      m,
+      () => [[bone, 1]],
+      () => ({ aMat: [0, 0, 0, 0] }),
+    );
+  }
 }
 
 // ------------------------------------------------------------------------------------------
@@ -512,11 +517,11 @@ export function buildBodyGeometry(boneIndex, level = 'medium') {
     });
   }
 
-  // eyes
-  const eye = ellipsoidData(0.019, 0.018, 0.025, D.eye[0], D.eye[1]);
+  // eyes (low: the lid is painted by the shader, see material.js)
+  const eye = ellipsoidData(...EYE.radii, D.eye[0], D.eye[1]);
   for (const side of SIDES) {
     const m = new THREE.Matrix4()
-      .makeRotationY(0.35 * side)
+      .makeRotationY(EYE.yaw * side)
       .setPosition(headPoint(0.168, 0.03, 0.104 * side));
     b.addIndexed(
       eye.p,
@@ -526,9 +531,13 @@ export function buildBodyGeometry(boneIndex, level = 'medium') {
       () => ({ aMat: [0, 0, 1, 0] }),
     );
   }
+  if (D.lid[0] > 0) addEyelids(b, D);
 
-  // mane (lying to the right) and forelock
+  // mane (lying to the right) and forelock: the free part of the hair is skinned to its own bones,
+  // which swing on springs (life.js); the root stays with the neck / head
   const [mn, mv] = D.mane;
+  const maneBones = MANE_U.map((_, i) => `mane${i + 1}`);
+  const hairSwing = (sv) => smoothstep(0.02, 0.75, sv);
   buildShell(b, neck, {
     nu: mn,
     nv: mv,
@@ -543,6 +552,12 @@ export function buildBodyGeometry(boneIndex, level = 'medium') {
       (0.006 + 0.024 * (1 - sv) * (1 - 0.35 * sv)) * lerp(0.4, 1, smoothstep(0, 0.1, su)),
     inset: -0.004,
     attrs: () => ({ aMat: [1, 0, 0, 0] }),
+    weights: (u, a, p, su, sv) => {
+      const k = hairSwing(sv);
+      const rigid = neck.def.weights(u, a, p).map(([n, w]) => [n, w * (1 - k)]);
+      const swing = chainWeights(u, MANE_SPLIT, maneBones, MANE_BLEND).map(([n, w]) => [n, w * k]);
+      return [...rigid, ...swing];
+    },
   });
   const [fn, fv] = D.forelock;
   buildShell(b, head, {
@@ -556,6 +571,11 @@ export function buildBodyGeometry(boneIndex, level = 'medium') {
     thickness: (su) => 0.003 + 0.009 * (1 - su * 0.7),
     inset: -0.003,
     attrs: () => ({ aMat: [1, 0, 0, 0] }),
+    weights: (u, a, p, su) => {
+      const k = smoothstep(0, 0.9, su);
+      const rigid = head.def.weights(u, a, p).map(([n, w]) => [n, w * (1 - k)]);
+      return [...rigid, ['forelock', k]];
+    },
   });
 
   makeTail().build(b, {
@@ -581,7 +601,11 @@ const COL = {
   girth: [0.1, 0.07, 0.05],
   steel: [0.72, 0.73, 0.75],
   brow: [0.85, 0.85, 0.88],
+  wrap: [0.9, 0.9, 0.87],
 };
+
+// Leg wraps (fleece bandages) on the cannon bones: section positions (see FRONT_SECT) and thickness
+const WRAP = { k0: 3.12, k1: 3.92, thickness: 0.008 };
 const lin = (c) => {
   const col = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
   return [col.r, col.g, col.b];
@@ -699,6 +723,25 @@ export function buildTackGeometry(boneIndex, level = 'medium') {
       attrs: () => ({ color: C.leather }),
     });
   }
+  // leg wraps on all four cannon bones (medium, high; low paints them in the shader)
+  const [wn, wv] = D.wrap;
+  if (wn > 0) {
+    for (const front of [true, false]) {
+      for (const side of SIDES) {
+        const { loft, kToU } = makeLeg(front, side);
+        buildShell(b, loft, {
+          nu: wn,
+          nv: wv,
+          closedV: true,
+          map: (su, sv) => [kToU(lerp(WRAP.k0, WRAP.k1, su)), sv * TAU],
+          thickness: (su) => WRAP.thickness * (1 + 0.25 * Math.abs(2 * su - 1) ** 4),
+          inset: 0.002,
+          attrs: (su) => ({ color: su < 0.08 || su > 0.92 ? C.trim : C.wrap }),
+        });
+      }
+    }
+  }
+
   // bit rings
   const ring = torusData(0.026, 0.0045, D.ring[0], D.ring[1]);
   for (const side of SIDES) {

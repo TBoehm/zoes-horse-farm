@@ -11,6 +11,8 @@ export const wrap = (a) => {
 };
 /** Maximum forward angle of the femur (angD, ≈ 77°). */
 const FEMUR_MAX = 1.35;
+/** Margin (m) that the leg keeps short of fully stretched when the carpus unfolds to reach. */
+const REACH_MARGIN = 0.01;
 const dirZ = (t) => Math.sin(t);
 const dirY = (t) => -Math.cos(t);
 
@@ -96,6 +98,17 @@ function twoBone(rootZ, rootY, tz, ty, l1, l2, sigma) {
 }
 
 /**
+ * Slide of the shoulder blade (angD delta) for a hoof at the fore/aft offset dz (m, + = forwards)
+ * from its neutral position. The blade rotates back with a leg that reaches backwards, which
+ * lengthens the reach so that the long strides of the canter stay within the IK limits (without
+ * it the leg is stretched and its joints snap when the hoof lifts); forwards it tilts a little
+ * the other way. Continuous at dz = 0.
+ */
+export function scapulaSlide(dz) {
+  return dz >= 0 ? clamp(-0.2 * dz, -0.15, 0) : clamp(0.7 * dz, -0.5, 0);
+}
+
+/**
  * Solve a foreleg. hz/hy: hoof point (local), past: absolute pastern angle (angD, local),
  * knee: carpus flexion (rad, 0 = straight), scap: scapula rotation (angD delta).
  * Returns rotation.x for [scapula, humerus, forearm, cannon, pastern].
@@ -106,8 +119,17 @@ export function solveFront(rig, hz, hy, past, knee, scap, out = new Array(5)) {
   const sy = rig.A.y + rig.lsc * dirY(tsc);
   const fz = hz - rig.l4 * dirZ(past);
   const fy = hy - rig.l4 * dirY(past);
-  const delta = rig.d0 - knee;
-  const L = Math.sqrt(rig.l2 * rig.l2 + rig.l3 * rig.l3 + 2 * rig.l2 * rig.l3 * Math.cos(delta));
+  let delta = rig.d0 - knee;
+  let L = Math.sqrt(rig.l2 * rig.l2 + rig.l3 * rig.l3 + 2 * rig.l2 * rig.l3 * Math.cos(delta));
+  // A folded carpus shortens the leg. When the fetlock has to be further from the shoulder than
+  // that, the carpus unfolds just enough to reach it (instead of clamping the chain, which makes
+  // the joints snap when the hoof lifts or lands).
+  const need = Math.hypot(fz - sz, fy - sy) - rig.l1 + REACH_MARGIN;
+  if (L < need) {
+    L = Math.min(need, rig.l2 + rig.l3 - 1e-4);
+    const c = (L * L - rig.l2 * rig.l2 - rig.l3 * rig.l3) / (2 * rig.l2 * rig.l3);
+    delta = (delta < 0 ? -1 : 1) * Math.acos(clamp(c, -1, 1));
+  }
   const psi = Math.atan2(rig.l3 * Math.sin(delta), rig.l2 + rig.l3 * Math.cos(delta));
   const ik = twoBone(sz, sy, fz, fy, rig.l1, L, rig.sigma);
   const t1 = ik.t1;

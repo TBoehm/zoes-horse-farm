@@ -1,20 +1,36 @@
 // Horse motion state (pure, no three.js): gait blending, stride phase, hoof paths per leg, body
-// motion, jump/hop/refusal weights and footfall events. The three.js adapter (index.js) turns
-// this into bone rotations.
-import {
-  GAITS,
-  GAIT_KEYS,
-  approach,
-  blendedFrequency,
-  bodySample,
-  bump,
-  legSample,
-} from './gaits.js';
+// motion, jump/hop/refusal weights, idle gestures and footfall events. The three.js adapter
+// (index.js) turns this into bone rotations. Rule 24: everything here changes continuously – the
+// gait weights are critically damped springs, the legs keep their own phase and plant their hooves
+// (legs.js), jump and refusal weights follow smooth progress curves.
+import { GAITS, GAIT_KEYS, approach, blendedFrequency, bodySample, bump } from './gaits.js';
+import { blendGait, createLegModel, stepLegs } from './legs.js';
 import { clamp, smoothstep } from './math.js';
 import { jumpParam } from './poses.js';
+import { createGestureScheduler } from './schedule.js';
+import { createSpring, smoothTo, stepSpring } from './spring.js';
 
-const GAIT_RATE = 5; // gait cross-fade rate (1/s)
+// Cross-fade of the gaits: a critically damped spring reaches 95 % after 4.7 / omega ≈ 0.47 s
+const GAIT_OMEGA = 10;
+// The hop pose follows its envelope through a critically damped spring (no quick onset)
+const HOP_OMEGA = 18;
 const MOVING_GAITS = ['walk', 'trot', 'canter', 'back'];
+
+// Canter lead: a flying change when the turn clearly goes the other way for a while
+const LEAD_CHANGE = Object.freeze({ minTurn: 0.3, delay: 0.4, blendOmega: 7 });
+
+// Jump: weight of the jump pose as a function of the jump parameter J (0 take-off … 3 landed):
+// it comes in during the first half of the take-off and goes out during the landing, so there is
+// no snap at either end. The weight may not change faster than this per second (a jump that
+// starts in the middle, e.g. after a restart).
+const JUMP_IN = 0.5;
+const JUMP_OUT = [2.4, 3.0];
+const JUMP_SLEW = 14;
+// Landing events: progress of the landing phase when the forehand and the hindquarters touch down
+const LAND = Object.freeze({ front: 0.3, hind: 0.6, hindStrength: 0.65 });
+
+// Idle gestures only while the horse stands still
+const GESTURE_MAX_SPEED = 0.05;
 
 /**
  * Body bend (rad) for a turn rate (rad/s, + = right): bends towards the inside, so + = to the
@@ -34,32 +50,48 @@ export function turnLean(speed, turn) {
   return clamp(0.35 * Math.atan((speed * turn) / 9.81), -0.3, 0.3);
 }
 
-export function createMotion() {
+/** Weight of the jump pose for the jump parameter J. */
+export function jumpWeightFor(J) {
+  return smoothstep(0, JUMP_IN, J) * (1 - smoothstep(JUMP_OUT[0], JUMP_OUT[1], J));
+}
+
+/** options.rng: random numbers for the idle gestures (without it there are none). */
+export function createMotion({ rng = null } = {}) {
+  const model = createLegModel();
   return {
     weights: { halt: 1, walk: 0, trot: 0, canter: 0, back: 0 },
+    springs: Object.fromEntries(GAIT_KEYS.map((k) => [k, createSpring(k === 'halt' ? 1 : 0)])),
     phi: 0,
     freq: 0,
-    lead: 1, // +1 left lead, −1 right lead
-    legs: [0, 1, 2, 3].map(() => ({ dz: 0, y: 0, flex: 0, past: 0, sink: 0, stance: true, c: 1 })),
+    lead: 1, // +1 left lead, −1 right lead (the one the legs follow)
+    leadBlend: 1, // lead as a smooth value, for body roll and rider
+    leadTimer: 0,
+    model,
+    legs: model.legs,
+    moving: false,
     body: { bob: 0, pitch: 0, neck: 0, roll: 0 },
     jumpWeight: 0,
     jumpJ: 0,
     hopWeight: 0,
+    hopSpring: createSpring(),
     hopJ: 0,
     stopWeight: 0,
     runoutWeight: 0,
     runoutDir: 1,
+    landing: { front: 0, hind: 0 }, // strength of a landing in this step (0 = none)
+    landPrev: -1,
     bend: 0, // body bend, + = to the left (+X)
     lean: 0, // lean, + = to the right (rotation.z)
     speed: 0,
     time: 0,
+    gesture: rng ? createGestureScheduler({ rng }) : null,
     falls: [], // reused result of stepMotion (no allocation per frame)
   };
 }
 
-const tmpLeg = {};
 const tmpBody = {};
 const target = { halt: 0, walk: 0, trot: 0, canter: 0, back: 0 };
+const legInput = { w: null, v: 0, vs: 0, vf: 0, moving: false, gait: 'walk', lead: 1, phi: 0 };
 
 /**
  * Advance one time step. state = sim.horse. Returns the leg indices whose hoof touched down
@@ -76,45 +108,81 @@ export function stepMotion(m, dt, state) {
 
   // gait weights; turning on the spot: walking steps without forward travel
   target.halt = target.walk = target.trot = target.canter = target.back = 0;
+  const step = smoothstep(0.15, 0.6, Math.abs(turn));
   if (gait === 'halt') {
-    const step = smoothstep(0.15, 0.6, Math.abs(turn));
     target.walk = step;
     target.halt = 1 - step;
   } else {
     target[gait] = 1;
   }
-  if (gait === 'canter' && m.weights.canter < 0.05) {
-    if (turn > 0.05) m.lead = -1;
-    else if (turn < -0.05) m.lead = 1;
+  const moving = gait !== 'halt' || step > 0.5;
+  m.moving = moving;
+
+  // canter lead: chosen when striking off, changed on the fly when the turn goes the other way
+  if (gait === 'canter') {
+    const want = turn > 0.05 ? -1 : turn < -0.05 ? 1 : 0;
+    if (m.weights.canter < 0.05) {
+      if (want) m.lead = want;
+      m.leadTimer = 0;
+    } else if (want && want !== m.lead && Math.abs(turn) > LEAD_CHANGE.minTurn) {
+      m.leadTimer += dt;
+      if (m.leadTimer >= LEAD_CHANGE.delay) {
+        m.lead = want;
+        m.leadTimer = 0;
+      }
+    } else {
+      m.leadTimer = Math.max(0, m.leadTimer - 2 * dt);
+    }
+  } else {
+    m.leadTimer = 0;
   }
+  const leadS = m.leadSpring || (m.leadSpring = createSpring(m.leadBlend));
+  smoothTo(leadS, m.lead, LEAD_CHANGE.blendOmega, dt);
+  m.leadBlend = Math.abs(leadS.x - m.lead) < 1e-3 ? m.lead : leadS.x;
+
   let sum = 0;
   for (const k of GAIT_KEYS) {
-    m.weights[k] = approach(m.weights[k], target[k], GAIT_RATE, dt);
-    sum += m.weights[k];
+    const s = m.springs[k];
+    stepSpring(s, target[k], GAIT_OMEGA, 1, dt);
+    if (s.x < 0) s.x = 0;
+    sum += s.x;
   }
-  for (const k of GAIT_KEYS) m.weights[k] /= sum;
+  for (const k of GAIT_KEYS) {
+    const s = m.springs[k];
+    s.x /= sum;
+    m.weights[k] = s.x;
+  }
   const w = m.weights;
 
-  // stride phase: frequency from the gaits (calm walk cadence when turning at halt)
+  // stride phase: cadence of the commanded gait (calm walk cadence when turning at halt); at halt
+  // it fades with the moving gaits
   const vf = gait === 'halt' ? Math.max(v, 0.9 * Math.abs(turn)) : v;
-  m.freq = blendedFrequency(w, vf);
+  blendGait(m.model, w, v, vf, dt);
+  m.freq = moving ? m.model.fn : blendedFrequency(w, vf);
   m.phi = (m.phi + m.freq * dt) % 1;
 
   // jump, hop, refusal
   if (state.jump) {
-    m.jumpWeight = approach(m.jumpWeight, 1, 14, dt);
     m.jumpJ = jumpParam(state.jump);
+    const wanted = jumpWeightFor(m.jumpJ);
+    const maxStep = JUMP_SLEW * dt;
+    m.jumpWeight += clamp(wanted - m.jumpWeight, -maxStep, maxStep);
   } else {
-    m.jumpWeight = approach(m.jumpWeight, 0, 4, dt);
-    if (m.jumpWeight < 0.02) m.jumpJ = 0;
+    // interrupted jump (restart): fade the pose out
+    m.jumpWeight = approach(m.jumpWeight, 0, 6, dt);
+    if (m.jumpWeight < 1e-3) {
+      m.jumpWeight = 0;
+      m.jumpJ = 0;
+    }
   }
+  let hopTarget = 0;
   if (state.hop) {
     const p = clamp(state.hop.progress ?? 0, 0, 1);
     m.hopJ = 3 * p;
-    m.hopWeight = bump(p, 0.15, 0.75);
-  } else {
-    m.hopWeight = approach(m.hopWeight, 0, 10, dt);
+    hopTarget = bump(p, 0.15, 0.75);
   }
+  smoothTo(m.hopSpring, hopTarget, HOP_OMEGA, dt);
+  m.hopWeight = clamp(m.hopSpring.x, 0, 1);
   const ref = state.refusal;
   const stopT = ref && ref.type === 'stop' ? bump(ref.progress ?? 0, 0.12, 0.6) : 0;
   m.stopWeight = approach(m.stopWeight, stopT, 12, dt);
@@ -125,6 +193,19 @@ export function stepMotion(m, dt, state) {
     m.runoutWeight = approach(m.runoutWeight, 0, 8, dt);
   }
 
+  // landing: the forehand and then the hindquarters touch down (dust, sound)
+  m.landing.front = m.landing.hind = 0;
+  if (state.jump && state.jump.phase === 'landing') {
+    const p = clamp(state.jump.progress ?? 0, 0, 1);
+    if (m.landPrev >= 0) {
+      if (m.landPrev < LAND.front && p >= LAND.front) m.landing.front = 1;
+      if (m.landPrev < LAND.hind && p >= LAND.hind) m.landing.hind = LAND.hindStrength;
+    }
+    m.landPrev = p;
+  } else {
+    m.landPrev = -1;
+  }
+
   // turns: bend into the turn, lean inwards (centripetal)
   m.bend = approach(m.bend, turnBend(turn), 4, dt);
   m.lean = approach(m.lean, turnLean(state.speed || 0, turn), 4, dt);
@@ -132,35 +213,32 @@ export function stepMotion(m, dt, state) {
   // hoof paths and ground contact per leg
   const falls = m.falls;
   falls.length = 0;
+  legInput.w = w;
+  legInput.v = v;
+  legInput.vs = state.speed || 0;
+  legInput.vf = vf;
+  legInput.moving = moving;
+  legInput.gait = gait === 'halt' ? 'walk' : gait;
+  legInput.lead = m.lead;
+  legInput.phi = m.phi;
+  stepLegs(m.model, legInput, dt, falls);
   const quiet = gait === 'halt' || m.jumpWeight > 0.3 || m.hopWeight > 0.4;
-  for (let leg = 0; leg < 4; leg++) {
-    const L = m.legs[leg];
-    let dz = 0;
-    let y = 0;
-    let flex = 0;
-    let past = 0;
-    let sink = w.halt * 0.008;
-    let c = w.halt;
-    for (const g of MOVING_GAITS) {
-      const wg = w[g];
-      if (wg < 1e-4) continue;
-      legSample(g, leg, m.phi, v, m.freq, m.lead, tmpLeg);
-      dz += wg * tmpLeg.dz;
-      y += wg * tmpLeg.y;
-      flex += wg * tmpLeg.flex;
-      past += wg * tmpLeg.past;
-      sink += wg * tmpLeg.sink;
-      if (tmpLeg.stance) c += wg;
-    }
-    const wasDown = L.c >= 0.5;
-    L.dz = dz;
-    L.y = y;
-    L.flex = flex;
-    L.past = past;
-    L.sink = sink;
-    L.c = c;
-    L.stance = c >= 0.5;
-    if (L.stance && !wasDown && !quiet) falls.push(leg);
+  if (quiet) falls.length = 0;
+
+  // idle gestures (hoof scrape) only while the horse stands still
+  if (m.gesture) {
+    const calm =
+      !moving &&
+      !(state.graze > 0.05) &&
+      v < GESTURE_MAX_SPEED &&
+      w.halt > 0.95 &&
+      m.jumpWeight < 0.01 &&
+      m.hopWeight < 0.01 &&
+      m.stopWeight < 0.01 &&
+      m.runoutWeight < 0.01 &&
+      m.legs.every((l) => l.inStance && !l.squaring);
+    const g = m.gesture.step(dt, calm);
+    if (g.id === 'paw' && g.weight > 0) scrapeHoof(m.legs[g.leg], g);
   }
 
   // body
@@ -172,13 +250,28 @@ export function stepMotion(m, dt, state) {
   for (const g of MOVING_GAITS) {
     const wg = w[g];
     if (wg < 1e-4) continue;
-    bodySample(g, m.phi, g === 'walk' && gait === 'halt' ? 0.3 : v, m.lead, tmpBody);
+    bodySample(g, m.phi, g === 'walk' && gait === 'halt' ? 0.3 : v, m.leadBlend, tmpBody);
     B.bob += wg * tmpBody.bob;
     B.pitch += wg * tmpBody.pitch;
     B.neck += wg * tmpBody.neck;
     B.roll += wg * tmpBody.roll;
   }
   return falls;
+}
+
+/**
+ * Hoof scrape of a foreleg: the leg reaches forward, drags back twice along the ground and is
+ * set down again. g.weight (0..1, smooth) scales the whole motion, so it starts and ends without
+ * a pop.
+ */
+export function scrapeHoof(leg, g) {
+  const reach = smoothstep(0, 0.4, g.t) * (1 - smoothstep(g.duration - 0.45, g.duration, g.t));
+  const drag = 0.5 + 0.5 * Math.cos(2 * Math.PI * 1.7 * (g.t - 0.4)); // 1 = forward, 0 = back
+  const k = g.weight * reach;
+  leg.dz += k * (0.16 + 0.2 * drag);
+  leg.y += k * (0.05 + 0.07 * drag);
+  leg.flex += k * (0.9 + 0.3 * drag);
+  leg.past += k * 0.7;
 }
 
 /** Base neck carriage per gait (+ = lower/forward). */

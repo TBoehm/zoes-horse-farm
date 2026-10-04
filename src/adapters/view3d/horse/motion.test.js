@@ -166,7 +166,7 @@ describe('motion blending', () => {
         const before = m.legs.map((l) => ({ ...l }));
         stepMotion(m, dt, st);
         m.legs.forEach((l, k) => {
-          if (l.stance && before[k].stance && l.y === 0) {
+          if (l.y === 0 && before[k].y === 0) {
             expect((l.dz - before[k].dz) / dt).toBeCloseTo(-v, 0);
             checked++;
           }
@@ -186,7 +186,7 @@ describe('motion blending', () => {
       const before = m.legs.map((l) => ({ ...l }));
       stepMotion(m, dt, st);
       m.legs.forEach((l, k) => {
-        if (l.stance && before[k].stance && l.y === 0) {
+        if (l.y === 0 && before[k].y === 0) {
           expect((l.dz - before[k].dz) / dt).toBeCloseTo(0.5, 0);
           checked++;
         }
@@ -195,14 +195,49 @@ describe('motion blending', () => {
     expect(checked).toBeGreaterThan(50);
   });
 
-  it('jump: weight rises quickly to ≈ 1 on take-off', () => {
+  it('jump: the pose weight follows the jump progress (in during the take-off, out during the landing)', () => {
     const m = createMotion();
     const st = { gait: 'canter', speed: 6, turnRate: 0, jump: null, hop: null, refusal: null };
     for (let t = 0; t < 1; t += 1 / 60) stepMotion(m, 1 / 60, st);
-    st.jump = { phase: 'takeoff', progress: 0.3 };
-    for (let i = 0; i < 12; i++) stepMotion(m, 1 / 60, st);
-    expect(m.jumpWeight).toBeGreaterThan(0.9);
-    expect(m.jumpJ).toBeCloseTo(0.3, 5);
+    expect(m.jumpWeight).toBe(0);
+    const weights = [];
+    for (const [phase, frames] of [
+      ['takeoff', 14],
+      ['flight', 36],
+      ['landing', 15],
+    ]) {
+      for (let i = 0; i < frames; i++) {
+        st.jump = { phase, progress: (i + 0.5) / frames };
+        stepMotion(m, 1 / 60, st);
+        weights.push(m.jumpWeight);
+      }
+    }
+    expect(weights[0]).toBeLessThan(0.1);
+    expect(weights[20]).toBeGreaterThan(0.99);
+    expect(weights[40]).toBeCloseTo(1, 6);
+    expect(weights[weights.length - 1]).toBeLessThan(0.05);
+    // never a snap: at most a few percent per frame, except for the slew limit of the quick take-off
+    for (let i = 1; i < weights.length; i++) {
+      expect(Math.abs(weights[i] - weights[i - 1])).toBeLessThan(0.24);
+    }
+    st.jump = null;
+    for (let i = 0; i < 30; i++) stepMotion(m, 1 / 60, st);
+    expect(m.jumpWeight).toBe(0);
+    expect(m.jumpJ).toBe(0);
+  });
+
+  it('jump that is interrupted fades out instead of snapping', () => {
+    const m = createMotion();
+    const st = { gait: 'canter', speed: 6, turnRate: 0, jump: null, hop: null, refusal: null };
+    for (let t = 0; t < 1; t += 1 / 60) stepMotion(m, 1 / 60, st);
+    st.jump = { phase: 'flight', progress: 0.5 };
+    for (let i = 0; i < 30; i++) stepMotion(m, 1 / 60, st);
+    expect(m.jumpWeight).toBeCloseTo(1, 6);
+    st.jump = null;
+    stepMotion(m, 1 / 60, st);
+    expect(m.jumpWeight).toBeGreaterThan(0.8);
+    for (let i = 0; i < 90; i++) stepMotion(m, 1 / 60, st);
+    expect(m.jumpWeight).toBe(0);
   });
 
   it('refusal stop: weight rises and falls with progress', () => {

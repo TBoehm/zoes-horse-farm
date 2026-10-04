@@ -57,7 +57,7 @@ const f = (x) => x.toFixed(4);
 
 const COAT_FN = /* glsl */ `
 uniform vec3 uBase, uDark, uBelly, uHair, uPointColor, uMuzzle, uHoof, uWhite;
-uniform float uPoints, uDapple, uPinto, uMarking;
+uniform float uPoints, uDapple, uPinto, uMarking, uFlare, uBlink;
 varying vec3 vRest;
 varying vec4 vMat;
 varying vec3 vFace;
@@ -127,7 +127,8 @@ vec3 horseCoat(){
     vec3 white = mix(uWhite, vec3(0.86, 0.66, 0.62), muz * 0.6);
     col = mix(col, white, mark);
     // nostrils (comma shape) and mouth line
-    float nz = length(vec2((s - 0.566 + (abs(u) - 0.048) * 0.5) / 0.022, (abs(u) - 0.047) / 0.012));
+    // the nostrils widen with the breathing (uFlare 0..1)
+    float nz = length(vec2((s - 0.566 + (abs(u) - 0.048) * 0.5) / (0.02 + 0.006 * uFlare), (abs(u) - 0.047) / (0.0105 + 0.0045 * uFlare)));
     float nost = (1.0 - smoothstep(0.7, 1.0, nz)) * smoothstep(0.0, 0.25, fr) * (1.0 - smoothstep(0.75, 0.95, fr));
     col = mix(col, vec3(0.03, 0.02, 0.02), nost * 0.92);
     float mouth = smoothstep(0.03, 0.0, abs(fr + 0.4)) * smoothstep(0.54, 0.57, s);
@@ -138,11 +139,27 @@ vec3 horseCoat(){
     float wp = hzPinto(p, head);
     col = mix(col, uWhite * (1.0 + 0.05 * fine), wp * (1.0 - vMat.y));
   }
+#ifdef HORSE_LOW
+  // low: leg wraps are painted (no extra geometry): white fleece with a dark top edge on the cannon
+  {
+    float cannon = smoothstep(0.19, 0.215, p.y) * (1.0 - smoothstep(0.405, 0.43, p.y));
+    cannon *= 1.0 - vMat.y;
+    float trim = smoothstep(0.375, 0.395, p.y);
+    vec3 wrapCol = mix(vec3(0.82, 0.82, 0.8), vec3(0.07, 0.1, 0.26), trim);
+    col = mix(col, wrapCol, cannon * step(p.y, 0.45));
+  }
+#endif
   // hoof (light horn below a white leg), eye, inner ear
   vec3 hoof = uHoof * (1.0 + 0.25 * hzNoise(vec3(p.x * 90.0, p.y * 6.0, p.z * 90.0)));
   if (uPinto > 0.5) hoof = mix(hoof, vec3(0.55, 0.48, 0.38), hzPinto(p + vec3(0.0, 0.12, 0.0), 0.0));
   col = mix(col, hoof, vMat.y);
-  col = mix(col, vec3(0.025, 0.017, 0.012), vMat.z);
+  float eyeOpen = vMat.z;
+#ifdef HORSE_LOW
+  // low: a blink paints the eye with the coat colour (medium and high have real eyelids)
+  col = mix(col, uBase * 0.8, vMat.z * uBlink);
+  eyeOpen = vMat.z * (1.0 - uBlink);
+#endif
+  col = mix(col, vec3(0.025, 0.017, 0.012), eyeOpen);
   col = mix(col, col * 0.35 + vec3(0.02), vMat.w);
   return col;
 }
@@ -166,6 +183,9 @@ export function createCoatUniforms() {
     uDapple: { value: 0 },
     uPinto: { value: 0 },
     uMarking: { value: 1 },
+    // animated every frame (nostril flare, blink of the painted eye on low)
+    uFlare: { value: 0 },
+    uBlink: { value: 0 },
   };
 }
 
