@@ -27,6 +27,20 @@ Audio-Zustand; nur lesend, dazu `go(screen, params)` zum Springen auf einen Bild
 Parameter existiert der Hook nicht. Die Smoke-Tests (`tests/smoke/`) nutzen ihn und warten auf
 Zustände statt auf feste Zeiten, weil der Software-Renderer in CI langsam ist (wenige fps).
 
+## Auf echten Geräten testen
+
+Mit `?debug` in der URL (z. B. `http://<rechner>:4173/?debug`, auf dem Handy oder Tablet über die
+Adresse des Rechners im selben WLAN) zeigt der Ritt unter der fps-Zeile eine Diagnose-Box. Sie
+aktualisiert sich etwa zweimal pro Sekunde und zeigt: GPU-Name, Grafikstufe (mit „Auto“, wenn die
+Automatik an ist), Pixel-Ratio von Gerät und Renderer, Größe der Zeichenfläche (Buffer), größte
+Textur, Antialiasing, die geschätzte GPU-Speicher-Nutzung gegen das Budget (mit Hinweis, wenn
+Auflösung, Schatten oder Umgebung dafür verkleinert wurden), die Zahl der Grafik-Verluste und
+-Wiederherstellungen (mit Sekunden seit Seitenstart) und die letzten Fehler. Damit lässt sich
+nachvollziehen, warum das Spiel auf einem Gerät eine niedrigere Stufe nimmt oder die Grafik
+verliert. Ein Grafik-Verlust im Hintergrund (App-Wechsel) oder kurz nach der Rückkehr zählt nicht
+als Überlastung. Ohne `?debug` gibt es die Box nicht. Alles Weitere zur Box steht in der
+[technischen Spec](docs/specs/springreiten-trainer/architecture.md) (Abschnitt „Diagnose-Box“).
+
 ## Quality Gates
 
 Dieselben Befehle wie in GitHub Actions (`.github/workflows/ci.yml`):

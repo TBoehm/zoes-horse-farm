@@ -424,6 +424,37 @@ describe('Self jump and refusal (rules 20, 22)', () => {
     expect(ofType(events, 'landed')).toHaveLength(1);
   });
 
+  it('a moderate steering correction in the last 5 m still jumps, without a refusal', () => {
+    const v = makeElement('vertical', 0.8);
+    const sim = makeSim([v]);
+    placeBefore(sim, v, 8, { speed: 5.8, gallop: true });
+    const press = pressAt({ gallop: true }, atCenter);
+    let correctingSince = null;
+    let maxHeading = 0;
+    const { events } = drive(
+      sim,
+      (s, t) => {
+        // the correction (steer 0.5) starts 5 m before the obstacle and lasts 0.3 s
+        if (correctingSince === null && s.approach && s.approach.distance <= 5) correctingSince = t;
+        const correcting = correctingSince !== null && t - correctingSince < 0.3;
+        return { ...press(s, t), steer: correcting ? 0.5 : 0 };
+      },
+      {
+        until: untilQuiet,
+        maxT: 6,
+        onStep: (s) => {
+          maxHeading = Math.max(maxHeading, Math.abs(s.horse.heading));
+        },
+      },
+    );
+    expect(correctingSince).not.toBeNull();
+    expect(maxHeading).toBeGreaterThan(0.05); // the correction really turned the horse
+    expect(ofType(events, 'refusal')).toHaveLength(0);
+    expect(ofType(events, 'swerve')).toHaveLength(0);
+    expect(ofType(events, 'takeoff')).toHaveLength(1);
+    expect(ofType(events, 'landed')).toHaveLength(1);
+  });
+
   it('turning away beforehand: no refusal', () => {
     const v = makeElement('vertical', 0.6);
     const sim = makeSim([v]);

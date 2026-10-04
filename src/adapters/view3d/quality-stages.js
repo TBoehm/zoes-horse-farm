@@ -102,19 +102,6 @@ export function planQualityStagesFromState(applied, to) {
 }
 
 /**
- * Ordered stage descriptors { id, compile } for a change from one preset (or level name) to
- * another; stages whose values do not differ are left out.
- */
-export function planQualityStages(from, to) {
-  const start = resolvePreset(from);
-  if (!start) return [];
-  return planQualityStagesFromState(
-    Object.fromEntries(QUALITY_STAGE_IDS.map((id) => [id, start])),
-    to,
-  );
-}
-
-/**
  * Paces the stages: tick() is called once per drawn frame and returns the next stage when at least
  * `gapFrames` frames have passed since the last one (the first stage of a plan on an idle queue
  * comes on the next frame), otherwise null.

@@ -42,7 +42,10 @@ function rendererString(gl) {
 function probeRendererString() {
   try {
     const probe = document.createElement('canvas');
-    const gl = probe.getContext('webgl2') ?? probe.getContext('webgl');
+    // the same attributes as the real renderer's context (see renderer.js), so that a dual-GPU
+    // laptop hands out the same (high-performance) GPU: the budget is based on its name
+    const attributes = { powerPreference: 'high-performance', antialias: false, depth: false };
+    const gl = probe.getContext('webgl2', attributes) ?? probe.getContext('webgl', attributes);
     const name = gl ? rendererString(gl) : '';
     gl?.getExtension('WEBGL_lose_context')?.loseContext();
     return name;
@@ -104,9 +107,8 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   // Antialiasing is a context attribute and cannot change later: follow the stored level, unless
   // the multisampled buffers alone would not fit the budget
   const antialiasWanted = QUALITY_PRESETS[level].antialias;
-  const renderer = createRenderer(canvas, {
-    antialias: chooseAntialias(QUALITY_PRESETS[level], viewSize(), budgetMB),
-  });
+  const antialiasChosen = chooseAntialias(QUALITY_PRESETS[level], viewSize(), budgetMB);
+  const renderer = createRenderer(canvas, { antialias: antialiasChosen });
   const contextAntialias = Boolean(renderer.getContextAttributes()?.antialias);
   const fitFor = (forLevel) => effectivePreset(forLevel, contextAntialias);
   const camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.1, 900);
@@ -170,14 +172,23 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     applied[id] = target;
   }
 
-  /** Everything at once: for a switch nobody sees or that nothing is drawn for (see applyQuality). */
+  /** Everything at once, for a switch nobody sees or that nothing is drawn for (applyQuality). */
   function applyAllNow({ gpu = true } = {}) {
     stageQueue.clear();
     targetPreset = fitFor(level);
     guarded('quality switch', () => {
-      pendingPixelRatio = targetPreset.pixelRatio;
       world.setQuality(targetPreset, { gpu });
       horse.setQuality(targetPreset.characterDetail);
+      if (gpu) {
+        pendingPixelRatio = targetPreset.pixelRatio; // the frame loop applies it (see applyStage)
+      } else {
+        // The context is lost: nothing is shown, so the drawing buffer can change right away. A
+        // restored context is created at the size the canvas has by then, so it has to be the new
+        // one already (the old size with multisampling is what the device could not carry).
+        pendingPixelRatio = null;
+        setMaxPixelRatio(renderer, targetPreset.pixelRatio);
+        resize(true);
+      }
     });
     for (const id of QUALITY_STAGE_IDS) applied[id] = targetPreset;
     governor.interrupt(); // the switch is no measurement
@@ -196,7 +207,8 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
       if (!contextWatch.lost) precompile();
       return;
     }
-    targetPreset = fitFor(next); // every switch, also a manual "high", is checked against the budget
+    // every switch, also a manual "high", is checked against the budget
+    targetPreset = fitFor(next);
     stageQueue.plan(planQualityStagesFromState(applied, targetPreset));
   }
 
@@ -239,17 +251,26 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   }
   window.addEventListener('resize', () => guarded('resize', () => resize()));
   // WebGL context loss (rule 4): the device took the graphics memory away (typical on phones and
-  // tablets, e.g. under memory pressure or when the tab was in the background). three.js has its
+  // tablets, e.g. under memory pressure or when the app was in the background). three.js has its
   // own listeners on the canvas, registered before ours, so it has already rebuilt its internal
   // state (initGLContext) when `onRestored` runs. We announce the loss so that the ride pauses,
   // rebuild what only lived on the GPU, and announce the restore.
-  // A loss shows that the device is overloaded: the level goes down right away, while nothing is
-  // drawn, so that the restored scene comes back already at the new level (no switch later). The
-  // calls on the lost context are ignored by the browser, and three.js resets all its resource
-  // bookkeeping in initGLContext on the restore (https://www.khronos.org/webgl/wiki/HandlingContextLost).
+  // A loss in the foreground shows that the device is overloaded: the level goes down right away,
+  // while nothing is drawn, so that the restored scene comes back already at the new level and
+  // size (no switch later). A loss in the background or just after returning does not count
+  // (levelAfterContextLoss). The calls on the lost context are ignored by the browser, and three.js
+  // resets all its resource bookkeeping in initGLContext on the restore
+  // (https://www.khronos.org/webgl/wiki/HandlingContextLost).
   const contextStats = { lost: 0, restored: 0, lostAtS: null, restoredAtS: null };
   let graphicsHintPending = false;
   const secondsSinceStart = () => performance.now() / 1000;
+  // Contexts often get lost while the page is in the background (Android app switch): that says
+  // nothing about the load of the game, so the loss handler needs to know when the page last
+  // went to the background or came back (levelAfterContextLoss).
+  let visibilityChangedAtS = -Infinity;
+  document.addEventListener('visibilitychange', () => {
+    visibilityChangedAtS = secondsSinceStart();
+  });
   const contextWatch = watchContextLoss(canvas, {
     onLost() {
       contextStats.lost += 1;
@@ -258,6 +279,8 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
         const decision = levelAfterContextLoss({
           auto: settingsService.get().graphicsAuto,
           level,
+          visible: document.visibilityState === 'visible',
+          sinceVisibilityChangeS: secondsSinceStart() - visibilityChangedAtS,
         });
         const changed = decision.level !== level;
         level = decision.level;
@@ -323,6 +346,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   // overlay needs no new object per update.
   const diag = {
     gpu: '',
+    budgetGpu: '',
     level: '',
     auto: false,
     devicePixelRatio: 1,
@@ -345,6 +369,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   };
   function diagnostics() {
     if (!diag.gpu && !contextWatch.lost) diag.gpu = rendererString(renderer.getContext());
+    diag.budgetGpu = gpuName; // the name the budget was based on (the probe context)
     diag.level = level;
     diag.auto = governor.auto;
     diag.devicePixelRatio = window.devicePixelRatio || 1;
@@ -363,7 +388,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     diag.shadowCap = fitInfo?.capped.shadowMapSize ?? null;
     diag.sceneryCapped = fitInfo?.capped.scenery ?? false;
     diag.antialias = contextAntialias;
-    diag.antialiasDropped = antialiasWanted && !contextAntialias;
+    diag.antialiasDropped = antialiasWanted && !antialiasChosen; // the budget said no
     return diag;
   }
 
@@ -383,7 +408,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     },
     /** Events: 'contextLost', 'contextRestored'. Returns the unsubscribe function. */
     on: emitter.on,
-    /** true while a level change is still being applied (stages, pixel ratio, shaders compiling). */
+    /** true while a level change is still being applied (stages, pixel ratio, shader compile). */
     get settling() {
       return stageQueue.pending > 0 || pendingPixelRatio !== null || gate.blocked;
     },
@@ -404,10 +429,11 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
       last = 0;
       canvas.hidden = !fn;
       if (fn) {
-        // Nothing of the ride is on screen yet: the time to finish a switch that was still in
-        // stages, to fit the level to the window and to give the textures the anisotropy of the level (an upload, never done in
-        // the middle of a ride, see world.syncAnisotropy)
-        // (the size of the window may have changed since the level was applied: fit again)
+        // Nothing of the ride is on screen yet, so this is the time to
+        // - finish a switch that was still in stages,
+        // - fit the level to the window (its size may have changed since the level was applied),
+        // - give the textures the anisotropy of the level (an upload, never done in the middle of
+        //   a ride, see world.syncAnisotropy).
         if (planQualityStagesFromState(applied, fitFor(level)).length > 0) {
           applyAllNow();
           precompile();

@@ -100,12 +100,13 @@ function boot() {
     if (store.shouldShowSaveNotice()) showSaveNotice(app.layers.overlay);
   });
 
-  app.go(firstScreen(store));
-  // Read-only helpers for browser tests; only with `?testhooks` in the URL
+  // Read-only helpers for browser tests; only with `?testhooks` in the URL. Installed before the
+  // first screen so that everything they configure is there when the screens start.
   if (testHooksRequested()) {
     installTestHooks({ app, store, inputMode });
     app.services.gpuBudgetOverrideMB = gpuBudgetOverride(); // forces a small budget in tests
   }
+  app.go(firstScreen(store));
 }
 
 try {

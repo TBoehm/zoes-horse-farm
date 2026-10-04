@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   createStageQueue,
-  planQualityStages,
   planQualityStagesFromState,
   QUALITY_STAGE_IDS,
 } from './quality-stages.js';
@@ -9,25 +8,30 @@ import { QUALITY_PRESETS } from './quality.js';
 import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
 
 const ids = (plan) => plan.map((s) => s.id);
+/** The state of an engine whose stages all are at `levelOrPreset`. */
+const applied = (levelOrPreset) =>
+  Object.fromEntries(QUALITY_STAGE_IDS.map((id) => [id, levelOrPreset]));
+/** Stages for a change from one level (or preset) to another, as the engine plans it. */
+const planChange = (from, to) => planQualityStagesFromState(applied(from), to);
 
-describe('planQualityStages', () => {
+describe('planning a change between two levels', () => {
   it('plans nothing when the level stays the same', () => {
-    for (const level of GRAPHICS_LEVELS) expect(planQualityStages(level, level)).toEqual([]);
+    for (const level of GRAPHICS_LEVELS) expect(planChange(level, level)).toEqual([]);
   });
 
   it('steps down resolution first, then shadows, materials, characters and scenery', () => {
-    expect(ids(planQualityStages('medium', 'low'))).toEqual([
+    expect(ids(planChange('medium', 'low'))).toEqual([
       'pixelRatio',
       'shadows',
       'materials',
       'characters',
       'density',
     ]);
-    expect(ids(planQualityStages('high', 'low'))).toEqual(ids(planQualityStages('medium', 'low')));
+    expect(ids(planChange('high', 'low'))).toEqual(ids(planChange('medium', 'low')));
   });
 
   it('steps up in the opposite order: resolution comes last', () => {
-    expect(ids(planQualityStages('low', 'medium'))).toEqual([
+    expect(ids(planChange('low', 'medium'))).toEqual([
       'density',
       'characters',
       'materials',
@@ -37,35 +41,35 @@ describe('planQualityStages', () => {
   });
 
   it('leaves out stages whose values do not differ (medium ↔ high keeps the materials)', () => {
-    expect(ids(planQualityStages('high', 'medium'))).toEqual([
+    expect(ids(planChange('high', 'medium'))).toEqual([
       'pixelRatio',
       'shadows',
       'characters',
       'density',
     ]);
-    expect(ids(planQualityStages('medium', 'high'))).not.toContain('materials');
+    expect(ids(planChange('medium', 'high'))).not.toContain('materials');
   });
 
   it('accepts preset objects as well as level names', () => {
-    expect(ids(planQualityStages(QUALITY_PRESETS.high, QUALITY_PRESETS.low))).toEqual(
-      ids(planQualityStages('high', 'low')),
+    expect(ids(planChange(QUALITY_PRESETS.high, QUALITY_PRESETS.low))).toEqual(
+      ids(planChange('high', 'low')),
     );
   });
 
   it('plans a preset fitted to the budget like its level: the copy keeps the direction', () => {
     const capped = { ...QUALITY_PRESETS.high, pixelRatio: 1.25, shadowMapSize: 1024 };
-    expect(ids(planQualityStages('low', capped))).toEqual(ids(planQualityStages('low', 'high')));
-    expect(ids(planQualityStages(capped, 'low'))).toEqual(ids(planQualityStages('high', 'low')));
+    expect(ids(planChange('low', capped))).toEqual(ids(planChange('low', 'high')));
+    expect(ids(planChange(capped, 'low'))).toEqual(ids(planChange('high', 'low')));
   });
 
   it('a capped pixel ratio is a stage of its own, also at the same level', () => {
     const capped = { ...QUALITY_PRESETS.high, pixelRatio: 1.25 };
-    expect(ids(planQualityStages('high', capped))).toEqual(['pixelRatio']);
-    expect(ids(planQualityStages(capped, 'high'))).toEqual(['pixelRatio']);
+    expect(ids(planChange('high', capped))).toEqual(['pixelRatio']);
+    expect(ids(planChange(capped, 'high'))).toEqual(['pixelRatio']);
   });
 
   it('marks the stages that change shaders for a precompile', () => {
-    const byId = Object.fromEntries(planQualityStages('medium', 'low').map((s) => [s.id, s]));
+    const byId = Object.fromEntries(planChange('medium', 'low').map((s) => [s.id, s]));
     expect(byId.pixelRatio.compile).toBe(false);
     expect(byId.shadows.compile).toBe(true);
     expect(byId.materials.compile).toBe(true);
@@ -76,36 +80,27 @@ describe('planQualityStages', () => {
   it('never touches the textures: there is no anisotropy stage', () => {
     for (const from of GRAPHICS_LEVELS) {
       for (const to of GRAPHICS_LEVELS) {
-        expect(ids(planQualityStages(from, to))).not.toContain('anisotropy');
-        for (const id of ids(planQualityStages(from, to))) {
+        expect(ids(planChange(from, to))).not.toContain('anisotropy');
+        for (const id of ids(planChange(from, to))) {
           expect(QUALITY_STAGE_IDS).toContain(id);
         }
       }
     }
   });
 
-  it('plans every stage at most once, and none of them for unknown levels', () => {
-    const plan = ids(planQualityStages('high', 'low'));
+  it('plans every stage at most once, and none of them for an unknown target', () => {
+    const plan = ids(planChange('high', 'low'));
     expect(new Set(plan).size).toBe(plan.length);
-    expect(planQualityStages('nope', 'low')).toEqual([]);
-    expect(planQualityStages('low', undefined)).toEqual([]);
+    expect(planChange('low', undefined)).toEqual([]);
   });
 
   it('returns frozen descriptors (shared constants, never changed by callers)', () => {
-    const plan = planQualityStages('medium', 'low');
+    const plan = planChange('medium', 'low');
     expect(Object.isFrozen(plan[0])).toBe(true);
   });
 });
 
 describe('planQualityStagesFromState', () => {
-  const applied = (level) => Object.fromEntries(QUALITY_STAGE_IDS.map((id) => [id, level]));
-
-  it('equals planQualityStages when every stage is at the same level', () => {
-    expect(planQualityStagesFromState(applied('high'), 'low')).toEqual(
-      planQualityStages('high', 'low'),
-    );
-  });
-
   it('plans only the stages that are still behind after an interrupted switch', () => {
     const state = { ...applied('medium'), pixelRatio: 'low', shadows: 'low' };
     expect(ids(planQualityStagesFromState(state, 'low'))).toEqual([

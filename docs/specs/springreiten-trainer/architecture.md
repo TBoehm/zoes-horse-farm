@@ -320,8 +320,11 @@ Beherrschbar bleibt das über die hybride Stick-Totzone (Fingerwackeln ≈ ±7°
 lenkt nicht). Folgen: Pferdeneigung/-biegung (`view3d/horse/motion.js`, `turnLean`/`turnBend`) sind
 auf die engeren Kurven abgestimmt (Neigung ≈ ⅓ der physikalischen, max. 0,3 rad; Biegung gedeckelt
 bei 0,35 rad), und die Verfolgerkamera (`view3d/camera.js`, reine Hilfe `camera-math.js`) folgt der
-Pferderichtung geglättet (`FOLLOW.headingStiffness`, Nachlauf ≈ 35° bei der schnellsten Drehung),
-damit der Blick bei schnellen Kurven ruhig bleibt; die Reiteransicht schaut nur leicht verzögert.
+Pferderichtung geglättet (`FOLLOW_HEADING_STIFFNESS` in `camera-math.js`, Nachlauf ≈ 34° bei der
+schnellsten Drehung), damit der Blick bei schnellen Kurven ruhig bleibt; die Reiteransicht schaut
+nur leicht verzögert. Die Schwenkrate der Kamera ist gedeckelt (`FOLLOW_HEADING_MAX_RATE`), aber
+immer sicher über der schnellsten Spielerdrehung (`turnInPlace` × 1,2, aus `TUNING` abgeleitet):
+ein Deckel darunter ließe den Nachlauf bei Dauerdrehung auf der Stelle unbegrenzt wachsen.
 Ausweich-/Zaunrichtungen (`refusal.maneuverTurnRate` 5,0, `fence.slideTurnRate` 6,0 rad/s) sind
 unverändert und bleiben schneller als jede Spielerlenkung.
 
@@ -474,13 +477,21 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
   der Kontext doch noch, verschwinden beide wieder. Den Fokus im Pausenmenü bekommt immer der erste
   nutzbare Knopf (bei Verlust ist „Weiter“ gesperrt).
 - **Kontextverlust als Hinweis auf ein überlastetes Gerät (Regel 4):** Beim Verlust entscheidet die
-  reine Funktion `levelAfterContextLoss({ auto, level })` (`view3d/quality.js`) → `{ level, persist,
-  hint }`: Mit Automatik geht die Stufe auf `low` und wird über `settings.setAutoLevel` gespeichert
-  (Automatik bleibt an); bei manueller Stufe über `low` bleibt die Stufe und `hint` ist wahr. Die
-  Engine setzt die Stufe **schon beim Verlust** um (`applyAllNow({ gpu: false })`: nichts wird
-  gezeichnet, Aufrufe am verlorenen Kontext ignoriert der Browser, kein PMREM-Render), damit die
-  wiederhergestellte Szene gleich auf `low` zurückkommt und es später keinen zweiten Wechsel gibt.
-  Ein noch laufender gestufter Wechsel wird dabei abgeschlossen. Der Hinweis wartet in der Engine
+  reine Funktion `levelAfterContextLoss({ auto, level, visible, sinceVisibilityChangeS })`
+  (`view3d/quality.js`) → `{ level, persist, hint }`: Mit Automatik geht die Stufe auf `low` und
+  wird über `settings.setAutoLevel` gespeichert (Automatik bleibt an); bei manueller Stufe über
+  `low` bleibt die Stufe und `hint` ist wahr. Ein Verlust im Hintergrund (`visible` falsch, die
+  Engine liest `document.visibilityState`) oder weniger als `CONTEXT_LOSS_GRACE_S` (3 s, technische
+  Konstante) nach dem letzten Sichtbarkeitswechsel (`visibilitychange`) sagt nichts über die Last
+  des Spiels (Android verwirft Kontexte oft beim App-Wechsel): dann bleibt alles, wie es ist
+  (`persist` und `hint` falsch). Die Engine setzt die Stufe **schon beim Verlust** um
+  (`applyAllNow({ gpu: false })`: nichts wird gezeichnet, Aufrufe am verlorenen Kontext ignoriert
+  der Browser, kein PMREM-Render), damit die wiederhergestellte Szene gleich auf `low` zurückkommt
+  und es später keinen zweiten Wechsel gibt. Dabei wird auch die Pixel-Ratio **sofort** gesetzt
+  (`setMaxPixelRatio` + `resize(true)`, statt sie für den Frame-Loop vorzumerken): ein
+  wiederhergestellter Kontext legt den Zeichenpuffer in der Größe an, die die Zeichenfläche dann
+  hat, und das war sonst die alte, große Größe samt MSAA, die den Verlust ausgelöst hatte. Ein noch
+  laufender gestufter Wechsel wird dabei abgeschlossen. Der Hinweis wartet in der Engine
   (`engine.takeGraphicsHint()` liest und löscht ihn); der Ritt-Bildschirm zeigt ihn als Toast
   `ride.graphicsContextLost`, sobald das Kind nach der Wiederherstellung fortsetzt (oder ein neuer
   Ritt beginnt).
@@ -488,8 +499,10 @@ engine.on('contextLost' | 'contextRestored', fn) → unsubscribe
   oder manuell) geschieht nicht in einem Frame, sondern in kleinen Schritten, weil ein Frame mit
   allen neuen Shadern, neuer Schatten-Map, neuem Zeichenpuffer und neu hochgeladenen Texturen den
   Grafikprozess eines Tablets überlasten und so den Kontext kosten kann (Khronos
-  „HandlingContextLost“). Die reine Funktion `planQualityStages(from, to)` liefert die geordneten
-  Schritte `{ id, compile }`, jeder nur, wenn sich seine Werte unterscheiden:
+  „HandlingContextLost“). Die reine Funktion `planQualityStagesFromState(applied, to)` liefert aus dem
+  Stand je Schritt (`applied`: Schritt-Id → Stufe/Preset; ein unterbrochener Wechsel lässt Schritte
+  zurück) die noch nötigen geordneten Schritte `{ id, compile }`, jeder nur, wenn sich seine Werte
+  unterscheiden:
   `pixelRatio` (zuerst: Auflösung ist der größte Hebel und braucht keinen Shader) → `shadows`
   (Schattenpass und -Map) → `materials` (Material-Typ, Normal-Maps, Nebel an/aus, Umgebungskarte:
   alles Shader-Änderungen, ein Schritt mit einem Kompilieren) → `characters` (Pferd und Reiter) →
@@ -540,6 +553,10 @@ nachstellen kann.
   768 × 1024 in Half-Float-RGBA ≈ 6 MiB), Texturen mit Mipmaps (× 4/3; Normal-Maps nur wenn die Stufe
   sie nutzt), Szenerie (Instanzen/LOD) und eine Grundlast (Geometrie, Programme, Pferd,
   Compositor). `antialias` ist das Attribut des **echten** Kontexts.
+- Der GPU-Name für das Budget kommt aus einem Wegwerf-Kontext (`probeRendererString`, vor dem
+  Renderer, weil dessen Attribute von der Stufe abhängen). Er wird mit denselben Attributen wie der
+  echte Kontext erzeugt (`powerPreference: 'high-performance'`, `antialias: false`, `depth: false`),
+  damit ein Laptop mit zwei GPUs dieselbe liefert.
 - `gpuBudgetMB({ deviceMemory, isTouch, rendererString })` (MiB): Touch 40 MiB je GiB
   `deviceMemory`, begrenzt auf 96…320, ohne Angabe 160; Desktop 64 je GiB, 256…1024, ohne Angabe
   512; schwache GPU (`WEAK_GPU`) × 0,75. `navigator.deviceMemory` ist auf 0,25…8 GiB gerundet und
@@ -576,7 +593,10 @@ im Ritt), auch im Pausenmenü und bei verlorenem Kontext. Der Text kommt aus der
 eingesetzt werden nur Zahlen und technische Zeichenketten (GPU-Name, Fehlertexte). Die Zahlen
 liefert `engine.diagnostics()` (immer dasselbe Objekt): GPU (`WEBGL_debug_renderer_info`, sonst
 `RENDERER`), Stufe und Automatik, `devicePixelRatio`, Pixel-Ratio des Renderers, Zeichenpuffer,
-größte Textur, Antialiasing (an/aus, oder „aus: zu wenig Grafikspeicher“), GPU-Speicher-Schätzung
+größte Textur, Antialiasing (an/aus, oder „aus: zu wenig Grafikspeicher“, wenn `chooseAntialias`
+das Budget-Urteil „nein“ gespeichert hat; fehlt MSAA nur, weil der Browser es nicht gibt, steht dort
+„aus“), GPU-Name des Budgets (eigene Zeile, nur wenn der Probe-Kontext einen anderen Namen als der
+Renderer lieferte; bei verlorenem Kontext ersatzweise in der GPU-Zeile), GPU-Speicher-Schätzung
 gegen Budget (z. B. „GPU est. 180 / 256 MB, ratio capped 2 → 1.25“, plus Zeilen für gekappte
 Schatten-Map und verringerte Szenerie), Anzahl Kontextverluste/-wiederherstellungen mit Sekunden seit Seitenstart und
 ausstehende Stufenwechsel-Schritte.

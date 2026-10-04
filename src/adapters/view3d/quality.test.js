@@ -7,6 +7,7 @@ import {
   gpuBudgetMB,
   presetFor,
   levelAfterContextLoss,
+  CONTEXT_LOSS_GRACE_S,
   createLowFpsHint,
   createQualityGovernor,
   pickInitialLevel,
@@ -405,6 +406,42 @@ describe('levelAfterContextLoss (rule 4)', () => {
     });
   });
 
+  it('a loss while the page is in the background is no overload: nothing changes, no hint', () => {
+    for (const auto of [true, false]) {
+      for (const level of GRAPHICS_LEVELS) {
+        expect(levelAfterContextLoss({ auto, level, visible: false })).toEqual({
+          level,
+          persist: false,
+          hint: false,
+        });
+      }
+    }
+  });
+
+  it('a loss right after the page came back to the foreground is no overload either', () => {
+    const justBack = { visible: true, sinceVisibilityChangeS: CONTEXT_LOSS_GRACE_S - 0.1 };
+    expect(levelAfterContextLoss({ auto: true, level: 'high', ...justBack })).toEqual({
+      level: 'high',
+      persist: false,
+      hint: false,
+    });
+    expect(levelAfterContextLoss({ auto: false, level: 'high', ...justBack }).hint).toBe(false);
+  });
+
+  it('a loss in the foreground after the grace time counts as before', () => {
+    const settled = { visible: true, sinceVisibilityChangeS: CONTEXT_LOSS_GRACE_S };
+    expect(levelAfterContextLoss({ auto: true, level: 'high', ...settled })).toEqual({
+      level: 'low',
+      persist: true,
+      hint: false,
+    });
+    expect(levelAfterContextLoss({ auto: false, level: 'high', ...settled }).hint).toBe(true);
+  });
+
+  it('without visibility information a loss counts (visible, no change seen)', () => {
+    expect(levelAfterContextLoss({ auto: true, level: 'medium' }).level).toBe('low');
+  });
+
   it('the hint follows the same rule as the "level too high" hint', () => {
     for (const auto of [true, false]) {
       for (const level of GRAPHICS_LEVELS) {
@@ -590,6 +627,25 @@ describe('fitPresetToBudget', () => {
     expect(tiny.preset.pixelRatio).toBe(1);
     expect(tiny.preset.shadowMapSize).toBe(1024);
     expect(tiny.fits).toBe(false); // best effort: the level still plays
+  });
+
+  it('is monotonic: a bigger budget never gives a lower ratio or fewer features', () => {
+    const contexts = [TABLET, { ...TABLET, devicePixelRatio: 3 }, { ...TABLET, antialias: false }];
+    for (const level of GRAPHICS_LEVELS) {
+      for (const ctx of contexts) {
+        let previous = null;
+        for (let budget = 5; budget <= 600; budget += 5) {
+          const { preset } = fit(level, budget, ctx);
+          if (previous) {
+            expect(preset.pixelRatio).toBeGreaterThanOrEqual(previous.pixelRatio);
+            expect(preset.shadowMapSize).toBeGreaterThanOrEqual(previous.shadowMapSize);
+            expect(preset.grassTufts).toBeGreaterThanOrEqual(previous.grassTufts);
+            expect(preset.envDensity).toBeGreaterThanOrEqual(previous.envDensity);
+          }
+          previous = preset;
+        }
+      }
+    }
   });
 
   it('never goes below ratio 1 (a lower device ratio is simply used as it is)', () => {

@@ -97,10 +97,17 @@ export const audioState = (page) => page.evaluate(() => window.__zhfTest.audio()
 /** How often each effect was really played (dropped ones are not counted). */
 export const sfxCounts = async (page) => (await audioState(page)).sfxCounts;
 
-/** Emulates a tab that goes to the background (or comes back): `hidden` + `visibilitychange`. */
+/**
+ * Emulates a tab that goes to the background (or comes back): `hidden`, `visibilityState` and
+ * `visibilitychange`.
+ */
 export const setTabHidden = (page, hidden) =>
   page.evaluate((value) => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => value });
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => (value ? 'hidden' : 'visible'),
+    });
     document.dispatchEvent(new Event('visibilitychange'));
   }, hidden);
 

@@ -450,13 +450,29 @@ export function canHintLowerLevel({ auto, level }) {
   return !auto && lowerLevel(level) !== level;
 }
 
+// A context loss within this many seconds of the page going to the background or coming back is
+// not counted as overload (technical value, no game play): Android browsers often drop the
+// context on an app switch, and right after the return the page is still waking up.
+export const CONTEXT_LOSS_GRACE_S = 3;
+
 /**
- * What a lost WebGL context means for the graphics level (rule 4). A loss shows that the device is
- * overloaded, so the level has to go down: with "Automatic" on it goes to low (and is saved, the
- * automatic stays on); a manually chosen level stays, the player only gets the hint to pick a
- * lower one. Returns { level, persist, hint }.
+ * What a lost WebGL context means for the graphics level (rule 4). A loss in the foreground shows
+ * that the device is overloaded, so the level has to go down: with "Automatic" on it goes to low
+ * (and is saved, the automatic stays on); a manually chosen level stays, the player only gets the
+ * hint to pick a lower one. A loss while the page is hidden, or within CONTEXT_LOSS_GRACE_S of a
+ * visibility change, says nothing about the device: nothing changes then.
+ * `visible`: the page is in the foreground; `sinceVisibilityChangeS`: seconds since it last went
+ * to the background or came back (Infinity: never). Returns { level, persist, hint }.
  */
-export function levelAfterContextLoss({ auto, level }) {
+export function levelAfterContextLoss({
+  auto,
+  level,
+  visible = true,
+  sinceVisibilityChangeS = Infinity,
+}) {
+  if (!visible || sinceVisibilityChangeS < CONTEXT_LOSS_GRACE_S) {
+    return { level, persist: false, hint: false };
+  }
   const lowered = lowerLevel(level) !== level;
   if (auto) return { level: 'low', persist: lowered, hint: false };
   return { level, persist: false, hint: canHintLowerLevel({ auto, level }) };

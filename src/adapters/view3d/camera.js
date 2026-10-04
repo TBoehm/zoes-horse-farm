@@ -1,7 +1,12 @@
 // Camera (rules 13, 14): default is diagonally behind/above horse and rider, rider view between
 // the ears.
 import * as THREE from 'three';
-import { followHeading } from './camera-math.js';
+import {
+  FOLLOW_HEADING_MAX_RATE,
+  FOLLOW_HEADING_STIFFNESS,
+  followHeading,
+  RIDER_HEADING_STIFFNESS,
+} from './camera-math.js';
 
 export const CAMERA_MODES = ['follow', 'rider'];
 
@@ -12,13 +17,10 @@ const FOLLOW = {
   lookAhead: 6,
   lookHeight: 1.1,
   stiffness: 5,
-  // The camera heading trails the horse's heading so the quick turns of the agile steering
-  // (up to 2.7 rad/s, SRT-009) sweep the view calmly: at the fastest turn it lags about 35°.
-  headingStiffness: 4.5,
-  headingMaxRate: 2.5,
 };
-// Rider view: the look direction trails only slightly (about 13° at the fastest turn).
-const RIDER_HEADING_STIFFNESS = 12;
+// The camera heading trails the horse's heading (constants and reasoning: camera-math.js), so the
+// quick turns of the agile steering (SRT-009) sweep the view calmly. The rider view's look
+// direction trails only slightly.
 
 export function createCameraRig(camera) {
   let mode = 'follow';
@@ -90,7 +92,7 @@ export function createCameraRig(camera) {
         camera.lookAt(look);
         return;
       }
-      trailHeading(dt, state.heading, FOLLOW.headingStiffness, FOLLOW.headingMaxRate);
+      trailHeading(dt, state.heading, FOLLOW_HEADING_STIFFNESS, FOLLOW_HEADING_MAX_RATE);
       followTargets(state);
       if (!initialized) {
         pos.copy(desiredPos);

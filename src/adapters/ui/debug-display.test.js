@@ -9,6 +9,7 @@ const t = (key, params = {}) => {
 
 const BASE = {
   gpu: 'ANGLE (Mali-G52)',
+  budgetGpu: 'ANGLE (Mali-G52)',
   level: 'medium',
   auto: true,
   devicePixelRatio: 2.625,
@@ -72,7 +73,21 @@ describe('formatDebugText', () => {
   });
 
   it('says so when the GPU name is not known', () => {
-    expect(lines({ ...BASE, gpu: '' })[0]).toBe('[debug.gpu gpu=[debug.none]]');
+    expect(lines({ ...BASE, gpu: '', budgetGpu: '' })[0]).toBe('[debug.gpu gpu=[debug.none]]');
+  });
+
+  it('shows the GPU the budget was based on only when it differs from the renderer', () => {
+    expect(lines(BASE).some((l) => l.startsWith('[debug.gpuBudget'))).toBe(false);
+    expect(lines({ ...BASE, budgetGpu: '' }).some((l) => l.startsWith('[debug.gpuBudget'))).toBe(
+      false,
+    );
+    const out = lines({ ...BASE, budgetGpu: 'Intel(R) UHD Graphics' });
+    expect(out[0]).toBe('[debug.gpu gpu=ANGLE (Mali-G52)]');
+    expect(out[1]).toBe('[debug.gpuBudget gpu=Intel(R) UHD Graphics]');
+  });
+
+  it('falls back to the budget GPU when the renderer name is not available (lost context)', () => {
+    expect(lines({ ...BASE, gpu: '' })[0]).toBe('[debug.gpu gpu=ANGLE (Mali-G52)]');
   });
 
   it('counts context losses and restores with the time since the start', () => {

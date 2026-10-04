@@ -89,7 +89,9 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
      zurückgesetzt), DANN MUSS das Spiel pausieren und nach der Wiederherstellung weiterspielbar sein.
      Ein solcher Verlust zeigt, dass das Gerät überlastet ist: SOLANGE „Automatisch" aktiv ist, MUSS
      die Stufe danach auf Niedrig gehen (gespeichert); bei manuell gewählter Stufe über Niedrig MUSS
-     ein Hinweis erscheinen, die Grafik niedriger zu stellen. Ein automatisches Herunterstufen
+     ein Hinweis erscheinen, die Grafik niedriger zu stellen. Ein Verlust, während das Spiel im
+     Hintergrund ist oder kurz nach der Rückkehr, zählt nicht als Überlastung (Stufe und Hinweis
+     bleiben unverändert). Ein automatisches Herunterstufen
      während des Ritts DARF die Darstellung nicht verlieren lassen: es MUSS in kleinen, für das Gerät
      verkraftbaren Schritten geschehen.
    - Bevor eine Stufe angewendet wird (Start und jeder Wechsel, auch manuell „Hoch"), MUSS das Spiel

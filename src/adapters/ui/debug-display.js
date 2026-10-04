@@ -16,8 +16,12 @@ export function formatDebugText(info, errors, t) {
     seconds === null || seconds === undefined
       ? t('debug.none')
       : t('debug.atSeconds', { s: Math.round(seconds) });
+  const gpu = info.gpu || info.budgetGpu;
+  // the memory budget comes from the probe context: show its GPU name when it is another one
+  const budgetGpuDiffers = Boolean(info.gpu && info.budgetGpu && info.budgetGpu !== info.gpu);
   const lines = [
-    t('debug.gpu', { gpu: info.gpu || t('debug.none') }),
+    t('debug.gpu', { gpu: gpu || t('debug.none') }),
+    ...(budgetGpuDiffers ? [t('debug.gpuBudget', { gpu: info.budgetGpu })] : []),
     t(info.auto ? 'debug.levelAuto' : 'debug.level', { level: t(`graphics.${info.level}`) }),
     t('debug.pixels', {
       device: round(info.devicePixelRatio),

@@ -10,6 +10,7 @@ import {
   openGameMenu,
   rideCourseOne,
   rideState,
+  setTabHidden,
   startFreeRide,
   storeSection,
   waitForRide,
@@ -328,12 +329,122 @@ test.describe('context loss fallback (rule 4)', () => {
     expect(watch.errors).toEqual([]);
   });
 
+  test('a loss while the tab is in the background is no overload: the level stays, no hint', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'medium' } },
+      lang: 'en',
+    });
+    await startFreeRide(page);
+
+    await setTabHidden(page, true); // the app goes to the background, the ride pauses
+    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    await page.waitForFunction(() => window.__zhfTest.ride().contextLost);
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+    expect(await storeSection(page, 'settings')).toMatchObject({
+      graphicsAuto: true,
+      graphicsLevel: 'medium',
+    });
+
+    expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);
+    await page.waitForFunction(() => !window.__zhfTest.ride().contextLost);
+    await setTabHidden(page, false);
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+    expect(await storeSection(page, 'settings')).toMatchObject({ graphicsLevel: 'medium' });
+    expect(watch.errors).toEqual([]);
+  });
+
+  test('a manual level gets no hint for a loss in the background', async ({
+    page,
+    browserName,
+  }) => {
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: false, graphicsLevel: 'medium' } },
+      lang: 'en',
+    });
+    await startFreeRide(page);
+    await setTabHidden(page, true); // the loss comes while the app is in the background
+    await loseRestoreResume(page);
+    await setTabHidden(page, false);
+    await expect(lostToasts(page)).toHaveCount(0);
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+  });
+
+  test('a loss right after the tab came back is no overload; a few seconds later it is', async ({
+    page,
+    browserName,
+  }) => {
+    test.setTimeout(90_000);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'medium' } },
+      lang: 'en',
+    });
+    await startFreeRide(page);
+
+    await setTabHidden(page, true);
+    await setTabHidden(page, false);
+    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    await page.waitForFunction(() => window.__zhfTest.ride().contextLost);
+    expect((await rideState(page)).graphicsLevel).toBe('medium');
+    expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);
+    await page.waitForFunction(() => !window.__zhfTest.ride().contextLost);
+
+    // settled in the foreground (the grace time is 3 s): a loss now counts
+    await page.waitForTimeout(3500);
+    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    await page.waitForFunction(() => window.__zhfTest.ride().contextLost);
+    expect((await rideState(page)).graphicsLevel).toBe('low');
+  });
+
   test('a manual low level gets no hint', async ({ page, browserName }) => {
     await openGameMenu(page, test, browserName, { save: MANUAL_LOW, lang: 'en' });
     await startFreeRide(page);
     await loseRestoreResume(page);
     await expect(lostToasts(page)).toHaveCount(0);
     expect((await rideState(page)).graphicsLevel).toBe('low');
+  });
+});
+
+test.describe('context loss fallback: drawing buffer (rule 4)', () => {
+  // a device pixel ratio of 2 gives "high" the full ratio 2, "low" gets 1
+  test.use({ deviceScaleFactor: 2 });
+
+  const bufferWidth = (page) => page.evaluate(() => document.querySelector('.scene-canvas').width);
+
+  test('the buffer is already small while the context is lost, so the restore does not rebuild the big one', async ({
+    page,
+    browserName,
+  }) => {
+    const watch = watchPage(page);
+    await openGameMenu(page, test, browserName, {
+      save: { ...NAMED, settings: { graphicsAuto: true, graphicsLevel: 'high' } },
+    });
+    await startFreeRide(page);
+    expect((await rideState(page)).graphicsPixelRatio).toBe(2);
+    const big = await bufferWidth(page);
+    // back to the menu: no frame loop, so only the loss handler can change the buffer now
+    await page.keyboard.press('Escape');
+    await page.locator('[data-action="quit"]').click();
+    await page.locator('[data-screen="menu"]').waitFor();
+
+    expect(await page.evaluate(() => window.__zhfTest.loseContext())).toBe(true);
+    await expect.poll(async () => (await storeSection(page, 'settings')).graphicsLevel).toBe('low');
+    // still lost: the buffer already has the size of the low level (ratio 1 instead of 2)
+    expect(await bufferWidth(page)).toBe(big / 2);
+
+    expect(await page.evaluate(() => window.__zhfTest.restoreContext())).toBe(true);
+    await page.waitForTimeout(500);
+    expect(await bufferWidth(page)).toBe(big / 2);
+    await page.locator('[data-entry="free"]').click();
+    await page.waitForFunction(
+      () => window.__zhfTest.ride() && !window.__zhfTest.ride().contextLost,
+    );
+    expect((await rideState(page)).graphicsLevel).toBe('low');
+    expect((await rideState(page)).graphicsPixelRatio).toBe(1);
+    expect(watch.errors).toEqual([]);
   });
 });
 

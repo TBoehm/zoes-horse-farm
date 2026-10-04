@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { followHeading, headingLag } from './camera-math.js';
+import {
+  FOLLOW_HEADING_MAX_RATE,
+  FOLLOW_HEADING_STIFFNESS,
+  followHeading,
+  RIDER_HEADING_STIFFNESS,
+  wrapAngle,
+} from './camera-math.js';
+import { TUNING } from '../../domain/sim/tuning.js';
 
 const DT = 1 / 60;
 
@@ -39,13 +46,41 @@ describe('followHeading (calm camera heading)', () => {
   });
 });
 
-describe('headingLag (steady-state lag behind a constant turn)', () => {
-  it('equals turn rate / stiffness for an exponential follower', () => {
-    expect(headingLag(2, 4)).toBeCloseTo(0.5, 12);
+describe('camera heading constants (SRT-009: on-the-spot turns)', () => {
+  const MAX_TURN = TUNING.control.turnInPlace; // fastest the player can turn the horse (rad/s)
+
+  /** Holds a constant turn rate for `seconds` and returns the largest lag (rad) seen. */
+  function maxLag(turnRate, seconds, stiffness, maxRate) {
+    let horse = 0;
+    let cam = 0;
+    let worst = 0;
+    for (let i = 0; i < Math.round(seconds / DT); i++) {
+      horse = wrapAngle(horse + turnRate * DT);
+      cam = followHeading(cam, horse, stiffness, DT, maxRate);
+      worst = Math.max(worst, Math.abs(wrapAngle(horse - cam)));
+    }
+    return worst;
+  }
+
+  it('the follow camera keeps up with the fastest turn: the lag stays bounded for 20 s', () => {
+    const steady = MAX_TURN / FOLLOW_HEADING_STIFFNESS;
+    const lag = maxLag(MAX_TURN, 20, FOLLOW_HEADING_STIFFNESS, FOLLOW_HEADING_MAX_RATE);
+    // near the steady-state value of an exponential follower, never a whole turn behind
+    expect(lag).toBeLessThan(steady * 1.1);
+    expect(lag).toBeLessThan((60 * Math.PI) / 180);
   });
 
-  it('the follow camera stays calm: at the fastest turn the lag stays below 60 degrees', () => {
-    // on-the-spot turn rate 2.7 rad/s with the follow-camera heading stiffness
-    expect(headingLag(2.7, 4.5)).toBeLessThan((60 * Math.PI) / 180);
+  it('the rider view keeps up with the fastest turn too', () => {
+    const steady = MAX_TURN / RIDER_HEADING_STIFFNESS;
+    expect(maxLag(MAX_TURN, 20, RIDER_HEADING_STIFFNESS, Infinity)).toBeLessThan(steady * 1.1);
+  });
+
+  it('the swing-rate cap lies safely above the fastest player turn', () => {
+    expect(FOLLOW_HEADING_MAX_RATE).toBeGreaterThan(MAX_TURN * 1.1);
+  });
+
+  it('still limits the swing on a sudden big heading jump', () => {
+    const h = followHeading(0, Math.PI, FOLLOW_HEADING_STIFFNESS, DT, FOLLOW_HEADING_MAX_RATE);
+    expect(Math.abs(h)).toBeLessThanOrEqual(FOLLOW_HEADING_MAX_RATE * DT + 1e-12);
   });
 });

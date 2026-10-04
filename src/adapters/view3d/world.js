@@ -26,7 +26,8 @@ function createMaterialPair(params) {
 }
 
 /**
- * createWorld(renderer, { quality }) → world API (`quality`: a level name or a preset object) (see architecture.md, section View).
+ * createWorld(renderer, { quality }) → world API (see architecture.md, section View).
+ * `quality`: a level name or a preset object.
  */
 export function createWorld(renderer, { quality = 'medium' } = {}) {
   const scene = new THREE.Scene();
