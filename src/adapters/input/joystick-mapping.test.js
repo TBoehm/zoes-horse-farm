@@ -57,6 +57,27 @@ describe('mapStick (nipplejs force/angle to steer/throttle)', () => {
     expect(mapStick(STEER_FULL * 0.99, deg(0)).steer).toBeLessThan(1);
   });
 
+  it('full lock comes early on the stick: at half deflection or less (SRT-009)', () => {
+    expect(STEER_FULL).toBeLessThanOrEqual(0.5);
+    expect(mapStick(0.5, deg(0)).steer).toBe(1);
+  });
+
+  it('a thumb wobble within the axial zone around vertical stays straight at any force', () => {
+    const edge = Math.asin(TUNING.control.stickAxialSteer);
+    for (const force of [0.3, 0.6, 1]) {
+      for (const sign of [-1, 1]) {
+        expect(mapStick(force, Math.PI / 2 + sign * 0.95 * edge).steer).toBe(0);
+      }
+    }
+  });
+
+  it('a wobble just outside the axial zone steers only gently (below 0.2)', () => {
+    // 10 degrees off vertical at full deflection
+    const steer = mapStick(1, deg(80)).steer;
+    expect(steer).toBeGreaterThan(0);
+    expect(steer).toBeLessThan(0.2);
+  });
+
   it('steering grows linearly between the dead zone and the full-lock deflection', () => {
     const mid = (STICK_DEAD_ZONE + STEER_FULL) / 2;
     expect(mapStick(mid, deg(0)).steer).toBeCloseTo(0.5, 9);
@@ -112,7 +133,7 @@ describe('mapStick (nipplejs force/angle to steer/throttle)', () => {
     expect(full.steer).toBe(1);
     expect(full.throttle).toBeCloseTo(0.634, 2);
     const light = mapStick(0.6, deg(45));
-    expect(light.steer).toBeCloseTo(0.667, 2);
+    expect(light.steer).toBeCloseTo(0.842, 2);
     expect(light.throttle).toBeCloseTo(0.346, 2);
   });
 

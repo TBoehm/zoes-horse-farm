@@ -49,20 +49,27 @@ export const TUNING = {
     // turn rate on the spot (rad/s); it drops with speed as ω = turnInPlace / (1 + v / turnSpeedRef),
     // so the turn radius v / ω grows with speed. Reference values (real horses): 10 m volte
     // (r = 5 m) at walk/trot, 20 m circle (r = 10 m) at canter, jump-off turns at jumping canter
-    // r ≈ 6–8 m, turn on the haunches ≈ on the spot. The game is a bit more agile (child
-    // audience): full lock gives r ≈ 1.0 m at walk (1.5 m/s), 2.7 m at medium trot (3.2 m/s),
-    // 6.3 m at jumping canter (5.8 m/s) and 10.4 m at full gallop (8 m/s); lateral acceleration
-    // v·ω stays ≤ 6.3 m/s² (real: 2.5 m/s² on a 20 m canter circle, ≈ 6–8 m/s² in tight turns).
-    turnInPlace: 1.8,
+    // r ≈ 6–8 m, turn on the haunches ≈ on the spot (real lateral acceleration v·ω: 2.5 m/s² on
+    // a 20 m canter circle, ≈ 6–8 m/s² in tight turns).
+    // The game is deliberately MUCH more agile than reality (SRT-009): the child found turning
+    // "far too hard" and asked for it to be about 50 % better, so every radius is 1/1.5 of the
+    // earlier value (turnInPlace 1.8 → 2.7 rad/s, same speed falloff). Full lock now gives
+    // r ≈ 0.7 m at walk (1.5 m/s), 1.8 m at medium trot (3.2 m/s), 4.2 m at jumping canter
+    // (5.8 m/s) and 6.9 m at full gallop (8 m/s); v·ω peaks at ≈ 9.3 m/s² (full gallop), kept
+    // below 1 g on purpose. Agility beats realism in a children's game, but the horse stays
+    // controllable: first-order turn-in (no overshoot) and the axial stick dead zone below.
+    turnInPlace: 2.7,
     turnSpeedRef: 6.0,
-    // steering responsiveness (1/s): the turn rate reaches 90 % of its target in ~0.19 s
-    turnResponse: 12,
+    // steering responsiveness (1/s): the turn rate reaches 90 % of its target in ~0.13 s
+    // (12 → ~0.19 s before SRT-009); a first-order filter, so it never overshoots
+    turnResponse: 18,
     // gamepad/touch stick: deflection (share of the stick radius) below this value counts as
     // centered; scaled radial dead zone, see joystick-mapping.js
     stickDeadZone: 0.12,
     // stick: sideways deflection (share of the stick radius) that already gives full steering
-    // lock; must stay ≤ 2/3 so the tightest turn is reached before the stop (rule 10)
-    stickSteerFull: 0.6,
+    // lock; must stay ≤ 2/3 so the tightest turn is reached before the stop (rule 10). Lowered
+    // from 0.6 to 0.5 (SRT-009): full lock comes earlier, a 45° forward hold already turns fully.
+    stickSteerFull: 0.5,
     // stick: axial dead zones on the unit direction components (hybrid dead zone), so the two
     // controls do not bleed into each other. A hold within ±asin(0.2) ≈ ±11.5° of horizontal
     // changes no speed (turning on the spot stays a turn, no rein-back or walk-off); a hold
