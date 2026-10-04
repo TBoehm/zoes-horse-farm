@@ -16,6 +16,7 @@ import {
 } from './adapters/platform/test-hooks.js';
 import { systemClock } from './adapters/platform/clock.js';
 import { installPageLifecycle } from './adapters/platform/page-lifecycle.js';
+import { getTabId } from './adapters/platform/tab-id.js';
 import { levelAfterContextLoss } from './adapters/view3d/quality.js';
 import {
   createErrorLog,
@@ -81,6 +82,7 @@ function boot() {
     settings,
     clock: systemClock,
     decide: levelAfterContextLoss,
+    tabId: getTabId(),
   });
   const previousRun = crashGuard.checkPreviousRun();
   // "Automatic" selected anew: levels that crashed on this device may be tried again

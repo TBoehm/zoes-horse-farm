@@ -81,7 +81,7 @@ erzwingt die Grenzen.
 | `src/application/modes/` | Modus-Strategien `free-mode.js`, `course-mode.js` (Uhr, HUD-Modell, Rittende-Ergebnis). **Modi speichern nichts**: nur die Ritt-Sitzung schreibt, und zwar über den Fortschritts-Dienst | `domain`, `application`, `shared` |
 | `src/application/progress-service.js` | Sprung zählen, Ritt abschließen, Fortschritt löschen (über Port `store`) | `domain`, `shared` |
 | `src/adapters/storage/` | localStorage-Store (implementiert Port `store`) | innen |
-| `src/adapters/platform/` | WebGL-Prüfung, Touch-Modus, Hochformat, PWA, Seiten-Lebenszyklus für den Absturzwächter (`page-lifecycle.js`) | innen |
+| `src/adapters/platform/` | WebGL-Prüfung, Touch-Modus, Hochformat, PWA, Seiten-Lebenszyklus (`page-lifecycle.js`) und Tab-Kennung (`tab-id.js`) für den Absturzwächter | innen |
 | `src/adapters/input/` | Tastatur, Touch-Bedienung (nipplejs) → `InputState` | innen |
 | `src/adapters/view3d/` | Renderer, Grafikstufen, Welt, Hindernisse, Pferd/Reiter, Kamera, Engine | innen |
 | `src/adapters/audio/` | WebAudio-Synthese | innen |
@@ -960,7 +960,7 @@ nachstellen kann.
   Preset (eine gekappte Pixel-Ratio ist ein eigener `pixelRatio`-Schritt). `engine.level` bleibt
   der Name der Stufe. `?testhooks&gpubudget=<MB>` erzwingt in Tests ein kleines Budget.
 
-### Absturzwächter (SRT-013, Regel 4: `application/crash-guard.js`, `adapters/platform/page-lifecycle.js`)
+### Absturzwächter (SRT-013, Regel 4: `application/crash-guard.js`, `adapters/platform/page-lifecycle.js`, `tab-id.js`)
 
 Schließt der Browser einen überlasteten Tab, läuft die Behandlung eines Kontextverlusts nie, denn die
 ganze Seite ist weg. Der Absturzwächter merkt sich darum im Spielstand, dass gerade die 3D-Darstellung
@@ -970,8 +970,8 @@ dem Einstellungs-Dienst; die Entscheidung über die Stufe bekommt er als Paramet
 `reload()` haben (siehe „Ports“).
 
 ```js
-const guard = createCrashGuard({ store, settings, clock, decide });  // decide = levelAfterContextLoss
-// optional: foregroundGraceMs (Standard FOREGROUND_GRACE_S · 1000)
+const guard = createCrashGuard({ store, settings, clock, decide, tabId });  // decide = levelAfterContextLoss
+// tabId: Kennung dieses Tabs (getTabId()) oder null; optional: foregroundGraceMs (Standard FOREGROUND_GRACE_S · 1000)
 const previous = guard.checkPreviousRun();   // beim Start, VOR dem ersten Bildschirm und der Engine
 // → { crashed: false } | { crashed: true, level: string|null, auto: bool, seconds }
 const lease = guard.markRendering({ level, auto });  // ein Bildschirm beginnt, die Szene zu zeichnen
@@ -989,7 +989,7 @@ addBlockedLevel(blocked, level)    // rein: eindeutig, von low nach high geordne
   Feld für Feld; ein alter Spielstand ohne Bereich zählt als „kein Absturz“): `rendering` (bool, Markierung),
   `level` (`low|medium|high|null`) und `auto` (bool) zur Zeit der Markierung, `since` und `lastSeen`
   (ms; Beginn und letzter Herzschlag, daraus die Dauer der Sitzung), `hintPending` (bool: bei der nächsten
-  Fahrt einmal „Grafik niedriger stellen“ zeigen), `blockedLevels` (Stufen ohne Duplikate, die die Automatik
+  Fahrt einmal „Grafik niedriger stellen“ zeigen), `tabId` (Kennung des Tabs, der die Markierung setzte, oder `null`), `blockedLevels` (Stufen ohne Duplikate, die die Automatik
   nicht mehr anstrebt, bis „Automatisch“ neu gewählt wird) und `lastCrash` (`null` oder alle Felder
   `{ level, auto, seconds, at }`).
 - **Leases:** Bildschirme, die die Szene zeichnen, halten einen Lease (`markRendering` → `frame` /
@@ -1015,9 +1015,19 @@ addBlockedLevel(blocked, level)    // rein: eindeutig, von low nach high geordne
   `visibilitychange` (versteckt → `markBackground`, sichtbar → `resume`), `pagehide` (auch bei Neuladen und
   normalem Schließen → `markBackground`) und `pageshow` (sichtbar → `resume`).
 - **Start** (`checkPreviousRun`, in `main.js` vor `createApp`): Eine übrig gebliebene Markierung ist ein
-  Absturz, **außer** ihr Herzschlag `lastSeen` ist jünger als zwei Intervalle (`2 · HEARTBEAT_INTERVAL_MS`,
-  10 s): dann zeichnet noch ein anderer Tab, es ist kein Absturz und die Markierung bleibt unverändert
-  (bekannte Grenze: ein Absturz mit Neuladen innerhalb von 10 s wird so nicht erkannt). Mit Stufe wird `decide({ auto, level })` angewandt (dieselbe Regel wie beim Kontextverlust:
+  Absturz, es sei denn, sie gehört einem anderen, noch zeichnenden Tab. Das entscheidet die **Tab-Kennung**
+  (`adapters/platform/tab-id.js`, `getTabId()`: einmal je Tab in `sessionStorage` unter
+  `zoes-horse-farm.tabId`, übersteht ein Neuladen desselben Tabs, auch das Neuladen, das der Browser sofort nach
+  dem Beenden eines überlasteten Tabs macht; ohne `sessionStorage` `null`). `main.js` übergibt sie als `tabId`
+  an den Wächter (Schichten: der Zugriff bleibt im Adapter), der sie bei jedem Setzen und jedem Herzschlag in
+  die Markierung schreibt (Feld `tabId`, `null` = unbekannt):
+  - Markierung mit **eigener** Kennung → Absturz, egal wie frisch der Herzschlag ist (derselbe Tab kam ohne
+    sauberes `pagehide` zurück);
+  - **andere** Kennung (oder keine in der Markierung) und `lastSeen` jünger als zwei Intervalle
+    (`2 · HEARTBEAT_INTERVAL_MS`, 10 s) → ein anderer Tab zeichnet noch: kein Absturz, Markierung unverändert;
+  - andere Kennung und alter Herzschlag → Absturz (z. B. der ganze Browser wurde beendet und neu geöffnet);
+  - eigene Kennung unbekannt (kein `sessionStorage`) → Absturz (lieber erkennen).
+  Mit Stufe wird `decide({ auto, level })` angewandt (dieselbe Regel wie beim Kontextverlust:
   Automatik → `settings.setAutoLevel('low')`; manuell über `low` → `hintPending`); jede abgestürzte Stufe
   kommt in `blockedLevels` (auch auf `low`, auch bei manueller Wahl), `lastCrash` wird mit `clock.nowIso()`
   gesetzt. `takeHint()` löscht den Hinweis; der Ritt-Bildschirm zeigt ihn (`showCrashHint`) als
@@ -1025,11 +1035,11 @@ addBlockedLevel(blocked, level)    // rein: eindeutig, von low nach high geordne
   (`canHintLowerLevel`). `main.js` legt `app.services.crashGuard` und `app.services.startupCrash` ab (die
   Engine nimmt daraus `lastChange = { kind: 'crash' }` für die Diagnose).
 - **Verdrahtung in `main.js`:** `createCrashGuard({ store, settings, clock: systemClock, decide:
-  levelAfterContextLoss })`, `settings.onAutoSelected(() => crashGuard.clearBlockedLevels())` und
+  levelAfterContextLoss, tabId: getTabId() })`, `settings.onAutoSelected(() => crashGuard.clearBlockedLevels())` und
   `installPageLifecycle(crashGuard)`. Die Engine fragt `crashGuard.blockedLevels()` für das Hochstufen und
   ruft `crashGuard.blockLevel(level)` bei einem gezählten Kontextverlust; ohne Wächter (nacktes Test-Setup)
   läuft sie wie zuvor.
-- **Tests:** `crash-guard.test.js`, `page-lifecycle.test.js`, `test-hooks.test.js` (Frame-Feed),
+- **Tests:** `crash-guard.test.js`, `page-lifecycle.test.js`, `tab-id.test.js`, `test-hooks.test.js` (Frame-Feed),
   `tests/smoke/graphics-crash.spec.js` (Absturz bei Automatik → `low` und Automatik bleibt; manuell über `low` →
   Hinweis einmal; manuell `low` → nichts; sauberer Stand und alter Spielstand ändern nichts; die Markierung
   folgt dem Ritt, dem Verstecken und dem Beenden; ein normales Neuladen im Ritt ist kein Absturz;

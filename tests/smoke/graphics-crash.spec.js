@@ -26,6 +26,14 @@ const rendering = (level, auto) => ({
   lastSeen: 8400,
 });
 
+// The key of the tab id in sessionStorage (adapters/platform/tab-id.js)
+const TAB_ID_KEY = 'zoes-horse-farm.tabId';
+const setTabId = (page, id) =>
+  page.addInitScript(({ key, value }) => sessionStorage.setItem(key, value), {
+    key: TAB_ID_KEY,
+    value: id,
+  });
+
 const seed = ({ level, auto, guard }) => ({
   ...NAMED,
   settings: { graphicsAuto: auto, graphicsLevel: level },
@@ -66,6 +74,46 @@ test.describe('crash guard (rule 4)', () => {
     await startFreeRide(page);
     await expect(feedback(page)).toHaveText('');
     expect(watch.errors).toEqual([]);
+  });
+
+  test('a crash reload of the same tab counts even with a fresh heartbeat', async ({
+    page,
+    browserName,
+  }) => {
+    // the browser reloads a killed tab at once: the tab id in sessionStorage is the same
+    await setTabId(page, 'tab-same');
+    await openGameMenu(page, test, browserName, {
+      lang: 'en',
+      save: seed({
+        level: 'medium',
+        auto: true,
+        guard: { ...rendering('medium', true), lastSeen: Date.now(), tabId: 'tab-same' },
+      }),
+    });
+    expect(await storeSection(page, 'settings')).toMatchObject({
+      graphicsAuto: true,
+      graphicsLevel: 'low',
+    });
+    const guard = await guardState(page);
+    expect(guard.rendering).toBe(false);
+    expect(guard.blockedLevels).toEqual(['medium']);
+  });
+
+  test('a fresh mark of another tab is a live tab, not a crash', async ({ page, browserName }) => {
+    await setTabId(page, 'tab-mine');
+    await openGameMenu(page, test, browserName, {
+      lang: 'en',
+      save: seed({
+        level: 'medium',
+        auto: true,
+        guard: { ...rendering('medium', true), lastSeen: Date.now(), tabId: 'tab-other' },
+      }),
+    });
+    expect(await storeSection(page, 'settings')).toMatchObject({ graphicsLevel: 'medium' });
+    const guard = await guardState(page);
+    expect(guard).toMatchObject({ rendering: true, tabId: 'tab-other' });
+    expect(guard.lastCrash).toBeNull();
+    expect(guard.blockedLevels).toEqual([]);
   });
 
   test('after a crash at a manual level above low, the next ride shows the hint once', async ({

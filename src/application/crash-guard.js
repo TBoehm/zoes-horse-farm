@@ -12,7 +12,8 @@
 // Two more cases keep the guard from crying wolf: after the page came back to the foreground the
 // mark is only set again after a grace time (Android often kills or reloads a tab right after an
 // app switch), and a leftover mark whose heartbeat is still fresh at the start belongs to a tab
-// that is alive (a second tab), not to a crash. The store writes its whole in-memory copy, so
+// that is alive (a second tab), not to a crash; the tab id tells the two apart (see
+// checkPreviousRun). The store writes its whole in-memory copy, so
 // every write of the guard first takes over what other tabs saved (`store.reload()`).
 import { field, registerSection } from './save-schema.js';
 import { FOREGROUND_GRACE_S, GRAPHICS_LEVELS } from './graphics-levels.js';
@@ -57,6 +58,8 @@ const fields = {
   auto: field.bool(true),
   since: field.number(0, MAX_TIME, 0),
   lastSeen: field.number(0, MAX_TIME, 0),
+  // the tab that set the mark (see checkPreviousRun); null: unknown
+  tabId: { fallback: null, check: (v) => v === null || (typeof v === 'string' && v.length <= 64) },
   // a manual level above low crashed: tell the player once at the next ride start
   hintPending: field.bool(false),
   // levels that crashed or lost the 3D picture on this device; the automatic must not climb to
@@ -90,6 +93,8 @@ registerSection(CRASH_GUARD_SECTION, {
  *   { level: string, persist: boolean, hint: boolean }} deps.decide what a loss of the 3D
  *   picture in the foreground means for the level (the same rule as for a lost WebGL context)
  * @param {number} [deps.foregroundGraceMs] time after the page came back before it is marked again
+ * @param {string|null} [deps.tabId] identity of this browser tab, constant across reloads of the
+ *   tab (null: unknown, e.g. no sessionStorage)
  */
 export function createCrashGuard({
   store,
@@ -97,6 +102,7 @@ export function createCrashGuard({
   clock,
   decide,
   foregroundGraceMs = FOREGROUND_GRACE_S * 1000,
+  tabId = null,
 }) {
   const leases = new Set();
   let background = false;
@@ -104,6 +110,7 @@ export function createCrashGuard({
   let latest = null; // { level, auto } of the most recent screen update
   let mirror = null; // what is persisted right now: { rendering, level, auto }
   let lastBeatMs = 0;
+  let ownsMark = false; // this guard set the persisted rendering mark (a second tab's is not ours)
 
   const read = () => store.get(CRASH_GUARD_SECTION);
 
@@ -130,6 +137,13 @@ export function createCrashGuard({
     return mirror;
   };
 
+  /** The mark belongs to another tab that is still drawing. */
+  function isLiveOtherTab(saved) {
+    if (!tabId || saved.tabId === tabId) return false;
+    const sinceLastSeenMs = clock.nowMs() - saved.lastSeen;
+    return sinceLastSeenMs >= 0 && sinceLastSeenMs < LIVE_HEARTBEATS * HEARTBEAT_INTERVAL_MS;
+  }
+
   const wantRendering = () =>
     leases.size > 0 && !background && clock.nowMs() - returnedAtMs >= foregroundGraceMs;
 
@@ -138,18 +152,28 @@ export function createCrashGuard({
     const now = clock.nowMs();
     const saved = persisted();
     if (!wantRendering()) {
-      if (saved.rendering) write({ rendering: false });
+      // only the own mark is cleared: a leftover one of a live second tab stays
+      if (saved.rendering && ownsMark) write({ rendering: false });
+      ownsMark = false;
       return;
     }
+    ownsMark = true;
     if (!saved.rendering) {
       lastBeatMs = now;
-      write({ rendering: true, level: latest.level, auto: latest.auto, since: now, lastSeen: now });
+      write({
+        rendering: true,
+        level: latest.level,
+        auto: latest.auto,
+        tabId,
+        since: now,
+        lastSeen: now,
+      });
     } else if (saved.level !== latest.level || saved.auto !== latest.auto) {
       write({ level: latest.level, auto: latest.auto });
     } else if (now - lastBeatMs >= HEARTBEAT_INTERVAL_MS) {
       lastBeatMs = now;
       // also restates the mark: another tab may have cleared it while this one still draws
-      write({ rendering: true, level: latest.level, auto: latest.auto, lastSeen: now });
+      write({ rendering: true, level: latest.level, auto: latest.auto, tabId, lastSeen: now });
     }
   }
 
@@ -199,9 +223,13 @@ export function createCrashGuard({
     /**
      * Start of the app, before the first ride: looks at the mark of the previous run. A leftover
      * "rendering" mark is a crash; the level rule is applied (automatic: low is saved; manual
-     * above low: a hint is flagged for the next ride start). A mark whose heartbeat is younger
-     * than two intervals belongs to a tab that is still drawing (a second tab): no crash, and the
-     * mark stays untouched.
+     * above low: a hint is flagged for the next ride start). Whose mark it is decides:
+     * - the mark of this very tab (same tab id; the tab came back, e.g. the browser reloaded it
+     *   right after it killed it) is a crash whatever the age of the heartbeat;
+     * - the mark of another tab with a heartbeat younger than two intervals is a live second tab:
+     *   no crash, the mark stays untouched;
+     * - the mark of another tab with an old heartbeat (the whole browser was killed) is a crash;
+     * - without a tab id (no sessionStorage) the owner is unknown: prefer detecting, a crash.
      * @returns {{ crashed: false } | { crashed: true, level: string|null, auto: boolean,
      *   seconds: number }}
      */
@@ -209,10 +237,7 @@ export function createCrashGuard({
       const saved = read();
       mirror = null;
       if (!saved.rendering) return { crashed: false };
-      const sinceLastSeenMs = clock.nowMs() - saved.lastSeen;
-      if (sinceLastSeenMs >= 0 && sinceLastSeenMs < LIVE_HEARTBEATS * HEARTBEAT_INTERVAL_MS) {
-        return { crashed: false };
-      }
+      if (isLiveOtherTab(saved)) return { crashed: false };
       const seconds = Math.max(0, Math.round((saved.lastSeen - saved.since) / 1000));
       const result = { crashed: true, level: saved.level, auto: saved.auto, seconds };
       let hint = false;

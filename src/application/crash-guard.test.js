@@ -17,7 +17,7 @@ const decide = ({ auto, level }) =>
     ? { level: 'low', persist: level !== 'low', hint: false }
     : { level, persist: false, hint: level !== 'low' };
 
-function setup({ guard: saved = {}, settings = {} } = {}) {
+function setup({ guard: saved = {}, settings = {}, tabId = null } = {}) {
   const store = fakeStore({
     settings: { graphicsAuto: true, graphicsLevel: 'medium', ...settings },
   });
@@ -31,7 +31,13 @@ function setup({ guard: saved = {}, settings = {} } = {}) {
     if (section === CRASH_GUARD_SECTION) writes += 1;
     return update(section, fn);
   };
-  const guard = createCrashGuard({ store, settings: createSettingsService(store), clock, decide });
+  const guard = createCrashGuard({
+    store,
+    settings: createSettingsService(store),
+    clock,
+    decide,
+    tabId,
+  });
   return {
     store,
     guard,
@@ -298,28 +304,67 @@ describe('crash guard: check of the previous run', () => {
     expect(state().lastCrash).toEqual(lastCrash);
   });
 
-  it('a mark with a fresh heartbeat is a live second tab, not a crash, and stays untouched', () => {
-    const fresh = HEARTBEAT_INTERVAL_MS * 2 - 1;
-    const { guard, store, state, writes, advance } = setup({
-      guard: crashed({ since: 1_000_000 - 60_000, lastSeen: 1_000_000 }),
+  describe('whose mark it is (tab id)', () => {
+    const FRESH_MS = HEARTBEAT_INTERVAL_MS * 2 - 1;
+    const mark = (extra) =>
+      crashed({ since: 940_000, lastSeen: 1_000_000, tabId: 'tab-a', ...extra });
+
+    it('the mark of this very tab is a crash even with a fresh heartbeat (reload after a kill)', () => {
+      const { guard, store } = setup({ guard: mark(), tabId: 'tab-a' });
+      expect(guard.checkPreviousRun()).toMatchObject({ crashed: true, level: 'medium' });
+      expect(store.data.settings.graphicsLevel).toBe('low');
+      expect(store.data.crashGuard.rendering).toBe(false);
     });
-    advance(fresh);
-    expect(guard.checkPreviousRun()).toEqual({ crashed: false });
-    expect(state()).toMatchObject({ rendering: true, level: 'medium', hintPending: false });
-    expect(state().blockedLevels).toEqual([]);
-    expect(store.data.settings.graphicsLevel).toBe('medium');
-    expect(writes()).toBe(0);
-  });
 
-  it('a mark whose heartbeat is two intervals old is a crash', () => {
-    const { guard, advance } = setup({ guard: crashed({ since: 900_000, lastSeen: 1_000_000 }) });
-    advance(HEARTBEAT_INTERVAL_MS * 2);
-    expect(guard.checkPreviousRun()).toMatchObject({ crashed: true, seconds: 100 });
-  });
+    it('the mark of another tab with a fresh heartbeat is a live tab: no crash, untouched', () => {
+      const { guard, store, state, writes, advance } = setup({ guard: mark(), tabId: 'tab-b' });
+      advance(FRESH_MS);
+      expect(guard.checkPreviousRun()).toEqual({ crashed: false });
+      expect(state()).toMatchObject({ rendering: true, level: 'medium', hintPending: false });
+      expect(state().blockedLevels).toEqual([]);
+      expect(store.data.settings.graphicsLevel).toBe('medium');
+      expect(writes()).toBe(0);
+    });
 
-  it('a heartbeat in the future (the clock was set back) does not hide a crash', () => {
-    const { guard } = setup({ guard: crashed({ since: 100_000, lastSeen: 2_000_000 }) });
-    expect(guard.checkPreviousRun().crashed).toBe(true);
+    it('a tab that draws nothing never clears the mark of a live other tab', () => {
+      const { guard, state, advance } = setup({ guard: mark(), tabId: 'tab-b' });
+      advance(FRESH_MS);
+      guard.checkPreviousRun();
+      guard.markBackground();
+      guard.resume();
+      expect(state()).toMatchObject({ rendering: true, tabId: 'tab-a' });
+    });
+
+    it('a mark without a tab id (older save) with a fresh heartbeat counts as another tab', () => {
+      const { guard } = setup({ guard: mark({ tabId: null }), tabId: 'tab-b' });
+      expect(guard.checkPreviousRun()).toEqual({ crashed: false });
+    });
+
+    it('the mark of another tab with an old heartbeat is a crash (the browser was killed)', () => {
+      const { guard, advance } = setup({ guard: mark(), tabId: 'tab-b' });
+      advance(HEARTBEAT_INTERVAL_MS * 2);
+      expect(guard.checkPreviousRun()).toMatchObject({ crashed: true, seconds: 60 });
+    });
+
+    it('without a tab id of its own the owner is unknown: a mark is a crash', () => {
+      const { guard } = setup({ guard: mark(), tabId: null });
+      expect(guard.checkPreviousRun().crashed).toBe(true);
+    });
+
+    it('a heartbeat in the future (the clock was set back) does not hide a crash', () => {
+      const { guard } = setup({ guard: mark({ lastSeen: 2_000_000 }), tabId: 'tab-b' });
+      expect(guard.checkPreviousRun().crashed).toBe(true);
+    });
+
+    it('the marks written while drawing carry the tab id (start and heartbeat)', () => {
+      const { guard, state, advance } = setup({ tabId: 'tab-a' });
+      const lease = guard.markRendering(MEDIUM_AUTO);
+      expect(state().tabId).toBe('tab-a');
+      state().tabId = null;
+      advance(HEARTBEAT_INTERVAL_MS);
+      lease.frame(MEDIUM_AUTO);
+      expect(state().tabId).toBe('tab-a');
+    });
   });
 
   it('a missing heartbeat gives zero seconds', () => {
@@ -367,6 +412,12 @@ describe('crash guard section', () => {
       lastSeen: 0,
       lastCrash: null,
     });
+  });
+
+  it('keeps a valid tab id and drops an invalid one', () => {
+    expect(section().sanitize({ tabId: 'tab-a' }, {}).tabId).toBe('tab-a');
+    expect(section().sanitize({ tabId: 7 }, {}).tabId).toBeNull();
+    expect(section().sanitize({}, {}).tabId).toBeNull();
   });
 
   it('drops a malformed last crash but keeps a valid one', () => {
