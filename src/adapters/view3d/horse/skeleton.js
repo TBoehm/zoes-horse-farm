@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 
 import { REST, SIDES } from './anatomy.js';
+import { maneAnchors } from './neck.js';
 
 export { LEG_NAMES, REST, SIDES } from './anatomy.js';
 
@@ -31,6 +32,36 @@ export const EAR = {
   length: 0.16,
 };
 
+/** Anchor of the forelock bone on the forehead (it swings about this point). */
+const FORELOCK_ANCHOR = () => headPoint(-0.02, 0.08, 0);
+
+/**
+ * Eye and eyelid: the eye is an ellipsoid turned about Y by `yaw`; the upper lid is a hemispherical
+ * cap whose pole points at `openAngle` (from the gaze towards up and back, so the lid rests above
+ * the eye) and is turned about `axis` by −`closeAngle` to cover the eye.
+ */
+export const EYE = {
+  radii: [0.019, 0.018, 0.025],
+  yaw: 0.35,
+  center: (side) => headPoint(0.168, 0.03, 0.104 * side),
+  openAngle: (135 * Math.PI) / 180,
+  closeAngle: (150 * Math.PI) / 180,
+  lidScale: 1.15,
+};
+const UP = new THREE.Vector3(0, 1, 0);
+/** Gaze direction of the eye on `side` (head frame). */
+export function eyeGaze(side) {
+  return new THREE.Vector3(side, 0, 0).applyAxisAngle(UP, EYE.yaw * side);
+}
+/** Hinge axis of the eyelid (head frame); a positive rotation about it lifts the gaze upwards. */
+export function lidAxis(side) {
+  return eyeGaze(side).cross(UP).normalize();
+}
+/** Direction of the lid pole at `angle` from the gaze towards up (head frame). */
+export function lidPole(side, angle) {
+  return eyeGaze(side).multiplyScalar(Math.cos(angle)).addScaledVector(UP, Math.sin(angle));
+}
+
 export const SADDLE_SEAT = new THREE.Vector3(0, 1.63, 0.08); // rider's seat point
 export const EAR_ANCHOR = () => headPoint(0.03, 0.14, 0); // between the ears
 
@@ -43,10 +74,14 @@ const mirror = (a, side) => [a[0] * side, a[1], a[2]];
 export function createSkeletonBones() {
   const bones = {};
   const list = [];
-  const make = (name, restPos, parentName) => {
+  const make = (name, restPos, parentName, quaternion = null) => {
     const b = new THREE.Bone();
     b.name = name;
     b.userData.rest = v(restPos);
+    if (quaternion) {
+      b.quaternion.copy(quaternion);
+      b.userData.restQuaternion = quaternion.clone();
+    }
     const parent = parentName ? bones[parentName] : null;
     if (parent) {
       b.position.copy(b.userData.rest).sub(parent.userData.rest);
@@ -86,6 +121,14 @@ export function createSkeletonBones() {
     make(`${p}ear`, [base.x, base.y, base.z], 'head');
   });
   REST.tail.forEach((t, i) => make(`tail${i + 1}`, t, i === 0 ? 'spineRear' : `tail${i}`));
+  // mane (a bone per anchor on the crest) and forelock: they swing on their own (life.js)
+  for (const a of maneAnchors()) make(a.name, a.position.toArray(), a.parent, a.quaternion);
+  make('forelock', FORELOCK_ANCHOR().toArray(), 'head');
+  // eyelids
+  SIDES.forEach((side, i) => {
+    const b = make(`${i === 0 ? 'L' : 'R'}lid`, EYE.center(side).toArray(), 'head');
+    b.userData.axis = lidAxis(side);
+  });
   const index = {};
   list.forEach((b, i) => (index[b.name] = i));
   return { root: bones.root, bones, list, index };

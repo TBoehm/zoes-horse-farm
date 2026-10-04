@@ -14,6 +14,7 @@ import { presetFor } from './quality.js';
 const STAGE_GAP_FRAMES = 6;
 
 const fogKey = (p) => (p.fog ? `${p.fog.near}/${p.fog.far}` : 'none');
+const materialsKey = (p) => `${p.material}|${p.normalMaps}|${p.fog !== null}|${p.envMap}`;
 
 /**
  * The stages in the order of a downgrade (cheapest lever for the GPU first). `key` reduces a
@@ -40,7 +41,7 @@ const STAGES = Object.freeze([
   Object.freeze({
     id: 'materials',
     compile: true,
-    key: (p) => `${p.material}|${p.normalMaps}|${p.fog !== null}|${p.envMap}`,
+    key: materialsKey,
   }),
   // geometry and material of horse and rider
   Object.freeze({
@@ -48,11 +49,27 @@ const STAGES = Object.freeze([
     compile: true,
     key: (p) => p.characterDetail,
   }),
-  // instance counts and geometry detail of the scenery, fog distance (a uniform)
+  // instance counts and geometry detail of the scenery, its details (flowers, bunting, flower
+  // boxes, grazing horses, hoof dust, birds, butterflies, wind) and the fog distance (a uniform).
+  // Details that appear for the first time bring shader programs with them (flowers, wings,
+  // bunting, swaying trees, dust), so the engine compiles after this stage, too.
   Object.freeze({
     id: 'density',
-    compile: false,
-    key: (p) => `${p.envDensity}|${p.envDetail}|${p.grassTufts}|${fogKey(p)}`,
+    compile: true,
+    key: (p) =>
+      [
+        p.envDensity,
+        p.envDetail,
+        p.grassTufts,
+        p.flowers,
+        p.decor,
+        p.grazingHorses,
+        p.hoofDust,
+        p.birds,
+        p.butterflies,
+        p.wind,
+        fogKey(p),
+      ].join('|'),
   }),
 ]);
 
@@ -61,6 +78,15 @@ const STAGES = Object.freeze([
 // WebGLTextures.js), so changing it means `needsUpdate` and a full texImage2D + mipmap generation
 // of every ground, sand and wood texture. The world applies the anisotropy of the level when a
 // ride starts (world.syncAnisotropy) and never in the middle of one.
+
+/**
+ * Do two presets agree on everything the materials stage is responsible for? While they do not
+ * (a level change between its materials and its density stage), the shader programs of the visible
+ * meshes are about to change, so nothing optional should be shown (see detail-hold.js).
+ */
+export function sameMaterialStage(a, b) {
+  return materialsKey(a) === materialsKey(b);
+}
 
 /** Ids of all stages, in the order of a downgrade. */
 export const QUALITY_STAGE_IDS = Object.freeze(STAGES.map((s) => s.id));

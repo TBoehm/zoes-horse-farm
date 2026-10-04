@@ -182,4 +182,19 @@ describe('settings service', () => {
       expect(seen).toEqual(['rider']);
     });
   });
+
+  describe('controls help', () => {
+    it('markControlsHelpSeen saves the flag and keeps the other settings', () => {
+      const { service, store } = setup({ controlsHelpSeen: false, camera: 'rider' });
+      service.markControlsHelpSeen();
+      expect(store.data.settings).toMatchObject({ controlsHelpSeen: true, camera: 'rider' });
+      expect(service.get().controlsHelpSeen).toBe(true);
+    });
+
+    it('is idempotent', () => {
+      const { service, store } = setup({ controlsHelpSeen: true });
+      service.markControlsHelpSeen();
+      expect(store.data.settings.controlsHelpSeen).toBe(true);
+    });
+  });
 });

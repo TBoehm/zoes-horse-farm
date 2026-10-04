@@ -29,7 +29,7 @@ export function renderResetSection(ctx, { fromPause }) {
       h(
         'button',
         {
-          class: 'btn',
+          class: 'btn btn-danger',
           type: 'button',
           dataset: { action: 'reset-confirm' },
           onclick: () => {

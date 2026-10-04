@@ -3,6 +3,7 @@ import {
   createStageQueue,
   planQualityStagesFromState,
   QUALITY_STAGE_IDS,
+  sameMaterialStage,
 } from './quality-stages.js';
 import { QUALITY_PRESETS } from './quality.js';
 import { GRAPHICS_LEVELS } from '../../application/graphics-levels.js';
@@ -74,7 +75,21 @@ describe('planning a change between two levels', () => {
     expect(byId.shadows.compile).toBe(true);
     expect(byId.materials.compile).toBe(true);
     expect(byId.characters.compile).toBe(true);
-    expect(byId.density.compile).toBe(false);
+    expect(byId.density.compile).toBe(true);
+  });
+
+  it('plans the density stage alone when only a detail of the scenery differs', () => {
+    for (const key of ['grassTufts', 'flowers', 'decor', 'birds', 'butterflies']) {
+      const changed = { ...QUALITY_PRESETS.medium, [key]: 0.9 };
+      expect(ids(planChange('medium', changed)), key).toEqual(['density']);
+    }
+    const calm = { ...QUALITY_PRESETS.medium, wind: false };
+    expect(ids(planChange('medium', calm))).toEqual(['density']);
+    // grazing horses and hoof dust belong to the scenery stage
+    const empty = { ...QUALITY_PRESETS.medium, grazingHorses: 0 };
+    expect(ids(planChange('medium', empty))).toEqual(['density']);
+    const dustless = { ...QUALITY_PRESETS.medium, hoofDust: false };
+    expect(ids(planChange('medium', dustless))).toEqual(['density']);
   });
 
   it('never touches the textures: there is no anisotropy stage', () => {
@@ -200,5 +215,31 @@ describe('createStageQueue', () => {
     queue.plan(plan);
     plan.length = 0;
     expect(queue.pending).toBe(1);
+  });
+});
+
+describe('sameMaterialStage', () => {
+  const { low, medium, high } = QUALITY_PRESETS;
+
+  it('tells whether two presets need the same shader programs', () => {
+    expect(sameMaterialStage(medium, high)).toBe(true);
+    expect(sameMaterialStage(low, medium)).toBe(false);
+    expect(sameMaterialStage(high, low)).toBe(false);
+  });
+
+  it('agrees with the plan: the materials stage is planned exactly when it is false', () => {
+    for (const from of GRAPHICS_LEVELS) {
+      for (const to of GRAPHICS_LEVELS) {
+        const planned = ids(planChange(from, to)).includes('materials');
+        expect(planned, `${from} → ${to}`).toBe(
+          !sameMaterialStage(QUALITY_PRESETS[from], QUALITY_PRESETS[to]),
+        );
+      }
+    }
+  });
+
+  it('is not tied to the fog distances, which are a uniform of the density stage', () => {
+    const farther = { ...medium, fog: { near: 100, far: 600 } };
+    expect(sameMaterialStage(medium, farther)).toBe(true);
   });
 });

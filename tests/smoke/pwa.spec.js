@@ -67,6 +67,7 @@ test.describe('PWA', () => {
     await expect(menu.or(namePrompt).or(no3d).first()).toBeVisible();
     if (await namePrompt.isVisible()) {
       await page.locator('[data-action="skip"]').click();
+      await page.locator('[data-action="help-done"]').click();
       await expect(menu).toBeVisible();
     }
     // without WebGL the game shows its notice instead; with WebGL a free ride must start offline

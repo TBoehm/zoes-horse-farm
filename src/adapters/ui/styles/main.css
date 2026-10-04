@@ -7,10 +7,31 @@
   --c-panel: rgba(255, 251, 243, 0.94);
   --c-ink: #2b1d12;
   --c-ink-soft: #6b5442;
-  --c-primary: #c8502e;
-  --c-primary-dark: #9c3a1f;
-  --c-secondary: #4a7a2e;
+  /* Heading / brand color: titles only, never a button or anything inside one (rule 57) */
+  --c-brand: #9c3a1f;
   --c-accent: #f2b632;
+  /* Button roles (rule 57). Each fill/ink pair is checked by palette.test.js (WCAG >= 4.5:1). */
+  --c-positive: #2e7d32; /* go on: menu entries, "Go", "Next", "Again", "Got it" */
+  --c-positive-ink: #ffffff;
+  --c-positive-dark: #1b5e20; /* 3D edge under the button */
+  --c-neutral-bg: #fff4e0; /* restrained: "Back", "Cancel", "Skip", "Restart" (outlined) */
+  --c-neutral-ink: #6b4423; /* text and border */
+  --c-neutral-press: #f3dfba;
+  --c-danger: #b3261e; /* only buttons that delete something */
+  --c-danger-ink: #ffffff;
+  --c-danger-dark: #7f1710;
+  --c-choice-bg: #efe4d3; /* option buttons: not selected */
+  --c-choice-ink: #2b1d12;
+  --c-choice-edge: #c9b79d;
+  --c-choice-on: #f2a900; /* option buttons: selected */
+  --c-choice-on-ink: #2b1d12;
+  --c-choice-on-edge: #a87400;
+  /* Touch buttons in the ride (label color is white on a darkened glass look) */
+  --c-touch-jump: #1e6fb5;
+  --c-touch-ink: #ffffff;
+  --c-touch-gallop-led: #b6ff6b; /* light of the gallop button while it is on */
+  /* Small touch buttons (pause, ...) as a solid color, for the help symbols that copy them */
+  --c-touch-small: #4b3a2b;
   --c-focus: #1f6feb;
   --radius: 18px;
   --shadow: 0 10px 30px rgba(40, 25, 10, 0.25);
@@ -121,7 +142,7 @@ body {
   margin: 0;
   font-size: clamp(1.8rem, 5vw, 2.8rem);
   letter-spacing: 0.01em;
-  color: var(--c-primary-dark);
+  color: var(--c-brand);
   text-shadow: 0 2px 0 #fff;
 }
 
@@ -139,17 +160,19 @@ body {
 }
 
 .btn {
+  --btn-edge: var(--c-positive-dark);
   font: inherit;
   font-weight: 700;
   min-width: var(--touch-min);
   min-height: var(--touch-min);
-  border: none;
+  /* The border is transparent on filled buttons; the outlined kind colors it (rule 57) */
+  border: 3px solid transparent;
   border-radius: var(--radius);
-  padding: 10px 18px;
+  padding: 7px 15px;
   cursor: pointer;
-  color: #fff;
-  background: var(--c-primary);
-  box-shadow: 0 4px 0 var(--c-primary-dark);
+  color: var(--c-positive-ink);
+  background: var(--c-positive);
+  box-shadow: 0 4px 0 var(--btn-edge);
   transition:
     transform 0.08s ease,
     box-shadow 0.08s ease,
@@ -162,7 +185,7 @@ body {
 
 .btn:active {
   transform: translateY(3px);
-  box-shadow: 0 1px 0 var(--c-primary-dark);
+  box-shadow: 0 1px 0 var(--btn-edge);
 }
 
 .btn:focus-visible {
@@ -181,17 +204,28 @@ body {
   min-height: 60px;
 }
 
+/* Restrained actions: light and outlined, flat (differs in shape, not only in color) */
 .btn-secondary {
-  background: var(--c-secondary);
-  box-shadow: 0 4px 0 #34581f;
+  color: var(--c-neutral-ink);
+  background: var(--c-neutral-bg);
+  border-color: var(--c-neutral-ink);
+  box-shadow: none;
+}
+
+.btn-secondary:hover {
+  filter: none;
+  background: var(--c-neutral-press);
 }
 
 .btn-secondary:active {
-  box-shadow: 0 1px 0 #34581f;
+  background: var(--c-neutral-press);
+  transform: translateY(2px);
+  box-shadow: none;
 }
 
 .btn-small {
-  padding: 8px 14px;
+  /* 3px less than before on each side: the border of .btn takes them (same size as ever) */
+  padding: 5px 11px;
   font-size: 1rem;
 }
 
@@ -230,14 +264,18 @@ body {
 }
 
 .btn-choice {
-  background: #efe4d3;
-  color: var(--c-ink);
-  box-shadow: 0 3px 0 #c9b79d;
+  --btn-edge: var(--c-choice-edge);
+  background: var(--c-choice-bg);
+  color: var(--c-choice-ink);
+  box-shadow: 0 3px 0 var(--btn-edge);
 }
 
+/* Selected: amber with dark text and a dark border (not only a different color) */
 .btn-choice[aria-checked='true'] {
-  background: var(--c-accent);
-  box-shadow: 0 3px 0 #b8861b;
+  --btn-edge: var(--c-choice-on-edge);
+  background: var(--c-choice-on);
+  color: var(--c-choice-on-ink);
+  border-color: var(--c-choice-on-ink);
 }
 
 .btn-toggle {
@@ -245,6 +283,8 @@ body {
   width: 72px;
   height: 44px;
   padding: 0;
+  /* no border: the knob is positioned from the padding box and must sit in the middle */
+  border: 0;
   background: #cdbfa9;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
@@ -255,7 +295,7 @@ body {
 }
 
 .btn-toggle[aria-checked='true'] {
-  background: var(--c-secondary);
+  background: var(--c-positive);
 }
 
 .toggle-knob {
@@ -277,7 +317,7 @@ body {
 input[type='range'] {
   min-height: var(--touch-min);
   width: min(220px, 50vw);
-  accent-color: var(--c-primary);
+  accent-color: var(--c-positive);
 }
 
 /* Notices */
@@ -302,7 +342,7 @@ input[type='range'] {
 .notice h2 {
   margin: 12px 0 8px;
   font-size: clamp(1.5rem, 6vw, 2.2rem);
-  color: var(--c-primary-dark);
+  color: var(--c-brand);
 }
 
 .notice p {

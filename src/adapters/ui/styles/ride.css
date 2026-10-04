@@ -193,7 +193,7 @@
 .touch-btn {
   font: inherit;
   font-weight: 800;
-  color: #fff;
+  color: var(--c-touch-ink);
   border: 3px solid rgba(255, 255, 255, 0.85);
   background: rgba(40, 30, 20, 0.45);
   border-radius: 50%;
@@ -218,12 +218,12 @@
 .touch-jump {
   width: 112px;
   height: 112px;
-  background: rgba(200, 80, 46, 0.6);
+  background: color-mix(in srgb, var(--c-touch-jump) 80%, transparent);
   font-size: 1.1rem;
 }
 
 .touch-gallop.is-on {
-  background: rgba(91, 140, 58, 0.85);
+  background: color-mix(in srgb, var(--c-positive) 88%, transparent);
 }
 
 .touch-gallop-light {
@@ -235,8 +235,8 @@
 }
 
 .touch-gallop.is-on .touch-gallop-light {
-  background: #b6ff6b;
-  box-shadow: 0 0 10px #b6ff6b;
+  background: var(--c-touch-gallop-led);
+  box-shadow: 0 0 10px var(--c-touch-gallop-led);
 }
 
 .touch-small {
@@ -299,5 +299,21 @@
   .touch-jump {
     width: 92px;
     height: 92px;
+  }
+}
+
+/* Low landscape screens (phones): the five pause buttons sit in two columns so that all fit */
+@media (max-height: 560px) and (orientation: landscape) {
+  .panel-pause {
+    width: min(560px, 100%);
+    padding: 12px 20px;
+  }
+  .panel-pause .menu-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .panel-pause .menu-list > .btn-menu {
+    grid-column: 1 / -1;
   }
 }

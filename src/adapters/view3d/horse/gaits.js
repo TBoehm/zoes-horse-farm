@@ -71,6 +71,36 @@ export const GAITS = {
   },
 };
 
+// Shapes of the swing phase (u = 0 lift-off … 1 touch-down, result 0..1): the hoof lifts and the
+// joints fold early in the swing and the hoof is placed gently. `ease` keeps the slope at
+// lift-off finite (a plain power curve starts vertically, which shows as a snap at 60 fps).
+const ease = (u, a) => (u * (1 + a)) / (u + a);
+/** Hoof height over the swing. */
+export const swingLift = (u) => Math.sin(Math.PI * ease(u, 2));
+// Smooth hump over u ∈ [0, 1] with its peak at u = p and zero slope at 0, p and 1
+const hump = (u, p) =>
+  u < p ? smoothstep(0, 1, u / p) : 1 - smoothstep(0, 1, Math.min(1, (u - p) / (1 - p)));
+/** Carpus / hock flexion over the swing. */
+export const swingFlex = (u) => hump(u, 0.38);
+/** Pastern fold over the swing. */
+export const swingPast = (u) => hump(u, 0.36);
+/** Fore/aft travel over the swing (0 … 1, slow start and end). */
+export const swingTravel = (u) => u - Math.sin(2 * Math.PI * u) / (2 * Math.PI);
+
+/**
+ * Correction of the fore/aft travel of the swing that gives it the slope 1 (per unit of u) at both
+ * ends and next to nothing in between: add slope × swingEnds(u) to a path that starts and ends
+ * with zero slope. Zero at u = 0 and u = 1.
+ */
+export const swingEnds = (u) => u * Math.pow(1 - u, 6) - (1 - u) * Math.pow(u, 6);
+
+/** Lift scales a bit with speed within the gait (slow walk: flatter). */
+export function liftScaleFor(gait, v) {
+  if (gait === 'walk') return lerp(0.45, 1, clamp(v / 1.4, 0, 1));
+  if (gait === 'back') return lerp(0.5, 1, clamp(v / BACK_REF_SPEED, 0, 1));
+  return 1;
+}
+
 /** Maximum hoof travel per stance phase (beyond that the leg would overextend). */
 export const MAX_STANCE_TRAVEL = 1.15;
 
@@ -101,10 +131,7 @@ export function legSample(gait, leg, phi, v, f, lead = 1, out = {}) {
   const p = legPhase(phi, offsetsFor(gait, lead)[leg]);
   const L = f > 1e-4 ? Math.min(MAX_STANCE_TRAVEL, (d * v) / f) : 0;
   const c = g.center[leg];
-  // lift scales a bit with speed within the gait (slow walk: flatter)
-  let liftScale = 1;
-  if (gait === 'walk') liftScale = lerp(0.45, 1, clamp(v / 1.4, 0, 1));
-  else if (gait === 'back') liftScale = lerp(0.5, 1, clamp(v / BACK_REF_SPEED, 0, 1));
+  const liftScale = liftScaleFor(gait, v);
   if (p < d) {
     const u = p / d;
     out.dz = c + L / 2 - L * u;
@@ -115,11 +142,10 @@ export function legSample(gait, leg, phi, v, f, lead = 1, out = {}) {
     out.stance = true;
   } else {
     const u = (p - d) / (1 - d);
-    const e = u - Math.sin(2 * Math.PI * u) / (2 * Math.PI);
-    out.dz = c - L / 2 + L * e;
-    out.y = g.lift[leg] * liftScale * Math.sin(Math.PI * Math.pow(u, 0.75));
-    out.flex = g.flex[leg] * liftScale * Math.pow(Math.sin(Math.PI * Math.pow(u, 0.65)), 1.3);
-    out.past = g.past[leg] * liftScale * Math.sin(Math.PI * Math.pow(u, 0.55));
+    out.dz = c - L / 2 + L * swingTravel(u);
+    out.y = g.lift[leg] * liftScale * swingLift(u);
+    out.flex = g.flex[leg] * liftScale * swingFlex(u);
+    out.past = g.past[leg] * liftScale * swingPast(u);
     out.sink = 0;
     out.stance = false;
   }

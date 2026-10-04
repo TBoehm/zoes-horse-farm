@@ -5,7 +5,7 @@ import { createBadgesScreen } from './badges-screen.js';
 import { createMyHorseScreen } from './my-horse-screen.js';
 import { createNamePromptScreen } from './name-prompt.js';
 import { renderResetSection } from './reset-section.js';
-import { displayName, needsNamePrompt } from '../../../../application/horse-service.js';
+import { displayName } from '../../../../application/horse-service.js';
 
 export function registerProfile(app) {
   app.register('namePrompt', createNamePromptScreen);
@@ -31,9 +31,4 @@ export function registerProfile(app) {
     ),
   );
   registerSettingsSection({ id: 'reset', order: 90, render: renderResetSection });
-}
-
-/** First screen after the start: the name question until it was answered (rule 43). */
-export function firstScreen(store) {
-  return needsNamePrompt(store) ? 'namePrompt' : 'menu';
 }

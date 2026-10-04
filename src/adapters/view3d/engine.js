@@ -136,6 +136,9 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
   });
   world.scene.add(horse.object);
 
+  // contact points of the footfalls in the world, one vector for all of them
+  const footPoint = new THREE.Vector3();
+
   const emitter = createEmitter();
   const gate = createRenderGate();
   const reportError = createErrorReporter();
@@ -412,6 +415,16 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     cameraRig,
     world,
     horse,
+    /**
+     * Raises hoof dust for the footfalls of the last horse.update(). Call it after the horse
+     * object has been placed for the frame; the world decides where and how strong (sand only).
+     */
+    emitHoofDust() {
+      for (const ev of horse.footfalls) {
+        horse.footfallWorld(ev, footPoint);
+        world.emitHoofDust(footPoint.x, footPoint.y, footPoint.z, ev.strength);
+      }
+    },
     governor,
     get level() {
       return level;

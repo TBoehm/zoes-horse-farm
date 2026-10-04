@@ -2,15 +2,35 @@
 // Quality levels can be switched at runtime (the governor downgrades), stage by stage.
 import * as THREE from 'three';
 import { presetFor, QUALITY_PRESETS } from './quality.js';
+import { sameMaterialStage } from './quality-stages.js';
+import { createDetailHold } from './detail-hold.js';
 import { createSky, SKY_COLORS } from './sky.js';
 import { createArena, createCourseLines } from './arena.js';
 import { createEnvironment, SITE } from './environment.js';
 import { createObstacles } from './obstacles.js';
+import { createWind } from './plant-shaders.js';
 import { createAidMarker } from './aid-marker.js';
+import { createDust } from './dust.js';
+import { createGrazingHorses } from './horse/grazing.js';
+import { planPaddockKeepOut } from './decor-plan.js';
+import { PADDOCK, isOnArenaSand } from './world-layout.js';
+import { createRng } from './textures.js';
 import { collectGpuObjects, releaseNow } from './resilience.js';
 
 const SHADOW_HALF = 24; // half extent of the shadow camera (m)
 const SUN_DISTANCE = 90;
+// Grazing horses in the paddock: different coats, a fixed seed (the same picture every time)
+const GRAZING_COATS = Object.freeze(['grey', 'chestnut']);
+const GRAZING_SEED = 31;
+// The horses are only animated while the paddock (a sphere around it) is in view
+const PADDOCK_SPHERE = Object.freeze({
+  x: PADDOCK.x,
+  z: PADDOCK.z,
+  radius: Math.hypot(PADDOCK.width, PADDOCK.depth) / 2 + 3,
+});
+// Weakest footfall that raises hoof dust (a step at the walk does not)
+const DUST_MIN_STRENGTH = 0.3;
+const DUST_EDGE_MARGIN = 0.2; // m, no dust right at the fence
 
 /** Material pair: standard (medium/high) and Lambert (low) with the same base values. */
 function createMaterialPair(params) {
@@ -61,17 +81,30 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
   const sky = createSky({ sunDirection });
   scene.add(sky.group);
 
-  // arena, environment, obstacles, markings
-  const arena = createArena({ materialFactory, path: SITE.path, pathFence: SITE.pathFence });
+  // arena, environment, obstacles, markings; one wind moves the trees, the grass, the flowers, the
+  // bunting and the animals of all of them
+  const wind = createWind();
+  const arena = createArena({
+    materialFactory,
+    path: SITE.path,
+    pathFence: SITE.pathFence,
+    wind,
+  });
   scene.add(arena.group);
-  const environment = createEnvironment({ materialFactory });
+  const environment = createEnvironment({ materialFactory, wind });
   scene.add(environment.group);
-  const obstacles = createObstacles({ materialFactory, release });
+  const obstacles = createObstacles({ materialFactory, release, wind });
   scene.add(obstacles.group);
   const lines = createCourseLines({ materialFactory, release });
   scene.add(lines.group);
   const aid = createAidMarker();
   scene.add(aid.mesh);
+  // hoof dust over the sand; the pool follows the level (none on low)
+  const dust = createDust({ quality: 'low', release });
+  scene.add(dust.object);
+  // grazing horses of the paddock: built when a level has them (see syncGrazing)
+  let grazing = null;
+  let grazingCount = 0;
 
   // image-based light from the sky (PMREM; built lazily, freed on "low", rebuilt after a lost
   // WebGL context)
@@ -127,6 +160,13 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
     density: QUALITY_PRESETS.medium,
   };
 
+  // The optional details (flowers, tufts, birds, bunting, boxes, props) are not drawn while the
+  // materials stage and the density stage are at different levels: the shaders of everything
+  // visible change in between, and a detail that appears or disappears one stage later would be
+  // compiled twice (see detail-hold.js). Code that decides the visibility itself restores them
+  // first (density stage, new obstacles) and calls applyMeshes after it.
+  const detailHold = createDetailHold();
+
   function applyMeshes() {
     const lambert = stageState.materials.material === 'lambert';
     const { shadows, shadowCasters } = stageState.shadows;
@@ -137,6 +177,12 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
       e.mesh.castShadow = cast;
       e.mesh.receiveShadow = shadows && e.shadow !== 'none';
     }
+    detailHold.sync(
+      managed()
+        .filter((e) => e.detail)
+        .map((e) => e.mesh),
+      sameMaterialStage(stageState.materials, stageState.density),
+    );
   }
 
   // Each stage reads what is really there and changes only that, so a stage can be repeated and an
@@ -191,14 +237,71 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
     else if (!p.fog) scene.fog = null;
   }
 
-  /** Scenery: instance counts, geometry detail and the fog distances (no shader change). */
+  /**
+   * Scenery: instance counts, geometry detail, the details of a level (flowers, birds, butterflies,
+   * bunting, paddock, flower boxes, wind) and the fog distances. Meshes that appear here bring
+   * their own shader programs; the engine compiles after this stage.
+   */
   function applyDensityStage(p) {
+    detailHold.restore(); // the code below decides what is visible
     stageState.density = p;
     if (scene.fog && p.fog) {
       scene.fog.near = p.fog.near;
       scene.fog.far = p.fog.far;
     }
-    environment.setDensity(p.envDensity, p.grassTufts, p.envDetail);
+    environment.setDensity(p.envDensity, p.grassTufts, p.envDetail, {
+      flowers: p.flowers,
+      birds: p.birds,
+      butterflies: p.butterflies,
+      wind: p.wind,
+    });
+    const decor = p.decor ?? 0;
+    arena.setDetail(decor);
+    obstacles.setDecor(decor > 0);
+    dust.setQuality(p.hoofDust ? (p.level === 'high' ? 'high' : 'medium') : 'low');
+    syncGrazing(p);
+    applyMeshes(); // holds the details back if the materials stage is not at this level yet
+  }
+
+  /**
+   * The grazing horses of a level: made when the level has them, thrown away (and their GPU
+   * objects released) when it has none, rebuilt when their number changes, otherwise only their
+   * geometry detail follows the level.
+   */
+  function syncGrazing(p) {
+    const wanted = p.grazingHorses ?? 0;
+    if (grazing && wanted !== grazingCount) {
+      grazing.dispose();
+      grazing = null;
+    }
+    grazingCount = wanted;
+    if (wanted <= 0) return;
+    if (grazing) {
+      grazing.setQuality(p);
+      return;
+    }
+    grazing = createGrazingHorses({
+      quality: p,
+      area: { ...PADDOCK, avoid: planPaddockKeepOut() },
+      count: wanted,
+      coats: GRAZING_COATS,
+      rng: createRng(GRAZING_SEED),
+      release,
+    });
+    scene.add(grazing.group);
+  }
+
+  // scratch objects of the view test (see paddockInView)
+  const viewMatrix = new THREE.Matrix4();
+  const viewFrustum = new THREE.Frustum();
+  const paddockSphere = new THREE.Sphere(
+    new THREE.Vector3(PADDOCK_SPHERE.x, 0, PADDOCK_SPHERE.z),
+    PADDOCK_SPHERE.radius,
+  );
+  function paddockInView(camera) {
+    if (!camera) return true;
+    viewMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    return viewFrustum.setFromProjectionMatrix(viewMatrix).intersectsSphere(paddockSphere);
   }
 
   /**
@@ -299,6 +402,7 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
   return {
     scene,
     setObstacles(list, { flags = false } = {}) {
+      detailHold.restore();
       obstacles.setObstacles(list, { flags });
       approachDirs.clear();
       aid.hide();
@@ -378,7 +482,18 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
       shadowFocus.set(x, 0, z);
       updateShadowCamera();
     },
+    /**
+     * A footfall at the world position (x, y, z) of the sand: hoof dust, if the footfall is strong
+     * enough (not at the walk), on the sand of the arena (not on grass or the path) and the level
+     * has dust. `strength`: 0..1 (see horse.footfalls).
+     */
+    emitHoofDust(x, y, z, strength) {
+      if (strength < DUST_MIN_STRENGTH || !isOnArenaSand(x, z, DUST_EDGE_MARGIN)) return;
+      dust.emit(x, y, z, strength);
+    },
     update(dt, camera) {
+      dust.update(dt);
+      if (grazing && paddockInView(camera)) grazing.update(dt);
       sky.update(dt, camera);
       environment.update(dt);
       obstacles.update(dt, camera);
@@ -390,6 +505,9 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
       return collectGpuObjects(scene, [envTarget]);
     },
     dispose() {
+      grazing?.dispose();
+      grazing = null;
+      dust.dispose();
       obstacles.dispose();
       lines.dispose();
       aid.dispose();

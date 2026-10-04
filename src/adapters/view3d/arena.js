@@ -2,7 +2,17 @@
 import * as THREE from 'three';
 import { ARENA } from '../../domain/sim/tuning.js';
 import { releaseNow } from './resilience.js';
-import { FENCE, GATE, linePosts, planFence, planLines } from './world-layout.js';
+import {
+  FENCE,
+  GATE,
+  PADDOCK,
+  linePosts,
+  planFence,
+  planLines,
+  planPaddockFence,
+} from './world-layout.js';
+import { createArenaDecor } from './arena-decor.js';
+import { createWind } from './plant-shaders.js';
 import {
   createSandTextures,
   createGeometryBuilder,
@@ -90,43 +100,55 @@ function setWorldUv(geometry, tile) {
   uv.needsUpdate = true;
 }
 
-const FENCE_COLORS = { arena: 0xf4f1ea, wood: 0x8a6a4a, gate: 0xe9e4d8 };
+const FENCE_COLORS = { arena: 0xf4f1ea, wood: 0x8a6a4a, gate: 0xe9e4d8, paddock: 0x9a7650 };
 
-/** Builds post and board InstancedMeshes for all fences. */
-function buildFence(plan, materials) {
+const FENCE_HEIGHT = { arena: FENCE.height + 0.05, paddock: 1.3 };
+const FENCE_RAILS = {
+  arena: [
+    { y: 0.06, h: 0.28 }, // kick board
+    { y: 0.62, h: 0.13 },
+    { y: 1.05, h: 0.13 },
+  ],
+  paddock: [
+    { y: 0.4, h: 0.11 },
+    { y: 0.8, h: 0.11 },
+    { y: 1.2, h: 0.11 },
+  ],
+  wood: [
+    { y: 0.45, h: 0.1 },
+    { y: 0.85, h: 0.1 },
+  ],
+};
+
+function postOf(p) {
+  const h = FENCE_HEIGHT[p.style] ?? 1.0;
+  return { x: p.x, z: p.z, ry: 0, sx: FENCE.post, sy: h, sz: FENCE.post, color: p.style };
+}
+
+function boardsOf(s) {
+  return (FENCE_RAILS[s.style] ?? FENCE_RAILS.wood).map((r) => ({
+    x: s.x,
+    y: r.y,
+    z: s.z,
+    ry: s.ang,
+    sx: FENCE.board,
+    sy: r.h,
+    sz: s.len + FENCE.post,
+    color: s.style,
+  }));
+}
+
+/**
+ * Builds post and board InstancedMeshes for all fences. The fence of the paddock (`extra`) comes
+ * last in both meshes, so that `count` can leave it out: `baseCounts` are the instances without it.
+ */
+function buildFence(plan, extra, materials) {
   const unit = new THREE.BoxGeometry(1, 1, 1);
   unit.translate(0, 0.5, 0);
   const posts = [];
   const boards = [];
-  for (const p of plan.posts) {
-    const h = p.style === 'arena' ? FENCE.height + 0.05 : 1.0;
-    posts.push({ x: p.x, z: p.z, ry: 0, sx: FENCE.post, sy: h, sz: FENCE.post, color: p.style });
-  }
-  for (const s of plan.segments) {
-    const rails =
-      s.style === 'arena'
-        ? [
-            { y: 0.06, h: 0.28 }, // kick board
-            { y: 0.62, h: 0.13 },
-            { y: 1.05, h: 0.13 },
-          ]
-        : [
-            { y: 0.45, h: 0.1 },
-            { y: 0.85, h: 0.1 },
-          ];
-    for (const r of rails) {
-      boards.push({
-        x: s.x,
-        y: r.y,
-        z: s.z,
-        ry: s.ang,
-        sx: FENCE.board,
-        sy: r.h,
-        sz: s.len + FENCE.post,
-        color: s.style,
-      });
-    }
-  }
+  for (const p of plan.posts) posts.push(postOf(p));
+  for (const s of plan.segments) boards.push(...boardsOf(s));
   // gate: two strong posts, two leaves with boards and a brace
   const g = plan.gate;
   if (g) {
@@ -158,6 +180,10 @@ function buildFence(plan, materials) {
     }
   }
 
+  const baseCounts = { posts: posts.length, boards: boards.length };
+  for (const p of extra.posts) posts.push(postOf(p));
+  for (const s of extra.segments) boards.push(...boardsOf(s));
+
   const make = (list, name) => {
     const mesh = new THREE.InstancedMesh(unit, materials.standard, list.length);
     mesh.name = name;
@@ -186,14 +212,26 @@ function buildFence(plan, materials) {
     mesh.receiveShadow = true;
     return mesh;
   };
-  return { posts: make(posts, 'fence-posts'), boards: make(boards, 'fence-boards') };
+  return {
+    posts: make(posts, 'fence-posts'),
+    boards: make(boards, 'fence-boards'),
+    baseCounts,
+  };
 }
 
 /**
  * Arena. materialFactory(kind, params) returns a material pair { standard, lambert }
- * (the world handles quality switches).
+ * (the world handles quality switches). `wind` (createWind()) moves the bunting.
+ * `setDetail(decor)`: decor > 0 adds the paddock fence, the bunting (`decor` < 1: every second
+ * pennant), the pots at the gate and the props of the paddock; 0 leaves them out (low level).
  */
-export function createArena({ materialFactory, path, pathFence }) {
+export function createArena({
+  materialFactory,
+  path,
+  pathFence,
+  wind = createWind(),
+  paddock = PADDOCK,
+}) {
   const group = new THREE.Group();
   group.name = 'arena';
   const sand = createSandTextures({ size: 512 });
@@ -215,8 +253,12 @@ export function createArena({ materialFactory, path, pathFence }) {
 
   const fenceMats = materialFactory('fence', { color: 0xffffff, roughness: 0.72 });
   const plan = planFence({ pathFence });
-  const fence = buildFence(plan, fenceMats);
+  const fence = buildFence(plan, planPaddockFence(paddock), fenceMats);
   group.add(fence.posts, fence.boards);
+  const fenceTotals = { posts: fence.posts.count, boards: fence.boards.count };
+
+  const decor = createArenaDecor({ materialFactory, wind });
+  group.add(decor.group);
 
   return {
     group,
@@ -228,7 +270,14 @@ export function createArena({ materialFactory, path, pathFence }) {
       { mesh: ground, mats: sandMats, shadow: 'receive' },
       { mesh: fence.posts, mats: fenceMats, shadow: 'all' },
       { mesh: fence.boards, mats: fenceMats, shadow: 'all' },
+      ...decor.meshes,
     ],
+    setDetail(share) {
+      const withPaddock = share > 0;
+      fence.posts.count = withPaddock ? fenceTotals.posts : fence.baseCounts.posts;
+      fence.boards.count = withPaddock ? fenceTotals.boards : fence.baseCounts.boards;
+      decor.setDetail(share);
+    },
   };
 }
 

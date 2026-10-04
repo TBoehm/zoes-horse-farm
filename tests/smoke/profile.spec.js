@@ -37,6 +37,8 @@ test.describe('name question (first start)', () => {
     await expect(page.locator('[data-screen="namePrompt"]')).toBeVisible();
     await input.fill('  Sternchen  ');
     await ok.click();
+    // the controls help comes between the name question and the menu (rule 56)
+    await page.locator('[data-action="help-done"]').click();
     await expect(page.locator('[data-field="greeting"]')).toContainText('Sternchen');
     // spaces around the name are removed; the answer is saved
     expect(await storeSection(page, 'horse')).toMatchObject({
@@ -54,6 +56,7 @@ test.describe('name question (first start)', () => {
     await openGame(page);
     await webglOrSkip(page, test, browserName);
     await page.locator('[data-action="skip"]').click();
+    await page.locator('[data-action="help-done"]').click();
     const greeting = page.locator('[data-field="greeting"]');
     await expect(greeting).toContainText('Flash');
     // the default name changes with the language as long as there is no own name
@@ -76,6 +79,7 @@ test.describe('name question: language default name', () => {
     await webglOrSkip(page, test, browserName);
     await page.locator('[data-field="horseName"]').fill('Flash');
     await page.locator('[data-action="ok"]').click();
+    await page.locator('[data-action="help-done"]').click();
     await expect(page.locator('[data-field="greeting"]')).toContainText('Flash');
     expect(await storeSection(page, 'horse')).toMatchObject({ name: null, nameAnswered: true });
   });
@@ -90,7 +94,7 @@ test.describe('main menu entries', () => {
     const ids = await page
       .locator('[data-screen="menu"] [data-entry]')
       .evaluateAll((nodes) => nodes.map((n) => n.dataset.entry));
-    expect(ids).toEqual(['courses', 'free', 'horse', 'badges', 'settings']);
+    expect(ids).toEqual(['courses', 'free', 'horse', 'badges', 'help', 'settings']);
     await expect(page.locator('[data-field="greeting"]')).toContainText('Blitz');
   });
 });

@@ -45,6 +45,7 @@ export default [
       'public/generated/**',
       'test-results/**',
       'playwright-report/**',
+      '.claude/**',
     ],
   },
   js.configs.recommended,

@@ -18,6 +18,8 @@ addSettingsFields({
   aidCourse: field.bool(false),
   // fps counter in the ride (rule 4): off by default
   showFps: field.bool(false),
+  // the controls help was closed with "Got it" at least once (rule 56)
+  controlsHelpSeen: field.bool(false),
 });
 
 addSettingsFields({

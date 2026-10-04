@@ -99,3 +99,15 @@ describe('fps display setting field', () => {
     expect(settings.sanitize({ showFps: bad }, {}).showFps).toBe(false);
   });
 });
+
+describe('controls help flag', () => {
+  it('is off by default and in an old save without it (rule 56)', () => {
+    expect(settings.defaults({}).controlsHelpSeen).toBe(false);
+    expect(settings.sanitize({ lang: 'de' }, {}).controlsHelpSeen).toBe(false);
+  });
+
+  it('keeps a saved true and repairs a wrong type', () => {
+    expect(settings.sanitize({ controlsHelpSeen: true }, {}).controlsHelpSeen).toBe(true);
+    expect(settings.sanitize({ controlsHelpSeen: 'yes' }, {}).controlsHelpSeen).toBe(false);
+  });
+});
