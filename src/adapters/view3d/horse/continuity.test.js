@@ -22,6 +22,37 @@ vi.mock('./motion.js', async (importOriginal) => {
     },
   };
 });
+
+// The joint limiter (joint-limit.js) smooths every output of the leg IK, so a pop in the IK would be
+// spread over a few frames and the limits of the leg joints below would stay green. The tests
+// below therefore also look at what the limiter changes: it records |output - IK target| of every
+// call, and with `passThrough` it returns the IK target unchanged (the unlimited pose).
+const limiterProbe = vi.hoisted(() => ({ passThrough: false, records: [] }));
+vi.mock('./joint-limit.js', async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    limitJoint: (state, target, dt, maxSpeed, maxAccel) => {
+      if (limiterProbe.passThrough) return original.snapJoint(state, target);
+      const out = original.limitJoint(state, target, dt, maxSpeed, maxAccel);
+      limiterProbe.records.push({ correction: Math.abs(out - target), maxSpeed });
+      return out;
+    },
+  };
+});
+// A one-frame pop of the IK (the forearm of the left foreleg gets +1 rad at the given call).
+const ikPop = vi.hoisted(() => ({ at: -1, calls: 0 }));
+vi.mock('./ik.js', async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    solveFront: (rig, hz, hy, past, knee, scap, out, soft) => {
+      const result = original.solveFront(rig, hz, hy, past, knee, scap, out, soft);
+      if (ikPop.calls++ === ikPop.at) result[2] += 1;
+      return result;
+    },
+  };
+});
 import {
   FRAME,
   SEQUENCES,
@@ -243,6 +274,14 @@ const LEG_ACCEL = 0.3; // rad, change of the per-frame rotation from one frame t
 const ROOT_STEP = 0.08; // m per frame (the take-off rotates the body about the hind feet)
 const HOOF_STEP = 0.2; // m per frame, hoof relative to the body
 const IK_SLIDE = 0.004; // m per frame, planted hoof relative to the ground (IK error)
+// What the joint limiter may change (see limiterProbe). Measured: corrections of 0.10-0.15 rad in
+// the steady canter and up to 0.22 rad at the start of the canter and in the lead change; a
+// swinging hoof deviates by up to 5.5 cm from the unlimited pose (12.6 cm in the run-out).
+const LIMITER_CORRECTION = 0.25; // rad, per joint and frame
+const PLANTED_CORRECTION = 1e-4; // rad: a planted leg is not limited at all
+const HOOF_DEVIATION = 0.065; // m, swinging hoof vs. the unlimited pose
+// the run-out measures 12.6 cm; the brake of the refusal that starts in mid-canter 9 cm
+const HOOF_DEVIATION_BY_SEQUENCE = { runout: 0.14, refusalStop: 0.1 }; // m
 
 /**
  * Largest per-frame rotation (first difference) and largest change of that rotation from one
@@ -272,7 +311,9 @@ function createLegTracker() {
   };
 }
 
-function trackHorse(name) {
+function trackHorse(name, { unlimited = false } = {}) {
+  limiterProbe.passThrough = unlimited;
+  limiterProbe.records = [];
   const horse = createHorse({ quality: 'low', rider: false, rng: createRng(3) });
   const m = created[created.length - 1];
   const bones = [];
@@ -285,6 +326,7 @@ function trackHorse(name) {
   const hoof = { step: 0, slide: 0, where: '' };
   const root = { prev: null, step: 0, where: '' };
   const v = new THREE.Vector3();
+  const hoofFrames = []; // per frame and leg: the hoof in the horse frame (null while planted)
   let z = 0;
   runScript(
     SEQUENCES[name],
@@ -314,8 +356,11 @@ function trackHorse(name) {
         m.stopWeight < 0.01 &&
         m.runoutWeight < 0.01 &&
         Math.abs(state.turnRate || 0) < 0.3;
+      const frameHooves = [];
+      hoofFrames.push(frameHooves);
       for (let k = 0; k < 4; k++) {
         v.copy(HOOF_REST[k]).sub(FETLOCK_REST[k]).applyMatrix4(byName[PASTERN[k]].matrixWorld);
+        frameHooves.push({ pos: v.clone(), swinging: m.legs[k].y > 0 });
         const planted = m.legs[k].y === 0 && !m.legs[k].squaring && poseFree;
         if (prevHoof[k]) {
           const d = Math.hypot(v.z - prevHoof[k].z, v.y - prevHoof[k].y);
@@ -342,7 +387,42 @@ function trackHorse(name) {
     },
   );
   horse.dispose();
-  return { worst, legs: legs.worst, hoof, root };
+  limiterProbe.passThrough = false;
+  return { worst, legs: legs.worst, hoof, root, hoofFrames, limiter: limiterProbe.records };
+}
+
+/**
+ * What the joint limiter did in a sequence: its largest correction, the largest correction of a
+ * planted leg (the limiter gives a planted leg the larger room, see STANCE_LIMIT_FACTOR) and how
+ * far a swinging hoof is from where the unlimited IK pose puts it.
+ */
+function limiterEffect(name) {
+  const limited = trackHorse(name);
+  const unlimited = trackHorse(name, { unlimited: true });
+  const stanceSpeed = Math.max(...limited.limiter.map((r) => r.maxSpeed));
+  const swingSpeed = Math.min(...limited.limiter.map((r) => r.maxSpeed));
+  let correction = 0;
+  let planted = 0;
+  for (const r of limited.limiter) {
+    if (r.maxSpeed === stanceSpeed && stanceSpeed > swingSpeed) {
+      planted = Math.max(planted, r.correction);
+    } else {
+      correction = Math.max(correction, r.correction);
+    }
+  }
+  let deviation = 0;
+  let where = '';
+  limited.hoofFrames.forEach((hooves, i) => {
+    hooves.forEach((h, k) => {
+      if (!h.swinging) return;
+      const d = h.pos.distanceTo(unlimited.hoofFrames[i][k].pos);
+      if (d > deviation) {
+        deviation = d;
+        where = `leg ${k} frame ${i}`;
+      }
+    });
+  });
+  return { correction, planted, deviation, where, calls: limited.limiter.length };
 }
 
 describe('full animation continuity at 60 fps (bones of the real horse)', () => {
@@ -356,7 +436,33 @@ describe('full animation continuity at 60 fps (bones of the real horse)', () => 
       expect(hoof.step).toBeLessThanOrEqual(HOOF_STEP);
       expect(hoof.slide, `hoof ${hoof.where}`).toBeLessThanOrEqual(IK_SLIDE);
     });
+
+    it(`${name}: the joint limiter only smooths small kinks of the IK`, () => {
+      const { correction, planted, deviation, where, calls } = limiterEffect(name);
+      expect(calls).toBeGreaterThan(0);
+      expect(correction, 'largest correction of a leg joint (rad)').toBeLessThanOrEqual(
+        LIMITER_CORRECTION,
+      );
+      expect(planted, 'correction of a planted leg (rad)').toBeLessThanOrEqual(PLANTED_CORRECTION);
+      const limit = HOOF_DEVIATION_BY_SEQUENCE[name] ?? HOOF_DEVIATION;
+      expect(deviation, `swinging hoof vs. unlimited pose at ${where}`).toBeLessThanOrEqual(limit);
+    });
   }
+
+  // The IK of the left foreleg gets a pop of 1 rad at one frame of the jump sequence (the front legs
+  // are solved first, twice per frame). The unlimited second run of limiterEffect is past that call
+  // and stays clean. The limiter spreads the pop, so the limits of the leg joints do not see it.
+  it('the guards catch a pop of the IK in the swing of a hoof', () => {
+    ikPop.at = 2 * 205;
+    ikPop.calls = 0;
+    try {
+      const { correction, deviation } = limiterEffect('jump');
+      expect(correction).toBeGreaterThan(LIMITER_CORRECTION);
+      expect(deviation).toBeGreaterThan(HOOF_DEVIATION);
+    } finally {
+      ikPop.at = -1;
+    }
+  });
 });
 
 // --- jumps from every gait, with the real height of the horse and the rider on top ---------------

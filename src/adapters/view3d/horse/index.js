@@ -74,8 +74,8 @@ const AIRBORNE_SOFT_REACH = 0.16;
 const AIRBORNE_RAMP = 0.15;
 const AIRBORNE_RATE = 10; // 1/s, how fast the soft zone follows
 // Limit of the leg joints (see joint-limit.js): 0.33 rad per frame and 0.25 rad per frame and
-// frame at 60 fps. Smooth motion never reaches it; only the kinks of the IK do. A hoof on the
-// ground gets twice the room: limiting it would make it slide over the ground.
+// frame at 60 fps. It smooths the IK kinks of every canter stride (an error of up to about 0.15
+// rad). A hoof on the ground gets twice the room: limiting it would make it slide over the ground.
 const LEG_JOINT_LIMIT = Object.freeze({ speed: 20, accel: 900 });
 const STANCE_LIMIT_FACTOR = 2;
 const PI = POSE_KEYS.reduce((o, k, i) => ((o[k] = i), o), {});
