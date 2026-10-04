@@ -42,6 +42,15 @@ export function nextUpgradeLevel({ level, blocked = [], left = [], fits = () => 
 }
 
 /**
+ * Whether the upgrade governor may measure at all: only while riding (`measuring`) and with
+ * "Automatic" on (`auto`). A manually chosen level is never raised, so it gets no measurement.
+ * @param {{ measuring: boolean, auto: boolean }} input
+ */
+export function upgradeMeasuring({ measuring, auto }) {
+  return Boolean(measuring) && Boolean(auto);
+}
+
+/**
  * @param {object} deps
  * @param {() => string|null} deps.chooseTarget the level to climb to (see nextUpgradeLevel), or
  *   null; only called once the frame rate says go

@@ -135,8 +135,7 @@ ausstehenden unbewerteten 3-s-Wiederaufbau desselben Elements ab. Das HUD-Modell
 `services.ride` (`{ session, engine, screen }`, gesetzt vom Ritt-Bildschirm, beim Verlassen entfernt)
 ist **nur für den Test-Hook** (`adapters/platform/test-hooks.js`, nur mit `?testhooks`): er liest
 daraus einen Schnappschuss. Produktionscode liest es nicht.
-Der Test-Hook bietet außer Lesefunktionen `go(name, params)`, `setAutoLevel(level)` (ändert die
-Stufe wie der Governor: Automatik bleibt an) sowie `loseContext()` / `restoreContext()`
+Der Test-Hook bietet außer Lesefunktionen `go(name, params)` sowie `loseContext()` / `restoreContext()`
 (simulierter WebGL-Kontextverlust über `WEBGL_lose_context`, Rückgabe `false` ohne Engine oder
 Erweiterung); der Schnappschuss enthält `contextLost` und `graphicsSettling` (ein Stufenwechsel
 läuft noch: Schritte ausstehend, Pixel-Ratio vorgemerkt oder Shader werden kompiliert) und
@@ -1053,12 +1052,14 @@ addBlockedLevel(blocked, level)    // rein: eindeutig, von low nach high geordne
   läuft sie wie zuvor.
 - **Tests:** `crash-guard.test.js`, `page-lifecycle.test.js`, `tab-id.test.js`, `test-hooks.test.js` (Frame-Feed)
   und `quality-upgrade.test.js` tragen die Regeln (eigene und fremde Tab-Markierung, Schonzeiten, gesperrte, über dem
-  Budget liegende und wegen Ruckelns verlassene Stufen, Hinweis einmal, alter Spielstand, Diagnose-Zeile). Im Browser
+  Budget liegende und wegen Ruckelns verlassene Stufen, Hinweis einmal, alter Spielstand; `debug-display.test.js` für die Diagnose-Zeile). Im Browser
   sind es nur Smoke-Tests: `tests/smoke/graphics-crash.spec.js` (Absturz bei Automatik → `low` und Automatik bleibt;
   manuell über `low` → Hinweis; die Markierung folgt dem Ritt; ein normales Neuladen im Ritt ist kein Absturz) und
   `tests/smoke/graphics-upgrade.spec.js` (erster Start bei `low`; mit schnellen Frames `low → medium`, gespeichert, die
   Diagnose-Box nennt den Grund, der Ritt bleibt lenkbar und die Stufe gilt beim nächsten Start). Der Aufstieg treibt
-  die Messung über `__zhfTest.setFrameFeed` statt über echte Wartezeiten.
+  die Messung über `__zhfTest.setFrameFeed` statt über echte Wartezeiten. Dass eine manuelle Stufe nie hochgestuft
+  wird, sichert die reine Torfunktion `upgradeMeasuring({ measuring, auto })` (`quality-upgrade.js`), die die Engine vor
+  jedem Messschritt des Aufstiegs fragt (Test in `quality-upgrade.test.js`).
 
 ### Diagnose-Box (`?debug`)
 
@@ -1109,7 +1110,23 @@ TDD für `domain` und `application` (Test zuerst). Adapter: reine Hilfsfunktione
 Verhalten im Browser per Smoke-Test (`tests/smoke/`, nur Chromium, u. a. `colors.spec.js` für die Button-Farben und
 `help.spec.js` für die Bedienungs-Tipps; die Grafik-Specs `graphics*.spec.js` bleiben klein: je ein Ablauf pro
 Funktion, Grenzwerte und Sonderfälle gehören in Unit-Tests, und "das Bild steht" prüft `expectPicture` über eine
-kleine Kopie der Zeichenfläche statt über einen Screenshot). Adapter-Tests ohne Browser laufen in Node: three.js-Szenen
+kleine Kopie der Zeichenfläche statt über einen Screenshot; sie zählt Farben im ganzen Bild und in der unteren
+Hälfte, damit der Himmel allein nicht als Szene gilt: Himmel 8 bzw. 1 Farbe, Reit-Szene 88 bis 178 bzw. 27 bis 47,
+Grenzen 40 bzw. 12 in `tests/smoke/helpers.js`). Adapter-Tests ohne Browser laufen in Node: three.js-Szenen
 über `tests/support/scene-stats.js` und `fake-canvas.js` (Draw Calls, Dreiecke, Texturen ohne GL),
 Bewegung über `tests/support/sequence-helper.js` (Kontinuität von Frame zu Frame), Farben über
 `tests/support/color.js`.
+
+**Bewusst nicht mehr abgedeckt (Entscheidung des Nutzers, die Grafik-Smoke-Tests klein zu halten):** Die
+folgende Verdrahtung hat weder einen Smoke- noch einen Unit-Test, nur die Regeln dahinter sind unit-getestet
+(`quality.test.js`, `resilience.test.js`, `crash-guard.test.js`, `debug-display.test.js`). Wer sie anfasst, prüft sie
+von Hand im Browser.
+
+- Ritt-Bildschirm: Neuladen-Angebot nach dem Wächter der Wiederherstellung (Hinweistext, Schaltfläche
+  „Neu laden“ sichtbar und fokussiert; späte Wiederherstellung führt zurück ins normale Menü).
+- Ein Kontextverlust vor dem Start des Rittes: der Ritt beginnt pausiert.
+- Engine bei Kontextverlust: der Zeichenpuffer schrumpft, solange der Kontext fehlt; ein gezählter Verlust sperrt
+  die Stufe (`crashGuard.blockLevel`).
+- Manueller Wechsel auf `high`: die Prüfung gegen das Budget (`applyQuality` → `fitFor`).
+- Verdrahtung des Hinweises bei niedriger fps (`canHintLowerLevel` → Toast).
+- Die Diagnose-Box existiert ohne `?debug` nicht (Verdrahtung in `main.js` und im Ritt-Bildschirm).

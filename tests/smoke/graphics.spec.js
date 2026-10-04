@@ -85,7 +85,7 @@ test.describe('graphics level switch during a ride (rule 4)', () => {
 });
 
 test.describe('graphics level switch with touch (rule 4)', () => {
-  // A small window keeps the software renderer fast enough, also for "high"
+  // A small window keeps the software renderer fast enough
   test.use({ viewport: { width: 640, height: 360 }, hasTouch: true, isMobile: true });
 
   /** Pause → settings → pick a graphics level → back → continue, all by tapping. */

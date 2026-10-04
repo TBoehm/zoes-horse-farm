@@ -157,14 +157,15 @@ export async function canvasScreenshotSize(page) {
 }
 
 /**
- * Number of distinct colours in a small copy of the 3D canvas as it was drawn in the next frame (a
- * blank or flat canvas gives 1). It reads the drawing buffer inside an animation frame callback,
- * which runs after the engine's own callback of the same frame, while the buffer is still valid. A
- * screenshot of the canvas costs seconds on the software renderer of the CI browser (a PNG of the
- * full device-pixel picture), this costs a few milliseconds. Colours are quantised to 4 bits per
- * channel, so a smooth gradient does not count as a picture.
+ * Distinct colours in a small copy of the 3D canvas as it was drawn in the next frame, in the whole
+ * picture (`total`) and in its lower half only (`lower`). A blank or flat canvas gives 1. It reads
+ * the drawing buffer inside an animation frame callback, which runs after the engine's own callback
+ * of the same frame, while the buffer is still valid. A screenshot of the canvas costs seconds on
+ * the software renderer of the CI browser (a PNG of the full device-pixel picture), this costs a few
+ * milliseconds. Colours are quantised to 4 bits per channel, so a smooth gradient is only a few
+ * colours.
  */
-export function canvasColorCount(page) {
+export function canvasColorStats(page) {
   return page.evaluate(
     () =>
       new Promise((resolve) => {
@@ -176,24 +177,41 @@ export function canvasColorCount(page) {
           const context = probe.getContext('2d', { willReadFrequently: true });
           context.drawImage(canvas, 0, 0, probe.width, probe.height);
           const { data } = context.getImageData(0, 0, probe.width, probe.height);
-          const colors = new Set();
+          const all = new Set();
+          const lower = new Set();
           for (let i = 0; i < data.length; i += 4) {
-            colors.add(((data[i] >> 4) << 8) | ((data[i + 1] >> 4) << 4) | (data[i + 2] >> 4));
+            const color = ((data[i] >> 4) << 8) | ((data[i + 1] >> 4) << 4) | (data[i + 2] >> 4);
+            all.add(color);
+            if (i >= data.length / 2) lower.add(color);
           }
-          resolve(colors.size);
+          resolve({ total: all.size, lower: lower.size });
         });
       }),
   );
 }
 
-// A drawn ride scene has about 120 of these colours at 640 × 400; a blank canvas has 1
-const MIN_PICTURE_COLORS = 12;
+// Measured on the software renderer (4-bit colours, probe of 64 × 40): the sky alone gives 8 in
+// the whole picture and 1 in the lower half (at 640 × 400, 640 × 360 and 900 × 420; a sun in view
+// may add some, so the limit has room above it); a ride scene gives 88 to 178 in total (lowest: low,
+// 640 × 360) and 27 to 47 in the lower half. The limits sit between the two.
+const MIN_PICTURE_COLORS = 40;
+const MIN_LOWER_HALF_COLORS = 12;
 
-/** Waits until the 3D canvas shows a real picture (not blank, not one flat colour). */
+/**
+ * Waits until the 3D canvas shows a drawn scene, not only the sky (a blank canvas, one flat colour
+ * or the sky gradient alone). A ride scene (arena, horse, scenery) has far more colours than the
+ * sky shader, in the lower half of the picture too (the ground, which the sky never covers).
+ */
 export const expectPicture = (page, timeout = 30_000) =>
   expect
-    .poll(() => canvasColorCount(page), { timeout, message: 'the 3D canvas shows a picture' })
-    .toBeGreaterThanOrEqual(MIN_PICTURE_COLORS);
+    .poll(
+      async () => {
+        const { total, lower } = await canvasColorStats(page);
+        return total >= MIN_PICTURE_COLORS && lower >= MIN_LOWER_HALF_COLORS;
+      },
+      { timeout, message: 'the 3D canvas shows a drawn scene, not only the sky' },
+    )
+    .toBe(true);
 
 /** Touch input through the Chrome DevTools Protocol (real touch events, like a finger). */
 export async function createFinger(page) {

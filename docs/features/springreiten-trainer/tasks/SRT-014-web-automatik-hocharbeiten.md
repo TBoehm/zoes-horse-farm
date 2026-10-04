@@ -59,8 +59,9 @@ zusätzlich gesperrte Stufen und den Grund des letzten Wechsels.
   the governor changes the level (down or up): automatic stays on; Smoke-Test:
   graphics-upgrade.spec.js › fast frames: low → medium, saved, …)
 - [x] Manuelle Stufe: keine Automatik, kein Hochstufen (Regel 4). (Nachweis: quality.test.js ›
-  createQualityGovernor › never upgrades / auto=false never changes; settings-service.test.js ›
-  graphics › manual level: auto off, level saved)
+  createQualityGovernor › never upgrades / auto=false never changes; quality-upgrade.test.js ›
+  upgradeMeasuring (a manual level is never raised, rule 4) › never measures with a manual level, however
+  fast the frames are; settings-service.test.js › graphics › manual level: auto off, level saved)
 - [x] Die fps-Anzeige folgt jedem Wechsel sofort; `?debug` zeigt gesperrte Stufen (Regel 4). (Nachweis:
   debug-display.test.js › automatic level changes (rule 4) › lists the blocked levels … / shows the
   reason of the last automatic change; fps-display.test.js › formatFpsText › marks an automatically

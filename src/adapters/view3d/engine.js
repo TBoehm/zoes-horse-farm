@@ -12,7 +12,7 @@ import {
   QUALITY_PRESETS,
   startupCrashChange,
 } from './quality.js';
-import { createUpgradeGovernor, nextUpgradeLevel } from './quality-upgrade.js';
+import { createUpgradeGovernor, nextUpgradeLevel, upgradeMeasuring } from './quality-upgrade.js';
 import {
   createStageQueue,
   planQualityStagesFromState,
@@ -295,7 +295,7 @@ export function createEngine({ app, settings: settingsService, inputMode }) {
     const before = level;
     downgrade.frame(dt, measuring);
     if (level !== before) return; // stepped down in this frame
-    const climb = upgrade.frame(dt, measuring && downgrade.auto, busy);
+    const climb = upgrade.frame(dt, upgradeMeasuring({ measuring, auto: downgrade.auto }), busy);
     if (climb) climbTo(climb);
   }
 

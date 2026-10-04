@@ -1,9 +1,9 @@
 // Test hook for browser tests (smoke tests, manual play-tests): `window.__zhfTest`.
 // Only installed when the URL contains `?testhooks`; the game itself never uses it. The helpers
 // return plain copies of the state; `go` (jumps to a screen, e.g. to look at the results screen
-// without riding a whole course), `setAutoLevel` (a governor-style level change) and
-// `loseContext` / `restoreContext` (simulated WebGL context loss) and `setFrameFeed` (replaces the
-// frame times the graphics automatic measures) are the only actions.
+// without riding a whole course), `loseContext` / `restoreContext` (simulated WebGL context loss)
+// and `setFrameFeed` (replaces the frame times the graphics automatic measures) are the only
+// actions.
 
 const round = (n, digits = 3) => (Number.isFinite(n) ? Number(n.toFixed(digits)) : n);
 
@@ -112,8 +112,6 @@ export function installTestHooks({ app, store, inputMode, target = window }) {
     audio: () => app.services.audio?.getState?.() ?? null,
     touchMode: () => inputMode.touch,
     go: (name, params) => app.go(name, params),
-    // The way the frame-rate governor changes the level: lowers it with "Automatic" staying on
-    setAutoLevel: (level) => app.ctx.settings.setAutoLevel(level),
     // Simulates a lost / restored WebGL context (WEBGL_lose_context) to test rule 4. Returns false
     // when there is no engine or the browser does not offer the extension.
     loseContext: () => contextLoss('loseContext'),
