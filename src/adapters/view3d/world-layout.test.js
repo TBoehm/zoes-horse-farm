@@ -27,6 +27,11 @@ import {
   isBlocked,
   scatter,
   instanceCount,
+  PADDOCK,
+  paddockPoint,
+  paddockContains,
+  planPaddockFence,
+  SITE,
   POLE_RADIUS,
   STAND_X,
 } from './world-layout.js';
@@ -339,5 +344,97 @@ describe('environment', () => {
     expect(instanceCount(100, 10, 1)).toBe(100);
     expect(instanceCount(100, 10, 0.5)).toBe(55);
     expect(instanceCount(5, 10, 0.5)).toBe(5);
+  });
+});
+
+describe('paddock', () => {
+  const rotated = { x: 10, z: -5, width: 20, depth: 14, rotation: 0.6 };
+
+  it('has a documented rectangle on the meadow', () => {
+    expect(PADDOCK.width).toBeGreaterThanOrEqual(18);
+    expect(PADDOCK.depth).toBeGreaterThanOrEqual(12);
+    expect(Object.isFrozen(PADDOCK)).toBe(true);
+  });
+
+  it('does not touch the arena, the stable, the path, the hut or the benches', () => {
+    const corners = [
+      paddockPoint(1, 1),
+      paddockPoint(1, -1),
+      paddockPoint(-1, 1),
+      paddockPoint(-1, -1),
+    ];
+    const half = { x: ARENA.width / 2 + 3, z: ARENA.length / 2 + 3 };
+    for (const c of corners) {
+      expect(Math.abs(c.x) > half.x || Math.abs(c.z) > half.z).toBe(true);
+      // stable footprint (with a gap) and the path fences
+      const st = SITE.stable;
+      const inStable =
+        Math.abs(c.x - st.x) < st.depth / 2 + 2 && Math.abs(c.z - st.z) < st.length / 2 + 2;
+      expect(inStable).toBe(false);
+      expect(c.z).toBeLessThan(SITE.pathFence[1].a[1] - 4);
+    }
+    expect(Math.hypot(PADDOCK.x - SITE.hut.x, PADDOCK.z - SITE.hut.z)).toBeGreaterThan(40);
+  });
+
+  it('is on flat ground', () => {
+    for (const [u, v] of [
+      [0, 0],
+      [1, 1],
+      [-1, -1],
+    ]) {
+      const p = paddockPoint(u, v);
+      expect(terrainHeight(p.x, p.z)).toBe(0);
+    }
+  });
+
+  it('paddockPoint maps the unit square to the rectangle, also when rotated', () => {
+    expect(paddockPoint(0, 0)).toEqual({ x: PADDOCK.x, z: PADDOCK.z });
+    const edge = paddockPoint(1, 0);
+    expect(edge.x).toBeCloseTo(PADDOCK.x + PADDOCK.width / 2, 9);
+    const r = paddockPoint(1, 0, rotated);
+    expect(Math.hypot(r.x - rotated.x, r.z - rotated.z)).toBeCloseTo(rotated.width / 2, 9);
+    const back = paddockPoint(0, 1, rotated);
+    expect(Math.hypot(back.x - rotated.x, back.z - rotated.z)).toBeCloseTo(rotated.depth / 2, 9);
+  });
+
+  it('paddockContains follows the rotated rectangle and the margin', () => {
+    expect(paddockContains(PADDOCK.x, PADDOCK.z)).toBe(true);
+    expect(paddockContains(PADDOCK.x + PADDOCK.width / 2 + 0.1, PADDOCK.z)).toBe(false);
+    expect(paddockContains(PADDOCK.x + PADDOCK.width / 2 - 0.5, PADDOCK.z, 1)).toBe(false);
+    expect(paddockContains(PADDOCK.x + PADDOCK.width / 2 + 0.5, PADDOCK.z, -1)).toBe(true);
+    for (const [u, v] of [
+      [0.9, 0.9],
+      [-0.9, 0.9],
+      [0.9, -0.9],
+      [0, 0],
+    ]) {
+      const p = paddockPoint(u, v, rotated);
+      expect(paddockContains(p.x, p.z, 0, rotated)).toBe(true);
+    }
+    const outside = paddockPoint(1.2, 0, rotated);
+    expect(paddockContains(outside.x, outside.z, 0, rotated)).toBe(false);
+  });
+
+  it('is blocked for plants, with a clearance around the fence', () => {
+    expect(isBlocked(PADDOCK.x, PADDOCK.z)).toBe(true);
+    expect(isBlocked(PADDOCK.x + PADDOCK.width / 2 + 0.5, PADDOCK.z)).toBe(true);
+    expect(isBlocked(PADDOCK.x - PADDOCK.width / 2 - 2, PADDOCK.z)).toBe(false);
+  });
+
+  it('planPaddockFence runs along the four sides with unique posts', () => {
+    const plan = planPaddockFence();
+    const perimeter = 2 * (PADDOCK.width + PADDOCK.depth);
+    const length = plan.segments.reduce((sum, s) => sum + s.len, 0);
+    expect(length).toBeCloseTo(perimeter, 6);
+    expect(plan.segments.every((s) => s.style === 'paddock')).toBe(true);
+    expect(plan.posts).toHaveLength(plan.segments.length);
+    const keys = new Set(plan.posts.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`));
+    expect(keys.size).toBe(plan.posts.length);
+    // every post is on the fence line
+    for (const p of plan.posts) {
+      const onX = Math.abs(Math.abs(p.x - PADDOCK.x) - PADDOCK.width / 2) < 1e-6;
+      const onZ = Math.abs(Math.abs(p.z - PADDOCK.z) - PADDOCK.depth / 2) < 1e-6;
+      expect(onX || onZ).toBe(true);
+    }
   });
 });

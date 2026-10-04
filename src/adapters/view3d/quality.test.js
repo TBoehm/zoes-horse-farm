@@ -92,6 +92,26 @@ describe('QUALITY_PRESETS', () => {
     expect(QUALITY_PRESETS.low.material).toBe('lambert');
   });
 
+  it('adds the details of SRT-011 level by level: none on low, the most on high', () => {
+    const { low, medium, high } = QUALITY_PRESETS;
+    for (const key of ['grassTufts', 'flowers', 'decor', 'birds', 'butterflies']) {
+      expect(low[key], `low ${key}`).toBe(0);
+      expect(medium[key], `medium ${key}`).toBeLessThanOrEqual(high[key]);
+      expect(high[key], `high ${key}`).toBeGreaterThan(0);
+    }
+    expect(low.wind).toBe(false);
+    expect(medium.wind).toBe(true);
+    expect(high.wind).toBe(true);
+    // moderate flowers, grass and animals on medium, butterflies only on high
+    expect(medium.flowers).toBeGreaterThan(0);
+    expect(medium.flowers).toBeLessThan(high.flowers);
+    expect(medium.grassTufts).toBeGreaterThan(0);
+    expect(medium.grassTufts).toBeLessThan(high.grassTufts);
+    expect(medium.birds).toBeGreaterThan(0);
+    expect(medium.butterflies).toBe(0);
+    expect(high.butterflies).toBeGreaterThan(0);
+  });
+
   it('antialiasing is off on low and on above', () => {
     expect(QUALITY_PRESETS.low.antialias).toBe(false);
     expect(QUALITY_PRESETS.medium.antialias).toBe(true);
@@ -477,8 +497,49 @@ describe('estimateGpuMemoryMB', () => {
   it('adds drawing buffer, shadow map, environment map, textures and scenery (high on a tablet)', () => {
     // 2560 × 1600 px × 40 B (MSAA ×4 colour+depth, two colour buffers) = 156.25 MiB; shadow map
     // 2048² × 8 B = 32 MiB; environment map 6 MiB; 3 textures with mipmaps 4 MiB; baseline 16 MiB;
-    // scenery 2 + 1 MiB
-    expect(estimate('high')).toBeCloseTo(217.25, 1);
+    // scenery 2 MiB, grass tufts 2, flowers 0.5, decoration 0.5, animals 0.1
+    expect(estimate('high')).toBeCloseTo(219.35, 1);
+  });
+
+  it('counts the details of the scenery and scales them with the preset', () => {
+    const base = QUALITY_PRESETS.high;
+    const cost = (key, off = 0) =>
+      estimateGpuMemoryMB(base, TABLET) - estimateGpuMemoryMB({ ...base, [key]: off }, TABLET);
+    expect(cost('grassTufts')).toBeCloseTo(2, 5);
+    expect(cost('flowers')).toBeCloseTo(0.5, 5);
+    expect(cost('decor')).toBeCloseTo(0.5, 5);
+    // birds and butterflies share one small cost: only both off saves it
+    expect(cost('birds')).toBe(0);
+    const noAnimals = estimateGpuMemoryMB({ ...base, birds: 0, butterflies: 0 }, TABLET);
+    expect(estimateGpuMemoryMB(base, TABLET) - noAnimals).toBeCloseTo(0.1, 5);
+    // half the flowers cost half
+    expect(cost('flowers', 0.5)).toBeCloseTo(0.25, 5);
+  });
+
+  it('every detail that a level shows is part of its estimate (low carries none)', () => {
+    const low = QUALITY_PRESETS.low;
+    const stripped = {
+      ...low,
+      grassTufts: 0,
+      flowers: 0,
+      decor: 0,
+      birds: 0,
+      butterflies: 0,
+    };
+    expect(estimateGpuMemoryMB(low, TABLET)).toBeCloseTo(estimateGpuMemoryMB(stripped, TABLET), 9);
+    for (const level of ['medium', 'high']) {
+      const preset = QUALITY_PRESETS[level];
+      const without = { ...preset, flowers: 0, decor: 0, birds: 0, butterflies: 0, grassTufts: 0 };
+      expect(estimateGpuMemoryMB(preset, TABLET)).toBeGreaterThan(
+        estimateGpuMemoryMB(without, TABLET),
+      );
+    }
+  });
+
+  it('copes with presets that know none of the newer details', () => {
+    const old = { ...QUALITY_PRESETS.medium };
+    for (const key of ['flowers', 'decor', 'birds', 'butterflies']) delete old[key];
+    expect(Number.isFinite(estimateGpuMemoryMB(old, TABLET))).toBe(true);
   });
 
   it('grows with the square of the pixel ratio', () => {
@@ -623,10 +684,24 @@ describe('fitPresetToBudget', () => {
     expect(result.preset.envDensity).toBe(1); // the tufts were enough
     const tiny = fit('high', 20);
     expect(tiny.preset.grassTufts).toBe(0);
+    expect(tiny.preset.flowers).toBe(0);
     expect(tiny.preset.envDensity).toBe(0.55);
     expect(tiny.preset.pixelRatio).toBe(1);
     expect(tiny.preset.shadowMapSize).toBe(1024);
     expect(tiny.fits).toBe(false); // best effort: the level still plays
+  });
+
+  it('drops the flowers after the tufts and before the trees and bushes', () => {
+    const atRatio1 = { ...TABLET, pixelRatio: 1 };
+    const cheapest = (p) => estimateGpuMemoryMB({ ...p, shadowMapSize: 1024 }, atRatio1);
+    const justWithout = cheapest({ ...QUALITY_PRESETS.high, grassTufts: 0 });
+    const result = fit('high', justWithout - 0.1);
+    expect(result.preset.grassTufts).toBe(0);
+    expect(result.preset.flowers).toBe(0);
+    expect(result.preset.envDensity).toBe(1); // the flowers were enough
+    expect(result.preset.decor).toBe(1); // the decoration and the animals stay
+    expect(result.preset.birds).toBe(1);
+    expect(result.capped.scenery).toBe(true);
   });
 
   it('is monotonic: a bigger budget never gives a lower ratio or fewer features', () => {
@@ -640,6 +715,7 @@ describe('fitPresetToBudget', () => {
             expect(preset.pixelRatio).toBeGreaterThanOrEqual(previous.pixelRatio);
             expect(preset.shadowMapSize).toBeGreaterThanOrEqual(previous.shadowMapSize);
             expect(preset.grassTufts).toBeGreaterThanOrEqual(previous.grassTufts);
+            expect(preset.flowers).toBeGreaterThanOrEqual(previous.flowers);
             expect(preset.envDensity).toBeGreaterThanOrEqual(previous.envDensity);
           }
           previous = preset;
@@ -677,7 +753,7 @@ describe('fitPresetToBudget', () => {
 
   it('reports the estimate of the fitted preset and the requested one', () => {
     const result = fit('high', 160);
-    expect(result.requestedMB).toBeCloseTo(217.25, 1);
+    expect(result.requestedMB).toBeCloseTo(219.35, 1);
     expect(result.estimateMB).toBeCloseTo(estimateGpuMemoryMB(result.preset, TABLET), 9);
     expect(result.budgetMB).toBe(160);
   });

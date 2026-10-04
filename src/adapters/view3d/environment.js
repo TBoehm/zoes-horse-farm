@@ -1,5 +1,6 @@
-// Surroundings of the riding facility: meadow with hills, trees, bushes, grass tufts
-// (instanced), stable, judges' hut and props. All procedural.
+// Surroundings of the riding facility: meadow with hills, trees, bushes, grass tufts and flowers
+// (instanced, moving in the wind), birds and butterflies, stable, judges' hut and props. All
+// procedural.
 import * as THREE from 'three';
 import {
   SITE,
@@ -17,6 +18,13 @@ import {
   jitterVertices,
   shadeByHeight,
 } from './textures.js';
+import { createWind, patchTreeWind, patchBushWind, patchTuftWind } from './plant-shaders.js';
+import { createMeadow } from './meadow.js';
+import { createWildlife } from './wildlife.js';
+import { butterflyAnchors } from './meadow-plan.js';
+
+const TUFT_TOTAL = 11000; // grass tufts at full density
+const BUTTERFLY_PATCHES = 7; // flower patches the butterflies hover over
 
 // --- Terrain -----------------------------------------------------------------------------------
 
@@ -166,27 +174,6 @@ function tuftGeometry(rng) {
     new THREE.Float32BufferAttribute(new Float32Array((positions.length / 3) * 2), 2),
   );
   return g;
-}
-
-/** Wind for grass tufts: tips sway depending on the instance position. */
-function patchWind(material, timeUniform) {
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.windTime = timeUniform;
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float windTime;')
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-        #ifdef USE_INSTANCING
-          vec2 ip = vec2(instanceMatrix[3].x, instanceMatrix[3].z);
-          float sway = sin(windTime * 1.7 + ip.x * 0.35 + ip.y * 0.21) * 0.6
-                     + sin(windTime * 3.1 + ip.y * 0.5) * 0.25;
-          transformed.x += sway * position.y * 0.18;
-          transformed.z += sway * position.y * 0.08;
-        #endif`,
-      );
-  };
-  material.customProgramCacheKey = () => 'wind-v1';
 }
 
 // --- Buildings -----------------------------------------------------------------------------------
@@ -405,14 +392,14 @@ function makeInstanced(geometry, material, items, rng, { scale = [0.85, 1.3], ti
 }
 
 /**
- * Environment. materialFactory(kind, params) → { standard, lambert }.
- * setDensity(envDensity, grassTufts, detail) sets the instance counts per quality level.
+ * Environment. materialFactory(kind, params) → { standard, lambert }; `wind` (createWind()) is the
+ * wind of the whole world (the arena and the obstacles share it).
+ * setDensity(envDensity, grassTufts, detail, details) sets the instance counts per quality level.
  */
-export function createEnvironment({ materialFactory, seed = 11 }) {
+export function createEnvironment({ materialFactory, seed = 11, wind = createWind() }) {
   const rng = createRng(seed);
   const group = new THREE.Group();
   group.name = 'environment';
-  const windTime = { value: 0 };
 
   // terrain
   const grassMap = createGrassTexture({ size: 512 });
@@ -429,6 +416,10 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
 
   // trees
   const plantMats = materialFactory('plants', { vertexColors: true, roughness: 0.92 });
+  // only the standard material sways: the Lambert one (low) stays free of the wind code
+  patchTreeWind(plantMats.standard, wind);
+  const bushMats = materialFactory('bushes', { vertexColors: true, roughness: 0.92 });
+  patchBushWind(bushMats.standard, wind);
   const nearDeciduous = [
     [-30, -30, 1.25],
     [-28, 47, 1.35],
@@ -503,23 +494,23 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   for (const [x, z] of [...nearDeciduous, ...alley])
     bushItems.push([x + 1.5 + rng() * 2, z + rng() * 2 - 1]);
   bushItems.push(...scatter(rng, 40, 30, 110, 2));
-  const bushMesh = makeInstanced(bushGeometry(rng), plantMats.standard, bushItems, rng, {
+  const bushMesh = makeInstanced(bushGeometry(rng), bushMats.standard, bushItems, rng, {
     scale: [0.7, 1.4],
   });
   bushMesh.name = 'bushes';
   bushMesh.userData.lods = { high: bushMesh.geometry, low: bushGeometry(rng, 0) };
   bushMesh.userData.priority = Math.min(bushPriority, 8);
 
-  // grass tufts (high only), denser near the fence
+  // grass tufts (medium and high), denser near the fence
   const tuftMats = materialFactory('tufts', {
     vertexColors: true,
     roughness: 1,
     side: THREE.DoubleSide,
   });
-  patchWind(tuftMats.standard, windTime);
-  patchWind(tuftMats.lambert, windTime);
+  patchTuftWind(tuftMats.standard, wind);
+  patchTuftWind(tuftMats.lambert, wind);
   const tuftItems = [];
-  for (let i = 0; tuftItems.length < 5200 && i < 60000; i += 1) {
+  for (let i = 0; tuftItems.length < TUFT_TOTAL && i < TUFT_TOTAL * 12; i += 1) {
     const near = rng() < 0.55;
     const x = near ? (rng() - 0.5) * 2 * 32 : (rng() - 0.5) * 2 * 75;
     const z = near ? (rng() - 0.5) * 2 * 46 : (rng() - 0.5) * 2 * 90;
@@ -531,6 +522,15 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   });
   tuftMesh.name = 'grass-tufts';
   tuftMesh.userData.priority = 0;
+
+  // flowers in patches, birds in the sky and butterflies over the flowers (medium and high)
+  const flowers = createMeadow({ materialFactory, wind, seed });
+  const wildlife = createWildlife({
+    materialFactory,
+    wind,
+    seed,
+    anchors: butterflyAnchors(flowers.patches, BUTTERFLY_PATCHES),
+  });
 
   // buildings
   const buildingMats = materialFactory('buildings', { vertexColors: true, roughness: 0.85 });
@@ -549,36 +549,46 @@ export function createEnvironment({ materialFactory, seed = 11 }) {
   }
   forestMesh.receiveShadow = false;
   group.add(deciduousMesh, coniferMesh, forestMesh, bushMesh, tuftMesh, buildings);
+  group.add(flowers.mesh, wildlife.group);
 
   const scalable = [deciduousMesh, coniferMesh, forestMesh, bushMesh];
 
   return {
     group,
-    windTime,
+    wind,
+    windTime: wind.time,
     textures: [grassMap],
     meshes: [
       { mesh: terrain, mats: groundMats, shadow: 'receive' },
       { mesh: deciduousMesh, mats: plantMats, shadow: 'all' },
       { mesh: coniferMesh, mats: plantMats, shadow: 'all' },
       { mesh: forestMesh, mats: plantMats, shadow: 'none' },
-      { mesh: bushMesh, mats: plantMats, shadow: 'none' },
+      { mesh: bushMesh, mats: bushMats, shadow: 'none' },
       { mesh: tuftMesh, mats: tuftMats, shadow: 'none' },
+      { mesh: flowers.mesh, mats: flowers.mats, shadow: 'none' },
+      ...wildlife.meshes,
       { mesh: buildings, mats: buildingMats, shadow: 'all' },
     ],
     /**
      * density 0..1 scales trees/bushes above the mandatory instances; tufts 0..1;
-     * detail 'high' | 'low' picks the geometry detail.
+     * detail 'high' | 'low' picks the geometry detail. details: { flowers 0..1 (share of the
+     * flowers), birds 0..1, butterflies 0..1, wind (boolean: trees, bushes, grass and flowers
+     * sway) }; everything off when missing.
      */
-    setDensity(density, tufts, detail = 'high') {
+    setDensity(density, tufts, detail = 'high', details = {}) {
       for (const m of scalable) {
         if (m.userData.lods) m.geometry = m.userData.lods[detail] || m.userData.lods.high;
         m.count = instanceCount(m.userData.total, m.userData.priority, density);
       }
       tuftMesh.count = Math.round(tuftMesh.userData.total * tufts);
       tuftMesh.visible = tuftMesh.count > 0;
+      flowers.setDensity(details.flowers ?? 0);
+      wildlife.setDetail({ birds: details.birds ?? 0, butterflies: details.butterflies ?? 0 });
+      wind.strength.value = details.wind ? 1 : 0;
     },
     update(dt) {
-      windTime.value += dt;
+      wind.time.value += dt;
+      wildlife.update(dt);
     },
   };
 }

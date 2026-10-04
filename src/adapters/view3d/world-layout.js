@@ -280,14 +280,19 @@ export function planFence({ pathFence = [] } = {}) {
   fenceRun([-hx, -hz], [hx, -hz], FENCE.spacing, out, 'arena');
   out.gate = { x: gx, z0: g0, z1: g1 };
   for (const run of pathFence) fenceRun(run.a, run.b, run.spacing ?? 3, out, 'wood');
+  out.posts = uniquePosts(out.posts);
+  return out;
+}
+
+/** Drops posts that stand at the same place (corners of runs that meet). */
+function uniquePosts(posts) {
   const seen = new Set();
-  out.posts = out.posts.filter((p) => {
+  return posts.filter((p) => {
     const key = `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
-  return out;
 }
 
 // --- Environment ----------------------------------------------------------------------------
@@ -330,6 +335,73 @@ export function terrainHeight(x, z) {
   return rise * (6 + 26 * ang + roll) + far * 30 * ang;
 }
 
+// --- Paddock ------------------------------------------------------------------------------------
+
+/**
+ * The paddock: a fenced piece of meadow west of the arena, south of the path to the stable, so
+ * that it is seen from the arena. A rectangle on flat ground (terrain height 0).
+ * `x`, `z`: center; `width` along the local u axis, `depth` along the local v axis (m, inside the
+ * fence lines); `rotation`: yaw about +Y (rad, the same sense as an obstacle's `rot`; 0 = width
+ * along world x). Grazing horses go inside: pick points with paddockPoint() and test with
+ * paddockContains().
+ */
+export const PADDOCK = Object.freeze({ x: -34, z: -9, width: 20, depth: 14, rotation: 0 });
+
+/**
+ * World position of a point of the paddock. `u`, `v` ∈ [−1, 1] are fractions of the half width
+ * and half depth from the center (0, 0 = center, ±1 = on the fence line).
+ */
+export function paddockPoint(u, v, paddock = PADDOCK) {
+  const lx = (u * paddock.width) / 2;
+  const lz = (v * paddock.depth) / 2;
+  const c = Math.cos(paddock.rotation);
+  const s = Math.sin(paddock.rotation);
+  return { x: paddock.x + lx * c + lz * s, z: paddock.z - lx * s + lz * c };
+}
+
+/**
+ * Is a world point inside the paddock? `margin` > 0 keeps that far away from the fence (for
+ * animals), a negative margin grows the area.
+ */
+export function paddockContains(x, z, margin = 0, paddock = PADDOCK) {
+  const dx = x - paddock.x;
+  const dz = z - paddock.z;
+  const c = Math.cos(paddock.rotation);
+  const s = Math.sin(paddock.rotation);
+  const lx = dx * c - dz * s;
+  const lz = dx * s + dz * c;
+  return Math.abs(lx) <= paddock.width / 2 - margin && Math.abs(lz) <= paddock.depth / 2 - margin;
+}
+
+/** Fence of the paddock (style 'paddock': three rails, higher posts), without a gate gap. */
+export function planPaddockFence(paddock = PADDOCK) {
+  const out = { posts: [], segments: [] };
+  const corners = [
+    paddockPoint(1, -1, paddock),
+    paddockPoint(1, 1, paddock),
+    paddockPoint(-1, 1, paddock),
+    paddockPoint(-1, -1, paddock),
+  ];
+  corners.forEach((a, i) => {
+    const b = corners[(i + 1) % corners.length];
+    fenceRun([a.x, a.z], [b.x, b.z], FENCE.spacing, out, 'paddock');
+  });
+  out.posts = uniquePosts(out.posts);
+  return out;
+}
+
+/** Axis-aligned box around the (rotated) paddock plus a clearance, in the format of BLOCKED. */
+function paddockBlock(paddock, clearance) {
+  const c = Math.abs(Math.cos(paddock.rotation));
+  const s = Math.abs(Math.sin(paddock.rotation));
+  return {
+    x: paddock.x,
+    z: paddock.z,
+    hw: (paddock.width * c + paddock.depth * s) / 2 + clearance,
+    hd: (paddock.width * s + paddock.depth * c) / 2 + clearance,
+  };
+}
+
 /** Areas where no plants may stand. */
 const BLOCKED = Object.freeze([
   { x: 0, z: 0, hw: ARENA.width / 2 + 2.5, hd: ARENA.length / 2 + 2.5 },
@@ -343,6 +415,7 @@ const BLOCKED = Object.freeze([
   { x: -28.6, z: 22, hw: 9, hd: 3 },
   { x: SITE.hut.x, z: SITE.hut.z, hw: 3.5, hd: 4 },
   { x: 23.5, z: 12, hw: 2, hd: 9 }, // benches
+  paddockBlock(PADDOCK, 1),
 ]);
 
 export function isBlocked(x, z, margin = 0) {
