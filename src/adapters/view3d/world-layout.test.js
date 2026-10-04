@@ -28,6 +28,7 @@ import {
   scatter,
   instanceCount,
   PADDOCK,
+  isOnArenaSand,
   paddockPoint,
   paddockContains,
   planPaddockFence,
@@ -436,5 +437,23 @@ describe('paddock', () => {
       const onZ = Math.abs(Math.abs(p.z - PADDOCK.z) - PADDOCK.depth / 2) < 1e-6;
       expect(onX || onZ).toBe(true);
     }
+  });
+});
+
+describe('isOnArenaSand', () => {
+  it('is true inside the riding area and false on the meadow around it', () => {
+    expect(isOnArenaSand(0, 0)).toBe(true);
+    expect(isOnArenaSand(ARENA.width / 2 - 0.5, ARENA.length / 2 - 0.5)).toBe(true);
+    expect(isOnArenaSand(-ARENA.width / 2 + 0.5, -ARENA.length / 2 + 0.5)).toBe(true);
+    expect(isOnArenaSand(ARENA.width / 2 + 2, 0)).toBe(false);
+    expect(isOnArenaSand(0, -ARENA.length / 2 - 2)).toBe(false);
+    expect(isOnArenaSand(PADDOCK.x, PADDOCK.z)).toBe(false);
+  });
+
+  it('ends at the fence line; a margin keeps away from the edge', () => {
+    const edge = ARENA.width / 2 + FENCE.offset;
+    expect(isOnArenaSand(edge - 0.01, 0)).toBe(true);
+    expect(isOnArenaSand(edge + 0.01, 0)).toBe(false);
+    expect(isOnArenaSand(edge - 0.01, 0, 0.5)).toBe(false);
   });
 });

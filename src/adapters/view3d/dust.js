@@ -31,13 +31,13 @@ const PUFF = Object.freeze({
   rise: [0.5, 1.3], // m/s, upwards at the start (scaled by strength)
   life: [0.5, 1.2], // s
   size: [0.18, 0.7], // m, grows from the first to the second value
-  alpha: 0.4, // peak opacity (scaled by strength)
+  alpha: 0.6, // peak opacity (scaled by strength)
   drag: 2.2, // 1/s
   buoyancy: 0.25, // m/s², slow rise of the cloud
   gravity: 1.2, // m/s², pulls the rising dust back down
   maxDt: 0.1, // s
 });
-const COLOR = 0xcdb58b; // sand
+const COLOR = 0xe8dcc2; // dry sand dust: lighter than the footing, so that it shows against it
 
 /**
  * Particle pool as plain arrays (pure; no three.js). `rng` gives numbers in [0, 1).

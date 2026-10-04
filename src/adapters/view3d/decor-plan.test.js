@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { ARENA } from '../../domain/sim/tuning.js';
-import { FENCE, GATE, PADDOCK, planFence, paddockContains } from './world-layout.js';
-import { BUNTING_COLORS, planBunting, planPots, planPaddockProps } from './decor-plan.js';
+import { FENCE, GATE, PADDOCK, planFence, paddockContains, paddockPoint } from './world-layout.js';
+import {
+  BUNTING_COLORS,
+  planBunting,
+  planPots,
+  planPaddockProps,
+  planPaddockKeepOut,
+} from './decor-plan.js';
 
 const hx = ARENA.width / 2 + FENCE.offset;
 const hz = ARENA.length / 2 + FENCE.offset;
@@ -117,5 +123,32 @@ describe('planPaddockProps', () => {
     let d = p.rotation - toCenter;
     d -= Math.round(d / (2 * Math.PI)) * 2 * Math.PI;
     expect(Math.abs(d)).toBeLessThan(Math.PI / 2);
+  });
+});
+
+describe('planPaddockKeepOut', () => {
+  const props = planPaddockProps();
+  const circles = planPaddockKeepOut();
+
+  it('has a circle around every prop, centred on it', () => {
+    expect(circles).toHaveLength(3);
+    for (const key of ['shelter', 'trough', 'rack']) {
+      expect(circles.some((c) => c.x === props[key].x && c.z === props[key].z)).toBe(true);
+    }
+  });
+
+  it('leaves room in the paddock for the horses between the circles and the fence', () => {
+    let free = 0;
+    for (let u = -0.9; u <= 0.9; u += 0.1) {
+      for (let v = -0.9; v <= 0.9; v += 0.1) {
+        const p = paddockPoint(u, v);
+        if (
+          paddockContains(p.x, p.z, 1.4) &&
+          !circles.some((c) => Math.hypot(p.x - c.x, p.z - c.z) < c.r)
+        )
+          free++;
+      }
+    }
+    expect(free).toBeGreaterThan(150);
   });
 });

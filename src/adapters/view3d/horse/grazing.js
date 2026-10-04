@@ -3,7 +3,8 @@
 //
 //   const paddock = createGrazingHorses({
 //     quality: 'medium',                         // level name or preset (characterDetail)
-//     area: { x, z, width, depth, rotation },    // the paddock: a rectangle around (x, z), turned about Y
+//     area: { x, z, width, depth, rotation, avoid? }, // the paddock: a rectangle around (x, z),
+//                                                // turned about Y; avoid: [{ x, z, r }] props
 //     count: 2,
 //     coats: ['chestnut', 'bay', 'grey'],        // coats to pick from (default: all)
 //     rng,                                       // random numbers (default: seeded)
@@ -70,6 +71,7 @@ export function createGrazingHorses({
         (rng() - 0.5) * (area.width - 2 * GRAZING.margin),
         (rng() - 0.5) * (area.depth - 2 * GRAZING.margin),
       );
+      if (area.avoid?.some((c) => Math.hypot(p.x - c.x, p.z - c.z) < c.r)) continue;
       const gap = Math.min(...starts.map((s) => Math.hypot(s.x - p.x, s.z - p.z)), Infinity);
       if (gap > bestGap) {
         best = p;
@@ -77,13 +79,19 @@ export function createGrazingHorses({
       }
       if (gap >= MIN_SPACING) break;
     }
-    starts.push(best);
+    // (no free try: the middle of the paddock, the update moves the horse on)
+    starts.push(best ?? toWorld(area, 0, 0));
   }
 
+  // the coats are dealt out one after the other from a random start, so the horses differ
+  const firstCoat = Math.floor(rng() * coats.length);
+  const used = [];
   starts.forEach((p, i) => {
     const horseRng = createRng(Math.floor(rng() * 1e9));
+    const coat = coats[(firstCoat + i) % coats.length];
+    used.push(coat);
     const horse = createHorse({
-      coat: coats[Math.floor(rng() * coats.length)],
+      coat,
       marking: MARKINGS[Math.floor(rng() * MARKINGS.length)],
       quality: level,
       rider: false,
@@ -127,6 +135,8 @@ export function createGrazingHorses({
     /** The grazers (state of the behaviour; for tests and debugging). */
     grazers,
     horses,
+    /** The coat of each horse (for tests and debugging). */
+    coats: used,
     update,
     setQuality(next) {
       const wanted = levelOf(next);

@@ -32,6 +32,26 @@ describe('grazing horses', () => {
     paddock.dispose();
   });
 
+  it('gives the horses different coats, the same ones for the same seed', () => {
+    const coatsOf = (seed) => {
+      const p = createGrazingHorses({
+        quality: 'low',
+        area: AREA,
+        count: 2,
+        coats: ['grey', 'chestnut'],
+        rng: createRng(seed),
+      });
+      const coats = p.coats;
+      p.dispose();
+      return coats;
+    };
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const [a, b] = coatsOf(seed);
+      expect(a).not.toBe(b);
+      expect(coatsOf(seed)).toEqual([a, b]);
+    }
+  });
+
   it('uses the low horse model on low and medium and the medium model on high', () => {
     const tri = (q) => {
       const p = createGrazingHorses({ quality: q, area: AREA, count: 1 });
@@ -122,7 +142,13 @@ describe('grazing horses', () => {
       expect(released.has(g)).toBe(true);
       expect(released.has(m)).toBe(true);
     }
+    const current = meshesOf(paddock.group).map((m) => [m.geometry, m.material]);
     paddock.dispose();
+    // the final dispose goes through the hook, too (objects of a lost context are not freed)
+    for (const [g, m] of current) {
+      expect(released.has(g)).toBe(true);
+      expect(released.has(m)).toBe(true);
+    }
     expect(paddock.group.parent).toBe(null);
   });
 

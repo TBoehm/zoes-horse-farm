@@ -49,9 +49,9 @@ const STAGES = Object.freeze([
     key: (p) => p.characterDetail,
   }),
   // instance counts and geometry detail of the scenery, its details (flowers, bunting, flower
-  // boxes, birds, butterflies, wind) and the fog distance (a uniform). Details that appear for the
-  // first time bring shader programs with them (flowers, wings, bunting, swaying trees), so the
-  // engine compiles after this stage, too.
+  // boxes, grazing horses, hoof dust, birds, butterflies, wind) and the fog distance (a uniform).
+  // Details that appear for the first time bring shader programs with them (flowers, wings,
+  // bunting, swaying trees, dust), so the engine compiles after this stage, too.
   Object.freeze({
     id: 'density',
     compile: true,
@@ -62,6 +62,8 @@ const STAGES = Object.freeze([
         p.grassTufts,
         p.flowers,
         p.decor,
+        p.grazingHorses,
+        p.hoofDust,
         p.birds,
         p.butterflies,
         p.wind,

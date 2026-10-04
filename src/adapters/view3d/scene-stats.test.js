@@ -20,6 +20,16 @@ describe('sceneStats', () => {
     expect(sceneStats(scene)).toMatchObject({ calls: 1, triangles: 360, instances: 30 });
   });
 
+  it('counts a point cloud as one draw call without triangles', () => {
+    const scene = new THREE.Scene();
+    const points = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial());
+    points.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
+    scene.add(points);
+    expect(sceneStats(scene)).toMatchObject({ calls: 1, triangles: 0 });
+    points.visible = false;
+    expect(sceneStats(scene).calls).toBe(0);
+  });
+
   it('skips hidden meshes, hidden parents and empty instanced meshes', () => {
     const scene = new THREE.Scene();
     const hidden = new THREE.Mesh(box(), material);

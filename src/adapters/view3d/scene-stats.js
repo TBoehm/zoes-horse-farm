@@ -12,8 +12,8 @@ function trianglesOf(geometry) {
 }
 
 /**
- * Counts the visible meshes: draw calls (one per mesh, one per material group) and triangles
- * (times the instance count of instanced meshes). `shadowPass` is what the objects that cast
+ * Counts the visible meshes and point clouds: draw calls (one per mesh, one per material group)
+ * and triangles (times the instance count of instanced meshes). `shadowPass` is what the objects that cast
  * shadows cost again in the shadow pass.
  */
 export function sceneStats(root) {
@@ -22,6 +22,10 @@ export function sceneStats(root) {
     if (object.isSprite) {
       stats.calls += 1;
       stats.triangles += 2;
+      return;
+    }
+    if (object.isPoints && object.geometry) {
+      stats.calls += 1; // points are one draw call without triangles (hoof dust)
       return;
     }
     if (!object.isMesh || !object.geometry) return;

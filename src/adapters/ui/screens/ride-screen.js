@@ -371,6 +371,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
     renderHud(view.hud);
     horse.update(dt, view.horse);
     placeHorse(view.horse);
+    engine.emitHoofDust(); // after placeHorse: the footfalls are placed with the object
     world.syncRails(view.rails, dt, view.fallDirs);
     world.setShadowFocus(view.horse.x, view.horse.z);
     world.highlight(view.highlight?.elementId ?? null, view.highlight?.number);

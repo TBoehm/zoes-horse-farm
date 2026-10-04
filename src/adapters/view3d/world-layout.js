@@ -335,6 +335,17 @@ export function terrainHeight(x, z) {
   return rise * (6 + 26 * ang + roll) + far * 30 * ang;
 }
 
+/**
+ * Is a world point on the sand of the riding area (inside its fence)? Hooves dust only there; the
+ * path to the stable and the meadow do not. `margin` > 0 keeps that far inside.
+ */
+export function isOnArenaSand(x, z, margin = 0) {
+  return (
+    Math.abs(x) <= ARENA.width / 2 + FENCE.offset - margin &&
+    Math.abs(z) <= ARENA.length / 2 + FENCE.offset - margin
+  );
+}
+
 // --- Paddock ------------------------------------------------------------------------------------
 
 /**

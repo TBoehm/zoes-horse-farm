@@ -44,7 +44,7 @@ describe('dust pool', () => {
       }
     }
     expect(maxAlpha).toBeGreaterThan(0.15);
-    expect(maxAlpha).toBeLessThan(0.45);
+    expect(maxAlpha).toBeLessThan(0.65);
     expect(maxY).toBeGreaterThan(0.1);
     expect(maxY).toBeLessThan(2);
     expect(alive).toBe(0);

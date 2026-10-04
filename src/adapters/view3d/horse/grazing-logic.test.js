@@ -4,6 +4,7 @@ import {
   GRAZER_STATES,
   GRAZING,
   createGrazer,
+  distanceToSegment,
   insideArea,
   pickSpot,
   stepGrazer,
@@ -171,5 +172,53 @@ describe('grazing horse', () => {
     }
     expect(checkedWalk).toBeGreaterThan(5);
     expect(checkedGraze).toBeGreaterThan(100);
+  });
+});
+
+describe('keep-out circles (props in the paddock)', () => {
+  const avoid = [
+    { x: AREA.x, z: AREA.z, r: 3 },
+    { x: toWorld(AREA, 8, 4).x, z: toWorld(AREA, 8, 4).z, r: 2 },
+  ];
+  const area = { ...AREA, avoid };
+
+  it('distanceToSegment measures to the nearest point of the segment', () => {
+    expect(distanceToSegment(0, 1, -1, 0, 1, 0)).toBeCloseTo(1, 9);
+    expect(distanceToSegment(3, 0, -1, 0, 1, 0)).toBeCloseTo(2, 9);
+    expect(distanceToSegment(5, 5, 2, 2, 2, 2)).toBeCloseTo(Math.hypot(3, 3), 9);
+  });
+
+  it('picks spots that are outside the circles and whose way does not cross them', () => {
+    const rng = createRng(6);
+    for (let i = 0; i < 300; i++) {
+      const from = toWorld(AREA, (rng() - 0.5) * 20, (rng() - 0.5) * 12);
+      if (avoid.some((c) => Math.hypot(from.x - c.x, from.z - c.z) < c.r)) continue;
+      const spot = pickSpot(rng, area, from, []);
+      if (!spot) continue;
+      for (const c of avoid) {
+        expect(distanceToSegment(c.x, c.z, from.x, from.z, spot.x, spot.z)).toBeGreaterThanOrEqual(
+          c.r - 1e-9,
+        );
+      }
+    }
+  });
+
+  it('returns null when every way is blocked', () => {
+    const boxed = { ...AREA, avoid: [{ x: AREA.x, z: AREA.z, r: 100 }] };
+    expect(pickSpot(createRng(1), boxed, { x: AREA.x + 8, z: AREA.z }, [])).toBe(null);
+  });
+
+  it('a grazer never enters a circle while it walks around the paddock', () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const rng = createRng(seed);
+      const start = toWorld(AREA, -9, -5);
+      const g = createGrazer({ x: start.x, z: start.z, heading: 0, rng });
+      let inside = 0;
+      for (let t = 0; t < 1500; t += DT) {
+        stepGrazer(g, DT, area, [], rng);
+        if (avoid.some((c) => Math.hypot(g.x - c.x, g.z - c.z) < c.r - 0.3)) inside++;
+      }
+      expect(inside).toBe(0);
+    }
   });
 });

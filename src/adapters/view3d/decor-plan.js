@@ -87,3 +87,13 @@ export function planPaddockProps() {
     rack: { ...rack, rotation: PADDOCK.rotation },
   };
 }
+
+// Radius (m) of the circle around each prop that grazing horses keep out of: the footprint plus
+// room for a horse (about 1.2 m from its centre to its nose or tail)
+const KEEP_OUT = Object.freeze({ shelter: 3.6, trough: 2.4, rack: 2.2 });
+
+/** Circles { x, z, r } around the props of the paddock, for the grazing horses (world space). */
+export function planPaddockKeepOut() {
+  const props = planPaddockProps();
+  return Object.entries(KEEP_OUT).map(([key, r]) => ({ x: props[key].x, z: props[key].z, r }));
+}

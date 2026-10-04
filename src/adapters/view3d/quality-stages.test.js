@@ -84,6 +84,11 @@ describe('planning a change between two levels', () => {
     }
     const calm = { ...QUALITY_PRESETS.medium, wind: false };
     expect(ids(planChange('medium', calm))).toEqual(['density']);
+    // grazing horses and hoof dust belong to the scenery stage
+    const empty = { ...QUALITY_PRESETS.medium, grazingHorses: 0 };
+    expect(ids(planChange('medium', empty))).toEqual(['density']);
+    const dustless = { ...QUALITY_PRESETS.medium, hoofDust: false };
+    expect(ids(planChange('medium', dustless))).toEqual(['density']);
   });
 
   it('never touches the textures: there is no anisotropy stage', () => {

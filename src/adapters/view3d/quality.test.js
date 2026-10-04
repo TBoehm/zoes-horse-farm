@@ -497,8 +497,9 @@ describe('estimateGpuMemoryMB', () => {
   it('adds drawing buffer, shadow map, environment map, textures and scenery (high on a tablet)', () => {
     // 2560 × 1600 px × 40 B (MSAA ×4 colour+depth, two colour buffers) = 156.25 MiB; shadow map
     // 2048² × 8 B = 32 MiB; environment map 6 MiB; 3 textures with mipmaps 4 MiB; baseline 16 MiB;
-    // scenery 2 MiB, grass tufts 2, flowers 0.5, decoration 0.5, animals 0.1
-    expect(estimate('high')).toBeCloseTo(219.35, 1);
+    // scenery 2 MiB, grass tufts 2, flowers 0.5, decoration 0.5, animals 0.1, two grazing horses
+    // 0.86, hoof dust 0.01, extra vertices of horse and rider 0.22
+    expect(estimate('high')).toBeCloseTo(220.44, 1);
   });
 
   it('counts the details of the scenery and scales them with the preset', () => {
@@ -516,6 +517,22 @@ describe('estimateGpuMemoryMB', () => {
     expect(cost('flowers', 0.5)).toBeCloseTo(0.25, 5);
   });
 
+  it('counts the grazing horses by their model, the dust and the vertices of horse and rider', () => {
+    const cost = (preset, key, off) =>
+      estimateGpuMemoryMB(preset, TABLET) - estimateGpuMemoryMB({ ...preset, [key]: off }, TABLET);
+    // two horses of the low model (167 KB) on medium, of the medium model (430 KB) on high
+    expect(cost(QUALITY_PRESETS.medium, 'grazingHorses', 0)).toBeCloseTo((2 * 167) / 1000, 5);
+    expect(cost(QUALITY_PRESETS.high, 'grazingHorses', 0)).toBeCloseTo((2 * 430) / 1000, 5);
+    expect(cost(QUALITY_PRESETS.high, 'grazingHorses', 1)).toBeCloseTo(0.43, 5);
+    expect(cost(QUALITY_PRESETS.high, 'hoofDust', false)).toBeCloseTo(0.01, 5);
+    // rider +16 / +80 / +150 KB, horse +0 / +36 / +80 KB per character detail
+    const characters = (level) =>
+      cost({ ...QUALITY_PRESETS[level], grazingHorses: 0 }, 'characterDetail', 'none') * 1024;
+    expect(characters('low')).toBeCloseTo(16, 3);
+    expect(characters('medium')).toBeCloseTo(116, 3);
+    expect(characters('high')).toBeCloseTo(230, 3);
+  });
+
   it('every detail that a level shows is part of its estimate (low carries none)', () => {
     const low = QUALITY_PRESETS.low;
     const stripped = {
@@ -525,11 +542,22 @@ describe('estimateGpuMemoryMB', () => {
       decor: 0,
       birds: 0,
       butterflies: 0,
+      grazingHorses: 0,
+      hoofDust: false,
     };
     expect(estimateGpuMemoryMB(low, TABLET)).toBeCloseTo(estimateGpuMemoryMB(stripped, TABLET), 9);
     for (const level of ['medium', 'high']) {
       const preset = QUALITY_PRESETS[level];
-      const without = { ...preset, flowers: 0, decor: 0, birds: 0, butterflies: 0, grassTufts: 0 };
+      const without = {
+        ...preset,
+        flowers: 0,
+        decor: 0,
+        birds: 0,
+        butterflies: 0,
+        grassTufts: 0,
+        grazingHorses: 0,
+        hoofDust: false,
+      };
       expect(estimateGpuMemoryMB(preset, TABLET)).toBeGreaterThan(
         estimateGpuMemoryMB(without, TABLET),
       );
@@ -538,7 +566,9 @@ describe('estimateGpuMemoryMB', () => {
 
   it('copes with presets that know none of the newer details', () => {
     const old = { ...QUALITY_PRESETS.medium };
-    for (const key of ['flowers', 'decor', 'birds', 'butterflies']) delete old[key];
+    for (const key of ['flowers', 'decor', 'birds', 'butterflies', 'grazingHorses', 'hoofDust']) {
+      delete old[key];
+    }
     expect(Number.isFinite(estimateGpuMemoryMB(old, TABLET))).toBe(true);
   });
 
@@ -704,6 +734,21 @@ describe('fitPresetToBudget', () => {
     expect(result.capped.scenery).toBe(true);
   });
 
+  it('drops the grazing horses after the flowers and before the trees and bushes', () => {
+    const atRatio1 = { ...TABLET, pixelRatio: 1 };
+    const cheapest = (p) => estimateGpuMemoryMB({ ...p, shadowMapSize: 1024 }, atRatio1);
+    const withoutFlowers = { ...QUALITY_PRESETS.high, grassTufts: 0, flowers: 0 };
+    const result = fit('high', cheapest(withoutFlowers) - 0.1);
+    expect(result.preset.flowers).toBe(0);
+    expect(result.preset.grazingHorses).toBe(0);
+    expect(result.preset.envDensity).toBe(1); // the horses were enough
+    expect(result.preset.hoofDust).toBe(true);
+    expect(result.capped.scenery).toBe(true);
+    // the horses are the last of the "grass and surroundings" group, after the resolution
+    expect(result.preset.pixelRatio).toBe(1);
+    expect(fit('high', 160).preset.grazingHorses).toBe(2);
+  });
+
   it('is monotonic: a bigger budget never gives a lower ratio or fewer features', () => {
     const contexts = [TABLET, { ...TABLET, devicePixelRatio: 3 }, { ...TABLET, antialias: false }];
     for (const level of GRAPHICS_LEVELS) {
@@ -716,6 +761,7 @@ describe('fitPresetToBudget', () => {
             expect(preset.shadowMapSize).toBeGreaterThanOrEqual(previous.shadowMapSize);
             expect(preset.grassTufts).toBeGreaterThanOrEqual(previous.grassTufts);
             expect(preset.flowers).toBeGreaterThanOrEqual(previous.flowers);
+            expect(preset.grazingHorses).toBeGreaterThanOrEqual(previous.grazingHorses);
             expect(preset.envDensity).toBeGreaterThanOrEqual(previous.envDensity);
           }
           previous = preset;
@@ -753,7 +799,7 @@ describe('fitPresetToBudget', () => {
 
   it('reports the estimate of the fitted preset and the requested one', () => {
     const result = fit('high', 160);
-    expect(result.requestedMB).toBeCloseTo(219.35, 1);
+    expect(result.requestedMB).toBeCloseTo(220.44, 1);
     expect(result.estimateMB).toBeCloseTo(estimateGpuMemoryMB(result.preset, TABLET), 9);
     expect(result.budgetMB).toBe(160);
   });

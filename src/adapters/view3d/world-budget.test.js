@@ -8,7 +8,8 @@ import { createWorld } from './world.js';
 import { QUALITY_PRESETS } from './quality.js';
 import { sceneStats } from './scene-stats.js';
 import { collectGpuObjects } from './resilience.js';
-import { paddockContains } from './world-layout.js';
+import { PADDOCK, paddockContains } from './world-layout.js';
+import { planPaddockKeepOut } from './decor-plan.js';
 
 const el = (id, kind, height, x, z, rot = 0, spread = 0) => ({
   id,
@@ -305,5 +306,155 @@ describe('animation and cleanup', () => {
       expect(objects.has(mesh), name).toBe(true);
       expect(objects.has(mesh.geometry), `${name} geometry`).toBe(true);
     }
+  });
+});
+
+describe('grazing horses and hoof dust', () => {
+  // a camera that looks at the paddock from the meadow, and one that looks away from it
+  const towards = new THREE.PerspectiveCamera(50, 1.6, 0.1, 900);
+  towards.position.set(PADDOCK.x, 6, PADDOCK.z + 22);
+  towards.lookAt(PADDOCK.x, 0, PADDOCK.z);
+  towards.updateMatrixWorld(true);
+  const away = new THREE.PerspectiveCamera(50, 1.6, 0.1, 900);
+  away.position.set(0, 6, 0);
+  away.lookAt(60, 0, 40);
+  away.updateMatrixWorld(true);
+
+  /** A world at a level, reached the way the tests above do (no environment map in the test). */
+  const worldAt = (level) => {
+    const world = buildWorld('low');
+    showLevel(world, level);
+    return world;
+  };
+  const horsesOf = (world) => {
+    const group = world.scene.getObjectByName('paddock-horses');
+    return group ? group.children : [];
+  };
+  const dustOf = (world) => world.scene.getObjectByName('hoof-dust');
+
+  it('has no grazing horses and no dust on low, two horses on medium and high', () => {
+    installFakeCanvas();
+    const world = buildWorld('low');
+    expect(horsesOf(world)).toHaveLength(0);
+    expect(dustOf(world)).toBeUndefined();
+    for (const level of ['medium', 'high', 'low', 'high']) {
+      showLevel(world, level);
+      const wanted = level === 'low' ? 0 : 2;
+      expect(horsesOf(world), level).toHaveLength(wanted);
+      expect(Boolean(dustOf(world)), level).toBe(level !== 'low');
+    }
+    world.dispose();
+  });
+
+  it('draws one call per grazing horse and the dust only while it is alive', () => {
+    installFakeCanvas();
+    const world = buildWorld('low');
+    const calls = (level) => {
+      showLevel(world, level);
+      return sceneStats(world.scene).calls;
+    };
+    const medium = calls('medium');
+    // two horses are in the medium budget (see BEFORE.medium); no puff yet, so no dust call
+    expect(medium - BEFORE.medium.calls).toBeLessThanOrEqual(8);
+    world.emitHoofDust(0, 0, 0, 1);
+    world.update(0.016, camera);
+    expect(sceneStats(world.scene).calls).toBe(medium + 1);
+    for (let i = 0; i < 200; i += 1) world.update(0.016, camera);
+    expect(sceneStats(world.scene).calls).toBe(medium);
+    world.dispose();
+  });
+
+  it('keeps the horses inside the paddock and away from the props', () => {
+    installFakeCanvas();
+    const world = worldAt('medium');
+    const group = world.scene.getObjectByName('paddock-horses');
+    const keepOut = planPaddockKeepOut();
+    for (let i = 0; i < 60 * 240; i += 1) {
+      world.update(1 / 30, towards);
+      if (i % 30 !== 0) continue;
+      for (const horse of group.children) {
+        const { x, z } = horse.position;
+        expect(paddockContains(x, z, 0.5)).toBe(true);
+        for (const c of keepOut) expect(Math.hypot(x - c.x, z - c.z)).toBeGreaterThan(c.r - 0.8);
+      }
+    }
+    world.dispose();
+  });
+
+  it('animates the horses only while the paddock is in view', () => {
+    installFakeCanvas();
+    const world = worldAt('medium');
+    const group = world.scene.getObjectByName('paddock-horses');
+    const state = () => JSON.stringify(group.children.map((h) => h.position.toArray()));
+    const before = state();
+    for (let i = 0; i < 60 * 120; i += 1) world.update(1 / 30, away);
+    expect(state()).toBe(before);
+    for (let i = 0; i < 60 * 120; i += 1) world.update(1 / 30, towards);
+    expect(state()).not.toBe(before);
+    world.dispose();
+  });
+
+  it('raises dust for strong footfalls on the sand only', () => {
+    installFakeCanvas();
+    const world = worldAt('high');
+    const dust = dustOf(world);
+    const puffs = () => {
+      world.update(0.016, camera);
+      return dust.visible;
+    };
+    expect(puffs()).toBe(false);
+    world.emitHoofDust(0, 0, 5, 0.12); // a step at the walk
+    expect(puffs()).toBe(false);
+    world.emitHoofDust(30, 0, 5, 0.9); // on the meadow
+    world.emitHoofDust(-30, 0, 22, 0.9); // on the path to the stable
+    expect(puffs()).toBe(false);
+    world.emitHoofDust(0, 0, 5, 0.5); // a trot step on the sand
+    expect(puffs()).toBe(true);
+    world.dispose();
+  });
+
+  it('follows the level: the dust pool and the horses go with a switch to low and back', () => {
+    installFakeCanvas();
+    const world = worldAt('high');
+    world.emitHoofDust(0, 0, 0, 1);
+    showLevel(world, 'low');
+    expect(dustOf(world)).toBeUndefined();
+    world.emitHoofDust(0, 0, 0, 1); // nothing to emit into
+    showLevel(world, 'high');
+    expect(dustOf(world)).toBeDefined();
+    expect(horsesOf(world)).toHaveLength(2);
+    world.dispose();
+  });
+
+  it('releases the GPU objects of the horses and the dust through the release hook', () => {
+    installFakeCanvas();
+    const released = new Set();
+    const world = createWorld(renderer, { quality: 'low', release: (o) => released.add(o) });
+    showLevel(world, 'high');
+    const objects = world.gpuObjects();
+    const horses = horsesOf(world);
+    const geometries = horses.flatMap((h) => {
+      const list = [];
+      h.traverse((o) => o.isMesh && list.push(o.geometry));
+      return list;
+    });
+    expect(geometries).toHaveLength(2);
+    expect(geometries.every((g) => objects.includes(g))).toBe(true);
+    showLevel(world, 'low');
+    expect(geometries.every((g) => released.has(g))).toBe(true);
+    expect(horsesOf(world)).toHaveLength(0);
+    world.dispose();
+  });
+
+  it('lists the horses and the dust among the objects of the context loss handling', () => {
+    installFakeCanvas();
+    const world = worldAt('high');
+    world.emitHoofDust(0, 0, 0, 1);
+    const objects = new Set(world.gpuObjects());
+    expect(objects.has(dustOf(world).geometry)).toBe(true);
+    for (const horse of horsesOf(world)) {
+      horse.traverse((o) => o.isMesh && expect(objects.has(o.geometry)).toBe(true));
+    }
+    world.dispose();
   });
 });

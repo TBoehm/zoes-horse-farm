@@ -33,7 +33,11 @@ export const GRAZING = Object.freeze({
   candidates: 8,
 });
 
-/** Area { x, z, width, depth, rotation }: a rectangle around (x, z), turned about Y. */
+/**
+ * Area { x, z, width, depth, rotation, avoid? }: a rectangle around (x, z), turned about Y.
+ * `avoid`: [{ x, z, r }] circles (shelter, trough, ...) that the horses neither stand in nor walk
+ * through (world coordinates).
+ */
 export function toLocal(area, x, z, out = { x: 0, z: 0 }) {
   const dx = x - area.x;
   const dz = z - area.z;
@@ -59,13 +63,32 @@ export function insideArea(area, x, z, margin = 0) {
   return Math.abs(p.x) <= area.width / 2 - margin && Math.abs(p.z) <= area.depth / 2 - margin;
 }
 
+/** Distance from the point (px, pz) to the segment a → b. */
+export function distanceToSegment(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const len2 = dx * dx + dz * dz;
+  const t = len2 > 0 ? clamp(((px - ax) * dx + (pz - az) * dz) / len2, 0, 1) : 0;
+  return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
+}
+
+/** Does the way from → to cross one of the circles (or does it end in one)? */
+function blockedByAvoid(avoid, from, to) {
+  if (!avoid) return false;
+  for (const c of avoid) {
+    if (distanceToSegment(c.x, c.z, from.x, from.z, to.x, to.z) < c.r) return true;
+  }
+  return false;
+}
+
 const between = (rng, [a, b]) => a + (b - a) * rng();
 const wrapAngle = (a) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
 const headingTo = (dx, dz) => Math.atan2(dx, dz);
 
 /**
  * A point in the area for the next grazing spot: `distance` away from `from` in a random
- * direction when it fits, as far from the other horses as possible (several candidates).
+ * direction when it fits, as far from the other horses as possible (several candidates). Spots
+ * whose way crosses a keep-out circle of the area are skipped; null when no candidate is free.
  * others: [{ x, z }] positions the horse should keep away from.
  */
 export function pickSpot(rng, area, from, others = [], tuning = GRAZING) {
@@ -80,6 +103,7 @@ export function pickSpot(rng, area, from, others = [], tuning = GRAZING) {
     p.x = clamp(p.x, -area.width / 2 + tuning.margin, area.width / 2 - tuning.margin);
     p.z = clamp(p.z, -area.depth / 2 + tuning.margin, area.depth / 2 - tuning.margin);
     const spot = toWorld(area, p.x, p.z);
+    if (blockedByAvoid(area.avoid, from, spot)) continue;
     const moved = Math.hypot(spot.x - from.x, spot.z - from.z);
     let gap = Infinity;
     for (const o of others) gap = Math.min(gap, Math.hypot(spot.x - o.x, spot.z - o.z));
@@ -132,7 +156,8 @@ export function stepGrazer(g, dt, area, others, rng, tuning = GRAZING) {
       if (g.timer <= 0) {
         if (rng() < tuning.lookThenMove) {
           g.target = pickSpot(rng, area, g, others, tuning);
-          g.state = S.turn;
+          if (g.target) g.state = S.turn;
+          else startGraze(g, rng, tuning); // every way is blocked: stay
         } else {
           startGraze(g, rng, tuning);
         }
