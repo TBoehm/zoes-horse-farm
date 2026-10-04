@@ -19,7 +19,7 @@ export default {
     'graphics.high': 'Hoch',
     'settings.aidFree': 'Absprung-Hilfe im freien Modus',
     'settings.aidCourse': 'Absprung-Hilfe im Parcours',
-    'feedback.knockdown': 'Abwurf!',
+    'feedback.knockdown': 'Stange gefallen!',
     'feedback.refusal': 'Verweigert!',
     'ride.jumps': 'Sprünge: {count}',
   },
