@@ -22,7 +22,7 @@ const rgb = (hex) => {
  * Returns { geometry, stringVertices, pennantCount, coreCount }; drawing the first
  * stringVertices + 3 * n vertices gives the strings and the first n pennants.
  */
-export function buildBuntingGeometry(plan = planBunting()) {
+function buildBuntingGeometry(plan = planBunting()) {
   const positions = [];
   const colors = [];
   const flutter = [];
@@ -82,7 +82,7 @@ export function buildBuntingGeometry(plan = planBunting()) {
 }
 
 /** Number of vertices to draw for a share of the pennants (0 = nothing, below 1 = every second). */
-export function buntingDrawCount(bunting, share) {
+function buntingDrawCount(bunting, share) {
   if (!(share > 0)) return 0;
   const pennants = share >= 1 ? bunting.pennantCount : bunting.coreCount;
   return bunting.stringVertices + pennants * 3;
@@ -235,8 +235,8 @@ export function createArenaDecor({ materialFactory, wind, seed = 11 }) {
   return {
     group,
     meshes: [
-      { mesh: buntingMesh, mats: buntingMats, shadow: 'none' },
-      { mesh: decorMesh, mats: decorMats, shadow: 'all' },
+      { mesh: buntingMesh, mats: buntingMats, shadow: 'none', detail: true },
+      { mesh: decorMesh, mats: decorMats, shadow: 'all', detail: true },
     ],
     setDetail(share) {
       const count = buntingDrawCount(bunting, share);

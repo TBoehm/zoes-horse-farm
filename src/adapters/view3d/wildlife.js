@@ -177,8 +177,8 @@ export function createWildlife({ materialFactory, wind, anchors = [], seed = 11 
   }
 
   const meshes = [
-    { mesh: birdMesh, mats: birdMats, shadow: 'none' },
-    { mesh: butterflyMesh, mats: butterflyMats, shadow: 'none' },
+    { mesh: birdMesh, mats: birdMats, shadow: 'none', detail: true },
+    { mesh: butterflyMesh, mats: butterflyMats, shadow: 'none', detail: true },
   ];
 
   return {

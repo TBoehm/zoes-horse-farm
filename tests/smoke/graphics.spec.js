@@ -656,7 +656,7 @@ test.describe('GPU memory budget (rule 4)', () => {
       lang: 'en',
       // the context was made for "low", without multisampling: that is cheaper than the "high"
       // contexts of the tests above, so the budget has to be smaller to cap anything (and a bit
-      // above what "high" needs at ratio 1: the scenery details of SRT-011 take about 5 MB, so
+      // above what "high" needs at ratio 1: the scenery details of SRT-011 take about 3 MB, so
       // that ratio 1 fits and the ratio is capped between 1 and 2)
       query: '&debug&gpubudget=68',
     });

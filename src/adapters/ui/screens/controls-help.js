@@ -8,12 +8,13 @@ import { defaultHelpMode, HELP_MODES, rowsFor } from './help-content.js';
 
 /**
  * @param {object} ctx app context
- * @param {{ fromPause?: boolean, mode?: 'keyboard'|'touch' }} params fromPause: opened on top of the
- *   paused ride (rule 56); mode: the shown input type (kept across a language change)
+ * @param {{ fromPause?: boolean }} params fromPause: opened on top of the paused ride (rule 56).
+ *   The shown input type is local: nothing in the app changes the language while this screen is
+ *   open (the settings cannot be reached from here), so there is nothing to keep across a rebuild.
  */
 export function createControlsHelpScreen(ctx, params = {}) {
   const { t, h, app, store, settings, inputMode } = ctx;
-  params.mode ??= defaultHelpMode(inputMode.touch);
+  let mode = defaultHelpMode(inputMode.touch);
 
   const keyCap = (key) => h('kbd', { class: 'keycap' }, key.labelKey ? t(key.labelKey) : key.label);
 
@@ -45,7 +46,7 @@ export function createControlsHelpScreen(ctx, params = {}) {
   function renderList() {
     clear(list);
     list.append(
-      ...rowsFor(params.mode).map((row) =>
+      ...rowsFor(mode).map((row) =>
         h(
           'li',
           { class: 'help-row', dataset: { help: row.id } },
@@ -60,10 +61,10 @@ export function createControlsHelpScreen(ctx, params = {}) {
   const modeSwitch = choiceGroup({
     name: 'helpMode',
     label: t('help.mode'),
-    value: params.mode,
-    options: HELP_MODES.map((mode) => ({ value: mode, label: t(`help.mode.${mode}`) })),
-    onChange: (mode) => {
-      params.mode = mode;
+    value: mode,
+    options: HELP_MODES.map((value) => ({ value, label: t(`help.mode.${value}`) })),
+    onChange: (next) => {
+      mode = next;
       renderList();
     },
   });

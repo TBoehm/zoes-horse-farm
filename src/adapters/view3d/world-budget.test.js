@@ -1,12 +1,12 @@
 // The built world per quality level (rule 3): what is drawn, what it costs in draw calls and
 // triangles, and that the details of SRT-011 appear, disappear and are freed correctly. No WebGL:
-// the numbers come from the scene graph (scene-stats.js), the textures from a canvas double.
+// the numbers come from the scene graph (tests/support/scene-stats.js), the textures from a canvas double.
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { installFakeCanvas } from '../../../tests/support/fake-canvas.js';
 import { createWorld } from './world.js';
 import { QUALITY_PRESETS } from './quality.js';
-import { sceneStats } from './scene-stats.js';
+import { sceneStats } from '../../../tests/support/scene-stats.js';
 import { collectGpuObjects } from './resilience.js';
 import { PADDOCK, paddockContains } from './world-layout.js';
 import { planPaddockKeepOut } from './decor-plan.js';
@@ -44,10 +44,13 @@ const BEFORE = Object.freeze({
   high: { calls: 18, triangles: 94846 },
 });
 
+// "A handful" of additional draw calls per level; the limit leaves room for the hoof dust (+1)
+const HANDFUL_OF_CALLS = 10;
+
 // Budgets per level from the research (three.js forum, mobile practice): ~100 draw calls on mobile
 const BUDGET = Object.freeze({
   low: { calls: 60, triangles: 60_000 },
-  medium: { calls: 100, triangles: 120_000 },
+  medium: { calls: 100, triangles: 90_000 },
   high: { calls: 150, triangles: 250_000 },
 });
 
@@ -65,11 +68,22 @@ function buildWorld(quality = 'low') {
   return world;
 }
 
-/** The shadow and density stages, as the engine applies them on a level change. */
+const shownLevel = new WeakMap(); // world → level the helper below has shown last
+const rankOf = (level) => ['low', 'medium', 'high'].indexOf(level ?? 'low');
+
+/** The preset of a level without the environment map (it needs a real GL context to be built). */
+const testPreset = (level) => ({ ...QUALITY_PRESETS[level], envMap: false });
+
+/**
+ * The stages of a level change in the order of the engine: a downgrade goes shadows → materials →
+ * density, a climb the other way round.
+ */
 function showLevel(world, level) {
-  const preset = QUALITY_PRESETS[level];
-  world.applyQualityStage('shadows', preset);
-  world.applyQualityStage('density', preset);
+  const preset = testPreset(level);
+  const down = rankOf(level) < rankOf(shownLevel.get(world));
+  const order = down ? ['shadows', 'materials', 'density'] : ['density', 'materials', 'shadows'];
+  for (const id of order) world.applyQualityStage(id, preset);
+  shownLevel.set(world, level);
   world.update(0.016, camera);
 }
 
@@ -140,22 +154,30 @@ describe('the world per level', () => {
   });
 
   it('adds only a handful of draw calls per level', () => {
-    expect(stats.medium.calls - BEFORE.medium.calls).toBeLessThanOrEqual(8);
-    expect(stats.high.calls - BEFORE.high.calls).toBeLessThanOrEqual(8);
+    // 7 on medium and 8 on high today; the hoof dust adds one more while it is alive
+    expect(stats.medium.calls - BEFORE.medium.calls).toBeLessThanOrEqual(HANDFUL_OF_CALLS);
+    expect(stats.high.calls - BEFORE.high.calls).toBeLessThanOrEqual(HANDFUL_OF_CALLS);
   });
 
-  it('thins the details out on medium: fewer flowers, grass tufts and pennants than on high', () => {
+  it('keeps medium well below twice its old triangle count (no grass tufts there)', () => {
+    expect(stats.medium.triangles).toBeLessThanOrEqual(BEFORE.medium.triangles * 1.8);
+  });
+
+  it('thins the details out on medium: fewer flowers, birds and pennants than on high, no grass tufts', () => {
     const count = (name, level) => {
       showLevel(world, level);
       const mesh = world.scene.getObjectByName(name);
       return mesh.isInstancedMesh ? mesh.count : mesh.geometry.drawRange.count;
     };
-    for (const name of ['flowers', 'grass-tufts', 'birds', 'bunting']) {
+    for (const name of ['flowers', 'birds', 'bunting']) {
       const medium = count(name, 'medium');
       const high = count(name, 'high');
       expect(medium, name).toBeGreaterThan(0);
       expect(medium, name).toBeLessThan(high);
     }
+    // the grass tufts are the biggest cost of the details and only high has them
+    expect(count('grass-tufts', 'medium')).toBe(0);
+    expect(count('grass-tufts', 'high')).toBeGreaterThan(0);
     showLevel(world, 'high');
   });
 
@@ -250,6 +272,73 @@ describe('the flower boxes at the stands', () => {
     // the first obstacle has one element with one row: two boxes of one colour
     expect(colors[0]).toBe(colors[1]);
     expect(new Set(colors).size).toBeGreaterThan(2);
+  });
+});
+
+describe('a staged level change and the shader programs', () => {
+  const DETAILS = [
+    'grass-tufts',
+    'flowers',
+    'birds',
+    'butterflies',
+    'bunting',
+    'decor-props',
+    'planters',
+  ];
+  const shownDetails = (world) =>
+    DETAILS.filter((name) => world.scene.getObjectByName(name)?.visible);
+
+  it('draws no detail between the materials and the density stage of a downgrade', () => {
+    installFakeCanvas();
+    const world = buildWorld('low');
+    showLevel(world, 'high');
+    expect(shownDetails(world)).toEqual(DETAILS);
+    const low = testPreset('low');
+    world.applyQualityStage('shadows', low);
+    expect(shownDetails(world)).toEqual(DETAILS);
+    // the engine compiles after this stage: the details must not be part of it, they go next
+    world.applyQualityStage('materials', low);
+    expect(shownDetails(world)).toEqual([]);
+    world.applyQualityStage('density', low);
+    expect(shownDetails(world)).toEqual([]);
+    world.dispose();
+  });
+
+  it('shows no detail with the old materials during a climb, only with the new ones', () => {
+    installFakeCanvas();
+    const world = buildWorld('low');
+    const high = testPreset('high');
+    world.applyQualityStage('density', high);
+    expect(shownDetails(world)).toEqual([]);
+    world.applyQualityStage('materials', high);
+    expect(shownDetails(world)).toEqual(DETAILS);
+    for (const name of DETAILS) {
+      expect(world.scene.getObjectByName(name).material.isMeshStandardMaterial, name).toBe(true);
+    }
+    world.dispose();
+  });
+
+  it('keeps the details visible when only the density changes (medium → high)', () => {
+    installFakeCanvas();
+    const world = buildWorld('low');
+    showLevel(world, 'medium');
+    const before = shownDetails(world);
+    expect(before.length).toBeGreaterThan(0);
+    world.applyQualityStage('density', testPreset('high'));
+    expect(shownDetails(world)).toEqual(DETAILS);
+    world.dispose();
+  });
+
+  it('does not show the flower boxes of a new course while the stages are out of step', () => {
+    installFakeCanvas();
+    const world = buildWorld('low');
+    showLevel(world, 'medium');
+    world.applyQualityStage('materials', testPreset('low'));
+    world.setObstacles(OBSTACLES);
+    expect(shownDetails(world)).toEqual([]);
+    world.applyQualityStage('density', testPreset('low'));
+    expect(shownDetails(world)).toEqual([]);
+    world.dispose();
   });
 });
 
@@ -355,7 +444,7 @@ describe('grazing horses and hoof dust', () => {
     };
     const medium = calls('medium');
     // two horses are in the medium budget (see BEFORE.medium); no puff yet, so no dust call
-    expect(medium - BEFORE.medium.calls).toBeLessThanOrEqual(8);
+    expect(medium - BEFORE.medium.calls).toBeLessThanOrEqual(HANDFUL_OF_CALLS);
     world.emitHoofDust(0, 0, 0, 1);
     world.update(0.016, camera);
     expect(sceneStats(world.scene).calls).toBe(medium + 1);

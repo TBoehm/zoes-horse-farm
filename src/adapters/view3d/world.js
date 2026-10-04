@@ -2,6 +2,8 @@
 // Quality levels can be switched at runtime (the governor downgrades), stage by stage.
 import * as THREE from 'three';
 import { presetFor, QUALITY_PRESETS } from './quality.js';
+import { sameMaterialStage } from './quality-stages.js';
+import { createDetailHold } from './detail-hold.js';
 import { createSky, SKY_COLORS } from './sky.js';
 import { createArena, createCourseLines } from './arena.js';
 import { createEnvironment, SITE } from './environment.js';
@@ -158,6 +160,13 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
     density: QUALITY_PRESETS.medium,
   };
 
+  // The optional details (flowers, tufts, birds, bunting, boxes, props) are not drawn while the
+  // materials stage and the density stage are at different levels: the shaders of everything
+  // visible change in between, and a detail that appears or disappears one stage later would be
+  // compiled twice (see detail-hold.js). Code that decides the visibility itself restores them
+  // first (density stage, new obstacles) and calls applyMeshes after it.
+  const detailHold = createDetailHold();
+
   function applyMeshes() {
     const lambert = stageState.materials.material === 'lambert';
     const { shadows, shadowCasters } = stageState.shadows;
@@ -168,6 +177,12 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
       e.mesh.castShadow = cast;
       e.mesh.receiveShadow = shadows && e.shadow !== 'none';
     }
+    detailHold.sync(
+      managed()
+        .filter((e) => e.detail)
+        .map((e) => e.mesh),
+      sameMaterialStage(stageState.materials, stageState.density),
+    );
   }
 
   // Each stage reads what is really there and changes only that, so a stage can be repeated and an
@@ -228,6 +243,7 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
    * their own shader programs; the engine compiles after this stage.
    */
   function applyDensityStage(p) {
+    detailHold.restore(); // the code below decides what is visible
     stageState.density = p;
     if (scene.fog && p.fog) {
       scene.fog.near = p.fog.near;
@@ -244,6 +260,7 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
     obstacles.setDecor(decor > 0);
     dust.setQuality(p.hoofDust ? (p.level === 'high' ? 'high' : 'medium') : 'low');
     syncGrazing(p);
+    applyMeshes(); // holds the details back if the materials stage is not at this level yet
   }
 
   /**
@@ -385,6 +402,7 @@ export function createWorld(renderer, { quality = 'medium', release = releaseNow
   return {
     scene,
     setObstacles(list, { flags = false } = {}) {
+      detailHold.restore();
       obstacles.setObstacles(list, { flags });
       approachDirs.clear();
       aid.hide();

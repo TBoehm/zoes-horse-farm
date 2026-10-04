@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { buildFlowerGeometry, buildPlanterGeometry } from './flower-geometry.js';
+import {
+  buildFlowerGeometry,
+  buildPlanterGeometry,
+  PLANTER_BOX_HEIGHT,
+} from './flower-geometry.js';
 
 const triangles = (g) => g.attributes.position.count / 3;
 const petalVertices = (g) => [...g.attributes.petal.array].filter((v) => v === 1).length;
@@ -69,6 +73,16 @@ describe('buildPlanterGeometry', () => {
     expect(size.x).toBeLessThan(0.4);
     expect(size.y).toBeGreaterThan(0.25);
     expect(size.y).toBeLessThan(0.45);
+  });
+
+  it('has a wooden box that ends exactly at the height the wind shader keeps rigid', () => {
+    const p = g.attributes.position;
+    const heights = new Set();
+    for (let i = 0; i < p.count; i += 1) {
+      if (p.getY(i) <= PLANTER_BOX_HEIGHT + 0.001) heights.add(Number(p.getY(i).toFixed(2)));
+    }
+    // box bottom and box top (the corner of a leaf dips into the box); soil and blossoms above
+    expect([...heights].sort()).toEqual([0, PLANTER_BOX_HEIGHT]);
   });
 
   it('keeps some blossoms in their own colour for a mixed planting', () => {

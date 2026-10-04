@@ -102,11 +102,11 @@ describe('QUALITY_PRESETS', () => {
     expect(low.wind).toBe(false);
     expect(medium.wind).toBe(true);
     expect(high.wind).toBe(true);
-    // moderate flowers, grass and animals on medium, butterflies only on high
+    // moderate flowers and birds on medium, butterflies only on high
     expect(medium.flowers).toBeGreaterThan(0);
     expect(medium.flowers).toBeLessThan(high.flowers);
-    expect(medium.grassTufts).toBeGreaterThan(0);
-    expect(medium.grassTufts).toBeLessThan(high.grassTufts);
+    // the grass tufts are the biggest triangle cost: medium has none (ticket SRT-011)
+    expect(medium.grassTufts).toBe(0);
     expect(medium.birds).toBeGreaterThan(0);
     expect(medium.butterflies).toBe(0);
     expect(high.butterflies).toBeGreaterThan(0);
@@ -521,9 +521,9 @@ describe('estimateGpuMemoryMB', () => {
     const cost = (preset, key, off) =>
       estimateGpuMemoryMB(preset, TABLET) - estimateGpuMemoryMB({ ...preset, [key]: off }, TABLET);
     // two horses of the low model (167 KB) on medium, of the medium model (430 KB) on high
-    expect(cost(QUALITY_PRESETS.medium, 'grazingHorses', 0)).toBeCloseTo((2 * 167) / 1000, 5);
-    expect(cost(QUALITY_PRESETS.high, 'grazingHorses', 0)).toBeCloseTo((2 * 430) / 1000, 5);
-    expect(cost(QUALITY_PRESETS.high, 'grazingHorses', 1)).toBeCloseTo(0.43, 5);
+    expect(cost(QUALITY_PRESETS.medium, 'grazingHorses', 0)).toBeCloseTo((2 * 167) / 1024, 5);
+    expect(cost(QUALITY_PRESETS.high, 'grazingHorses', 0)).toBeCloseTo((2 * 430) / 1024, 5);
+    expect(cost(QUALITY_PRESETS.high, 'grazingHorses', 1)).toBeCloseTo(430 / 1024, 5);
     expect(cost(QUALITY_PRESETS.high, 'hoofDust', false)).toBeCloseTo(0.01, 5);
     // rider +16 / +80 / +150 KB, horse +0 / +36 / +80 KB per character detail
     const characters = (level) =>
@@ -715,6 +715,9 @@ describe('fitPresetToBudget', () => {
     const tiny = fit('high', 20);
     expect(tiny.preset.grassTufts).toBe(0);
     expect(tiny.preset.flowers).toBe(0);
+    expect(tiny.preset.butterflies).toBe(0);
+    expect(tiny.preset.birds).toBe(0);
+    expect(tiny.preset.decor).toBe(0);
     expect(tiny.preset.envDensity).toBe(0.55);
     expect(tiny.preset.pixelRatio).toBe(1);
     expect(tiny.preset.shadowMapSize).toBe(1024);
@@ -749,6 +752,39 @@ describe('fitPresetToBudget', () => {
     expect(fit('high', 160).preset.grazingHorses).toBe(2);
   });
 
+  it('takes the butterflies with the flowers they hover over', () => {
+    const atRatio1 = { ...TABLET, pixelRatio: 1 };
+    const cheapest = (p) => estimateGpuMemoryMB({ ...p, shadowMapSize: 1024 }, atRatio1);
+    const noTufts = { ...QUALITY_PRESETS.high, grassTufts: 0 };
+    const result = fit('high', cheapest(noTufts) - 0.1);
+    expect(result.preset.flowers).toBe(0);
+    expect(result.preset.butterflies).toBe(0);
+    expect(result.preset.birds).toBe(1);
+  });
+
+  it('then takes the birds and the decoration, before the trees and bushes', () => {
+    const atRatio1 = { ...TABLET, pixelRatio: 1 };
+    const cheapest = (p) => estimateGpuMemoryMB({ ...p, shadowMapSize: 1024 }, atRatio1);
+    const bare = {
+      ...QUALITY_PRESETS.high,
+      grassTufts: 0,
+      flowers: 0,
+      butterflies: 0,
+      grazingHorses: 0,
+    };
+    const birdsGone = fit('high', cheapest(bare) - 0.01);
+    expect(birdsGone.preset.birds).toBe(0);
+    expect(birdsGone.preset.decor).toBe(1);
+    expect(birdsGone.preset.envDensity).toBe(1);
+    const decorGone = fit('high', cheapest({ ...bare, birds: 0 }) - 0.01);
+    expect(decorGone.preset.decor).toBe(0);
+    expect(decorGone.preset.envDensity).toBe(1);
+    expect(decorGone.capped.scenery).toBe(true);
+    // only now do the trees and bushes get thinner
+    const treesThinner = fit('high', cheapest({ ...bare, birds: 0, decor: 0 }) - 0.01);
+    expect(treesThinner.preset.envDensity).toBe(0.55);
+  });
+
   it('is monotonic: a bigger budget never gives a lower ratio or fewer features', () => {
     const contexts = [TABLET, { ...TABLET, devicePixelRatio: 3 }, { ...TABLET, antialias: false }];
     for (const level of GRAPHICS_LEVELS) {
@@ -762,6 +798,9 @@ describe('fitPresetToBudget', () => {
             expect(preset.grassTufts).toBeGreaterThanOrEqual(previous.grassTufts);
             expect(preset.flowers).toBeGreaterThanOrEqual(previous.flowers);
             expect(preset.grazingHorses).toBeGreaterThanOrEqual(previous.grazingHorses);
+            expect(preset.butterflies).toBeGreaterThanOrEqual(previous.butterflies);
+            expect(preset.birds).toBeGreaterThanOrEqual(previous.birds);
+            expect(preset.decor).toBeGreaterThanOrEqual(previous.decor);
             expect(preset.envDensity).toBeGreaterThanOrEqual(previous.envDensity);
           }
           previous = preset;

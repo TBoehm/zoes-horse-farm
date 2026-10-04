@@ -96,17 +96,21 @@ export function patchTuftWind(material, wind) {
  * Flowers: the stem bends with the wind, and the geometry's `petal` attribute (1 on petals, 0 on
  * stem and heart) picks which vertices take the colour of the instance. Instanced meshes with an
  * instance colour only.
+ * `base`: height (m) of a rigid part below the plants (the wooden box of a flower box): only what
+ * is above it bends, so the box itself stays put. 0 for the meadow flowers.
  */
-export function patchBlossoms(material, wind) {
-  return patchMaterial(material, wind, 'wind-blossom-v1', {
+export function patchBlossoms(material, wind, { base = 0 } = {}) {
+  const baseGlsl = base.toFixed(3);
+  return patchMaterial(material, wind, `wind-blossom-v2-${baseGlsl}`, {
     declarations: 'attribute float petal;',
     afterBegin: /* glsl */ `
       #ifdef USE_INSTANCING
         vec2 fp = vec2(instanceMatrix[3].x, instanceMatrix[3].z);
         float stemBend = sin(windTime * 1.9 + fp.x * 0.5 + fp.y * 0.37) * 0.6
                    + sin(windTime * 3.3 + fp.y * 0.9) * 0.25;
-        transformed.x += stemBend * position.y * 0.35 * windStrength;
-        transformed.z += stemBend * position.y * 0.15 * windStrength;
+        float stemLength = max(position.y - ${baseGlsl}, 0.0);
+        transformed.x += stemBend * stemLength * 0.35 * windStrength;
+        transformed.z += stemBend * stemLength * 0.15 * windStrength;
       #endif`,
     afterColor: /* glsl */ `
       #ifdef USE_INSTANCING_COLOR

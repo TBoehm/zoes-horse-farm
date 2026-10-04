@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import './settings-schema.js';
 import { nextStartScreen, startSequence } from './start-flow.js';
 import { fakeStore } from '../../tests/support/test-ports.js';
 

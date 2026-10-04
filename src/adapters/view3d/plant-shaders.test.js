@@ -85,6 +85,22 @@ describe('the vertex shader patches', () => {
     expect(text.indexOf('#include <color_vertex>')).toBeLessThan(text.indexOf('petal);'));
   });
 
+  it('bend a flower only above its rigid base, so a flower box does not wobble', () => {
+    const bend = (base) =>
+      compile(patchBlossoms(new THREE.MeshStandardMaterial(), createWind(), base), 'standard')
+        .vertexShader;
+    expect(bend(undefined)).toContain('max(position.y - 0.000, 0.0)');
+    expect(bend({ base: 0.2 })).toContain('max(position.y - 0.200, 0.0)');
+    // the bend is not taken from the raw height any more
+    expect(bend({ base: 0.2 })).not.toMatch(/stemBend \* position\.y/);
+    // programs with another base must not share a cache key
+    const key = (base) =>
+      patchBlossoms(new THREE.MeshStandardMaterial(), createWind(), {
+        base,
+      }).customProgramCacheKey();
+    expect(key(0)).not.toBe(key(0.2));
+  });
+
   it('give every kind of patch its own program key', () => {
     const keys = new Set();
     for (const [patch] of Object.values(PATCHES)) {
