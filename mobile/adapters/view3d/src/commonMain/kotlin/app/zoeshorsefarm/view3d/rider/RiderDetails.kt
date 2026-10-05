@@ -367,7 +367,19 @@ private fun addBow(
     val dir = v3(PonyJoints.pony2).sub(v3(PonyJoints.pony1)).normalize()
     val q = Quat().setFromUnitVectors(Vec3(0.0, 0.0, 1.0), dir)
     val low = level == GraphicsLevel.LOW
-    val ring = torusData(0.03, 0.0115, if (low) 3 else if (d.small[1] > 3) 5 else 4, if (low) 5 else 9)
+    val ring =
+        torusData(
+            0.03,
+            0.0115,
+            if (low) {
+                3
+            } else if (d.small[1] > 3) {
+                5
+            } else {
+                4
+            },
+            if (low) 5 else 9,
+        )
     val w = rigid("pony1")
     b.addIndexed(ring, Mat4().compose(root, q, tmpScale), { w }, { colorOf(c.bow) })
     if (low) return

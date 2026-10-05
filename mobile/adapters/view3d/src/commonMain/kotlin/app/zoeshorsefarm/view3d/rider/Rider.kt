@@ -79,7 +79,8 @@ private class LimbNames(
     val hand: String,
 )
 
-private fun boneNames(p: String) = LimbNames("${p}thigh", "${p}shin", "${p}foot", "${p}upperArm", "${p}forearm", "${p}hand")
+private fun boneNames(p: String) =
+    LimbNames("${p}thigh", "${p}shin", "${p}foot", "${p}upperArm", "${p}forearm", "${p}hand")
 
 // precomputed: update() runs every frame
 private val LEFT_NAMES = boneNames("L")
@@ -202,8 +203,10 @@ private fun pair(
 // added (1336): the face is paid for with coarser hands, boots and stirrups, which are small in
 // the picture.
 private val DETAIL_LOW = RiderDetail(pair(8, 8), pair(4, 6), pair(8, 6), pair(5, 3), pair(5, 4), pair(3, 5), 3, 2)
-private val DETAIL_MEDIUM = RiderDetail(pair(14, 12), pair(7, 9), pair(12, 9), pair(10, 4), pair(10, 6), pair(4, 10), 4, 4)
-private val DETAIL_HIGH = RiderDetail(pair(20, 16), pair(10, 12), pair(16, 12), pair(14, 4), pair(14, 6), pair(4, 14), 4, 4)
+private val DETAIL_MEDIUM =
+    RiderDetail(pair(14, 12), pair(7, 9), pair(12, 9), pair(10, 4), pair(10, 6), pair(4, 10), 4, 4)
+private val DETAIL_HIGH =
+    RiderDetail(pair(20, 16), pair(10, 12), pair(16, 12), pair(14, 4), pair(14, 6), pair(4, 14), 4, 4)
 
 private fun detailOf(level: GraphicsLevel): RiderDetail =
     when (level) {
@@ -320,8 +323,21 @@ private fun buildRiderGeometry(
 ): Geometry {
     val d = detailOf(level)
     val b = MeshBuilder(index, mapOf("color" to 3))
+    addTorso(b, d, level)
+    addHeadAndHelmet(b, d, level)
+    for (s in SIDES) {
+        addArmAndHand(b, d, s)
+        addLegAndStirrup(b, d, s)
+    }
+    return b.build()
+}
 
-    // Torso (n points backward for an upward tangent: "up" = back, "down" = front)
+/** Torso (n points backward for an upward tangent: "up" = back, "down" = front) with jacket details. */
+private fun addTorso(
+    b: MeshBuilder,
+    d: RiderDetail,
+    level: GraphicsLevel,
+) {
     val torsoPts =
         listOf(
             Vec3(0.0, -0.015, -0.06),
@@ -351,7 +367,15 @@ private fun buildRiderGeometry(
                 },
                 weights = { u, _, _ -> chainWeights(u, ju, torsoBones, 0.06) },
                 attrs = { u, _, _, _, _ ->
-                    colorAttrs(if (u < 0.3) C.breeches else if (u > 0.95) C.collar else C.jacket)
+                    colorAttrs(
+                        if (u < 0.3) {
+                            C.breeches
+                        } else if (u > 0.95) {
+                            C.collar
+                        } else {
+                            C.jacket
+                        },
+                    )
                 },
             ),
         )
@@ -360,8 +384,14 @@ private fun buildRiderGeometry(
         LoftBuild(samples(d.torso[0]), d.torso[1], capStart = Cap(0.05, 2), capEnd = Cap(0.02, 1)),
     )
     addJacketDetails(b, torso, level, C)
+}
 
-    // Neck, head, ponytail
+/** Neck, head, ponytail, helmet with peak, face and chin strap. */
+private fun addHeadAndHelmet(
+    b: MeshBuilder,
+    d: RiderDetail,
+    level: GraphicsLevel,
+) {
     limb(
         b,
         listOf(joint(0.0, 0.6, -0.035), joint(0.0, 0.69, -0.025), joint(0.0, 0.78, -0.01)),
@@ -395,78 +425,88 @@ private fun buildRiderGeometry(
     b.addIndexed(peak, Mat4().makeRotationX(0.25).setPosition(0.0, 0.86, 0.095), { headW }, { helmetColor })
     addFace(b, level, C)
     addChinStrap(b, level, C)
+}
 
-    for (s in SIDES) {
-        val p = if (s > 0) "L" else "R"
-        // Arm
-        limb(
-            b,
-            listOf(mir(J.shoulder, s), mir(J.elbow, s), mir(J.wrist, s)),
-            arrayOf(row(0.0, 0.05), row(0.45, 0.043), row(0.55, 0.04), row(0.95, 0.031), row(1.0, 0.032)),
-            listOf("${p}upperArm", "${p}forearm"),
-            { C.jacket },
-            d,
-        )
-        val hand = ellipsoidData(0.028, 0.042, 0.05, d.hand[0], d.hand[1])
-        val hp = Vec3(J.wrist[0] * s, J.wrist[1], J.wrist[2]).add(Vec3(-0.01 * s, -0.01, 0.04))
-        val handW = rigid("${p}hand")
-        val glove = colorAttrs(C.glove)
-        b.addIndexed(hand, Mat4().makeRotationX(0.5).setPosition(hp), { handW }, { glove })
-        // Leg: thigh (breeches), shin and foot (boot)
-        limb(
-            b,
-            listOf(mir(J.hip, s), mir(J.knee, s), mir(J.ankle, s)),
-            arrayOf(
-                row(0.0, 0.085),
-                row(0.25, 0.08),
-                row(0.47, 0.058),
-                row(0.5, 0.057),
-                row(0.54, 0.06),
-                row(0.72, 0.055),
-                row(1.0, 0.04),
-            ),
-            listOf("${p}thigh", "${p}shin"),
-            { u -> if (u < 0.52) C.breeches else C.boot },
-            d,
-            capStart = 0.05,
-        )
-        limb(
-            b,
-            listOf(
-                mir(joint(J.ankle[0], J.ankle[1] - 0.01, J.ankle[2] - 0.05), s),
-                mir(J.ankle, s),
-                mir(J.toe, s),
-            ),
-            arrayOf(row(0.0, 0.04, 1.1), row(0.5, 0.042, 1.0), row(1.0, 0.033, 0.8)),
-            listOf("${p}foot", "${p}foot"),
-            { C.boot },
-            d,
-            n = d.foot,
-        )
-        // Stirrup iron under the ball of the foot, leather up to the saddle
-        val iron = torusData(0.055, 0.007, d.iron[0], d.iron[1])
-        val ip = Vec3(J.toe[0] * s, J.toe[1] + 0.055 - 0.035, J.toe[2] - 0.07)
-        val footW = rigid("${p}foot")
-        val steel = colorAttrs(C.steel)
-        b.addIndexed(iron, Mat4().makeScale(0.9, 1.0, 1.0).setPosition(ip), { footW }, { steel })
-        val top = Vec3(0.2 * s, -0.04, 0.1)
-        val bottom = ip.clone().add(Vec3(0.0, 0.05, 0.0))
-        val leather = colorAttrs(C.leather)
-        Loft(
-            LoftDef(
-                frame = lineFrames(top, bottom, Vec3(0.0, 0.0, 1.0)),
-                section = { _, a -> doubleArrayOf(cos(a) * 0.003, sin(a) * 0.016) },
-                weights = { u, _, _ ->
-                    listOf(
-                        BoneWeight("base", 1 - smoothstep(0.0, 1.0, u)),
-                        BoneWeight("${p}foot", smoothstep(0.0, 1.0, u)),
-                    )
-                },
-                attrs = { _, _, _, _, _ -> leather },
-            ),
-        ).build(b, LoftBuild(samples(d.leather), 4))
-    }
-    return b.build()
+private fun addArmAndHand(
+    b: MeshBuilder,
+    d: RiderDetail,
+    s: Double,
+) {
+    val p = if (s > 0) "L" else "R"
+    limb(
+        b,
+        listOf(mir(J.shoulder, s), mir(J.elbow, s), mir(J.wrist, s)),
+        arrayOf(row(0.0, 0.05), row(0.45, 0.043), row(0.55, 0.04), row(0.95, 0.031), row(1.0, 0.032)),
+        listOf("${p}upperArm", "${p}forearm"),
+        { C.jacket },
+        d,
+    )
+    val hand = ellipsoidData(0.028, 0.042, 0.05, d.hand[0], d.hand[1])
+    val hp = Vec3(J.wrist[0] * s, J.wrist[1], J.wrist[2]).add(Vec3(-0.01 * s, -0.01, 0.04))
+    val handW = rigid("${p}hand")
+    val glove = colorAttrs(C.glove)
+    b.addIndexed(hand, Mat4().makeRotationX(0.5).setPosition(hp), { handW }, { glove })
+}
+
+/** Leg: thigh (breeches), shin and foot (boot), stirrup iron and leather. */
+private fun addLegAndStirrup(
+    b: MeshBuilder,
+    d: RiderDetail,
+    s: Double,
+) {
+    val p = if (s > 0) "L" else "R"
+    limb(
+        b,
+        listOf(mir(J.hip, s), mir(J.knee, s), mir(J.ankle, s)),
+        arrayOf(
+            row(0.0, 0.085),
+            row(0.25, 0.08),
+            row(0.47, 0.058),
+            row(0.5, 0.057),
+            row(0.54, 0.06),
+            row(0.72, 0.055),
+            row(1.0, 0.04),
+        ),
+        listOf("${p}thigh", "${p}shin"),
+        { u -> if (u < 0.52) C.breeches else C.boot },
+        d,
+        capStart = 0.05,
+    )
+    limb(
+        b,
+        listOf(
+            mir(joint(J.ankle[0], J.ankle[1] - 0.01, J.ankle[2] - 0.05), s),
+            mir(J.ankle, s),
+            mir(J.toe, s),
+        ),
+        arrayOf(row(0.0, 0.04, 1.1), row(0.5, 0.042, 1.0), row(1.0, 0.033, 0.8)),
+        listOf("${p}foot", "${p}foot"),
+        { C.boot },
+        d,
+        n = d.foot,
+    )
+    // Stirrup iron under the ball of the foot, leather up to the saddle
+    val iron = torusData(0.055, 0.007, d.iron[0], d.iron[1])
+    val ip = Vec3(J.toe[0] * s, J.toe[1] + 0.055 - 0.035, J.toe[2] - 0.07)
+    val footW = rigid("${p}foot")
+    val steel = colorAttrs(C.steel)
+    b.addIndexed(iron, Mat4().makeScale(0.9, 1.0, 1.0).setPosition(ip), { footW }, { steel })
+    val top = Vec3(0.2 * s, -0.04, 0.1)
+    val bottom = ip.clone().add(Vec3(0.0, 0.05, 0.0))
+    val leather = colorAttrs(C.leather)
+    Loft(
+        LoftDef(
+            frame = lineFrames(top, bottom, Vec3(0.0, 0.0, 1.0)),
+            section = { _, a -> doubleArrayOf(cos(a) * 0.003, sin(a) * 0.016) },
+            weights = { u, _, _ ->
+                listOf(
+                    BoneWeight("base", 1 - smoothstep(0.0, 1.0, u)),
+                    BoneWeight("${p}foot", smoothstep(0.0, 1.0, u)),
+                )
+            },
+            attrs = { _, _, _, _, _ -> leather },
+        ),
+    ).build(b, LoftBuild(samples(d.leather), 4))
 }
 
 /** Rider from bind pose; [update] applies the seat and IK. */
@@ -603,7 +643,14 @@ class Rider(
         ctx: RiderContext? = null,
     ) {
         seatFilter.step(dt, state, ctx, seat)
-        val halt = if (ctx != null) ctx.weights.halt else if (state.gait == Gait.HALT) 1.0 else 0.0
+        val halt =
+            if (ctx != null) {
+                ctx.weights.halt
+            } else if (state.gait == Gait.HALT) {
+                1.0
+            } else {
+                0.0
+            }
         stepHeadLook(look, dt, state, halt)
         stepPat(pat, dt, jumping = state.jump != null, halted = halt > 0.95)
         breathing(look.time, halt, breath)

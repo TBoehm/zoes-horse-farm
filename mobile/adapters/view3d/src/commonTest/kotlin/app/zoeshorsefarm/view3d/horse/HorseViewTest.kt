@@ -112,21 +112,26 @@ class HorseDetailTest {
     fun `every vertex is skinned to existing bones with weights that add up to 1`() {
         for (level in GRAPHICS_LEVELS) {
             val c = counts(level)
-            val boneCount = c.skel.list.size
-            for (g in listOf(c.body, c.tack)) {
-                val idx = g.getAttribute("skinIndex") as UShortAttribute
-                val w = g.float("skinWeight")
-                for (i in 0 until idx.count) {
-                    var sum = 0.0
-                    for (k in 0 until 4) {
-                        val weight = w.array[i * 4 + k].toDouble()
-                        sum += weight
-                        if (weight > 0) assertTrue(idx.array[i * 4 + k].toInt() < boneCount)
-                    }
-                    assertClose(1.0, sum, 4)
-                }
-            }
+            checkSkinning(c.body, c.skel.list.size)
+            checkSkinning(c.tack, c.skel.list.size)
         }
+    }
+}
+
+private fun checkSkinning(
+    g: Geometry,
+    boneCount: Int,
+) {
+    val idx = g.getAttribute("skinIndex") as UShortAttribute
+    val w = g.float("skinWeight")
+    for (i in 0 until idx.count) {
+        var sum = 0.0
+        for (k in 0 until 4) {
+            val weight = w.array[i * 4 + k].toDouble()
+            sum += weight
+            if (weight > 0) assertTrue(idx.array[i * 4 + k].toInt() < boneCount)
+        }
+        assertClose(1.0, sum, 4)
     }
 }
 
@@ -214,7 +219,11 @@ class HorseHairTest {
     fun `a stop swings tail and mane and forelock and they come to rest again`() {
         val horse = createHorse(quality = GraphicsLevel.LOW, rider = false, rng = createRng(2))
 
-        fun rest(name: String) = horse.group.getObjectByName(name)!!.quaternion.clone()
+        fun rest(name: String) =
+            horse.group
+                .getObjectByName(name)!!
+                .quaternion
+                .clone()
         val mane = horse.group.getObjectByName("mane3")!!
         val tail = horse.group.getObjectByName("tail3")!!
         val forelock = horse.group.getObjectByName("forelock")!!
@@ -359,11 +368,12 @@ class FootfallEventTest {
         val horse = createHorse(quality = GraphicsLevel.LOW, rider = false, rng = createRng(1))
         horse.group.position.set(10.0, 0.0, 5.0)
         horse.group.rotation.y = PI / 2
-        val ev = Footfall().also {
-            it.x = 0.16
-            it.y = 0.0
-            it.z = 1.0
-        }
+        val ev =
+            Footfall().also {
+                it.x = 0.16
+                it.y = 0.0
+                it.z = 1.0
+            }
         val out = horse.footfallWorld(ev)
         // facing +x: the local z axis points along +x, the local x axis along -z
         assertClose(11.0, out.x, 5)

@@ -15,11 +15,11 @@ import app.zoeshorsefarm.scene.texture.createRng
 import app.zoeshorsefarm.view3d.quality.QualityPreset
 import app.zoeshorsefarm.view3d.releaseNow
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
-import kotlin.math.cos
 
 // Grazing horses of the paddock (SRT-011): cheap horses without rider and tack that graze, look up
 // now and then and walk a few slow steps. The behaviour is in GrazingLogic.kt (pure, tested).
@@ -124,24 +124,31 @@ class GrazingHorses internal constructor(
         update(0.0) // (the horses stand at their spots before the first frame)
     }
 
+    private fun randomSpot(): XZ =
+        toWorld(
+            area,
+            (rng() - 0.5) * (area.width - 2 * GRAZING.margin),
+            (rng() - 0.5) * (area.depth - 2 * GRAZING.margin),
+        )
+
+    private fun isFree(p: XZ): Boolean = area.avoid?.none { hypot(p.x - it.x, p.z - it.z) < it.r } ?: true
+
     private fun pickStart(starts: List<XZ>): XZ {
         var best: XZ? = null
         var bestGap = -1.0
-        for (tries in 0 until START_TRIES) {
-            val p =
-                toWorld(
-                    area,
-                    (rng() - 0.5) * (area.width - 2 * GRAZING.margin),
-                    (rng() - 0.5) * (area.depth - 2 * GRAZING.margin),
-                )
-            if (area.avoid?.any { hypot(p.x - it.x, p.z - it.z) < it.r } == true) continue
+        var tries = 0
+        var spaced = false
+        while (tries < START_TRIES && !spaced) {
+            tries++
+            val p = randomSpot()
+            if (!isFree(p)) continue
             var gap = Double.POSITIVE_INFINITY
             for (s in starts) gap = min(gap, hypot(s.x - p.x, s.z - p.z))
             if (gap > bestGap) {
                 best = p
                 bestGap = gap
             }
-            if (gap >= MIN_SPACING) break
+            spaced = gap >= MIN_SPACING
         }
         // (no free try: the middle of the paddock, the update moves the horse on)
         return best ?: toWorld(area, 0.0, 0.0)

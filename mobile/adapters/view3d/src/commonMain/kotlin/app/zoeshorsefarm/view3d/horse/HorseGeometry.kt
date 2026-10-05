@@ -787,7 +787,19 @@ private fun addSaddle(
     torso: Loft,
     c: TackColors,
 ) {
-    // saddle pad
+    addSaddlePad(b, d, torso, c)
+    addSaddleSeat(b, d, torso, c)
+    addSaddleFlaps(b, d, torso, c)
+    addGirth(b, d, torso, c)
+}
+
+/** Saddle pad. */
+private fun addSaddlePad(
+    b: MeshBuilder,
+    d: Detail,
+    torso: Loft,
+    c: TackColors,
+) {
     val pn = d.pad[0]
     val pv = d.pad[1]
     buildShell(
@@ -810,8 +822,15 @@ private fun addSaddle(
             },
         ),
     )
+}
 
-    // saddle: seat with pommel and cantle
+/** Saddle: seat with pommel and cantle. */
+private fun addSaddleSeat(
+    b: MeshBuilder,
+    d: Detail,
+    torso: Loft,
+    c: TackColors,
+) {
     buildShell(
         b,
         torso,
@@ -831,8 +850,15 @@ private fun addSaddle(
             },
         ),
     )
+}
 
-    // saddle flaps (forward cut) left and right
+/** Saddle flaps (forward cut) left and right. */
+private fun addSaddleFlaps(
+    b: MeshBuilder,
+    d: Detail,
+    torso: Loft,
+    c: TackColors,
+) {
     val fn = d.flap[0]
     val fv = d.flap[1]
     for (side in SIDES) {
@@ -856,8 +882,15 @@ private fun addSaddle(
             ),
         )
     }
+}
 
-    // girth
+/** Girth. */
+private fun addGirth(
+    b: MeshBuilder,
+    d: Detail,
+    torso: Loft,
+    c: TackColors,
+) {
     buildShell(
         b,
         torso,

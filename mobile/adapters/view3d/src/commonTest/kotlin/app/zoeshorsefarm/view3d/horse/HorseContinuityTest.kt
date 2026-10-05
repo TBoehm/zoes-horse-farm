@@ -17,6 +17,7 @@ import app.zoeshorsefarm.scene.texture.createRng
 import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.round
 import kotlin.math.sin
@@ -404,6 +405,127 @@ private fun quatAngle(
     b: Quat,
 ) = 2 * acos(min(1.0, abs(a.dot(b))))
 
+/** Follows the bones, the hooves and the root of a horse frame by frame (see [trackHorse]). */
+private class HorseTracker(
+    private val name: String,
+    private val horse: HorseView,
+) {
+    private val m = horse.motion
+    private val bones = bonesOf(horse.group)
+    private val byName = bones.associateBy { it.name }
+    private val prevQ = HashMap<Bone, Quat>()
+    val body = WorstValue()
+    val legs = LegTracker()
+    private val prevZ = DoubleArray(4)
+    private val prevY = DoubleArray(4)
+    private val prevWorld = DoubleArray(4)
+    private val prevPlanted = BooleanArray(4)
+    private var seen = false
+    var hoofStep = 0.0
+    var hoofSlide = 0.0
+    var hoofWhere = ""
+    private var rootPrev: Vec3? = null
+    var rootStep = 0.0
+    var rootWhere = ""
+    private val v = Vec3()
+    val hoofFrames = ArrayList<List<HoofSample>>() // per frame and leg: the hoof in the horse frame
+    private var z = 0.0
+
+    fun advance(
+        dt: Double,
+        state: Horse,
+    ) {
+        horse.update(dt, state)
+        z += state.speed * dt
+    }
+
+    fun sample(
+        state: Horse,
+        step: Int,
+        t: Double,
+    ) {
+        val tag = "$name#$step@${fixed2(t)}s"
+        sampleBones(tag)
+        sampleHooves(state, tag)
+        sampleRoot(tag)
+    }
+
+    private fun sampleBones(tag: String) {
+        for (b in bones) {
+            if (LEG_BONES.matches(b.name)) {
+                legs.sample(b, tag)
+            } else {
+                val q = prevQ[b]
+                // the eyelids close within three frames (a blink)
+                if (q != null && !b.name.endsWith("lid")) {
+                    val angle = quatAngle(q, b.quaternion)
+                    if (angle > body.v) {
+                        body.v = angle
+                        body.w = "${b.name} $tag"
+                    }
+                }
+                prevQ[b] = b.quaternion.clone()
+            }
+        }
+    }
+
+    // planted hooves are only comparable on a straight line (a turn moves them in the horse frame)
+    private fun isPoseFree(state: Horse): Boolean =
+        m.jumpWeight < 0.01 &&
+            m.hopWeight < 0.01 &&
+            m.stopWeight < 0.01 &&
+            m.runoutWeight < 0.01 &&
+            abs(state.turnRate) < 0.3
+
+    private fun sampleHooves(
+        state: Horse,
+        tag: String,
+    ) {
+        val poseFree = isPoseFree(state)
+        val frameHooves = ArrayList<HoofSample>()
+        hoofFrames.add(frameHooves)
+        for (k in 0 until 4) {
+            v.copy(HOOF_REST[k]).sub(FETLOCK_REST[k]).applyMatrix4(byName.getValue(PASTERN[k]).matrixWorld)
+            frameHooves.add(HoofSample(v.clone(), m.legs[k].y > 0))
+            val planted = m.legs[k].y == 0.0 && !m.legs[k].squaring && poseFree
+            if (seen) compareHoof(k, planted, tag)
+            prevZ[k] = v.z
+            prevY[k] = v.y
+            prevWorld[k] = v.z + z
+            prevPlanted[k] = planted
+        }
+        seen = true
+    }
+
+    private fun compareHoof(
+        k: Int,
+        planted: Boolean,
+        tag: String,
+    ) {
+        hoofStep = max(hoofStep, hypot(v.z - prevZ[k], v.y - prevY[k]))
+        if (planted && prevPlanted[k]) {
+            val s = abs(v.z + z - prevWorld[k])
+            if (s > hoofSlide) {
+                hoofSlide = s
+                hoofWhere = "leg $k $tag"
+            }
+        }
+    }
+
+    private fun sampleRoot(tag: String) {
+        val p = byName.getValue("root").position
+        val before = rootPrev
+        if (before != null) {
+            val d = p.distanceTo(before)
+            if (d > rootStep) {
+                rootStep = d
+                rootWhere = tag
+            }
+        }
+        rootPrev = p.clone()
+    }
+}
+
 /**
  * The joint limiter smooths every output of the leg IK, so a pop in the IK would be spread over a few
  * frames and the limits of the leg joints would stay green. The tests therefore also look at what the
@@ -426,94 +548,24 @@ private fun trackHorse(
         }
     }
     horse.frontSolved = { out -> if (IkPop.calls++ == IkPop.at) out[2] += 1.0 }
-    val m = horse.motion
-    val bones = bonesOf(horse.group)
-    val byName = bones.associateBy { it.name }
-    val prevQ = HashMap<Bone, Quat>()
-    val worstBody = WorstValue()
-    val legs = LegTracker()
-    val prevZ = DoubleArray(4)
-    val prevY = DoubleArray(4)
-    val prevWorld = DoubleArray(4)
-    val prevPlanted = BooleanArray(4)
-    val seen = BooleanArray(4)
-    var hoofStep = 0.0
-    var hoofSlide = 0.0
-    var hoofWhere = ""
-    var rootPrev: Vec3? = null
-    var rootStep = 0.0
-    var rootWhere = ""
-    val v = Vec3()
-    val hoofFrames = ArrayList<List<HoofSample>>() // per frame and leg: the hoof in the horse frame
-    var z = 0.0
+    val tracker = HorseTracker(name, horse)
     runScript(
         Sequences.all.getValue(name),
-        { dt, state ->
-            horse.update(dt, state)
-            z += state.speed * dt
-        },
-        { state, step, t ->
-            val tag = "$name#$step@${fixed2(t)}s"
-            for (b in bones) {
-                if (LEG_BONES.matches(b.name)) {
-                    legs.sample(b, tag)
-                    continue
-                }
-                val q = prevQ[b]
-                // the eyelids close within three frames (a blink)
-                if (q != null && !b.name.endsWith("lid")) {
-                    val angle = quatAngle(q, b.quaternion)
-                    if (angle > worstBody.v) {
-                        worstBody.v = angle
-                        worstBody.w = "${b.name} $tag"
-                    }
-                }
-                prevQ[b] = b.quaternion.clone()
-            }
-            // planted hooves are only comparable on a straight line (a turn moves them in the horse frame)
-            val poseFree =
-                m.jumpWeight < 0.01 &&
-                    m.hopWeight < 0.01 &&
-                    m.stopWeight < 0.01 &&
-                    m.runoutWeight < 0.01 &&
-                    abs(state.turnRate) < 0.3
-            val frameHooves = ArrayList<HoofSample>()
-            hoofFrames.add(frameHooves)
-            for (k in 0 until 4) {
-                v.copy(HOOF_REST[k]).sub(FETLOCK_REST[k]).applyMatrix4(byName.getValue(PASTERN[k]).matrixWorld)
-                frameHooves.add(HoofSample(v.clone(), m.legs[k].y > 0))
-                val planted = m.legs[k].y == 0.0 && !m.legs[k].squaring && poseFree
-                if (seen[k]) {
-                    val d = hypot(v.z - prevZ[k], v.y - prevY[k])
-                    if (d > hoofStep) hoofStep = d
-                    if (planted && prevPlanted[k]) {
-                        val s = abs(v.z + z - prevWorld[k])
-                        if (s > hoofSlide) {
-                            hoofSlide = s
-                            hoofWhere = "leg $k $tag"
-                        }
-                    }
-                }
-                prevZ[k] = v.z
-                prevY[k] = v.y
-                prevWorld[k] = v.z + z
-                prevPlanted[k] = planted
-                seen[k] = true
-            }
-            val p = byName.getValue("root").position
-            val before = rootPrev
-            if (before != null) {
-                val d = p.distanceTo(before)
-                if (d > rootStep) {
-                    rootStep = d
-                    rootWhere = tag
-                }
-            }
-            rootPrev = p.clone()
-        },
+        { dt, state -> tracker.advance(dt, state) },
+        { state, step, t -> tracker.sample(state, step, t) },
     )
     horse.dispose()
-    return HorseTrack(worstBody, legs, hoofStep, hoofSlide, hoofWhere, rootStep, rootWhere, hoofFrames, records)
+    return HorseTrack(
+        tracker.body,
+        tracker.legs,
+        tracker.hoofStep,
+        tracker.hoofSlide,
+        tracker.hoofWhere,
+        tracker.rootStep,
+        tracker.rootWhere,
+        tracker.hoofFrames,
+        records,
+    )
 }
 
 private class LimiterEffect(
@@ -639,11 +691,60 @@ private fun jumpFrames(
             progress = (s - 0.2) / 0.55
         }
         frames.add(
-            Horse(gait = gait, speed = speed, y = height * sin(kotlin.math.PI * s), jump = JumpView(phase, min(1.0, progress))),
+            Horse(
+                gait = gait,
+                speed = speed,
+                y = height * sin(kotlin.math.PI * s),
+                jump = JumpView(phase, min(1.0, progress)),
+            ),
         )
     }
     repeat(60) { frames.add(Horse(gait = gait, speed = speed)) }
     return JumpFrames(frames, lead - 1)
+}
+
+/** Follows the bones of a horse with a rider through a jump: legs (steps) and rider joints (angles). */
+private class JumpTracker(
+    private val horse: HorseView,
+    private val from: Int,
+) {
+    private val riderNodes = HashSet<Node>()
+    private val bones = bonesOf(horse.group)
+    private val prevQ = HashMap<Bone, Quat>()
+    val rider = WorstValue()
+    val legs = LegTracker()
+
+    init {
+        horse.rider!!.group.traverse { riderNodes.add(it) }
+    }
+
+    fun frame(
+        i: Int,
+        state: Horse,
+    ) {
+        horse.update(FRAME, state)
+        if (i >= from) {
+            for (b in bones) if (b !in riderNodes && LEG_BONES.matches(b.name)) legs.sample(b, "frame ${i - from}")
+        }
+        for (b in bones) {
+            if (b in riderNodes || !LEG_BONES.matches(b.name)) sampleRider(b, i)
+        }
+    }
+
+    private fun sampleRider(
+        b: Bone,
+        i: Int,
+    ) {
+        val q = prevQ[b]
+        prevQ[b] = b.quaternion.clone()
+        if (q == null || i < from) return
+        if (b !in riderNodes || !RIDER_BONES.matches(b.name)) return
+        val angle = quatAngle(q, b.quaternion)
+        if (angle > rider.v) {
+            rider.v = angle
+            rider.w = "${b.name} frame ${i - from}"
+        }
+    }
 }
 
 class JumpContinuityTest {
@@ -667,35 +768,14 @@ class JumpContinuityTest {
         for (c in cases) {
             val label = "${c.gait} at ${c.speed} m/s over ${c.height} m"
             val horse = createHorse(quality = GraphicsLevel.LOW, rng = createRng(3))
-            val riderNodes = HashSet<Node>()
-            horse.rider!!.group.traverse { riderNodes.add(it) }
-            val bones = bonesOf(horse.group)
-            val prevQ = HashMap<Bone, Quat>()
-            val worstRider = WorstValue()
-            val legs = LegTracker()
             val jump = jumpFrames(c.gait, c.speed, c.height)
-            jump.frames.forEachIndexed { i, state ->
-                horse.update(FRAME, state)
-                for (b in bones) {
-                    val isRider = b in riderNodes
-                    if (!isRider && LEG_BONES.matches(b.name)) {
-                        if (i >= jump.from) legs.sample(b, "frame ${i - jump.from}")
-                        continue
-                    }
-                    val q = prevQ[b]
-                    prevQ[b] = b.quaternion.clone()
-                    if (q == null || i < jump.from || !isRider || !RIDER_BONES.matches(b.name)) continue
-                    val angle = quatAngle(q, b.quaternion)
-                    if (angle > worstRider.v) {
-                        worstRider.v = angle
-                        worstRider.w = "${b.name} frame ${i - jump.from}"
-                    }
-                }
-            }
+            val tracker = JumpTracker(horse, jump.from)
+            jump.frames.forEachIndexed { i, state -> tracker.frame(i, state) }
             horse.dispose()
+            val legs = tracker.legs
             assertTrue(legs.step.v <= JUMP_LEG_LIMIT, "$label: leg joint ${legs.step.w} ${legs.step.v}")
             assertTrue(legs.accel.v <= LEG_ACCEL, "$label: leg joint ${legs.accel.w} ${legs.accel.v}")
-            assertTrue(worstRider.v <= JUMP_RIDER_LIMIT, "$label: rider bone ${worstRider.w} ${worstRider.v}")
+            assertTrue(tracker.rider.v <= JUMP_RIDER_LIMIT, "$label: rider bone ${tracker.rider.w} ${tracker.rider.v}")
         }
     }
 }

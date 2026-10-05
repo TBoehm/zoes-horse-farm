@@ -1,8 +1,8 @@
 package app.zoeshorsefarm.view3d.horse
 
 import app.zoeshorsefarm.scene.GpuObject
-import app.zoeshorsefarm.scene.geometry.Geometry
 import app.zoeshorsefarm.scene.geometry.FloatAttribute
+import app.zoeshorsefarm.scene.geometry.Geometry
 import app.zoeshorsefarm.scene.geometry.Usage
 import app.zoeshorsefarm.scene.graph.Mesh
 import app.zoeshorsefarm.scene.material.BasicMaterial

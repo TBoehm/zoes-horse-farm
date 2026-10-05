@@ -32,6 +32,11 @@ private fun triangleBudget(level: GraphicsLevel) =
 
 private fun trianglesOf(rider: Rider) = rider.mesh.geometry.indexCount / 3
 
+private fun isFrontFace(
+    z: Double,
+    y: Double,
+) = z > 0.085 && y > 0.7 && y < 0.84
+
 private fun verticesOf(rider: Rider) = rider.mesh.geometry.position.count
 
 class RiderGeometryTest {
@@ -52,7 +57,9 @@ class RiderGeometryTest {
         for (level in GRAPHICS_LEVELS) {
             val rider = createRider(level)
             val geo = rider.mesh.geometry
-            val boneCount = rider.mesh.skeleton!!.bones.size
+            val boneCount =
+                rider.mesh.skeleton!!
+                    .bones.size
             val skinIndex = geo.getAttribute("skinIndex") as app.zoeshorsefarm.scene.geometry.UShortAttribute
             val skinWeight = geo.float("skinWeight")
             val position = geo.position
@@ -94,7 +101,10 @@ class RiderGeometryTest {
         val position = geo.position
         val skinIndex = geo.getAttribute("skinIndex") as app.zoeshorsefarm.scene.geometry.UShortAttribute
         val skinWeight = geo.float("skinWeight")
-        val bones = rider.mesh.skeleton!!.bones.map { it.name }
+        val bones =
+            rider.mesh.skeleton!!
+                .bones
+                .map { it.name }
         val ponyIdx = listOf("pony1", "pony2", "pony3").map { bones.indexOf(it) }.toSet()
         var frontFace = 0
         var pony = 0
@@ -104,9 +114,7 @@ class RiderGeometryTest {
                 pony++
                 assertLess(position.getZ(i), -0.05, "behind the head")
             }
-            if (bones[main] == "head" && position.getZ(i) > 0.085 && position.getY(i) > 0.7 && position.getY(i) < 0.84) {
-                frontFace++
-            }
+            if (bones[main] == "head" && isFrontFace(position.getZ(i), position.getY(i))) frontFace++
         }
         assertGreater(pony.toDouble(), 30.0)
         assertGreater(frontFace.toDouble(), 150.0)
@@ -187,7 +195,7 @@ class RiderHeadLookTest {
     }
 }
 
-class RiderPonytailTest {
+class RiderPonytailMotionTest {
     private fun swing(rider: Rider) =
         listOf("pony1", "pony2", "pony3").sumOf {
             val bone = rider.bones.getValue(it)
