@@ -5,14 +5,15 @@ Port of the logic and state of `src/adapters/ui/**` (web). Package `app.zoeshors
 
 The Compose layer (`:adapters:ui`, later) only **renders these models and calls their actions**. A model holds
 state and the actions of one screen, calls application code (never game rules) and resolves every text through
-`I18n` keys. Models are not thread safe: drive them from the UI thread; the `Scheduler` of the `AppContext` must
-run its tasks on that thread.
+`I18n` keys. Models are not thread safe: drive them from the UI thread. Delayed tasks (music delay, toasts) run on
+`UiScheduler`: the UI calls `scheduler.tick()` on every frame of its own clock, so the tasks run on the UI thread.
+**Never reuse the `Scheduler` of `:adapters:audio` for the UI**: its JVM implementation runs tasks on a daemon thread.
 
 ## Pieces
 
 | Kotlin | Web | Role |
 |---|---|---|
-| `AppContext` | `ctx` of `createApp` | store, settings service, input mode, clock, i18n, navigator, scheduler, lifecycle, badge toasts, sound, version |
+| `AppContext`, `UiScheduler`, `LocalTimeZone` | `ctx` of `createApp` | store, settings service, input mode, clock, i18n, navigator, `UiScheduler`, lifecycle, badge toasts, sound, version, time zone (default UTC) |
 | `nav/Route`, `nav/ScreenModel`, `nav/AppNavigator` | `app.js` | typed routes with params, `go`/`push`/`pop`, redirect (guards), music flag and delay per screen, rebuild on language change, `onScreen` event, rotate-blocked event |
 | `Screens.kt` (`registerScreens`, `startRoute`) | `main.js` + the `register*` files | one factory per route; first screen of the start sequence |
 | `menu/MainMenuModel`, `MenuRegistry` | `menu.js` | entries with order (courses 10, free 20, horse 30, badges 40, help 45, settings 50), greeting |
@@ -31,8 +32,10 @@ run its tasks on that thread.
 val i18n = I18n()                                   // + i18n.setLang(settings.get().lang)
 val navigator = AppNavigator(i18n)
 val badgeToasts = BadgeToastQueue(i18n, scheduler, viewportHeight = { windowHeightPx })
+val scheduler = UiScheduler(clock)                  // the UI calls scheduler.tick() every frame
 val ctx = AppContext(store, settings, inputMode, clock, i18n, navigator, scheduler, lifecycle,
-    badgeToasts, version = appVersionOf(buildVersion), sound = AudioSoundPort(audio))
+    badgeToasts, version = appVersionOf(buildVersion), sound = AudioSoundPort(audio),
+    timeZone = { epochMs -> platformUtcOffsetMinutes(epochMs) })
 AudioWiring(ctx)                                    // volumes, music per screen, background
 registerScreens(ctx, rng = { Random.nextDouble() }, engine = filamentRideEngine, horsePreview = preview)
 navigator.go(startRoute(store))
@@ -46,7 +49,8 @@ rotate notice's `onBlockedChange`.
 ## Models and their state
 
 Every model with state has a `changes: Changes` (`listen { }` returns the unsubscribe function): read the model again
-when it fires. Texts are properties resolved on read, so a language change shows on the next read. Navigation
+when it fires (`fire` does not allocate). The course HUD changes its time every frame without a change event: the UI
+reads `hud.timeCs` / `hud.timeText` when it draws (`hudState` holds everything else and is rebuilt only on change). Texts are properties resolved on read, so a language change shows on the next read. Navigation
 rebuilds the models of all screens except the ride (`rerenderOnLang = false`) when the language changes.
 
 ## Ride screen: what is ported, what remains
@@ -71,13 +75,13 @@ when (model.frame(dt, rawDt)) {
 
 **Remains for the engine/UI wave** (all behind `RideEnginePort` or in the Compose layer): the 3D world, horse,
 camera rig and shadow updates from `model.view`, `placeHorse`, hoof dust, `world.syncRails`, the graphics governor
-and low-fps-hint objects (`lowFpsHintFrame`, `interruptMeasuring`, `onRideRestarted`), the crash-guard render lease
+and low-fps-hint objects (`lowFpsHintFrame`, `interruptMeasuring`, `onRideRestarted`, `canHintLowerLevel`, `startRestoreWatchdog` / `cancelRestoreWatchdog`), the crash-guard render lease
 (`markRendering`/`frame`/`release`), `takeGraphicsHint` / `takeCrashHint`, `reloadGraphics`, the debug box
 (`debug-display.js`, `?debug` only, not ported), DOM layout and focus handling, the touch control widgets.
 
 ## Deviations from the web app
 
-- Badge dates use the UTC date of the stored ISO time (the web shows the local date); only `de` and `en`.
+- Badge dates are formatted from the language files (`date.long`, `date.month.N`, native-only `DATE_STRINGS`) in the zone of `AppContext.timeZone` (the web uses the browser's local zone; the default here is UTC until the shell provides one).
 - Colours are `Argb` values, `ButtonRole` has five button roles (the brand colour is a heading colour, never a
   button: `DesignTokens.brand`). `palette.test.js` "every colour token used in the style sheets is defined" is CSS
   specific and not ported.

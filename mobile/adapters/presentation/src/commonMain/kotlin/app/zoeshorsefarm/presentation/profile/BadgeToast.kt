@@ -1,10 +1,10 @@
 package app.zoeshorsefarm.presentation.profile
 
 import app.zoeshorsefarm.application.describeBadge
-import app.zoeshorsefarm.audio.Cancellable
-import app.zoeshorsefarm.audio.Scheduler
 import app.zoeshorsefarm.i18n.I18n
 import app.zoeshorsefarm.presentation.Changes
+import app.zoeshorsefarm.presentation.UiScheduler
+import app.zoeshorsefarm.presentation.UiTask
 
 // Short toast for instantly awarded badges, without interrupting the ride (rule 49). Small and at
 // the bottom centre, so that it does not cover the course HUD (top left). In touch mode it sits in
@@ -81,7 +81,7 @@ data class BadgeToastState(
  */
 class BadgeToastQueue(
     private val i18n: I18n,
-    private val scheduler: Scheduler,
+    private val scheduler: UiScheduler,
     private val viewportHeight: () -> Int,
     private val durationMs: Long = DEFAULT_DURATION_MS,
 ) {
@@ -94,7 +94,7 @@ class BadgeToastQueue(
         var visible = false
         var leaving = false
         var started = false
-        val timers = ArrayList<Cancellable>()
+        val timers = ArrayList<UiTask>()
     }
 
     /** Changes whenever [toasts] changes. */

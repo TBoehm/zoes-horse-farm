@@ -5,11 +5,13 @@ import app.zoeshorsefarm.domain.course.RunPhase
 import app.zoeshorsefarm.i18n.I18n
 
 // Course HUD (SRT-004): the plain-data HUD model of the course mode as texts and flags for the chips.
-// The ride screen owns the instance; the UI draws [CourseHudState].
+// The ride screen owns the instance; the UI draws [CourseHudState] and the time.
 
-/** What the HUD chips show. [notice] is null when no notice is shown. */
+/**
+ * What the HUD chips show, except the time (see [CourseHudPresenter.timeText]). [notice] is null when
+ * no notice is shown.
+ */
 data class CourseHudState(
-    val timeText: String,
     val timeVisible: Boolean,
     val timeWarning: Boolean,
     val allowedText: String,
@@ -20,8 +22,10 @@ data class CourseHudState(
 )
 
 /**
- * Turns the HUD model of a course ride into [CourseHudState]. The model changes every frame but its
- * values rarely do, so the state object is only rebuilt when a value or the language changed.
+ * Turns the HUD model of a course ride into [CourseHudState]. It runs every frame and must not
+ * allocate then: the model changes every frame in its time only, so the state object is rebuilt only
+ * when another value or the language changed (not when the time did), and the time is kept as a
+ * number ([timeCs]) that the UI formats when it draws ([timeText] caches the text of the last value).
  */
 class CourseHudPresenter(
     private val i18n: I18n,
@@ -31,9 +35,27 @@ class CourseHudPresenter(
     val faultsLabel: String get() = i18n.t("hud.faults")
     val nextLabel: String get() = i18n.t("hud.next")
 
+    /** The ride time in hundredths of a second as of the last [update]; changes every frame. */
+    var timeCs: Int = 0
+        private set
+
+    private var timeTextCs = Int.MIN_VALUE
+    private var timeTextLang = i18n.lang
+    private var timeTextCache = ""
+
+    /** The ride time as `mm:ss,hh`; formatted again only when [timeCs] or the language changed. */
+    val timeText: String
+        get() {
+            if (timeCs != timeTextCs || i18n.lang != timeTextLang) {
+                timeTextCs = timeCs
+                timeTextLang = i18n.lang
+                timeTextCache = formatCs(timeCs, i18n.lang)
+            }
+            return timeTextCache
+        }
+
     private var state: CourseHudState? = null
     private var phase: RunPhase? = null
-    private var timeCs = 0
     private var allowedS = 0
     private var faults = 0
     private var overTime = false
@@ -63,10 +85,10 @@ class CourseHudPresenter(
         nextLabel: String,
         missingHint: Int?,
     ): CourseHudState {
-        val cached = state
-        if (cached != null && same(phase, timeCs, allowedS, faults, overTime, nextLabel, missingHint)) return cached
-        this.phase = phase
         this.timeCs = timeCs
+        val cached = state
+        if (cached != null && same(phase, allowedS, faults, overTime, nextLabel, missingHint)) return cached
+        this.phase = phase
         this.allowedS = allowedS
         this.faults = faults
         this.overTime = overTime
@@ -81,7 +103,6 @@ class CourseHudPresenter(
                 else -> null
             }
         return CourseHudState(
-            timeText = formatCs(timeCs, i18n.lang),
             timeVisible = riding,
             timeWarning = overTime,
             allowedText = i18n.t("hud.allowedValue", mapOf("seconds" to allowedS)),
@@ -95,14 +116,12 @@ class CourseHudPresenter(
     @Suppress("LongParameterList") // compares the cached fields with the new ones
     private fun same(
         phase: RunPhase,
-        timeCs: Int,
         allowedS: Int,
         faults: Int,
         overTime: Boolean,
         nextLabel: String,
         missingHint: Int?,
     ) = phase == this.phase &&
-        timeCs == this.timeCs &&
         allowedS == this.allowedS &&
         faults == this.faults &&
         overTime == this.overTime &&

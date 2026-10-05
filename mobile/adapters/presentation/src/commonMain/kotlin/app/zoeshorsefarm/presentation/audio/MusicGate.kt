@@ -1,7 +1,7 @@
 package app.zoeshorsefarm.presentation.audio
 
-import app.zoeshorsefarm.audio.Cancellable
-import app.zoeshorsefarm.audio.Scheduler
+import app.zoeshorsefarm.presentation.UiScheduler
+import app.zoeshorsefarm.presentation.UiTask
 
 /**
  * Music per screen (rule 51), with an optional start delay: the results screen waits a moment so that
@@ -10,10 +10,10 @@ import app.zoeshorsefarm.audio.Scheduler
  * @param setWanted switches the menu melody on or off
  */
 class MusicGate(
-    private val scheduler: Scheduler,
+    private val scheduler: UiScheduler,
     private val setWanted: (Boolean) -> Unit,
 ) {
-    private var timer: Cancellable? = null
+    private var timer: UiTask? = null
     private var wanted = false
 
     private fun apply(value: Boolean) {
