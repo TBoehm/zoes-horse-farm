@@ -102,6 +102,14 @@ private val resting: Map<GraphicsLevel, GpuCounts> by lazy { LEVELS.associateWit
 
 class WorldStagesTest {
     @Test
+    fun `a world at rest holds the counts of the web app`() {
+        // programs, materials, geometries, instanced meshes (computed with the web app's world)
+        assertEquals(GpuCounts(11, 14, 17, 8), resting.getValue(GraphicsLevel.LOW))
+        assertEquals(GpuCounts(14, 16, 20, 8), resting.getValue(GraphicsLevel.MEDIUM))
+        assertEquals(GpuCounts(21, 24, 28, 13), resting.getValue(GraphicsLevel.HIGH))
+    }
+
+    @Test
     fun `steps down without ever holding more than before the change`() {
         for ((from, to) in listOf(
             GraphicsLevel.HIGH to GraphicsLevel.MEDIUM,
