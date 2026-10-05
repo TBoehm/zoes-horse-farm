@@ -356,4 +356,16 @@ class TickSchedulerTest {
         scheduler.advance(10)
         assertEquals(1, ran)
     }
+
+    @Test
+    fun `tasks due in one step run in due order and ties in scheduling order`() {
+        val scheduler = TickScheduler()
+        val ran = ArrayList<String>()
+        scheduler.schedule(30) { ran.add("c") }
+        scheduler.schedule(10) { ran.add("a1") }
+        scheduler.schedule(10) { ran.add("a2") }
+        scheduler.schedule(20) { ran.add("b") }
+        scheduler.advance(100)
+        assertEquals(listOf("a1", "a2", "b", "c"), ran)
+    }
 }
