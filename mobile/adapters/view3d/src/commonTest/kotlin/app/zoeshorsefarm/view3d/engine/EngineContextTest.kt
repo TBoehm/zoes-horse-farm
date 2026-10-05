@@ -147,7 +147,10 @@ class EngineContextTest {
         val rig = EngineRig(GraphicsLevel.LOW)
         rig.fake.simulateContextLoss()
         val d = rig.engine.diagnostics()
+        assertEquals("", d.gpu) // never read while the device was there
         assertEquals("Test GPU", d.budgetGpu)
+        rig.fake.simulateContextRestore()
+        assertEquals("fake gpu", rig.engine.diagnostics().gpu)
     }
 
     @Test

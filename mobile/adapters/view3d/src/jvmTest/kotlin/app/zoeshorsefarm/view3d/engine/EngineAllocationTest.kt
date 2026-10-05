@@ -33,15 +33,15 @@ private const val DT = 1.0 / 60
 
 // The JVM measures the bytes this thread allocated; some slack for the JIT and the test runner (a
 // regression that allocates per frame costs several hundred KB here).
-private const val ALLOWED_BYTES = 64 * 1024
+private const val ALLOWED_BYTES = 32 * 1024
 
 // With "Automatic" on, the upgrade governor asks for a target level once per full window (every 10 s
 // of riding, 33 times in the measured frames) and the budget estimate behind it allocates a few KB
-private const val ALLOWED_AUTO_BYTES = 192 * 1024
+private const val ALLOWED_AUTO_BYTES = 96 * 1024
 
 // High adds grazing horses and hoof dust of the world, which allocate a little per event (they have
 // their own allocation tests); here only a bound that a boxed number per call would break
-private const val ALLOWED_HIGH_BYTES_PER_FRAME = 200
+private const val ALLOWED_HIGH_TOTAL_BYTES = 128 * 1024
 
 // A budget that carries medium but not high, so that the automatic has no level to climb to
 private const val MEDIUM_ONLY_BUDGET_MB = 100
@@ -171,7 +171,7 @@ class EngineAllocationTest {
         val s = Setup(GraphicsLevel.HIGH, auto = true)
         repeat(WARM_UP_FRAMES) { s.frame() }
         val allocated = allocatedBytes { repeat(MEASURED_FRAMES) { s.frame() } }
-        val limit = ALLOWED_HIGH_BYTES_PER_FRAME * MEASURED_FRAMES
+        val limit = ALLOWED_HIGH_TOTAL_BYTES
         assertTrue(allocated < limit, "allocated $allocated bytes in $MEASURED_FRAMES frames")
         assertEquals(GraphicsLevel.HIGH, s.engine.level)
     }
