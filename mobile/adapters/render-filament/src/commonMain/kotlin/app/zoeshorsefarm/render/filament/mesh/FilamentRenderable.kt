@@ -16,6 +16,8 @@ class RenderableOptions(
     val culling: Boolean = true,
     /** Draw order among renderables of the same kind: 0 first, 7 last (the sky uses 0). */
     val priority: Int = DEFAULT_PRIORITY,
+    /** Order among transparent primitives (see `RenderOrder`); 0 keeps Filament's sorting by distance. */
+    val blendOrder: Int = 0,
     /** Whether the global fog applies; the sky and the clouds have it off. */
     val fog: Boolean = true,
     /** The box used for culling; null takes the bounds of the mesh. */
@@ -40,8 +42,9 @@ class RenderableOptions(
 
 /**
  * One drawable: a Filament entity with a transform and a renderable component, made from a [GpuMesh]
- * and a material instance. It joins the scene when created; [visible] takes it out of the scene and
- * puts it back (three.js `visible`), without freeing anything.
+ * and one material instance per primitive (a primitive is a range of the mesh drawn with one
+ * material, see [PrimitiveRange]). It joins the scene when created; [visible] takes it out of the
+ * scene and puts it back (three.js `visible`), without freeing anything.
  *
  * Instanced renderables must keep an identity transform: their instance matrices are world matrices.
  */
@@ -55,6 +58,8 @@ class FilamentRenderable private constructor(
     private var inScene = true
     private var destroyed = false
     private val box = Box()
+    private val boxCenter = FloatArray(3)
+    private val boxHalfExtent = FloatArray(3)
 
     var visible: Boolean
         get() = inScene
@@ -82,9 +87,45 @@ class FilamentRenderable private constructor(
         renderables.setBones(renderables.getInstance(entity), palette, boneCount)
     }
 
-    fun setMaterialInstance(material: MaterialInstance) {
+    /** Replaces the material instance of the first primitive. */
+    fun setMaterialInstance(material: MaterialInstance) = setMaterialInstanceAt(0, material)
+
+    fun setMaterialInstanceAt(
+        primitive: Int,
+        material: MaterialInstance,
+    ) {
         val renderables = engine.renderableManager
-        renderables.setMaterialInstanceAt(renderables.getInstance(entity), 0, material)
+        renderables.setMaterialInstanceAt(renderables.getInstance(entity), primitive, material)
+    }
+
+    /** Draws other index ranges; the number of ranges must stay the one the renderable was built with. */
+    fun setRanges(ranges: List<PrimitiveRange>) {
+        val renderables = engine.renderableManager
+        val instance = renderables.getInstance(entity)
+        val indices = mesh.indexBuffer
+        for (i in ranges.indices) {
+            val range = ranges[i]
+            if (indices != null) {
+                renderables.setGeometryAt(
+                    instance,
+                    i,
+                    RenderableManager.PrimitiveType.TRIANGLES,
+                    mesh.vertexBuffer,
+                    indices,
+                    range.start,
+                    range.count,
+                )
+            } else {
+                renderables.setGeometryAt(
+                    instance,
+                    i,
+                    RenderableManager.PrimitiveType.TRIANGLES,
+                    mesh.vertexBuffer,
+                    range.start,
+                    range.count,
+                )
+            }
+        }
     }
 
     fun setBounds(bounds: Aabb) {
@@ -103,9 +144,24 @@ class FilamentRenderable private constructor(
         renderables.setReceiveShadows(renderables.getInstance(entity), enabled)
     }
 
+    fun setCulling(enabled: Boolean) {
+        val renderables = engine.renderableManager
+        renderables.setCulling(renderables.getInstance(entity), enabled)
+    }
+
+    fun setFog(enabled: Boolean) {
+        val renderables = engine.renderableManager
+        renderables.setFogEnabled(renderables.getInstance(entity), enabled)
+    }
+
+    fun setPriority(priority: Int) {
+        val renderables = engine.renderableManager
+        renderables.setPriority(renderables.getInstance(entity), priority)
+    }
+
     private fun applyBounds(bounds: Aabb) {
-        box.center = bounds.center(FloatArray(3))
-        box.halfExtent = bounds.halfExtent(FloatArray(3))
+        box.center = bounds.center(boxCenter)
+        box.halfExtent = bounds.halfExtent(boxHalfExtent)
     }
 
     /** Takes the entity out of the scene and frees it. The mesh and material are not freed. */
@@ -119,39 +175,47 @@ class FilamentRenderable private constructor(
     }
 
     companion object {
-        /** Builds the renderable and adds it to the scene of the context. */
+        /** Builds a renderable with one primitive that draws the whole mesh, and adds it to the scene. */
         fun create(
             context: FilamentContext,
             mesh: GpuMesh,
             material: MaterialInstance,
             options: RenderableOptions = RenderableOptions(),
+        ): FilamentRenderable = create(context, mesh, listOf(material), null, options)
+
+        /**
+         * Builds the renderable and adds it to the scene of the context. `materials[i]` draws
+         * `ranges[i]`; without `ranges` there is one primitive that draws the whole mesh.
+         */
+        fun create(
+            context: FilamentContext,
+            mesh: GpuMesh,
+            materials: List<MaterialInstance>,
+            ranges: List<PrimitiveRange>?,
+            options: RenderableOptions = RenderableOptions(),
         ): FilamentRenderable {
+            require(materials.isNotEmpty()) { "a renderable needs a material" }
+            require(ranges == null || ranges.size == materials.size) { "one material per range" }
             val engine = context.engine
             val entity = engine.entityManager.create()
             val renderable = FilamentRenderable(engine, context.scene, entity, mesh, options.boneCount)
             renderable.applyBounds(options.bounds ?: mesh.bounds)
             val builder =
                 RenderableManager
-                    .Builder(1)
+                    .Builder(materials.size)
                     .boundingBox(renderable.box)
-                    .material(0, material)
                     .castShadows(options.castShadows)
                     .receiveShadows(options.receiveShadows)
                     .culling(options.culling)
                     .priority(options.priority)
                     .fog(options.fog)
-            val indices = mesh.indexBuffer
-            if (indices != null) {
-                builder.geometry(
-                    0,
-                    RenderableManager.PrimitiveType.TRIANGLES,
-                    mesh.vertexBuffer,
-                    indices,
-                    0,
-                    mesh.indexCount,
-                )
-            } else {
-                builder.geometry(0, RenderableManager.PrimitiveType.TRIANGLES, mesh.vertexBuffer, 0, mesh.vertexCount)
+            for (i in materials.indices) {
+                builder.material(i, materials[i])
+                addGeometry(builder, i, mesh, ranges?.get(i))
+                if (options.blendOrder != 0) {
+                    builder.blendOrder(i, options.blendOrder)
+                    builder.globalBlendOrderEnabled(i, true)
+                }
             }
             if (options.boneCount > 0) builder.skinning(options.boneCount)
             if (options.instanceCount > 0) builder.instances(options.instanceCount)
@@ -162,6 +226,33 @@ class FilamentRenderable private constructor(
             engine.transformManager.create(entity)
             context.scene.addEntity(entity)
             return renderable
+        }
+
+        private fun addGeometry(
+            builder: RenderableManager.Builder,
+            primitive: Int,
+            mesh: GpuMesh,
+            range: PrimitiveRange?,
+        ) {
+            val indices = mesh.indexBuffer
+            val triangles = RenderableManager.PrimitiveType.TRIANGLES
+            when {
+                indices != null && range != null -> {
+                    builder.geometry(primitive, triangles, mesh.vertexBuffer, indices, range.start, range.count)
+                }
+
+                indices != null -> {
+                    builder.geometry(primitive, triangles, mesh.vertexBuffer, indices, 0, mesh.indexCount)
+                }
+
+                range != null -> {
+                    builder.geometry(primitive, triangles, mesh.vertexBuffer, range.start, range.count)
+                }
+
+                else -> {
+                    builder.geometry(primitive, triangles, mesh.vertexBuffer, 0, mesh.vertexCount)
+                }
+            }
         }
 
         private const val MATRIX_SIZE = 16

@@ -22,6 +22,53 @@ class Aabb(
         if (z > max[2]) max[2] = z
     }
 
+    /** Makes the box empty again. */
+    fun reset() {
+        for (i in 0..2) {
+            min[i] = Float.POSITIVE_INFINITY
+            max[i] = Float.NEGATIVE_INFINITY
+        }
+    }
+
+    fun copyFrom(other: Aabb) {
+        for (i in 0..2) {
+            min[i] = other.min[i]
+            max[i] = other.max[i]
+        }
+    }
+
+    /** Refits the box to the first `vertexCount` positions (xyz each) without allocating. */
+    fun setFromPositions(
+        positions: FloatArray,
+        vertexCount: Int,
+    ) {
+        reset()
+        for (v in 0 until vertexCount) expand(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2])
+    }
+
+    /** Grows the box by `amount` on every side. */
+    fun inflate(amount: Float) {
+        for (i in 0..2) {
+            min[i] -= amount
+            max[i] += amount
+        }
+    }
+
+    /** The box around a sphere. */
+    fun setFromSphere(
+        x: Float,
+        y: Float,
+        z: Float,
+        radius: Float,
+    ) {
+        min[0] = x - radius
+        min[1] = y - radius
+        min[2] = z - radius
+        max[0] = x + radius
+        max[1] = y + radius
+        max[2] = z + radius
+    }
+
     fun center(out: FloatArray): FloatArray {
         for (i in 0..2) out[i] = (min[i] + max[i]) * 0.5f
         return out
