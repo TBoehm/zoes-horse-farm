@@ -127,7 +127,7 @@ Analyse: Komplexität, mögliche Fehler, Benennung, Stil; Regeln in `mobile/conf
 iOS-Haupt- und Testcode (`compileKotlinIos*`, `compileTestKotlinIos*`) und `forbiddenCallsCheck`
 (Domain/Application dürfen weder `kotlin.random`/`Random` noch Systemuhren direkt nutzen, Ersatz für
 die ESLint-Regeln der Web-App). Die Konvention bricht den Build ab, wenn Produktionscode ein
-`*-testing`-Modul einbindet. Warnungen sind Fehler (`allWarningsAsErrors`). Gradle 9.8 (Wrapper).
+`*-testing`-Modul einbindet (Test-Hilfsmodule untereinander dürfen das). Warnungen sind Fehler (`allWarningsAsErrors`). Gradle 9.8 (Wrapper).
 Die Web-Gates (`npm run …`) bleiben unverändert grün; ESLint und Prettier ignorieren `mobile/`.
 
 ## Arbeitsweise (parallele Agents)

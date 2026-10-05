@@ -7,7 +7,10 @@ import kotlin.math.min
 /**
  * Polygon triangulation: a port of mapbox `earcut` (the version three.js r186 ships), 2D only, so
  * the triangles of a shape come out in exactly the same order as in the web app.
+ *
+ * The complexity rules are suppressed on purpose: splitting this direct port would hurt fidelity.
  */
+@Suppress("LargeClass", "ComplexCondition", "CyclomaticComplexMethod", "ReturnCount", "LoopWithTooManyJumpStatements")
 object Earcut {
     private class Node(
         val i: Int,

@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:function-naming") // builders keep the three.js names (BoxGeometry(...))
+
 package app.zoeshorsefarm.scene.geometry
 
 import app.zoeshorsefarm.scene.math.Vec2
@@ -9,6 +11,7 @@ import kotlin.math.max
  * and without extrusion paths, which is all the game uses). Non-indexed with flat normals;
  * group 0 is the two lids, group 1 the side walls.
  */
+@Suppress("CyclomaticComplexMethod", "LongMethod") // direct port of three.js ExtrudeGeometry (no bevel)
 fun ExtrudeGeometry(
     shapes: List<Shape>,
     depth: Double = 1.0,

@@ -208,23 +208,29 @@ class CatmullRomCurve3(
             tmp.subVectors(points[l - 1], points[l - 2]).add(points[l - 1])
             p3 = tmp
         }
-        if (curveType == CatmullRomType.CENTRIPETAL || curveType == CatmullRomType.CHORDAL) {
-            val pow = if (curveType == CatmullRomType.CHORDAL) 0.5 else 0.25
-            var dt0 = p0.distanceToSquared(p1).pow(pow)
-            var dt1 = p1.distanceToSquared(p2).pow(pow)
-            var dt2 = p2.distanceToSquared(p3).pow(pow)
-            if (dt1 < 1e-4) dt1 = 1.0
-            if (dt0 < 1e-4) dt0 = dt1
-            if (dt2 < 1e-4) dt2 = dt1
-            px.initNonuniform(p0.x, p1.x, p2.x, p3.x, dt0, dt1, dt2)
-            py.initNonuniform(p0.y, p1.y, p2.y, p3.y, dt0, dt1, dt2)
-            pz.initNonuniform(p0.z, p1.z, p2.z, p3.z, dt0, dt1, dt2)
-        } else {
+        initPolynomials(p0, p1, p2, p3)
+        return target.set(px.calc(weight), py.calc(weight), pz.calc(weight))
+    }
+
+    private fun initPolynomials(
+        p0: Vec3,
+        p1: Vec3,
+        p2: Vec3,
+        p3: Vec3,
+    ) {
+        if (curveType == CatmullRomType.CATMULLROM) {
             px.initCatmullRom(p0.x, p1.x, p2.x, p3.x, tension)
             py.initCatmullRom(p0.y, p1.y, p2.y, p3.y, tension)
             pz.initCatmullRom(p0.z, p1.z, p2.z, p3.z, tension)
+            return
         }
-        return target.set(px.calc(weight), py.calc(weight), pz.calc(weight))
+        val pow = if (curveType == CatmullRomType.CHORDAL) 0.5 else 0.25
+        val dt1 = p1.distanceToSquared(p2).pow(pow).let { if (it < 1e-4) 1.0 else it }
+        val dt0 = p0.distanceToSquared(p1).pow(pow).let { if (it < 1e-4) dt1 else it }
+        val dt2 = p2.distanceToSquared(p3).pow(pow).let { if (it < 1e-4) dt1 else it }
+        px.initNonuniform(p0.x, p1.x, p2.x, p3.x, dt0, dt1, dt2)
+        py.initNonuniform(p0.y, p1.y, p2.y, p3.y, dt0, dt1, dt2)
+        pz.initNonuniform(p0.z, p1.z, p2.z, p3.z, dt0, dt1, dt2)
     }
 
     // JS `%` keeps the sign of the dividend; indices are never negative in practice (closed curves

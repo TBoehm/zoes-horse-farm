@@ -29,6 +29,7 @@ class DrawRange(
  * groups and bounds. Well-known attribute names: `position`, `normal`, `uv`, `color`,
  * `skinIndex`, `skinWeight`; any other name is a custom attribute for a material effect.
  */
+@Suppress("TooManyFunctions") // mirrors the three.js BufferGeometry API
 open class Geometry : GpuResource() {
     var name: String = ""
     val attributes: MutableMap<String, BufferAttribute> = LinkedHashMap()

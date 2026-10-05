@@ -15,37 +15,24 @@ private val spriteDefaultCenter = Vec2(0.5, 0.5)
  * nodes (groups, lights) always count as visible. `matrixWorld` must be up to date.
  */
 fun Frustum.intersectsObject(node: Node): Boolean {
-    when (node) {
-        is Sprite -> {
-            cullSphere.center.set(0.0, 0.0, 0.0)
-            cullSphere.radius = 0.7071067811865476 + spriteDefaultCenter.distanceTo(node.center)
-        }
+    val sphere = cullingSphere(node) ?: return true
+    return intersectsSphere(sphere.applyMatrix4(node.matrixWorld))
+}
 
-        is Mesh -> {
-            val own = node.boundingSphere
-            val sphere =
-                own ?: node.geometry.boundingSphere ?: run {
-                    node.geometry.computeBoundingSphere()
-                    node.geometry.boundingSphere
-                } ?: return true
-            cullSphere.copy(sphere)
-        }
-
-        is Points -> {
-            val sphere =
-                node.geometry.boundingSphere ?: run {
-                    node.geometry.computeBoundingSphere()
-                    node.geometry.boundingSphere
-                } ?: return true
-            cullSphere.copy(sphere)
-        }
-
-        else -> {
-            return true
-        }
+/** The local-space bounds of a drawable node in the shared scratch sphere, or null if it has none. */
+private fun cullingSphere(node: Node): Sphere? {
+    if (node is Sprite) {
+        cullSphere.center.set(0.0, 0.0, 0.0)
+        cullSphere.radius = 0.7071067811865476 + spriteDefaultCenter.distanceTo(node.center)
+        return cullSphere
     }
-    cullSphere.applyMatrix4(node.matrixWorld)
-    return intersectsSphere(cullSphere)
+    val geometry = (node as? Mesh)?.geometry ?: (node as? Points)?.geometry
+    val source =
+        (node as? Mesh)?.boundingSphere ?: geometry?.let { g ->
+            if (g.boundingSphere == null) g.computeBoundingSphere()
+            g.boundingSphere
+        }
+    return source?.let { cullSphere.copy(it) }
 }
 
 /**

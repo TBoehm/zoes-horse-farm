@@ -17,7 +17,11 @@ class Hsl(
 /**
  * RGB colour in the working space (linear sRGB), like three.js `Color` with ColorManagement on:
  * hex values, CSS strings and `setRGB(..., SRGB)` are converted to linear when they are set.
+ *
+ * Mutable value type: [equals] and [hashCode] compare the current values, so do not use an
+ * instance as a hash key while it is being mutated.
  */
+@Suppress("TooManyFunctions") // mirrors the three.js Color API
 class Color(
     r: Double = 1.0,
     g: Double = 1.0,
@@ -104,61 +108,63 @@ class Color(
     ): Color {
         val text = style.trim()
         val fn = FUNCTION.matchEntire(text) ?: FUNCTION.find(text)
-        if (fn != null) {
-            val parts = fn.groupValues[2].split(',').map { it.trim() }
-            when (fn.groupValues[1]) {
-                "rgb", "rgba" -> parseRgb(parts, colorSpace)
-                "hsl", "hsla" -> parseHsl(parts, colorSpace)
-            }
-            return this
-        }
-        if (text.startsWith("#")) {
-            val hex = text.substring(1)
-            if (hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
-                if (hex.length == 3) {
-                    return setRGB(
-                        hex[0].digitToInt(16) / 15.0,
-                        hex[1].digitToInt(16) / 15.0,
-                        hex[2].digitToInt(16) / 15.0,
-                        colorSpace,
-                    )
+        when {
+            fn != null -> {
+                val parts = fn.groupValues[2].split(',').map { it.trim() }
+                when (fn.groupValues[1]) {
+                    "rgb", "rgba" -> parseRgb(parts, colorSpace)
+                    "hsl", "hsla" -> parseHsl(parts, colorSpace)
                 }
-                if (hex.length == 6) return setHex(hex.toInt(16), colorSpace)
             }
-            return this
-        }
-        if (text.isNotEmpty()) {
-            val named = NAMES[text.lowercase()]
-            if (named != null) setHex(named, colorSpace)
+
+            text.startsWith("#") -> {
+                parseHex(text.substring(1), colorSpace)
+            }
+
+            text.isNotEmpty() -> {
+                NAMES[text.lowercase()]?.let { setHex(it, colorSpace) }
+            }
         }
         return this
+    }
+
+    private fun parseHex(
+        hex: String,
+        colorSpace: ColorSpace,
+    ) {
+        if (!hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return
+        if (hex.length == 3) {
+            setRGB(
+                hex[0].digitToInt(16) / 15.0,
+                hex[1].digitToInt(16) / 15.0,
+                hex[2].digitToInt(16) / 15.0,
+                colorSpace,
+            )
+        } else if (hex.length == 6) {
+            setHex(hex.toInt(16), colorSpace)
+        }
     }
 
     private fun parseRgb(
         parts: List<String>,
         colorSpace: ColorSpace,
     ) {
-        if (parts.size < 3) return
-        val percent = parts[0].endsWith("%")
-        val scale = if (percent) 100.0 else 255.0
-        val values = parts.take(3).map { it.removeSuffix("%").toDoubleOrNull() ?: return }
-        setRGB(
-            min(scale, values[0]) / scale,
-            min(scale, values[1]) / scale,
-            min(scale, values[2]) / scale,
-            colorSpace,
-        )
+        val scale = if (parts.firstOrNull()?.endsWith("%") == true) 100.0 else 255.0
+        val values = parts.take(3).map { it.removeSuffix("%").toDoubleOrNull() }
+        if (parts.size >= 3 && values.none { it == null }) {
+            val (r, g, b) = values.map { min(scale, it ?: 0.0) / scale }
+            setRGB(r, g, b, colorSpace)
+        }
     }
 
     private fun parseHsl(
         parts: List<String>,
         colorSpace: ColorSpace,
     ) {
-        if (parts.size < 3) return
-        val h = parts[0].toDoubleOrNull() ?: return
-        val s = parts[1].removeSuffix("%").toDoubleOrNull() ?: return
-        val l = parts[2].removeSuffix("%").toDoubleOrNull() ?: return
-        setHSL(h / 360, s / 100, l / 100, colorSpace)
+        val h = parts.getOrNull(0)?.toDoubleOrNull()
+        val s = parts.getOrNull(1)?.removeSuffix("%")?.toDoubleOrNull()
+        val l = parts.getOrNull(2)?.removeSuffix("%")?.toDoubleOrNull()
+        if (h != null && s != null && l != null) setHSL(h / 360, s / 100, l / 100, colorSpace)
     }
 
     fun clone(): Color = Color(r, g, b)
@@ -330,7 +336,9 @@ class Color(
         return this
     }
 
-    fun equals(c: Color): Boolean = c.r == r && c.g == g && c.b == b
+    override fun equals(other: Any?): Boolean = other is Color && other.r == r && other.g == g && other.b == b
+
+    override fun hashCode(): Int = 31 * (31 * r.hashCode() + g.hashCode()) + b.hashCode()
 
     fun fromArray(
         array: DoubleArray,
@@ -398,13 +406,20 @@ class Color(
             q: Double,
             tIn: Double,
         ): Double {
-            var t = tIn
-            if (t < 0) t += 1
-            if (t > 1) t -= 1
-            if (t < 1.0 / 6) return p + (q - p) * 6 * t
-            if (t < 1.0 / 2) return q
-            if (t < 2.0 / 3) return p + (q - p) * 6 * (2.0 / 3 - t)
-            return p
+            val t =
+                if (tIn < 0) {
+                    tIn + 1
+                } else if (tIn > 1) {
+                    tIn - 1
+                } else {
+                    tIn
+                }
+            return when {
+                t < 1.0 / 6 -> p + (q - p) * 6 * t
+                t < 1.0 / 2 -> q
+                t < 2.0 / 3 -> p + (q - p) * 6 * (2.0 / 3 - t)
+                else -> p
+            }
         }
 
         /** CSS colour names (subset of three.js `Color.NAMES` that matters for drawing). */

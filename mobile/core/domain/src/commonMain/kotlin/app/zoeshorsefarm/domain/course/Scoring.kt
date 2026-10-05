@@ -9,12 +9,16 @@ import kotlin.math.hypot
 
 // Course scoring (concept rules 32, 33, 36; glossary best result, ride time).
 
-const val KNOCKDOWN_FAULTS = 4
-const val REFUSAL_FAULTS = 4
+/** Fault points per knockdown and per refusal (tuning). */
+val KNOCKDOWN_FAULTS: Int = TUNING.scoring.knockdownFaults
+val REFUSAL_FAULTS: Int = TUNING.scoring.refusalFaults
 
-// one fault per started 4 s
-private const val TIME_FAULT_STEP_CS = 400
-private const val ALLOWED_TIME_FACTOR = 1.5
+// unit conversions and numeric tolerances
+internal const val MS_PER_SECOND = 1000.0
+internal const val MS_PER_CS = 10.0
+private const val ROUND_HALF = 0.5
+private const val CS_TRUNCATE_EPS = 1e-6
+private const val ALLOWED_TIME_EPS = 1e-9
 
 /** What the "best result" comparison needs: total fault points and the time in hundredths. */
 interface RatedResult {
@@ -69,27 +73,27 @@ fun allowedTime(
     course: Course,
     speed: Double = referenceSpeed(course),
 ): Int {
-    val seconds = (idealLineLength(course) / speed) * ALLOWED_TIME_FACTOR
+    val seconds = (idealLineLength(course) / speed) * TUNING.scoring.allowedTimeFactor
     // small tolerance against rounding noise for round values
-    return ceil(seconds - 1e-9).toInt()
+    return ceil(seconds - ALLOWED_TIME_EPS).toInt()
 }
 
 /** Milliseconds -> hundredths (truncated, like a stopwatch). */
-fun toCentiseconds(ms: Double): Int = floor(ms / 10 + 1e-6).toInt()
+fun toCentiseconds(ms: Double): Int = floor(ms / MS_PER_CS + CS_TRUNCATE_EPS).toInt()
 
 /** Time faults: 1 point per started 4 s over the allowed time, computed in hundredths. */
 fun timeFaults(overMs: Double): Int {
     // JS Math.round: halves round up
-    val overCs = floor(overMs / 10 + 0.5)
+    val overCs = floor(overMs / MS_PER_CS + ROUND_HALF)
     if (overCs <= 0) return 0
-    return ceil(overCs / TIME_FAULT_STEP_CS).toInt()
+    return ceil(overCs / TUNING.scoring.timeFaultStepCs).toInt()
 }
 
 /** Stars: 0 faults = 3, 1-4 = 2, more = 1 (rule 36). */
 fun starsFor(totalFaults: Int): Int =
     when {
-        totalFaults <= 0 -> 3
-        totalFaults <= 4 -> 2
+        totalFaults <= 0 -> TUNING.scoring.maxStars
+        totalFaults <= TUNING.scoring.twoStarMaxFaults -> 2
         else -> 1
     }
 

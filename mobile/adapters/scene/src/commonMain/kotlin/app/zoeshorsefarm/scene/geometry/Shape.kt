@@ -207,7 +207,7 @@ open class Path(
         val curve = EllipseCurve(x, y, xRadius, yRadius, startAngle, endAngle, clockwise, rotation)
         if (curves.isNotEmpty()) {
             val first = curve.getPoint(0.0)
-            if (!first.equals(currentPoint)) lineTo(first.x, first.y)
+            if (first != currentPoint) lineTo(first.x, first.y)
         }
         curves.add(curve)
         currentPoint.copy(curve.getPoint(1.0))
@@ -218,7 +218,7 @@ open class Path(
     fun closePath(): Path {
         val start = curves[0].getPoint(0.0)
         val end = curves[curves.size - 1].getPoint(1.0)
-        if (!start.equals(end)) curves.add(LineCurve(end, start))
+        if (start != end) curves.add(LineCurve(end, start))
         return this
     }
 
@@ -229,7 +229,7 @@ open class Path(
         for (curve in curves) {
             val pts = curve.getPoints(curve.resolution(divisions))
             for (point in pts) {
-                if (last?.equals(point) == true) continue
+                if (last == point) continue
                 points.add(point)
                 last = point
             }
@@ -285,7 +285,7 @@ object ShapeUtils {
 
     private fun removeDupEndPts(points: MutableList<Vec2>) {
         val l = points.size
-        if (l > 2 && points[l - 1].equals(points[0])) points.removeAt(l - 1)
+        if (l > 2 && points[l - 1] == points[0]) points.removeAt(l - 1)
     }
 
     private fun addContour(

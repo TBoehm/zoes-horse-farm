@@ -8,7 +8,13 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
-/** Mutable 2D vector (three.js `Vector2`). Methods mutate and return `this` so calls chain. */
+/**
+ * Mutable 2D vector (three.js `Vector2`). Methods mutate and return `this` so calls chain.
+ *
+ * Mutable value type: [equals] and [hashCode] compare the current values, so do not use an
+ * instance as a hash key while it is being mutated.
+ */
+@Suppress("TooManyFunctions") // mirrors the three.js Vector2 API
 class Vec2(
     var x: Double = 0.0,
     var y: Double = 0.0,
@@ -112,7 +118,9 @@ class Vec2(
         alpha: Double,
     ): Vec2 = set(a.x + (b.x - a.x) * alpha, a.y + (b.y - a.y) * alpha)
 
-    fun equals(v: Vec2): Boolean = v.x == x && v.y == y
+    override fun equals(other: Any?): Boolean = other is Vec2 && other.x == x && other.y == y
+
+    override fun hashCode(): Int = 31 * x.hashCode() + y.hashCode()
 
     fun fromArray(
         array: DoubleArray,

@@ -140,7 +140,7 @@ data class MaterialParams(
     val emissive: Int = 0x000000,
 )
 
-/** A shader uniform: its value is a `Double`, [Color], [Vec2], [Vec3] or [Boolean]; the view code mutates it in place. */
+/** A shader uniform: its value is a `Double`, [Color], [Vec2], [Vec3] or [Boolean]; view code mutates it in place. */
 class Uniform(
     var value: Any,
 )

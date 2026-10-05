@@ -14,7 +14,7 @@ fun createRng(seed: Int = 1): () -> Double {
     }
 }
 
-/** Tileable value noise: a grid of `period` cells, `invoke(u, v)` for `u`, `v` in `[0, 1)` (any real works, it wraps). */
+/** Tileable value noise: a grid of `period` cells, `invoke(u, v)` for `u`, `v` in `[0, 1)` (it wraps). */
 class TileNoise(
     private val period: Int,
     seed: Int = 1,
