@@ -26,6 +26,12 @@ kotlin {
     }
 }
 
+// Allocation tests must see what Kotlin/Native and ART allocate: HotSpot's escape analysis would
+// remove short-lived boxes (e.g. from function types with primitive arguments) and hide them.
+tasks.withType<Test>().configureEach {
+    jvmArgs("-XX:-DoEscapeAnalysis")
+}
+
 ktlint {
     version.set("1.8.0")
 }
