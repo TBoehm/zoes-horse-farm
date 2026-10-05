@@ -208,7 +208,7 @@ class Audio(
     fun onUserInteraction() {
         lock.withLock {
             unlockLocked()
-            if (disposed || failed || hidden || isRunning()) disarm()
+            if (unlockUnavailableOrUnneeded() || isRunning()) disarm()
         }
     }
 
@@ -226,9 +226,14 @@ class Audio(
         }
     }
 
+    private fun unlockUnavailable() = disposed || failed
+
+    // No unlock request makes sense: audio is gone, or the app is in the background (it suspends itself)
+    private fun unlockUnavailableOrUnneeded() = unlockUnavailable() || hidden
+
     private fun arm() {
         val listener = unlockListener
-        if (armed || listener == null || disposed || failed) return
+        if (armed || listener == null || unlockUnavailable()) return
         armed = true
         listener.onUnlockNeeded(true)
     }
