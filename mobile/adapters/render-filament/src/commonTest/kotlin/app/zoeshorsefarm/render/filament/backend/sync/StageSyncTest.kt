@@ -150,6 +150,42 @@ class StageSyncTest {
     }
 
     @Test
+    fun `the shadow box is read from the shadow camera every frame`() {
+        val light = sun()
+        light.castShadow = true
+        settings.shadowsEnabled = true
+        light.shadow.camera.left = -24.0
+        light.shadow.camera.right = 24.0
+        frame()
+        assertEquals(
+            24f,
+            stage.settings
+                .last()
+                .shadows!!
+                .halfExtent,
+        )
+        light.shadow.camera.left = -10.0
+        light.shadow.camera.right = 10.0
+        frame()
+        assertEquals(
+            10f,
+            stage.settings
+                .last()
+                .shadows!!
+                .halfExtent,
+        )
+        light.shadow.camera.zoom = 2.0
+        frame()
+        assertEquals(
+            5f,
+            stage.settings
+                .last()
+                .shadows!!
+                .halfExtent,
+        )
+    }
+
+    @Test
     fun `the shadow map size is limited`() {
         val light = sun()
         light.castShadow = true

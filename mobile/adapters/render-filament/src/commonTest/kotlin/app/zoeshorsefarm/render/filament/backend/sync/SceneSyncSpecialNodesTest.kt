@@ -248,6 +248,19 @@ class SceneSyncSpecialNodesTest : SyncHarness() {
     }
 
     @Test
+    fun `a material disposed while its mesh draws nothing is not used afterwards`() {
+        val material = StandardMaterial()
+        val mesh = instanced(count = 0, material = material)
+        frame()
+        assertTrue(live().isEmpty())
+        material.dispose()
+        mesh.count = 3
+        frame()
+        assertEquals(1, live().size)
+        assertTrue(device.liveMaterialInstances.contains(live().single().materials.single()))
+    }
+
+    @Test
     fun `two instanced meshes with one material have their own data`() {
         val material = StandardMaterial()
         instanced(count = 2, material = material)

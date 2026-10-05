@@ -91,6 +91,7 @@ internal class PointsEntry(
     override fun destroy(ctx: SyncContext) {
         dropBatch(ctx)
         dropRenderable()
+        binding?.users?.remove(this)
     }
 
     private fun positionsOf(geometry: Geometry): FloatAttribute? {
@@ -130,9 +131,13 @@ internal class PointsEntry(
             return null
         }
         dropRenderable()
+        existing?.users?.remove(this)
         bindingVersion = material.version
-        binding = ctx.materials.bind(material, spec, null)
-        return binding
+        val fresh = ctx.materials.bind(material, spec, null)
+        // told when the material is disposed, also before the first draw
+        fresh?.users?.add(this)
+        binding = fresh
+        return fresh
     }
 
     private fun feed(
@@ -207,7 +212,6 @@ internal class PointsEntry(
             )
         val created = ctx.device.createRenderable(live.mesh, listOf(current.instance), null, options)
         renderable = created
-        current.users += this
         culling = points.frustumCulled
         renderOrder = points.renderOrder
         fog = material.fog
@@ -256,7 +260,6 @@ internal class PointsEntry(
         renderable?.destroy()
         renderable = null
         shown = false
-        binding?.users?.remove(this)
         transform.invalidate()
     }
 

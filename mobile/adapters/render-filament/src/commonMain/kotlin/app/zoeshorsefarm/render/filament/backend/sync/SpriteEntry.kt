@@ -66,7 +66,10 @@ internal class SpriteEntry(
         bindingVersion = -1
     }
 
-    override fun destroy(ctx: SyncContext) = dropRenderable()
+    override fun destroy(ctx: SyncContext) {
+        dropRenderable()
+        binding?.users?.remove(this)
+    }
 
     private fun bindingFor(ctx: SyncContext): MaterialBinding? {
         val material = sprite.material
@@ -78,9 +81,13 @@ internal class SpriteEntry(
             return null
         }
         dropRenderable()
+        existing?.users?.remove(this)
         bindingVersion = material.version
-        binding = ctx.materials.bind(material, spec, null)
-        return binding
+        val fresh = ctx.materials.bind(material, spec, null)
+        // told when the material is disposed, also before the first draw
+        fresh?.users?.add(this)
+        binding = fresh
+        return fresh
     }
 
     private fun build(
@@ -96,7 +103,6 @@ internal class SpriteEntry(
             )
         val created = ctx.device.createRenderable(ctx.spriteQuad, listOf(current.instance), null, options)
         renderable = created
-        current.users += this
         culling = sprite.frustumCulled
         renderOrder = sprite.renderOrder
         fog = current.material.fog
@@ -134,7 +140,6 @@ internal class SpriteEntry(
         renderable?.destroy()
         renderable = null
         shown = false
-        binding?.users?.remove(this)
         transform.invalidate()
     }
 

@@ -189,7 +189,9 @@ class StageSync(
 
     private fun halfExtentOf(light: DirectionalLight): Float {
         val camera = light.shadow.camera
-        val half = ((camera.right - camera.left) / 2.0).toFloat()
+        // three.js refits the shadow projection every frame; the view code may have changed the box since
+        camera.updateProjectionMatrix()
+        val half = ((camera.right - camera.left) / (2.0 * camera.zoom)).toFloat()
         return if (half > 0f) half else DEFAULT_HALF_EXTENT
     }
 

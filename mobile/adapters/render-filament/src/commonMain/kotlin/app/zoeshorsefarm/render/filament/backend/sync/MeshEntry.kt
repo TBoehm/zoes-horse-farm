@@ -132,10 +132,10 @@ internal class MeshEntry(
     override fun destroy(ctx: SyncContext) {
         destroyRenderable()
         releaseOwnedBindings(ctx)
+        detachPlan()
         instances?.release()
         if (listening) instances?.mesh?.removeDisposeListener(ctx.disposeListener)
         listening = false
-        plan = null
     }
 
     override fun onGeometryReset() {
@@ -145,9 +145,16 @@ internal class MeshEntry(
     }
 
     override fun onMaterialReset() {
+        // the registry clears the user lists of the bindings itself
         destroyRenderable()
         plan = null
         boundData = null
+    }
+
+    private fun detachPlan() {
+        val old = plan ?: return
+        for (i in old.bindings.indices) old.bindings[i].users.remove(this)
+        plan = null
     }
 
     // ---- plan ----------------------------------------------------------------------------------
@@ -194,7 +201,11 @@ internal class MeshEntry(
                 bindings += binding
             }
         }
-        plan = DrawPlan(kept, bindings)
+        detachPlan()
+        val fresh = DrawPlan(kept, bindings)
+        plan = fresh
+        // a material that is disposed must reach the entry before the next frame, whether or not it is drawn yet
+        for (i in bindings.indices) if (this !in bindings[i].users) bindings[i].users += this
         // the instance data goes to the new material instances
         boundData = null
         key.capture(mesh, skin)
@@ -269,7 +280,6 @@ internal class MeshEntry(
         built = Built(g.mesh, instanceCount, boneCount, current)
         geometry = g
         g.users += this
-        for (binding in current.bindings) if (this !in binding.users) binding.users += this
         shown = true
         transform.invalidate()
         recordApplied(g, primary)
@@ -287,8 +297,6 @@ internal class MeshEntry(
             if (old.plan.bindings[i] !== current.bindings[i]) live.setMaterial(i, current.bindings[i].instance)
         }
         if (rangesChanged) live.setRanges(current.ranges)
-        for (binding in old.plan.bindings) binding.users.remove(this)
-        for (binding in current.bindings) if (this !in binding.users) binding.users += this
         built = Built(old.mesh, old.instanceCount, old.boneCount, current)
         if (instances != null) boundData = null
     }
@@ -296,12 +304,10 @@ internal class MeshEntry(
     private fun destroyRenderable() {
         renderable?.destroy()
         renderable = null
-        val old = built
         built = null
         shown = false
         geometry?.users?.remove(this)
         geometry = null
-        if (old != null) for (binding in old.plan.bindings) binding.users.remove(this)
         transform.invalidate()
     }
 
