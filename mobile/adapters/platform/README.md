@@ -9,8 +9,8 @@ Port of `src/adapters/platform/`. Package `app.zoeshorsefarm.platform`, depends 
 | `AppLifecycle`, `ManualAppLifecycle`, `bindCrashGuardLifecycle` | `page-lifecycle.js` | Foreground/background port for the crash guard; the shells call `ManualAppLifecycle.update` |
 | `DeviceInfo`, `DeviceInfoSource`, `SystemDeviceInfo` | (new) | Memory, cores, touch, screen pixels, GPU name for the graphics budget; iOS via NSProcessInfo, UIScreen and Metal, JVM for development |
 | `ErrorLog`, `describeError`, `describeDevice` | `debug-info.js` | Pure debug-box text and the ring of the last errors |
-| `GAME_KEYS` | `game-keys.js` | Keys the game reacts to |
-| `InputMode`, `classifyDevice`, `isPortrait` | `input-mode.js` | Touch mode; `InputMode.mobile()` is always touch, `HYBRID` for tablets with a keyboard |
+| `GameKey` | `game-keys.js` | The one list of keys the game reacts to; `:adapters:input` uses it too |
+| `InputMode` (`onKey(GameKey?)`), `classifyDevice`, `isPortrait` | `input-mode.js` | Touch mode; `InputMode.mobile()` is always touch, `HYBRID` for tablets with a keyboard |
 
 No tab id: `tab-id.js` gives every browser tab an id that survives the reload after a crash. The native app
 has one instance per install and no such storage, and a per-process id would be new after a crash, which

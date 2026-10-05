@@ -38,12 +38,15 @@ class InputMode(
         if (device == DeviceClass.HYBRID) set(true)
     }
 
-    /** A key was pressed ([code] as in [GAME_KEYS]); typing into a text field does not count. */
+    /**
+     * A key was pressed: [key] is its [GameKey], or null for any other key (those change nothing);
+     * typing into a text field does not count.
+     */
     fun onKey(
-        code: String,
+        key: GameKey?,
         inEditableField: Boolean = false,
     ) {
-        if (device == DeviceClass.HYBRID && code in GAME_KEYS && !inEditableField) set(false)
+        if (device == DeviceClass.HYBRID && key != null && !inEditableField) set(false)
     }
 
     /** Calls [listener] with the new value on every change; returns the function that unsubscribes. */
