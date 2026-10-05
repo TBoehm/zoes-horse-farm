@@ -5,3 +5,7 @@ indent_size = 4
 max_line_length = 120
 ktlint_code_style = ktlint_official
 ktlint_function_naming_ignore_when_annotated_with = Composable
+
+# geometry builders keep the three.js type names (BoxGeometry(...)) like factory functions
+[adapters/scene/src/commonMain/kotlin/app/zoeshorsefarm/scene/geometry/*.kt]
+ktlint_standard_function-naming = disabled
