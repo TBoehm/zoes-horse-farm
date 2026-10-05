@@ -36,8 +36,9 @@ regelt das „Wie“ der nativen App. Abweichungen erst hier ändern.
 
 Stand der Build-Umgebung (Cloud-Container): `dl.google.com` und `download.jetbrains.com` sind
 gesperrt. Damit fehlen Android Gradle Plugin, androidx und Compose Multiplatform (hängt an androidx).
-Bis dahin werden alle Module ohne Compose/Android gebaut und geprüft; UI (`:adapters:ui`) und App
-(`:app`) folgen in einer späteren Welle.
+Bis dahin werden alle Module ohne Compose/Android gebaut und geprüft; die Compose-UI (`:adapters:ui`)
+und die Plattform-Hüllen folgen, sobald die Hosts erreichbar sind. Die Bildschirm-Logik liegt dafür
+schon toolkit-frei in `:adapters:presentation`, die Verdrahtung in `:app`.
 
 ## Module (Gradle = Schichtgrenzen)
 
@@ -61,7 +62,8 @@ vom Build erzwungen (ersetzt `no-restricted-imports`).
 | `:adapters:i18n` | `app.zoeshorsefarm.i18n` | `src/adapters/ui/i18n/` (Texttabellen DE/EN, `t()`) | application |
 | `:adapters:presentation` | `app.zoeshorsefarm.presentation` | Bildschirm-Logik ohne UI-Toolkit aus `src/adapters/ui/` (Navigation, Menü, Einstellungen, Hinweise, Parcours-Plan, HUD-, Profil- und Hilfe-Modelle, Design-Tokens); die Compose-UI zeigt diese Modelle an und meldet Aktionen zurück | application, i18n, input, platform, audio |
 | `:adapters:ui` (später) | `app.zoeshorsefarm.ui` | Compose-Bildschirme | alles Innere |
-| `:app` (später) | `app.zoeshorsefarm.app` | Composition Root, Android-App, iOS-Framework | alles |
+| `:app` | `app.zoeshorsefarm.app` | Composition Root (verdrahtet Store, Dienste, Absturzwächter, i18n, Audio, Eingabe, Präsentation, Engine und Filament; Brücke `RideEnginePort` → Engine), später iOS-Framework | alles |
+| `androidApp`, `iosApp` (später) | – | Plattform-Hüllen (Android-App, Xcode-Projekt); brauchen Google Maven bzw. macOS | alles |
 
 Namenskonvention beim Port: JS-Datei `kebab-case.js` → Kotlin-Datei `PascalCase.kt` im passenden
 Unterpaket (`domain/sim/riding-sim.js` → `domain/sim/RidingSim.kt`); Tests `XxxTest.kt` in

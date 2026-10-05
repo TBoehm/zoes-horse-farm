@@ -31,4 +31,5 @@ include(
     ":adapters:input",
     ":adapters:i18n",
     ":adapters:presentation",
+    ":app",
 )
