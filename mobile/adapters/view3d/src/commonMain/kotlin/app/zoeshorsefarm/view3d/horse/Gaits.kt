@@ -41,6 +41,11 @@ private fun powSafe(
     e: Double,
 ): Double = max(x, 1e-4).pow(e)
 
+/** A value that depends on the speed (a primitive function type: calling it does not box). */
+fun interface SpeedCurve {
+    operator fun invoke(v: Double): Double
+}
+
 /**
  * Parameters of one gait. `duty` and `freq` are functions of the speed; `lift`, `flex`, `past` and
  * `center` have one value per leg (LF, RF, LH, RH). `reverse`: the hoof path runs forward relative
@@ -48,8 +53,8 @@ private fun powSafe(
  */
 class GaitSpec(
     val offsets: DoubleArray,
-    val duty: (Double) -> Double,
-    val freq: (Double) -> Double,
+    val duty: SpeedCurve,
+    val freq: SpeedCurve,
     val lift: DoubleArray,
     val flex: DoubleArray,
     val past: DoubleArray,

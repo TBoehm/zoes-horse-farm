@@ -538,15 +538,16 @@ private fun trackHorse(
 ): HorseTrack {
     val records = ArrayList<LimiterRecord>()
     val horse = createHorse(quality = GraphicsLevel.LOW, rider = false, rng = createRng(3))
-    horse.limiter = { state, target, dt, maxSpeed, maxAccel ->
-        if (unlimited) {
-            snapJoint(state, target)
-        } else {
-            val out = limitJoint(state, target, dt, maxSpeed, maxAccel)
-            records.add(LimiterRecord(abs(out - target), maxSpeed))
-            out
+    horse.limiter =
+        LimiterFn { state, target, dt, maxSpeed, maxAccel ->
+            if (unlimited) {
+                snapJoint(state, target)
+            } else {
+                val out = limitJoint(state, target, dt, maxSpeed, maxAccel)
+                records.add(LimiterRecord(abs(out - target), maxSpeed))
+                out
+            }
         }
-    }
     horse.frontSolved = { out -> if (IkPop.calls++ == IkPop.at) out[2] += 1.0 }
     val tracker = HorseTracker(name, horse)
     runScript(

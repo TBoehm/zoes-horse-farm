@@ -31,7 +31,7 @@ import kotlin.math.sin
 //       coats = listOf(Coat.CHESTNUT, Coat.BAY, Coat.GREY),      // coats to pick from (default: all)
 //       rng = rng,                            // random numbers (default: seeded)
 //       release = epoch::release,             // release hook of the GPU epoch
-//       groundY = { x, z -> 0.0 },            // height of the grass (default: flat)
+//       groundY = GroundY { x, z -> 0.0 },          // height of the grass (default: flat)
 //   )
 //   scene.add(paddock.group)
 //   paddock.update(dt)                        // every frame
@@ -78,6 +78,14 @@ fun <T> dealCoats(
     return List(count) { i -> coats[(first + i) % coats.size] }
 }
 
+/** Height of the grass at (x, z) (a primitive function type: calling it does not box). */
+fun interface GroundY {
+    operator fun invoke(
+        x: Double,
+        z: Double,
+    ): Double
+}
+
 /** The grazing horses of a paddock: [group] holds one horse group per horse. */
 class GrazingHorses internal constructor(
     startLevel: GraphicsLevel,
@@ -86,7 +94,7 @@ class GrazingHorses internal constructor(
     coats: List<Coat>,
     private val rng: () -> Double,
     release: (GpuObject?) -> Unit,
-    private val groundY: (Double, Double) -> Double,
+    private val groundY: GroundY,
 ) {
     val group = Group()
     private val grazers = ArrayList<Grazer>()
@@ -223,7 +231,7 @@ fun createGrazingHorses(
     coats: List<Coat> = COATS,
     rng: () -> Double = createRng(DEFAULT_SEED),
     release: (GpuObject?) -> Unit = ::releaseNow,
-    groundY: (Double, Double) -> Double = { _, _ -> 0.0 },
+    groundY: GroundY = GroundY { _, _ -> 0.0 },
 ): GrazingHorses = GrazingHorses(quality, area, count, coats, rng, release, groundY)
 
 /** Like the level variant; the `characterDetail` of the preset decides about the horse model. */
@@ -234,7 +242,7 @@ fun createGrazingHorses(
     coats: List<Coat> = COATS,
     rng: () -> Double = createRng(DEFAULT_SEED),
     release: (GpuObject?) -> Unit = ::releaseNow,
-    groundY: (Double, Double) -> Double = { _, _ -> 0.0 },
+    groundY: GroundY = GroundY { _, _ -> 0.0 },
 ): GrazingHorses =
     GrazingHorses(
         GraphicsLevel.fromId(quality.characterDetail.id) ?: quality.level,

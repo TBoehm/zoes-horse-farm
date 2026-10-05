@@ -82,6 +82,19 @@ private class LimbNames(
 private fun boneNames(p: String) =
     LimbNames("${p}thigh", "${p}shin", "${p}foot", "${p}upperArm", "${p}forearm", "${p}hand")
 
+/** The bones of one side of the rider, resolved by [LimbNames]. */
+private class LimbBones(
+    names: LimbNames,
+    bones: Map<String, Bone>,
+) {
+    val thigh = bones.getValue(names.thigh)
+    val shin = bones.getValue(names.shin)
+    val foot = bones.getValue(names.foot)
+    val upperArm = bones.getValue(names.upperArm)
+    val forearm = bones.getValue(names.forearm)
+    val hand = bones.getValue(names.hand)
+}
+
 // precomputed: update() runs every frame
 private val LEFT_NAMES = boneNames("L")
 private val RIGHT_NAMES = boneNames("R")
@@ -545,16 +558,27 @@ class Rider(
         hands = listOf(bones.getValue("Lhand"), bones.getValue("Rhand"))
     }
 
-    private val restDir = HashMap<String, Vec3>()
+    private val restDir = HashMap<Bone, Vec3>()
 
     init {
         for (b in list) {
             val child = b.children.firstOrNull { it is Bone }
-            if (child != null) restDir[b.name] = child.position.clone().normalize()
+            if (child != null) restDir[b] = child.position.clone().normalize()
         }
-        restDir["Lhand"] = Vec3(0.0, -0.2, 1.0).normalize()
-        restDir["Rhand"] = restDir.getValue("Lhand").clone()
+        val handDir = Vec3(0.0, -0.2, 1.0).normalize()
+        restDir[bones.getValue("Lhand")] = handDir
+        restDir[bones.getValue("Rhand")] = handDir.clone()
     }
+
+    // the bones that update() moves, looked up once
+    private val bPelvis = bones.getValue("pelvis")
+    private val bSpine = bones.getValue("spine")
+    private val bChest = bones.getValue("chest")
+    private val bNeck = bones.getValue("neck")
+    private val bHead = bones.getValue("head")
+    private val bBase = bones.getValue("base")
+    private val leftLimbs = LimbBones(LEFT_NAMES, bones)
+    private val rightLimbs = LimbBones(RIGHT_NAMES, bones)
 
     private val invBase = Mat4()
     private val m4 = Mat4()
@@ -586,7 +610,7 @@ class Rider(
     ) {
         frameOf(bone.parent!!, vTmp, qParent) // (a bone of the chain always has a parent)
         vB.copy(dirBase).normalize().applyQuaternion(qTmp.copy(qParent).invert())
-        bone.quaternion.setFromUnitVectors(restDir.getValue(bone.name), vB)
+        bone.quaternion.setFromUnitVectors(restDir.getValue(bone), vB)
         bone.updateMatrixWorld(true)
     }
 
@@ -654,12 +678,12 @@ class Rider(
         stepHeadLook(look, dt, state, halt)
         stepPat(pat, dt, jumping = state.jump != null, halted = halt > 0.95)
         breathing(look.time, halt, breath)
-        val pelvis = bones.getValue("pelvis")
-        val spine = bones.getValue("spine")
-        val chest = bones.getValue("chest")
-        val neck = bones.getValue("neck")
-        val head = bones.getValue("head")
-        val base = bones.getValue("base")
+        val pelvis = bPelvis
+        val spine = bSpine
+        val chest = bChest
+        val neck = bNeck
+        val head = bHead
+        val base = bBase
         pelvis.position.set(J.pelvis[0], J.pelvis[1] + seat.rise, J.pelvis[2] + seat.forward)
         val lean = seat.lean + PAT_LEAN * pat.reach
         pelvis.rotation.set(lean * 0.4 + seat.sway, 0.0, seat.roll)
@@ -671,15 +695,15 @@ class Rider(
         base.updateMatrixWorld(true)
         invBase.copy(base.matrixWorld).invert()
         for (s in SIDES) {
-            val names = if (s > 0) LEFT_NAMES else RIGHT_NAMES
-            val shin = bones.getValue(names.shin)
-            val foot = bones.getValue(names.foot)
-            val forearm = bones.getValue(names.forearm)
-            val hand = bones.getValue(names.hand)
+            val limbs = if (s > 0) leftLimbs else rightLimbs
+            val shin = limbs.shin
+            val foot = limbs.foot
+            val forearm = limbs.forearm
+            val hand = limbs.hand
             // legs: ankle in the stirrup (fixed on the saddle), knee forward/outward
             pTarget.set(J.ankle[0] * s, J.ankle[1], J.ankle[2] + seat.footForward)
             pPole.set(0.6 * s, -0.1, 1.2)
-            twoBone(bones.getValue(names.thigh), shin, foot, pTarget, pPole)
+            twoBone(limbs.thigh, shin, foot, pTarget, pPole)
             frameOf(shin, vA, qParent)
             foot.quaternion.copy(qParent).invert()
             foot.rotateX(-0.1)
@@ -692,7 +716,7 @@ class Rider(
                 seat.handZ + PAT_Z * patS,
             )
             pPole.set(0.5 * s, -0.4, -0.6)
-            twoBone(bones.getValue(names.upperArm), forearm, hand, pTarget, pPole)
+            twoBone(limbs.upperArm, forearm, hand, pTarget, pPole)
             frameOf(forearm, vA, qParent)
             hand.quaternion.copy(qParent).invert()
             hand.rotateZ(-0.5 * s)
@@ -705,7 +729,7 @@ class Rider(
      */
     fun lateUpdate(dt: Double) {
         if (!(dt > 0)) return
-        bones.getValue("head").matrixWorld.decompose(mPos, mQuat, scl)
+        bHead.matrixWorld.decompose(mPos, mQuat, scl)
         if (!hasMotion || mPos.distanceToSquared(mPrev) > TELEPORT_DISTANCE * TELEPORT_DISTANCE) {
             // first frame or a jump in place (restart): no velocity yet
             hasMotion = true
