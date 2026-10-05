@@ -123,6 +123,38 @@ val crown = StandardMaterial(vertexColors = true, effect = WindEffect.tree(wind)
 crown.effectEnabled = false; crown.needsUpdate = true; crown.dispose()
 ```
 
+## Sand effect
+
+`SandEffect(arenaHalfWidth, arenaHalfLength)` (program key `sand-v1`) patches the colour of the arena
+sand, standard and Lambert alike. Input: the world position `gp` (xz) of the fragment, which the
+backend passes from the vertex stage (`gp = (modelMatrix * vec4(position, 1)).xz`); `arenaHalf` =
+`vec2(arenaHalfWidth, arenaHalfLength)`. The code runs right after the colour map is applied and
+multiplies `diffuseColor.rgb` (reference: the web app's `patchSandMaterial` in `arena.js`):
+
+```glsl
+float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float gNoise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(gHash(i), gHash(i + vec2(1.0, 0.0)), f.x),
+             mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+// after the colour map:
+vec2 gp = vGroundPos;
+float n = gNoise(gp * 0.13) * 0.6 + gNoise(gp * 0.55) * 0.4;
+diffuseColor.rgb *= 0.9 + 0.2 * n;
+// track: band along a rounded rectangle about 1.7 m inside the fence
+vec2 b = arenaHalf - vec2(1.7);
+float R = 5.0;
+vec2 q = abs(gp) - (b - vec2(R));
+float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - R;
+float wob = gNoise(gp * 0.8) * 0.5;
+float band = 1.0 - smoothstep(0.35, 1.25, abs(d) + wob * 0.4);
+diffuseColor.rgb *= mix(vec3(1.0), vec3(0.78, 0.72, 0.66), band);
+// lighter sand pushed up against the fence
+float edge = smoothstep(1.0, 0.0, min(arenaHalf.x - abs(gp.x), arenaHalf.y - abs(gp.y)));
+diffuseColor.rgb *= 1.0 + edge * 0.08;
+```
+
 A label texture:
 
 ```kotlin

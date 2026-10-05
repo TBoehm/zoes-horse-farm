@@ -4,6 +4,7 @@ import app.zoeshorsefarm.application.GraphicsLevel
 import app.zoeshorsefarm.domain.sim.Zone
 import app.zoeshorsefarm.scene.graph.PerspectiveCamera
 import app.zoeshorsefarm.scene.render.FakeRenderBackend
+import app.zoeshorsefarm.view3d.PADDOCK
 import com.sun.management.ThreadMXBean
 import java.lang.management.ManagementFactory
 import kotlin.test.Test
@@ -18,6 +19,10 @@ private const val DT = 1.0 / 60
 // regression that allocates per frame costs several hundred KB here).
 private const val ALLOWED_BYTES = 64 * 1024
 private const val ALLOWED_DUST_BYTES = 8 * 1024
+
+// The grazing horses pick a new spot now and then (a few numbers each time); a boxed number per call
+// would cost about 130 bytes per frame. Measured: about 4 bytes per frame.
+private const val ALLOWED_GRAZING_BYTES_PER_FRAME = 16
 
 private fun allocatedBytes(block: () -> Unit): Long {
     val threads = ManagementFactory.getThreadMXBean() as ThreadMXBean
@@ -63,6 +68,32 @@ class WorldAllocationTest {
         }
         val allocated = allocatedBytes { repeat(MEASURED_FRAMES) { frame(world) } }
         assertTrue(allocated < ALLOWED_BYTES, "allocated $allocated bytes in $MEASURED_FRAMES frames")
+        world.dispose()
+    }
+
+    @Test
+    fun aFrameWithTheGrazingHorsesDoesNotAllocate() {
+        val world = buildWorld(FakeRenderBackend())
+        for (id in listOf(
+            "density",
+            "materials",
+            "shadows",
+        )) {
+            world.applyQualityStage(id, testPreset(GraphicsLevel.HIGH))
+        }
+        // the horses are only animated while the paddock is in view
+        val towards =
+            PerspectiveCamera(50.0, 1.6, 0.1, 900.0).also {
+                it.position.set(PADDOCK.x, 6.0, PADDOCK.z + 22)
+                it.lookAt(PADDOCK.x, 0.0, PADDOCK.z)
+                it.updateMatrixWorld(true)
+            }
+        repeat(WARM_UP_FRAMES) { world.update(DT, towards) }
+        val allocated = allocatedBytes { repeat(MEASURED_FRAMES) { world.update(DT, towards) } }
+        assertTrue(
+            allocated < ALLOWED_GRAZING_BYTES_PER_FRAME * MEASURED_FRAMES,
+            "allocated $allocated bytes in $MEASURED_FRAMES frames",
+        )
         world.dispose()
     }
 
