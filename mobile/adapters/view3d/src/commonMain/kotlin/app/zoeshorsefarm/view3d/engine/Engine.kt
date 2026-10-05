@@ -2,7 +2,6 @@ package app.zoeshorsefarm.view3d.engine
 
 import app.zoeshorsefarm.application.CameraMode
 import app.zoeshorsefarm.application.GraphicsLevel
-import app.zoeshorsefarm.application.RideAid
 import app.zoeshorsefarm.application.RideView
 import app.zoeshorsefarm.application.SettingsService
 import app.zoeshorsefarm.application.modes.CourseLines
@@ -11,7 +10,6 @@ import app.zoeshorsefarm.domain.horse.DEFAULT_APPEARANCE
 import app.zoeshorsefarm.domain.sim.Horse
 import app.zoeshorsefarm.domain.sim.Obstacle
 import app.zoeshorsefarm.domain.sim.TUNING
-import app.zoeshorsefarm.domain.sim.Zone
 import app.zoeshorsefarm.scene.graph.PerspectiveCamera
 import app.zoeshorsefarm.scene.math.Vec2
 import app.zoeshorsefarm.scene.math.Vec3
@@ -31,7 +29,6 @@ import app.zoeshorsefarm.view3d.printingLog
 import app.zoeshorsefarm.view3d.quality.LowFpsHint
 import app.zoeshorsefarm.view3d.quality.canHintLowerLevel
 import app.zoeshorsefarm.view3d.watchContextLoss
-import app.zoeshorsefarm.view3d.world.AidParams
 import app.zoeshorsefarm.view3d.world.World
 import kotlin.math.floor
 import kotlin.math.max
@@ -140,7 +137,6 @@ class Engine(
     private var tickCarryMs = 0.0
     private var redraw = true
     private var demand = false
-    private var aidParams: AidParams? = null
     private val diag = EngineDiagnostics()
 
     /** True while the ride is paused: the scene is drawn once and then not again until something changes. */
@@ -492,7 +488,6 @@ class Engine(
         world.setObstacles(obstacles, flags)
         world.highlight(null)
         world.setAid(null)
-        aidParams = null
         world.setFinishMarked(false)
         requestRedraw()
     }
@@ -562,7 +557,7 @@ class Engine(
      * The 3D part of a running ride frame: animates the horse, places it, raises dust, syncs poles,
      * highlight, aid and finish mark, moves the shadow focus and the camera and updates the world.
      * Call it once per frame while the ride runs (not while paused), after the session stepped.
-     * Allocation free except when the take-off aid changes.
+     * Allocation free.
      */
     fun updateRide(
         dt: Double,
@@ -577,32 +572,10 @@ class Engine(
         val highlight = view.highlight
         world.highlight(highlight?.elementId, highlight?.number)
         world.setFinishMarked(view.finishMarked)
-        world.setAid(aidFor(view.aid))
+        world.setAid(view.aid)
         cameraRig.update(dt, state, horse.earAnchor)
         world.update(dt, camera)
     }
-
-    // the world compares what it shows by value; the object is only made again when that changes
-    private fun aidFor(aid: RideAid?): AidParams? {
-        if (aid == null) {
-            aidParams = null
-            return null
-        }
-        val current = aidParams
-        if (current != null && sameAid(current, aid)) return current
-        val zone = aid.zone
-        return AidParams(aid.elementId, aid.dir, zone?.copy()).also { aidParams = it }
-    }
-
-    private fun sameAid(
-        current: AidParams,
-        aid: RideAid,
-    ): Boolean = current.elementId == aid.elementId && current.dir == aid.dir && sameZone(current.zone, aid.zone)
-
-    private fun sameZone(
-        a: Zone?,
-        b: Zone?,
-    ): Boolean = if (a == null || b == null) a == null && b == null else a.near == b.near && a.far == b.far
 
     // --- diagnostics ---------------------------------------------------------------------------
 
