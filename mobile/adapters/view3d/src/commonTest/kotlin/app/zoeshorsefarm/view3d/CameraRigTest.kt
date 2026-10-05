@@ -1,5 +1,6 @@
 package app.zoeshorsefarm.view3d
 
+import app.zoeshorsefarm.application.CameraMode
 import app.zoeshorsefarm.domain.sim.Horse
 import app.zoeshorsefarm.scene.graph.Group
 import app.zoeshorsefarm.scene.graph.Node
@@ -10,7 +11,6 @@ import kotlin.math.hypot
 import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 // camera.js has no tests in the web app. The expected values were computed by running its
 // `createCameraRig` with three.js r186 (node) through the same sequence of frames as below.
@@ -106,14 +106,6 @@ private val RIDER_WITHOUT_ANCHOR =
     )
 
 class CameraModeTest {
-    @Test
-    fun `knows both modes by their stored id`() {
-        assertEquals(CameraMode.FOLLOW, CameraMode.fromId("follow"))
-        assertEquals(CameraMode.RIDER, CameraMode.fromId("rider"))
-        assertNull(CameraMode.fromId("bogus"))
-        assertEquals(listOf("follow", "rider"), CAMERA_MODES.map { it.id })
-    }
-
     @Test
     fun `starts in the follow mode toggles and ignores unknown ids`() {
         val rig = CameraRig(PerspectiveCamera())

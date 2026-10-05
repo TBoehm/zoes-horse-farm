@@ -1,5 +1,6 @@
 package app.zoeshorsefarm.input
 
+import app.zoeshorsefarm.platform.GameKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

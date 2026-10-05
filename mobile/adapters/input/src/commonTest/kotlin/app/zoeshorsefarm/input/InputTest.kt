@@ -1,5 +1,8 @@
 package app.zoeshorsefarm.input
 
+import app.zoeshorsefarm.platform.DeviceClass
+import app.zoeshorsefarm.platform.GameKey
+import app.zoeshorsefarm.platform.InputMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -19,6 +22,46 @@ class InputTest {
             InputState(steer = 1.0, throttle = -1.0, gallop = true, jump = true, pause = true, camera = true),
             merged,
         )
+    }
+
+    // shared game keys (web input-mode.test.js "shared game keys")
+
+    @Test
+    fun theKeyboardHandlesExactlyTheKeysThatEndTheTouchMode() {
+        for (key in GameKey.entries) {
+            val keyboard = KeyboardInput()
+            assertTrue(keyboard.onKeyDown(key), "the keyboard ignores ${key.code}")
+            val mode = InputMode(DeviceClass.HYBRID)
+            mode.onTouch()
+            assertTrue(mode.touch)
+            mode.onKey(key)
+            assertFalse(mode.touch, "${key.code} does not end the touch mode")
+        }
+        // a key that is not a game key is neither handled nor ends the touch mode
+        assertEquals(null, GameKey.fromCode("KeyX"))
+    }
+
+    @Test
+    fun aTouchModeSwitchCausedByAnArrowKeyAlsoCounts() {
+        // arrow key -> (steer, throttle) it steers with
+        val expected =
+            mapOf(
+                GameKey.ARROW_UP to (0.0 to 1.0),
+                GameKey.ARROW_DOWN to (0.0 to -1.0),
+                GameKey.ARROW_LEFT to (-1.0 to 0.0),
+                GameKey.ARROW_RIGHT to (1.0 to 0.0),
+            )
+        for ((arrow, steering) in expected) {
+            val input = Input(touchMode = true)
+            val mode = InputMode(DeviceClass.HYBRID)
+            mode.onTouch()
+            mode.onChange { on -> input.onTouchModeChange(on) }
+            mode.onKey(arrow) // the detector sees the key first and switches the mode
+            assertFalse(input.touch.visible, arrow.code)
+            input.keyboard.onKeyDown(arrow)
+            val state = input.poll()
+            assertEquals(steering, state.steer to state.throttle, arrow.code)
+        }
     }
 
     // input rules

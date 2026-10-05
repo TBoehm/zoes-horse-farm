@@ -18,7 +18,7 @@ class InputModeTest {
     fun `touch only device is always active and keys change nothing`() {
         val mode = InputMode(DeviceClass.TOUCH)
         assertTrue(mode.touch)
-        mode.onKey("KeyW")
+        mode.onKey(GameKey.KEY_W)
         assertTrue(mode.touch)
     }
 
@@ -37,9 +37,9 @@ class InputModeTest {
         assertFalse(mode.touch)
         mode.onTouch()
         assertTrue(mode.touch)
-        mode.onKey("KeyX")
+        mode.onKey(GameKey.fromCode("KeyX"))
         assertTrue(mode.touch)
-        mode.onKey("Space")
+        mode.onKey(GameKey.SPACE)
         assertFalse(mode.touch)
         assertEquals(listOf(true, false), changes)
     }
@@ -48,9 +48,9 @@ class InputModeTest {
     fun `a game key typed into an editable field keeps hybrid mode on`() {
         val mode = InputMode(DeviceClass.HYBRID)
         mode.onTouch()
-        mode.onKey("KeyW", inEditableField = true)
+        mode.onKey(GameKey.KEY_W, inEditableField = true)
         assertTrue(mode.touch)
-        mode.onKey("KeyW", inEditableField = false)
+        mode.onKey(GameKey.KEY_W, inEditableField = false)
         assertFalse(mode.touch)
     }
 
@@ -60,7 +60,7 @@ class InputModeTest {
             val mode = InputMode(DeviceClass.HYBRID)
             mode.onTouch()
             assertTrue(mode.touch)
-            mode.onKey(code)
+            mode.onKey(GameKey.fromCode(code))
             assertFalse(mode.touch, code)
         }
     }
@@ -70,7 +70,7 @@ class InputModeTest {
         val mode = InputMode(DeviceClass.HYBRID)
         var calls = 0
         mode.onChange { calls += 1 }
-        mode.onKey("KeyW")
+        mode.onKey(GameKey.KEY_W)
         mode.onTouch()
         mode.onTouch()
         assertEquals(1, calls)

@@ -59,6 +59,7 @@ private fun lastCrashOf(value: Any?): LastCrash? {
             (map["at"] as? String)?.let { at ->
                 seconds?.let {
                     val extra = treeEntries(map).filterKeys { key -> key !in LAST_CRASH_KEYS }
+                    // whole seconds: a fraction is cut off (JS keeps it), the value is capped at Int.MAX_VALUE
                     LastCrash(level, auto, min(it, Int.MAX_VALUE.toDouble()).toInt(), at, extra)
                 }
             }
@@ -101,6 +102,7 @@ object CrashGuardSection : Section<CrashGuardState> {
             rendering = tree["rendering"] as? Boolean ?: false,
             level = levelOf(tree["level"]),
             auto = tree["auto"] as? Boolean ?: true,
+            // milliseconds since 1970: a fraction (JS allows one) is cut off by toLong()
             since = (tree["since"] as? Number)?.toLong() ?: 0,
             lastSeen = (tree["lastSeen"] as? Number)?.toLong() ?: 0,
             tabId = tree["tabId"] as? String,

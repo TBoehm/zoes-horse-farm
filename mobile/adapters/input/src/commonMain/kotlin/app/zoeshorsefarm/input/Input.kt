@@ -28,7 +28,10 @@ class Input(
         keyboard.latchGallop(onNextShiftPress = true)
     }
 
-    fun poll(): InputState = mergeInputs(keyboard.poll(), touch.poll())
+    private val merged = InputState()
+
+    /** Reads both sources once; the returned state is reused by the next poll (see [InputState]). */
+    fun poll(): InputState = mergeInputs(keyboard.poll(), touch.poll(), merged)
 
     /** The game ends the gallop (refusal, fence): touch off, shift must be pressed again. */
     fun endGallop() {

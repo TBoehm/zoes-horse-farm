@@ -17,7 +17,7 @@ Later ports add their rows here (keep the table sorted by JS file).
 
 | JS (`src/adapters/view3d/`) | Kotlin (`view3d/`) | Test | Notes |
 | --- | --- | --- | --- |
-| `camera.js` | `Camera.kt` (`CameraMode`, `CameraRig`) | `CameraRigTest.kt` | no JS test; expected poses were computed with the JS rig on three.js r186 |
+| `camera.js` | `CameraRig.kt` (`CameraRig`) | `CameraRigTest.kt` | uses `CameraMode` of `:core:application`; no JS test; expected poses were computed with the JS rig on three.js r186 |
 | `camera-math.js` | `CameraMath.kt` | `CameraMathTest.kt` | |
 | `detail-hold.js` | `DetailHold.kt` (`DetailHold`) | `DetailHoldTest.kt` | `createDetailHold()` is the class constructor |
 | `flight-paths.js` | `FlightPaths.kt` | `FlightPathsTest.kt` | |

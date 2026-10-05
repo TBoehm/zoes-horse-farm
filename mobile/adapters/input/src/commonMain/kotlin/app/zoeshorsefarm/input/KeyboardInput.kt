@@ -1,5 +1,7 @@
 package app.zoeshorsefarm.input
 
+import app.zoeshorsefarm.platform.GameKey
+
 // Keyboard input (rule 8): A/D steer, W/S speed, Shift (held) gallop, Space jump,
 // Esc pause, C camera. A gallop that the game ends needs Shift to be pressed again (rule 9).
 // Platform-neutral: the UI maps its key events to [GameKey] and calls onKeyDown/onKeyUp.
@@ -66,21 +68,22 @@ class KeyboardInput(
         latchNextShiftPress = false
     }
 
-    /** Reads the state; edges (jump, pause, camera) are reset in the process. */
+    private val state = InputState()
+
+    /** Reads the state; edges (jump, pause, camera) are reset in the process. Reused by the next poll. */
     fun poll(): InputState {
         val right = isDown(GameKey.KEY_D) || isDown(GameKey.ARROW_RIGHT)
         val left = isDown(GameKey.KEY_A) || isDown(GameKey.ARROW_LEFT)
         val up = isDown(GameKey.KEY_W) || isDown(GameKey.ARROW_UP)
         val back = isDown(GameKey.KEY_S) || isDown(GameKey.ARROW_DOWN)
-        val state =
-            InputState(
-                steer = (if (right) 1.0 else 0.0) - (if (left) 1.0 else 0.0),
-                throttle = (if (up) 1.0 else 0.0) - (if (back) 1.0 else 0.0),
-                gallop = isShift() && !shiftLatched,
-                jump = jump,
-                pause = pause,
-                camera = camera,
-            )
+        state.set(
+            steer = (if (right) 1.0 else 0.0) - (if (left) 1.0 else 0.0),
+            throttle = (if (up) 1.0 else 0.0) - (if (back) 1.0 else 0.0),
+            gallop = isShift() && !shiftLatched,
+            jump = jump,
+            pause = pause,
+            camera = camera,
+        )
         clearEdges()
         latchNextShiftPress = false
         return state
