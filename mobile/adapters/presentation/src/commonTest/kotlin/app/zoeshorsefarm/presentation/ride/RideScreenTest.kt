@@ -11,6 +11,7 @@ import app.zoeshorsefarm.application.modes.CourseLines
 import app.zoeshorsefarm.application.modes.RideModeId
 import app.zoeshorsefarm.application.testing.seededRng
 import app.zoeshorsefarm.platform.AppState
+import app.zoeshorsefarm.platform.GameKey
 import app.zoeshorsefarm.presentation.TestApp
 import app.zoeshorsefarm.presentation.nav.RedirectModel
 import app.zoeshorsefarm.presentation.nav.Route
@@ -260,13 +261,13 @@ class RideScreenTest {
     @Test
     fun escapeContinuesWhilePausedAndIgnoresKeyRepeat() {
         val model = start()
-        assertFalse(model.onKeyDown("Escape", repeat = false))
+        assertFalse(model.onKeyDown(GameKey.ESCAPE, repeat = false))
         model.pauseWithTouch()
-        assertTrue(model.onKeyDown("Escape", repeat = true))
+        assertTrue(model.onKeyDown(GameKey.ESCAPE, repeat = true))
         assertTrue(model.paused)
-        assertTrue(model.onKeyDown("Escape", repeat = false))
+        assertTrue(model.onKeyDown(GameKey.ESCAPE, repeat = false))
         assertFalse(model.paused)
-        assertFalse(model.onKeyDown("KeyW", repeat = false))
+        assertFalse(model.onKeyDown(null, repeat = false))
     }
 
     @Test

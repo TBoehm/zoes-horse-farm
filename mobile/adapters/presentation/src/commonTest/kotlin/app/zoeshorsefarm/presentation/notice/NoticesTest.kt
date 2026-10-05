@@ -3,6 +3,7 @@ package app.zoeshorsefarm.presentation.notice
 import app.zoeshorsefarm.application.Language
 import app.zoeshorsefarm.i18n.I18n
 import app.zoeshorsefarm.platform.DeviceClass
+import app.zoeshorsefarm.platform.GameKey
 import app.zoeshorsefarm.platform.InputMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -64,7 +65,7 @@ class NoticesTest {
         assertFalse(rotate.blocked)
         mode.onTouch()
         assertTrue(rotate.blocked)
-        mode.onKey("KeyW")
+        mode.onKey(GameKey.KEY_W)
         assertFalse(rotate.blocked)
         assertEquals(listOf(true, false), seen)
     }

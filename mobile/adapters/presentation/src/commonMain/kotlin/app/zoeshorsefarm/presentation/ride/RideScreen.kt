@@ -12,6 +12,7 @@ import app.zoeshorsefarm.audio.Cancellable
 import app.zoeshorsefarm.domain.sim.SimInput
 import app.zoeshorsefarm.input.Input
 import app.zoeshorsefarm.platform.AppState
+import app.zoeshorsefarm.platform.GameKey
 import app.zoeshorsefarm.presentation.AppContext
 import app.zoeshorsefarm.presentation.Changes
 import app.zoeshorsefarm.presentation.courses.CourseHudPresenter
@@ -36,8 +37,6 @@ private const val HINT_VISIBLE_S = 5.0 // the "graphics too high" hint is longer
 // How long the model waits for the graphics device to come back before it asks to restart the view
 // (some systems stop restoring after repeated losses). A technical value, not a game value.
 private const val CONTEXT_RESTORE_TIMEOUT_MS = 8000L
-
-private const val ESCAPE_CODE = "Escape"
 
 /** The buttons of the pause menu, in the order they are shown. */
 enum class PauseAction {
@@ -330,14 +329,14 @@ class RideScreenModel(
     fun onFocusLost() = setPaused(true)
 
     /**
-     * A hardware key press while this screen is shown. Escape continues a paused ride (key repeat is
-     * ignored). Returns true when the key was used.
+     * A hardware key press while this screen is shown ([key] null: not a game key). Escape continues a
+     * paused ride (key repeat is ignored). Returns true when the key was used.
      */
     fun onKeyDown(
-        code: String,
+        key: GameKey?,
         repeat: Boolean,
     ): Boolean {
-        if (!paused || !isTop || code != ESCAPE_CODE) return false
+        if (!paused || !isTop || key != GameKey.ESCAPE) return false
         if (!repeat) setPaused(false)
         return true
     }
