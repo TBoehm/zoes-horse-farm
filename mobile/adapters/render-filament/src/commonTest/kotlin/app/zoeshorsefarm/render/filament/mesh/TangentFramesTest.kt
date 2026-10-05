@@ -22,7 +22,10 @@ class TangentFramesTest {
         q: FloatArray,
         o: Int = 0,
     ): FloatArray {
-        val (x, y, z, w) = floatArrayOf(q[o], q[o + 1], q[o + 2], q[o + 3])
+        val x = q[o]
+        val y = q[o + 1]
+        val z = q[o + 2]
+        val w = q[o + 3]
         return floatArrayOf(2f * (x * z + w * y), 2f * (y * z - w * x), 1f - 2f * (x * x + y * y))
     }
 
@@ -30,7 +33,10 @@ class TangentFramesTest {
         q: FloatArray,
         o: Int = 0,
     ): FloatArray {
-        val (x, y, z, w) = floatArrayOf(q[o], q[o + 1], q[o + 2], q[o + 3])
+        val x = q[o]
+        val y = q[o + 1]
+        val z = q[o + 2]
+        val w = q[o + 3]
         return floatArrayOf(1f - 2f * (y * y + z * z), 2f * (x * y + z * w), 2f * (x * z - y * w))
     }
 
@@ -39,7 +45,10 @@ class TangentFramesTest {
         q: FloatArray,
         o: Int = 0,
     ): FloatArray {
-        val (x, y, z, w) = floatArrayOf(q[o], q[o + 1], q[o + 2], q[o + 3])
+        val x = q[o]
+        val y = q[o + 1]
+        val z = q[o + 2]
+        val w = q[o + 3]
         val s = if (w < 0f) -1f else 1f
         return floatArrayOf(
             2f * (x * y - w * z) * s,

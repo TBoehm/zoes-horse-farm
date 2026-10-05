@@ -23,53 +23,67 @@ class MaterialSourcesTest {
 
     // ---- every variant is consistent ----------------------------------------------------------
 
-    @Test
-    fun `every valid combination of the spec options generates consistent code`() {
-        var checked = 0
-        val winds =
-            listOf(
-                WindEffect.None,
-                WindEffect.Tree,
-                WindEffect.Bush,
-                WindEffect.Tuft,
-                WindEffect.Blossom(0.35f),
-                WindEffect.Bunting,
-                WindEffect.Wings(9f, 0.5f, 1f),
+    private val winds =
+        listOf(
+            WindEffect.None,
+            WindEffect.Tree,
+            WindEffect.Bush,
+            WindEffect.Tuft,
+            WindEffect.Blossom(0.35f),
+            WindEffect.Bunting,
+            WindEffect.Wings(9f, 0.5f, 1f),
+        )
+
+    /** The spec of one point in the option space, or null if the options contradict each other. */
+    private fun specOrNull(
+        shading: Shading,
+        bits: Int,
+        instancing: InstancingMode,
+        wind: WindEffect,
+        coat: CoatKind?,
+    ): MaterialSpec? =
+        try {
+            MaterialSpec(
+                shading = shading,
+                vertexColors = bits and 1 != 0,
+                baseColorMap = bits and 2 != 0,
+                normalMap = bits and 4 != 0,
+                alphaMap = bits and 8 != 0,
+                skinning = bits and 16 != 0,
+                blend = if (bits and 32 != 0) Blend.TRANSPARENT else Blend.OPAQUE,
+                doubleSided = bits and 64 != 0,
+                toneMapped = bits and 128 == 0,
+                instancing = instancing,
+                wind = wind,
+                coat = coat,
             )
-        val problems = ArrayList<String>()
-        for (shading in Shading.entries) {
-            for (bits in 0 until 256) {
-                for (instancing in InstancingMode.entries) {
-                    for (wind in winds) {
-                        for (coat in listOf(null, CoatKind.STANDARD, CoatKind.LOW)) {
-                            val spec =
-                                try {
-                                    MaterialSpec(
-                                        shading = shading,
-                                        vertexColors = bits and 1 != 0,
-                                        baseColorMap = bits and 2 != 0,
-                                        normalMap = bits and 4 != 0,
-                                        alphaMap = bits and 8 != 0,
-                                        skinning = bits and 16 != 0,
-                                        blend = if (bits and 32 != 0) Blend.TRANSPARENT else Blend.OPAQUE,
-                                        doubleSided = bits and 64 != 0,
-                                        toneMapped = bits and 128 == 0,
-                                        instancing = instancing,
-                                        wind = wind,
-                                        coat = coat,
-                                    )
-                                } catch (_: IllegalArgumentException) {
-                                    continue
-                                }
-                            checked++
-                            val found = GlslSanity.check(generate(spec))
-                            if (found.isNotEmpty()) problems += "${spec.key}: $found"
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+
+    private fun validSpecs(): Sequence<MaterialSpec> =
+        sequence {
+            for (shading in Shading.entries) {
+                for (bits in 0 until 256) {
+                    for (instancing in InstancingMode.entries) {
+                        for (wind in winds) {
+                            for (coat in listOf(null, CoatKind.STANDARD, CoatKind.LOW)) {
+                                specOrNull(shading, bits, instancing, wind, coat)?.let { yield(it) }
+                            }
                         }
                     }
                 }
             }
         }
-        assertTrue(checked > 500, "only $checked combinations were valid")
+
+    @Test
+    fun `every valid combination of the spec options generates consistent code`() {
+        val specs = validSpecs().toList()
+        val problems =
+            specs.mapNotNull { spec ->
+                GlslSanity.check(generate(spec)).takeIf { it.isNotEmpty() }?.let { "${spec.key}: $it" }
+            }
+        assertTrue(specs.size > 500, "only ${specs.size} combinations were valid")
         assertTrue(problems.isEmpty(), problems.take(5).joinToString("\n"))
     }
 
@@ -156,7 +170,7 @@ class MaterialSourcesTest {
     }
 
     @Test
-    fun `culling is back, none for double sided, front for the sky and none for sprites`() {
+    fun `culling is back by default and none for double sided or sprites and front for the sky`() {
         assertEquals(SourceCulling.BACK, generate(MaterialSpec(Shading.LIT)).culling)
         assertEquals(SourceCulling.NONE, generate(MaterialSpec(Shading.LIT, doubleSided = true)).culling)
         assertEquals(SourceCulling.FRONT, generate(MaterialSpec(Shading.SKY)).culling)
@@ -430,7 +444,7 @@ class MaterialSourcesTest {
     }
 
     @Test
-    fun `the standard coat has fine noise and spots, the low coat paints wraps and blinks`() {
+    fun `the standard coat has fine noise and spots while the low coat paints wraps and blinks`() {
         val standard = generate(MaterialSpec(Shading.LIT, coat = CoatKind.STANDARD)).fragment
         val low = generate(MaterialSpec(Shading.LAMBERT, coat = CoatKind.LOW)).fragment
         assertTrue("hzNoise(p * 3.0) * 0.6" in standard)

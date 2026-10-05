@@ -29,7 +29,7 @@ class RenderSettingsTest {
     }
 
     @Test
-    fun `msaa takes none, two or four samples`() {
+    fun `msaa takes none or two or four samples`() {
         RenderSettings(msaaSamples = 0)
         RenderSettings(msaaSamples = 2)
         RenderSettings(msaaSamples = 4)

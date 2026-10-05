@@ -67,6 +67,8 @@ internal object CoatGlsl {
         return uniformPattern.replace(resolved) { "materialParams.${it.value}" }
     }
 
+    // one GLSL function of the web shader, ported as it is: splitting it would only hide the port
+    @Suppress("LongMethod")
     private fun template(regions: MarkingRegions): String {
         fun f(x: Float) = GlslNumber.format(x, decimals = MARKING_DECIMALS)
         val star = regions.star
