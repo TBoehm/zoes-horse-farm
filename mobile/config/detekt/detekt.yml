@@ -2,6 +2,8 @@
 # Formatting is ktlint's job; detekt checks complexity, potential bugs, naming and style.
 
 style:
+  ReturnCount:
+    max: 3
   MaxLineLength:
     maxLineLength: 120
   MagicNumber:
@@ -19,3 +21,12 @@ naming:
   FunctionNaming:
     ignoreAnnotated:
       - 'Composable'
+
+complexity:
+  TooManyFunctions:
+    # facades of the ported web modules (audio, sessions, world) expose many small operations
+    allowedFunctionsPerFile: 20
+    allowedFunctionsPerClass: 20
+    allowedFunctionsPerObject: 20
+    allowedFunctionsPerInterface: 20
+    ignorePrivate: true
