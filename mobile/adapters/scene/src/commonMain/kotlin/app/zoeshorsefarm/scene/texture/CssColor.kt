@@ -105,12 +105,12 @@ object CssColor {
         }
 
     private fun parseRgb(parts: List<String>): Rgba? {
-        val values = parts.take(3).map { channel(it, 255.0) }
+        val rgb = parts.take(3).mapNotNull { channel(it, 255.0)?.coerceIn(0.0, 255.0) }
         val a = alpha(parts.getOrNull(3))
-        val valid = parts.size >= 3 && a != null && values.none { it == null }
-        return if (valid) {
-            val (r, g, b) = values.map { it?.coerceIn(0.0, 255.0) ?: 0.0 }
-            Rgba(r, g, b, (a ?: 1.0).coerceIn(0.0, 1.0))
+        return if (parts.size >= 3 && rgb.size == 3 &&
+            a != null
+        ) {
+            Rgba(rgb[0], rgb[1], rgb[2], a.coerceIn(0.0, 1.0))
         } else {
             null
         }
