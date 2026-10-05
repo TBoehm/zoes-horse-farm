@@ -45,7 +45,7 @@ class MaterialPackageCacheTest {
     }
 
     @Test
-    fun `the cache key joins the name, the fingerprint and the engine version`() {
+    fun `the cache key joins the name plus the fingerprint plus the engine version`() {
         val source = source(MaterialSpec(Shading.LIT))
         val key = MaterialPackageCache.keyOf(source, engineVersion = "1.77")
         assertEquals("zhf-lit-${source.fingerprint()}-1.77", key)

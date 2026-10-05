@@ -173,30 +173,39 @@ data class MaterialSpec(
             }.joinToString("-")
 
     private fun validate() {
-        if (skinning) {
-            require(instancing == InstancingMode.NONE) { "skinned meshes cannot be instanced" }
-            require(wind == WindEffect.None) { "skinned meshes cannot have wind" }
-        }
+        validateSkinning()
         validateWind()
-        if (normalMap) {
-            require(shading == Shading.LIT) { "normal maps are for the lit shading only" }
-            require(instancing == InstancingMode.NONE) { "normal maps cannot be combined with instancing" }
-        }
-        if (shading == Shading.SKY) {
-            require(!vertexColors && !baseColorMap && !alphaMap && !normalMap) { "the sky takes no maps or colours" }
-            require(instancing == InstancingMode.NONE && wind == WindEffect.None && !skinning) { "the sky is plain" }
-        }
-        if (shading == Shading.SPRITE) {
-            require(blend == Blend.TRANSPARENT) { "sprites are transparent" }
-            require(!vertexColors && !baseColorMap && !alphaMap && !normalMap) { "sprites take no maps or colours" }
-            require(instancing == InstancingMode.NONE && wind == WindEffect.None && !skinning) { "sprites are plain" }
-        }
-        if (coat != null) {
-            require(isLit) { "the coat needs a lit material" }
-            require(!vertexColors && !baseColorMap && !normalMap && !alphaMap) { "the coat paints the whole surface" }
-            require(instancing == InstancingMode.NONE && wind == WindEffect.None) {
-                "the coat is for skinned or plain meshes"
-            }
+        validateNormalMap()
+        validateSkyAndSprite()
+        validateCoat()
+    }
+
+    private fun validateSkinning() {
+        if (!skinning) return
+        require(instancing == InstancingMode.NONE) { "skinned meshes cannot be instanced" }
+        require(wind == WindEffect.None) { "skinned meshes cannot have wind" }
+    }
+
+    private fun validateNormalMap() {
+        if (!normalMap) return
+        require(shading == Shading.LIT) { "normal maps are for the lit shading only" }
+        require(instancing == InstancingMode.NONE) { "normal maps cannot be combined with instancing" }
+    }
+
+    private fun validateSkyAndSprite() {
+        if (shading != Shading.SKY && shading != Shading.SPRITE) return
+        val name = shading.id
+        require(!vertexColors && !baseColorMap && !alphaMap && !normalMap) { "the $name takes no maps or colours" }
+        require(instancing == InstancingMode.NONE && wind == WindEffect.None && !skinning) { "the $name is plain" }
+        if (shading == Shading.SPRITE) require(blend == Blend.TRANSPARENT) { "sprites are transparent" }
+    }
+
+    private fun validateCoat() {
+        if (coat == null) return
+        require(isLit) { "the coat needs a lit material" }
+        require(!vertexColors && !baseColorMap && !normalMap && !alphaMap) { "the coat paints the whole surface" }
+        require(instancing == InstancingMode.NONE && wind == WindEffect.None) {
+            "the coat is for skinned or plain meshes"
         }
     }
 

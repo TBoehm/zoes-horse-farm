@@ -3,7 +3,8 @@ package app.zoeshorsefarm.render.filament.mesh
 import io.github.erkko68.filament.IndexBuffer
 import io.github.erkko68.filament.VertexBuffer
 
-/** The Filament vertex attribute slot of a [VertexSemantic]. */
+/** The Filament vertex attribute slot of a [VertexSemantic]: a one to one mapping, one branch per attribute. */
+@Suppress("CyclomaticComplexMethod")
 internal fun VertexSemantic.toFilament(): VertexBuffer.VertexAttribute =
     when (this) {
         VertexSemantic.POSITION -> VertexBuffer.VertexAttribute.POSITION

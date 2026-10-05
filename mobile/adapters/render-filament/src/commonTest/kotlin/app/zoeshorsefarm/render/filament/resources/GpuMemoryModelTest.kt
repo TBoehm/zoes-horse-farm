@@ -63,7 +63,7 @@ class GpuMemoryModelTest {
     }
 
     @Test
-    fun `a smaller render size shrinks the render targets, keeps the swap chain and adds an upscale target`() {
+    fun `a smaller render size shrinks the render targets and keeps the swap chain and adds an upscale target`() {
         val full = GpuMemoryModel.frameBytes(FrameSizes(1000, 1000, 1000, 1000), 0)
         val half = GpuMemoryModel.frameBytes(FrameSizes(1000, 1000, 500, 500), 0)
         assertTrue(half < full)

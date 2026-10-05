@@ -20,7 +20,7 @@ class AmbientShTest {
     }
 
     @Test
-    fun `a hemisphere light uses two bands, four coefficients of three channels`() {
+    fun `a hemisphere light uses two bands and four coefficients of three channels`() {
         val sh = AmbientSh.hemisphere(sky, ground, 1f)
         assertEquals(2, AmbientSh.BANDS)
         assertEquals(12, sh.size)

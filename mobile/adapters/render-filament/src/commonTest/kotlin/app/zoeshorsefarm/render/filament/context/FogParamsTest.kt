@@ -43,7 +43,7 @@ class FogParamsTest {
     }
 
     @Test
-    fun `the fog meets three js at near, in the middle and at far`() {
+    fun `the fog meets three js at near and in the middle and at far`() {
         // three.js eases in and out with smoothstep, Filament is linear: the ends and the middle agree
         for ((near, far) in listOf(120f to 520f, 90f to 480f)) {
             val fog = FogParams.fromLinear(near, far, horizon)
