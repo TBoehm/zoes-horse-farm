@@ -2,6 +2,7 @@ package app.zoeshorsefarm.domain.progress
 
 import app.zoeshorsefarm.domain.course.RideResult
 import app.zoeshorsefarm.domain.sim.TUNING
+import app.zoeshorsefarm.domain.sim.Tuning
 
 // Badges (concept rule 49): pure check logic, immutable.
 // The takeoff assist has no influence on awarding (rule 42).
@@ -51,18 +52,16 @@ data class BadgeCheck(
     val awarded: List<String>,
 )
 
-private fun allCoursesThreeStars(progress: Progress) =
-    COURSE_IDS.all {
-        progress.courses[it]?.stars ==
-            TUNING.scoring.maxStars
-    }
+private fun allCoursesThreeStars(
+    progress: Progress,
+    tuning: Tuning,
+) = COURSE_IDS.all { progress.courses[it]?.stars == tuning.scoring.maxStars }
 
 // Only the real courses count, not stray entries of a damaged or newer save.
-private fun anyCourseThreeStars(progress: Progress) =
-    COURSE_IDS.any {
-        progress.courses[it]?.stars ==
-            TUNING.scoring.maxStars
-    }
+private fun anyCourseThreeStars(
+    progress: Progress,
+    tuning: Tuning,
+) = COURSE_IDS.any { progress.courses[it]?.stars == tuning.scoring.maxStars }
 
 /** Awards all still-missing badges from [conditions] (id -> fulfilled) with date [nowIso]. */
 private fun award(
@@ -84,11 +83,12 @@ private fun award(
 fun checkInstantBadges(
     progress: Progress,
     nowIso: String,
+    tuning: Tuning = TUNING,
 ): BadgeCheck {
     val jumps = progress.jumps
     return award(
         progress,
-        mapOf("firstJump" to (jumps >= 1), "jumpMouse" to (jumps >= TUNING.badges.jumpsForJumpMouse)),
+        mapOf("firstJump" to (jumps >= 1), "jumpMouse" to (jumps >= tuning.badges.jumpsForJumpMouse)),
         nowIso,
     )
 }
@@ -103,16 +103,17 @@ fun checkRideEndBadges(
     progress: Progress,
     result: RideResult?,
     nowIso: String,
+    tuning: Tuning = TUNING,
 ): BadgeCheck =
     award(
         progress,
         mapOf(
-            "clean" to (result?.faults?.total == 0 || anyCourseThreeStars(progress)),
+            "clean" to (result?.faults?.total == 0 || anyCourseThreeStars(progress, tuning)),
             "oxerPro" to (result?.cleanOxer == true),
             "comboPro" to (result?.cleanCombination == true),
             "allOpen" to (progress.unlocked >= COURSE_COUNT),
-            "starRider" to allCoursesThreeStars(progress),
-            "busy" to (progress.finishedRides >= TUNING.badges.ridesForBusy),
+            "starRider" to allCoursesThreeStars(progress, tuning),
+            "busy" to (progress.finishedRides >= tuning.badges.ridesForBusy),
         ),
         nowIso,
     )

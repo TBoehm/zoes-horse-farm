@@ -1,11 +1,12 @@
 package app.zoeshorsefarm.domain.course
 
+import app.zoeshorsefarm.domain.sim.ApproachInfo
 import app.zoeshorsefarm.domain.sim.ElementKind
 import app.zoeshorsefarm.domain.sim.HorsePose
 import app.zoeshorsefarm.domain.sim.SimRules
 import app.zoeshorsefarm.domain.sim.TUNING
 import app.zoeshorsefarm.domain.sim.Tuning
-import app.zoeshorsefarm.domain.sim.approachInfo
+import app.zoeshorsefarm.domain.sim.approachInfoInto
 import kotlin.math.hypot
 import kotlin.math.max
 
@@ -29,12 +30,15 @@ enum class LineCross {
     MISSING,
 }
 
-/** Fault points of a ride, itemized. */
+/**
+ * Fault points of a ride, itemized. [CourseRun.faults] returns the same instance on every read
+ * (read it every frame, do not keep it, use `copy()`); the one in a [RideResult] is its own.
+ */
 data class Faults(
-    val knockdowns: Int,
-    val refusals: Int,
-    val timeFaults: Int,
-    val total: Int,
+    var knockdowns: Int,
+    var refusals: Int,
+    var timeFaults: Int,
+    var total: Int,
 )
 
 /** Result of a finished ride (input of the progress). */
@@ -49,17 +53,23 @@ data class RideResult(
     override val totalFaults: Int get() = faults.total
 }
 
-/** The element that is due next: obstacle index, part (0 = a or single, 1 = b) and element id. */
+/**
+ * The element that is due next: obstacle index, part (0 = a or single, 1 = b) and element id.
+ * [CourseRun.current] returns the same instance on every read: read it, do not keep it.
+ */
 data class CurrentTarget(
-    val obstacleIndex: Int,
-    val part: Int,
-    val elementId: String,
+    var obstacleIndex: Int,
+    var part: Int,
+    var elementId: String,
 )
 
-/** The element to highlight in the arena with the obstacle number (null in free mode). */
+/**
+ * The element to highlight in the arena with the obstacle number (null in free mode).
+ * [CourseRun.highlight] returns the same instance on every read: read it, do not keep it.
+ */
 data class Highlight(
-    val elementId: String,
-    val number: Int?,
+    var elementId: String,
+    var number: Int?,
 )
 
 /** Answer to a landing: was the jump scored, and when should a fallen pole be rebuilt (s)? */
@@ -133,6 +143,14 @@ class CourseRun(
     private val scoredKnocks = HashSet<String>()
     private val refused = HashSet<String>()
 
+    // views and scratch: the per-frame reads allocate nothing
+    private val currentView = CurrentTarget(0, 0, "")
+    private val highlightView = Highlight("", null)
+    private val faultsView = Faults(0, 0, 0, 0)
+    private val scratchInfo = ApproachInfo()
+    private val numberLabels = Array(obstacles.size) { "${obstacles[it].number}" }
+    private val partBLabels = Array(obstacles.size) { "${obstacles[it].number}b" }
+
     private fun currentElement() = if (index >= obstacles.size) null else obstacles[index].elements[part]
 
     private fun rideMs(): Double =
@@ -144,12 +162,16 @@ class CourseRun(
 
     private fun overMs(ms: Double) = toCentiseconds(ms) * MS_PER_CS - allowedMs
 
-    private fun timeFaultsNow() = if (currentPhase == RunPhase.PRESTART) 0 else timeFaults(overMs(rideMs()))
+    private fun timeFaultsNow() = if (currentPhase == RunPhase.PRESTART) 0 else timeFaults(overMs(rideMs()), tuning)
 
-    private fun currentFaults(): Faults {
+    /** Writes the current fault points into [out]. */
+    private fun faultsInto(out: Faults): Faults {
         val time = timeFaultsNow()
-        val total = knockdowns * KNOCKDOWN_FAULTS + refusals * REFUSAL_FAULTS + time
-        return Faults(knockdowns, refusals, time, total)
+        out.knockdowns = knockdowns
+        out.refusals = refusals
+        out.timeFaults = time
+        out.total = knockdowns * tuning.scoring.knockdownFaults + refusals * tuning.scoring.refusalFaults + time
+        return out
     }
 
     private fun isCurrent(
@@ -190,15 +212,15 @@ class CourseRun(
         finalMs = max(0.0, timeMs - startMs)
         currentPhase = RunPhase.FINISHED
         currentHint = null
-        val f = currentFaults()
+        val f = faultsInto(Faults(0, 0, 0, 0))
         val oxers = obstacles.flatMap { o -> o.elements.filter { it.kind == ElementKind.OXER } }
         val combos = obstacles.filter { it.elements.size > 1 }
         currentResult =
             RideResult(
                 courseId = course.id,
                 timeCs = toCentiseconds(finalMs),
-                faults = Faults(knockdowns, refusals, f.timeFaults, f.total),
-                stars = starsFor(f.total),
+                faults = f,
+                stars = starsFor(f.total, tuning),
                 cleanOxer = oxers.any { cleanAt(listOf(it.id)) },
                 cleanCombination = combos.any { o -> cleanAt(o.elements.map { it.id }) },
             )
@@ -213,14 +235,19 @@ class CourseRun(
     val current: CurrentTarget?
         get() {
             val e = currentElement() ?: return null
-            return CurrentTarget(index, part, e.id)
+            currentView.obstacleIndex = index
+            currentView.part = part
+            currentView.elementId = e.id
+            return currentView
         }
 
     /** The element to highlight (with the obstacle number), or null. */
     val highlight: Highlight?
         get() {
             val e = currentElement() ?: return null
-            return Highlight(e.id, obstacles[index].number)
+            highlightView.elementId = e.id
+            highlightView.number = obstacles[index].number
+            return highlightView
         }
 
     /** All obstacles are done: the finish line is marked. */
@@ -230,11 +257,10 @@ class CourseRun(
     val nextLabel: String
         get() {
             if (currentElement() == null) return NEXT_LABEL_FINISH
-            val number = obstacles[index].number
-            return if (part == 1) "${number}b" else "$number"
+            return if (part == 1) partBLabels[index] else numberLabels[index]
         }
 
-    val faults: Faults get() = currentFaults()
+    val faults: Faults get() = faultsInto(faultsView)
 
     /** Course time in ms: 0 before the start, running while riding, frozen after the finish. */
     val timeMs: Double get() = rideMs()
@@ -334,9 +360,10 @@ class CourseRun(
         // Turning away between a and b (rule 31)
         if (part == 1) {
             val b = checkNotNull(currentElement()) { "part b without a current element" }
-            val info = approachInfo(b, horse, tuning.approachDistance)
+            val approaching =
+                approachInfoInto(b, horse, tuning.approachDistance, scratchInfo) && scratchInfo.approaching
             val far = hypot(horse.x - b.x, horse.z - b.z) > tuning.approachDistance
-            if (!(info != null && info.approaching) && far) restartCombination()
+            if (!approaching && far) restartCombination()
         }
     }
 

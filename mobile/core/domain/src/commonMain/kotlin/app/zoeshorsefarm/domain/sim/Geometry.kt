@@ -120,15 +120,61 @@ fun wrapAngle(a: Double): Double {
  * - crossing: lateral offset (m) at the point where the course meets the obstacle plane
  * - onLine: course hits the obstacle between the stands
  * - approaching: onLine && distance < approachDistance
+ *
+ * Mutable so the per-frame code can reuse one instance with [approachInfoInto].
  */
 data class ApproachInfo(
-    val dir: Int,
-    val distance: Double,
-    val angle: Double,
-    val crossing: Double,
-    val onLine: Boolean,
-    val approaching: Boolean,
-)
+    var dir: Int = 1,
+    var distance: Double = 0.0,
+    var angle: Double = 0.0,
+    var crossing: Double = 0.0,
+    var onLine: Boolean = false,
+    var approaching: Boolean = false,
+) {
+    /** Copies all fields of [other] into this one. */
+    fun set(other: ApproachInfo) {
+        dir = other.dir
+        distance = other.distance
+        angle = other.angle
+        crossing = other.crossing
+        onLine = other.onLine
+        approaching = other.approaching
+    }
+}
+
+/**
+ * Allocation-free [approachInfo]: fills [out] and returns true, or returns false (and leaves [out]
+ * untouched) if the horse is not moving toward the element.
+ */
+fun approachInfoInto(
+    element: Element,
+    horse: HorsePose,
+    approachDistance: Double,
+    out: ApproachInfo,
+): Boolean {
+    val along = localAlong(element, horse.x, horse.z)
+    val across = localAcross(element, horse.x, horse.z)
+    val fx = sin(horse.heading)
+    val fz = cos(horse.heading)
+    val fAlong = fx * sin(element.rot) + fz * cos(element.rot)
+    val fAcross = fx * -cos(element.rot) + fz * sin(element.rot)
+    if (abs(fAlong) < PARALLEL_EPS) return false
+    val dir = if (along < 0) 1 else -1
+    // is the horse moving toward the plane?
+    if (sign(fAlong) != dir.toDouble()) return false
+    val distance = abs(along) - element.spread / 2
+    // lateral offset at the intersection with the element's center plane
+    val travel = abs(along) / abs(fAlong)
+    val crossing = across + fAcross * travel
+    val onLine = abs(crossing) <= POLE_LENGTH / 2
+    out.dir = dir
+    out.distance = distance
+    out.angle = acos(min(1.0, abs(fAlong)))
+    out.crossing = crossing
+    out.onLine = onLine
+    out.approaching = onLine && distance < approachDistance
+    return true
+}
 
 /** Approach info of [horse] to [element]; null if the horse is not moving toward the element. */
 fun approachInfo(
@@ -136,29 +182,6 @@ fun approachInfo(
     horse: HorsePose,
     approachDistance: Double,
 ): ApproachInfo? {
-    val along = localAlong(element, horse.x, horse.z)
-    val across = localAcross(element, horse.x, horse.z)
-    val fx = sin(horse.heading)
-    val fz = cos(horse.heading)
-    val fAlong = fx * sin(element.rot) + fz * cos(element.rot)
-    val fAcross = fx * -cos(element.rot) + fz * sin(element.rot)
-    if (abs(fAlong) < PARALLEL_EPS) return null
-    val dir = if (along < 0) 1 else -1
-    // is the horse moving toward the plane?
-    if (sign(fAlong) != dir.toDouble()) return null
-    val halfSpread = element.spread / 2
-    val distance = abs(along) - halfSpread
-    val angle = acos(min(1.0, abs(fAlong)))
-    // lateral offset at the intersection with the element's center plane
-    val travel = abs(along) / abs(fAlong)
-    val crossing = across + fAcross * travel
-    val onLine = abs(crossing) <= POLE_LENGTH / 2
-    return ApproachInfo(
-        dir = dir,
-        distance = distance,
-        angle = angle,
-        crossing = crossing,
-        onLine = onLine,
-        approaching = onLine && distance < approachDistance,
-    )
+    val out = ApproachInfo()
+    return if (approachInfoInto(element, horse, approachDistance, out)) out else null
 }
