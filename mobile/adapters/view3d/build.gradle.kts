@@ -8,5 +8,8 @@ kotlin {
             api(project(":adapters:scene"))
             api(project(":core:application"))
         }
+        commonTest.dependencies {
+            implementation(project(":core:domain-testing"))
+        }
     }
 }

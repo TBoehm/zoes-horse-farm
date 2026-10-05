@@ -43,12 +43,6 @@ private fun atCenter(
     return zone.far * 0.5 + zone.near * 0.5
 }
 
-private fun untilQuiet(
-    s: RidingSim,
-    @Suppress("UNUSED_PARAMETER") ev: List<SimEvent>,
-    @Suppress("UNUSED_PARAMETER") t: Double,
-) = s.horse.jump == null && s.horse.refusal == null && s.horse.z > 4
-
 private val vertical = ElementKind.VERTICAL
 private val cross = ElementKind.CROSS
 private val oxer = ElementKind.OXER
@@ -236,7 +230,11 @@ class RidingSimJumpFlowTest {
                 },
                 until = { s, _, _ -> s.horse.z > COMBI_DISTANCE + 4 },
                 onStep = { s, ev, _ ->
-                    if (ev.ofType<SimEvent.Landed>().any { it.elementId == "a" }) bApproachAfterLanding.add(s.approach)
+                    if (ev.ofType<SimEvent.Landed>().any { it.elementId == "a" }) {
+                        bApproachAfterLanding.add(
+                            s.approach?.copy(),
+                        )
+                    }
                 },
             )
         assertEquals(

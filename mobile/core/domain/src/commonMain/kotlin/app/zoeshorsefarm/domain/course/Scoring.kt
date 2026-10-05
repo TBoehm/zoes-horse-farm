@@ -9,7 +9,7 @@ import kotlin.math.hypot
 
 // Course scoring (concept rules 32, 33, 36; glossary best result, ride time).
 
-/** Fault points per knockdown and per refusal (tuning). */
+/** Fault points per knockdown and per refusal of the game values (for display; the run uses its tuning). */
 val KNOCKDOWN_FAULTS: Int = TUNING.scoring.knockdownFaults
 val REFUSAL_FAULTS: Int = TUNING.scoring.refusalFaults
 
@@ -72,8 +72,9 @@ fun referenceSpeed(
 fun allowedTime(
     course: Course,
     speed: Double = referenceSpeed(course),
+    tuning: Tuning = TUNING,
 ): Int {
-    val seconds = (idealLineLength(course) / speed) * TUNING.scoring.allowedTimeFactor
+    val seconds = (idealLineLength(course) / speed) * tuning.scoring.allowedTimeFactor
     // small tolerance against rounding noise for round values
     return ceil(seconds - ALLOWED_TIME_EPS).toInt()
 }
@@ -82,18 +83,24 @@ fun allowedTime(
 fun toCentiseconds(ms: Double): Int = floor(ms / MS_PER_CS + CS_TRUNCATE_EPS).toInt()
 
 /** Time faults: 1 point per started 4 s over the allowed time, computed in hundredths. */
-fun timeFaults(overMs: Double): Int {
+fun timeFaults(
+    overMs: Double,
+    tuning: Tuning = TUNING,
+): Int {
     // JS Math.round: halves round up
     val overCs = floor(overMs / MS_PER_CS + ROUND_HALF)
     if (overCs <= 0) return 0
-    return ceil(overCs / TUNING.scoring.timeFaultStepCs).toInt()
+    return ceil(overCs / tuning.scoring.timeFaultStepCs).toInt()
 }
 
 /** Stars: 0 faults = 3, 1-4 = 2, more = 1 (rule 36). */
-fun starsFor(totalFaults: Int): Int =
+fun starsFor(
+    totalFaults: Int,
+    tuning: Tuning = TUNING,
+): Int =
     when {
-        totalFaults <= 0 -> TUNING.scoring.maxStars
-        totalFaults <= TUNING.scoring.twoStarMaxFaults -> 2
+        totalFaults <= 0 -> tuning.scoring.maxStars
+        totalFaults <= tuning.scoring.twoStarMaxFaults -> 2
         else -> 1
     }
 

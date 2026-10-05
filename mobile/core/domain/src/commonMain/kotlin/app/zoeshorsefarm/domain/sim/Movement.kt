@@ -167,10 +167,13 @@ data class ArenaBounds(
     val maxZ: Double,
 )
 
-fun arenaBounds(tuning: Tuning): ArenaBounds {
-    val r = tuning.horse.radius
-    return ArenaBounds(maxX = ARENA.width / 2 - r, maxZ = ARENA.length / 2 - r)
-}
+/** Largest |x| of the reference point (arena half width minus the horse radius). */
+fun arenaMaxX(tuning: Tuning): Double = ARENA.width / 2 - tuning.horse.radius
+
+/** Largest |z| of the reference point (arena half length minus the horse radius). */
+fun arenaMaxZ(tuning: Tuning): Double = ARENA.length / 2 - tuning.horse.radius
+
+fun arenaBounds(tuning: Tuning): ArenaBounds = ArenaBounds(maxX = arenaMaxX(tuning), maxZ = arenaMaxZ(tuning))
 
 /** Result of a wall hit: frontal (the caller stops) or slid along the wall; [normal] points out of the arena. */
 data class FenceHit(
@@ -217,14 +220,15 @@ private fun keepRearInside(
 /** How far the horse reference point is beyond wall [i] (> 0 = outside). */
 private fun overshoot(
     horse: Horse,
-    bounds: ArenaBounds,
+    maxX: Double,
+    maxZ: Double,
     i: Int,
 ): Double =
     when (i) {
-        0 -> horse.x - bounds.maxX
-        1 -> -bounds.maxX - horse.x
-        2 -> horse.z - bounds.maxZ
-        else -> -bounds.maxZ - horse.z
+        0 -> horse.x - maxX
+        1 -> -maxX - horse.x
+        2 -> horse.z - maxZ
+        else -> -maxZ - horse.z
     }
 
 /** Eases the heading parallel to wall [i] (with [dt] > 0 at the slide turn rate, else at once). */
@@ -253,12 +257,11 @@ private fun slideAlongWall(
 private fun hitWall(
     horse: Horse,
     tuning: Tuning,
-    bounds: ArenaBounds,
     i: Int,
     allowStop: Boolean,
     dt: Double,
 ): FenceHit? {
-    val over = overshoot(horse, bounds, i)
+    val over = overshoot(horse, arenaMaxX(tuning), arenaMaxZ(tuning), i)
     if (over <= 0) return null
     horse.x -= WALL_NX[i] * over
     horse.z -= WALL_NZ[i] * over
@@ -291,10 +294,9 @@ fun applyFence(
     allowStop: Boolean = true,
     dt: Double = 0.0,
 ): FenceHit? {
-    val bounds = arenaBounds(tuning)
     var result: FenceHit? = null
     for (i in 0 until WALL_COUNT) {
-        val hit = hitWall(horse, tuning, bounds, i, allowStop, dt)
+        val hit = hitWall(horse, tuning, i, allowStop, dt)
         // a frontal hit wins over a slide; the first slide is kept
         if (hit != null && (hit.frontal || result == null)) result = hit
     }

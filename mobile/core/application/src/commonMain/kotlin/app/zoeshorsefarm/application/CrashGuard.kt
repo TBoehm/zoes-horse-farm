@@ -69,7 +69,10 @@ sealed interface PreviousRun {
  * @param settings the settings service (the only writer of the settings)
  * @param decide what a loss of the 3D picture in the foreground means for the level: (auto, level)
  * @param foregroundGraceMs time after the app came back before it is marked again
- * @param tabId identity of this app instance, constant across restarts of it (null: unknown)
+ * @param tabId identity of this app instance, constant across restarts of it (null: unknown). The web
+ *   keeps it in `sessionStorage`, which survives the reload after a crash. The native app has exactly one
+ *   instance per install and no such storage, so it passes null: a per-process id would be new after a
+ *   crash and make the crashed run look like another live instance.
  */
 class CrashGuard(
     private val store: Store,

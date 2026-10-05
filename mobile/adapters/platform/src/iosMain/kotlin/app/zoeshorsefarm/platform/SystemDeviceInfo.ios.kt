@@ -10,7 +10,8 @@ import platform.UIKit.UIScreen
 
 /**
  * An iPhone or iPad: physical memory and cores from NSProcessInfo, native pixels from UIScreen,
- * GPU name from Metal.
+ * GPU name from Metal. Call it on the main thread (UIScreen.mainScreen is main-thread only) and once,
+ * not per frame: every call asks Metal for the system default device again.
  */
 actual object SystemDeviceInfo : DeviceInfoSource {
     actual override fun read(): DeviceInfo {

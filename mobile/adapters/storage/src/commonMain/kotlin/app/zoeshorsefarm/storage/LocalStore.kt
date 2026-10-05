@@ -76,6 +76,7 @@ class LocalStore(
             canSave = false
             return false
         }
+        // a stored version with a fraction is cut off to a whole number (the save version is an integer)
         val stored = (content["version"] as? Number)?.toDouble()?.takeIf { it.isFinite() }?.toLong() ?: 0L
         val saved = content + ("version" to maxOf(stored, SAVE_VERSION.toLong()))
         val written =

@@ -20,7 +20,7 @@ Later ports add their rows here (keep the table sorted by JS file).
 | `aid-marker.js` | `world/AidMarker.kt` | `WorldFingerprintTest.kt` | take-off band; `set(element, dir, zone)` |
 | `arena.js` | `world/Arena.kt` (arena, sand, fence), `world/CourseLinesView.kt` (start/finish lines, `makeSignQuad`, `roundRect`) | `WorldBudgetTest.kt`, `WorldFingerprintTest.kt` | no JS test of its own; the sand shader patch is open, see below |
 | `arena-decor.js` | `world/ArenaDecor.kt` | `WorldBudgetTest.kt` | bunting, pots, paddock props |
-| `camera.js` | `Camera.kt` (`CameraMode`, `CameraRig`) | `CameraRigTest.kt` | no JS test; expected poses were computed with the JS rig on three.js r186 |
+| `camera.js` | `CameraRig.kt` (`CameraRig`) | `CameraRigTest.kt` | uses `CameraMode` of `:core:application`; no JS test; expected poses were computed with the JS rig on three.js r186 |
 | `camera-math.js` | `CameraMath.kt` | `CameraMathTest.kt` | |
 | `decor-plan.js` | `world/DecorPlan.kt` | `DecorPlanTest.kt` | plain data classes instead of object literals |
 | `detail-hold.js` | `DetailHold.kt` (`DetailHold`) | `DetailHoldTest.kt` | `createDetailHold()` is the class constructor |

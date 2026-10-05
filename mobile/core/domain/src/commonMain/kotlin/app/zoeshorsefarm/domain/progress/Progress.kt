@@ -4,6 +4,7 @@ import app.zoeshorsefarm.domain.course.RatedResult
 import app.zoeshorsefarm.domain.course.RideResult
 import app.zoeshorsefarm.domain.course.isBetterResult
 import app.zoeshorsefarm.domain.sim.TUNING
+import app.zoeshorsefarm.domain.sim.Tuning
 import app.zoeshorsefarm.shared.clamp
 import kotlin.math.floor
 import kotlin.math.max
@@ -88,21 +89,29 @@ private val COURSE_ENTRY_KEYS = setOf("faults", "timeCs", "stars")
 private fun nonNegative(value: Any?): Double? = finiteNumber(value)?.takeIf { it >= 0 }
 
 /** A whole number of stars in 1..maxStars, or null. */
-private fun starCount(value: Any?): Int? =
-    finiteNumber(value)?.takeIf { it == floor(it) && it >= 1 && it <= TUNING.scoring.maxStars }?.toInt()
+private fun starCount(
+    value: Any?,
+    tuning: Tuning,
+): Int? = finiteNumber(value)?.takeIf { it == floor(it) && it >= 1 && it <= tuning.scoring.maxStars }?.toInt()
 
-private fun sanitizeCourse(entry: Any?): CourseBest? {
+private fun sanitizeCourse(
+    entry: Any?,
+    tuning: Tuning,
+): CourseBest? {
     if (entry !is Map<*, *>) return null
     val faults = nonNegative(entry["faults"])
     val timeCs = nonNegative(entry["timeCs"])
-    val stars = starCount(entry["stars"])
+    val stars = starCount(entry["stars"], tuning)
     if (faults == null || timeCs == null || stars == null) return null
     val extra = entriesOf(entry).filter { it.first !in COURSE_ENTRY_KEYS }.toMap()
     return CourseBest(toInt(floor(faults)), toInt(floor(timeCs)), stars, extra)
 }
 
 /** Sanitized copy: invalid -> default, readable values are kept, unknown fields are kept. */
-fun sanitizeProgress(raw: Any?): Progress {
+fun sanitizeProgress(
+    raw: Any?,
+    tuning: Tuning = TUNING,
+): Progress {
     val source = entriesOf(raw).toMap()
     val unlockedRaw = finiteNumber(source["unlocked"])
     val unlocked = if (unlockedRaw != null) floor(unlockedRaw) else 1.0
@@ -112,7 +121,7 @@ fun sanitizeProgress(raw: Any?): Progress {
     val unknownCourses = rawCourses.filterKeys { it !in COURSE_IDS }
     val courses = LinkedHashMap<String, CourseBest>()
     for (key in COURSE_IDS) {
-        val entry = sanitizeCourse(rawCourses[key])
+        val entry = sanitizeCourse(rawCourses[key], tuning)
         if (entry != null) courses[key] = entry
     }
 
@@ -154,11 +163,12 @@ data class AppliedRide(
 fun applyFinishedRide(
     progress: Progress,
     result: RideResult,
+    tuning: Tuning = TUNING,
 ): AppliedRide {
     val courseId = result.courseId
     if (courseId < 1 || courseId > COURSE_COUNT) return AppliedRide(progress, isNewBest = false, unlockedCourse = null)
     val key = courseId.toString()
-    val stars = min(TUNING.scoring.maxStars, max(1, result.stars))
+    val stars = min(tuning.scoring.maxStars, max(1, result.stars))
     val previous = progress.courses[key]
     val isNewBest = isBetterResult(result, previous)
     val faults = if (isNewBest || previous == null) result.faults.total else previous.faults

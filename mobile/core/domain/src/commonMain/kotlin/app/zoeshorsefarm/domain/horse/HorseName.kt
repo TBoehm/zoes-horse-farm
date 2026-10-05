@@ -5,19 +5,14 @@ package app.zoeshorsefarm.domain.horse
 
 const val NAME_MAX_LENGTH = 16
 
-// The characters JavaScript's String.trim removes (WhiteSpace and LineTerminator of ECMAScript).
-private fun isTrimmed(c: Char): Boolean =
-    c in '\u0009'..'\u000D' ||
-        c == ' ' ||
-        c == ' ' ||
-        c == ' ' ||
-        c in ' '..' ' ||
-        c == ' ' ||
-        c == ' ' ||
-        c == ' ' ||
-        c == ' ' ||
-        c == '　' ||
-        c == '﻿'
+// The characters JavaScript's String.trim removes (WhiteSpace and LineTerminator of ECMAScript),
+// as code points: tab..CR, space, NBSP, Ogham space, en quad..hair space, LS, PS, narrow NBSP,
+// medium math space, ideographic space and the byte order mark.
+private val TRIMMED_RANGES =
+    listOf(0x09..0x0D, 0x20..0x20, 0xA0..0xA0, 0x1680..0x1680, 0x2000..0x200A, 0x2028..0x2029) +
+        listOf(0x202F..0x202F, 0x205F..0x205F, 0x3000..0x3000, 0xFEFF..0xFEFF)
+
+private fun isTrimmed(c: Char): Boolean = TRIMMED_RANGES.any { c.code in it }
 
 /** Number of characters as the player sees them: surrogate pairs count once. */
 private fun codePointCount(s: String): Int {

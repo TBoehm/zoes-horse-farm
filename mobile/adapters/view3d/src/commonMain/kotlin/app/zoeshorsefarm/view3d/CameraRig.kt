@@ -1,5 +1,6 @@
 package app.zoeshorsefarm.view3d
 
+import app.zoeshorsefarm.application.CameraMode
 import app.zoeshorsefarm.domain.sim.Horse
 import app.zoeshorsefarm.scene.graph.Camera
 import app.zoeshorsefarm.scene.graph.Node
@@ -11,22 +12,6 @@ import kotlin.math.sin
 
 // Camera (rules 13, 14): default is diagonally behind/above horse and rider, rider view between
 // the ears.
-
-/** The two camera views. [id] is the name stored in the settings. */
-enum class CameraMode(
-    val id: String,
-) {
-    FOLLOW("follow"),
-    RIDER("rider"),
-    ;
-
-    companion object {
-        /** The mode with this stored name, or null if there is none. */
-        fun fromId(id: String): CameraMode? = entries.firstOrNull { it.id == id }
-    }
-}
-
-val CAMERA_MODES: List<CameraMode> = CameraMode.entries
 
 // Eyes slightly behind and above the poll so that the ears and the mane stay in view
 private const val RIDER_BACK = 0.5
