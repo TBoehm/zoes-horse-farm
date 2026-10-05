@@ -3,6 +3,9 @@ package app.zoeshorsefarm.scene.math
 import kotlin.math.max
 import kotlin.math.sqrt
 
+private val sphereTmp1 = Vec3()
+private val sphereTmp2 = Vec3()
+
 /** Plane `normal . p + constant = 0` (three.js `Plane`). */
 class Plane(
     val normal: Vec3 = Vec3(1.0, 0.0, 0.0),
@@ -83,6 +86,49 @@ class Sphere(
         center.add(offset)
         return this
     }
+
+    fun makeEmpty(): Sphere {
+        center.set(0.0, 0.0, 0.0)
+        radius = -1.0
+        return this
+    }
+
+    /** Grows the sphere just enough to contain `point`. */
+    fun expandByPoint(point: Vec3): Sphere {
+        if (isEmpty()) {
+            center.copy(point)
+            radius = 0.0
+            return this
+        }
+        sphereTmp1.subVectors(point, center)
+        val lengthSq = sphereTmp1.lengthSq()
+        if (lengthSq > radius * radius) {
+            val length = sqrt(lengthSq)
+            val delta = (length - radius) * 0.5
+            center.addScaledVector(sphereTmp1, delta / length)
+            radius += delta
+        }
+        return this
+    }
+
+    /** Grows the sphere to contain `sphere`. */
+    fun union(sphere: Sphere): Sphere {
+        if (sphere.isEmpty()) return this
+        if (isEmpty()) {
+            copy(sphere)
+            return this
+        }
+        if (center.equals(sphere.center)) {
+            radius = max(radius, sphere.radius)
+        } else {
+            sphereTmp2.subVectors(sphere.center, center).setLength(sphere.radius)
+            expandByPoint(sphereTmp1.copy(sphere.center).add(sphereTmp2))
+            expandByPoint(sphereTmp1.copy(sphere.center).sub(sphereTmp2))
+        }
+        return this
+    }
+
+    fun equals(sphere: Sphere): Boolean = sphere.center.equals(center) && sphere.radius == radius
 
     /** Smallest sphere around `points` (centre = box centre, like [Geometry.computeBoundingSphere]). */
     fun setFromPoints(points: List<Vec3>): Sphere {
