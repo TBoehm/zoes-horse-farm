@@ -108,8 +108,8 @@ class AudioTest {
         audio.unlock()
         val before = audio.engineOrFail().voicesStarted
         audio.sfx.hoof("canter")
-        assertTrue(audio.engineOrFail().voicesStarted > before)
         assertTrue(output.pump(0.3) > 0.01f)
+        assertTrue(audio.engineOrFail().voicesStarted > before)
     }
 
     @Test
@@ -131,10 +131,12 @@ class AudioTest {
         for ((name, call) in calls) {
             val before = audio.engineOrFail().voicesStarted
             call()
+            output.pump(0.01)
             assertTrue(audio.engineOrFail().voicesStarted > before, name)
         }
         val before = audio.engineOrFail().voicesStarted
         audio.sfx.hoof("halt")
+        output.pump(0.01)
         assertEquals(before, audio.engineOrFail().voicesStarted)
     }
 
@@ -152,8 +154,8 @@ class AudioTest {
         assertTrue(output.pump(0.3) < 1e-4f, "the running effect is cut")
         audio.setPaused(false)
         audio.sfx.hoof("walk")
-        assertTrue(audio.engineOrFail().voicesStarted > started)
         assertTrue(output.pump(0.2) > 0.005f)
+        assertTrue(audio.engineOrFail().voicesStarted > started)
     }
 
     @Test
