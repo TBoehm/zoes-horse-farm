@@ -19,6 +19,8 @@ style:
 
 naming:
   FunctionNaming:
+    # geometry builders keep the three.js type names (BoxGeometry(...)) like factory functions
+    functionPattern: '[a-z][a-zA-Z0-9]*|[A-Z][a-zA-Z0-9]*Geometry'
     ignoreAnnotated:
       - 'Composable'
 
