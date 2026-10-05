@@ -77,11 +77,14 @@ internal class MeshEntry(
         var receiveShadow = false
         var culling = false
         var renderOrder = 0
+        var blendOrder = 0
         var fog = true
         var boundsOwner: Any? = null
         var boundsVersion = -1
         var skinVersion = 0
     }
+
+    override val uploadOverflows: Int get() = instances?.uploadOverflows ?: 0
 
     override fun update(
         ctx: SyncContext,
@@ -261,14 +264,13 @@ internal class MeshEntry(
         boneCount: Int,
     ): RenderableHandle? {
         val primary = current.bindings[0].material
-        val transparent = current.bindings.any { it.spec.blend == Blend.TRANSPARENT }
         val options =
             RenderableOptions(
                 castShadows = mesh.castShadow,
                 receiveShadows = mesh.receiveShadow,
                 culling = mesh.frustumCulled,
                 priority = RenderOrder.priority(mesh.renderOrder),
-                blendOrder = if (transparent) RenderOrder.blendOrder(mesh.renderOrder) else 0,
+                blendOrder = blendOrderOf(current),
                 fog = primary.fog,
                 bounds = currentBounds(g),
                 instanceCount = if (instances != null) instanceCount else 0,
@@ -282,7 +284,7 @@ internal class MeshEntry(
         g.users += this
         shown = true
         transform.invalidate()
-        recordApplied(g, primary)
+        recordApplied(g, current)
         return created
     }
 
@@ -337,7 +339,7 @@ internal class MeshEntry(
             ctx.noteWind(bindings[i].wind)
         }
         bookPrograms(ctx, current)
-        syncFlags(live, current.bindings[0].material)
+        syncFlags(live, current)
         syncBounds(live, g)
         if (instances == null) {
             if (transform.refresh(mesh.matrixWorld)) live.setTransform(transform.current)
@@ -368,10 +370,20 @@ internal class MeshEntry(
         bookedBits = bits
     }
 
+    /** The blend order of the renderable: set while any of its materials blends. */
+    private fun blendOrderOf(current: DrawPlan): Int {
+        val bindings = current.bindings
+        for (i in bindings.indices) {
+            if (bindings[i].spec.blend == Blend.TRANSPARENT) return RenderOrder.blendOrder(mesh.renderOrder)
+        }
+        return 0
+    }
+
     private fun syncFlags(
         live: RenderableHandle,
-        primary: Material,
+        current: DrawPlan,
     ) {
+        val primary = current.bindings[0].material
         val state = applied
         if (mesh.castShadow != state.castShadow) {
             state.castShadow = mesh.castShadow
@@ -385,9 +397,11 @@ internal class MeshEntry(
             state.culling = mesh.frustumCulled
             live.setCulling(state.culling)
         }
-        if (mesh.renderOrder != state.renderOrder) {
+        val blend = blendOrderOf(current)
+        if (mesh.renderOrder != state.renderOrder || blend != state.blendOrder) {
             state.renderOrder = mesh.renderOrder
-            live.setPriority(RenderOrder.priority(state.renderOrder))
+            state.blendOrder = blend
+            live.setDrawOrder(RenderOrder.priority(state.renderOrder), blend)
         }
         if (primary.fog != state.fog) {
             state.fog = primary.fog
@@ -438,13 +452,15 @@ internal class MeshEntry(
 
     private fun recordApplied(
         g: GeometryEntry,
-        primary: Material,
+        current: DrawPlan,
     ) {
+        val primary = current.bindings[0].material
         val state = applied
         state.castShadow = mesh.castShadow
         state.receiveShadow = mesh.receiveShadow
         state.culling = mesh.frustumCulled
         state.renderOrder = mesh.renderOrder
+        state.blendOrder = blendOrderOf(current)
         state.fog = primary.fog
         state.boundsOwner = currentBounds(g)
         state.boundsVersion = boundsVersion(g)

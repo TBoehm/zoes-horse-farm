@@ -121,7 +121,7 @@ internal class SpriteEntry(
         }
         if (sprite.renderOrder != renderOrder) {
             renderOrder = sprite.renderOrder
-            drawable.setPriority(RenderOrder.priority(renderOrder))
+            drawable.setDrawOrder(RenderOrder.priority(renderOrder), RenderOrder.blendOrder(renderOrder))
         }
         if (current.material.fog != fog) {
             fog = current.material.fog

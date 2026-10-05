@@ -261,6 +261,14 @@ class SceneSyncSpecialNodesTest : SyncHarness() {
     }
 
     @Test
+    fun `the upload overflows are summed over the entries`() {
+        instanced(count = 2)
+        dust()
+        frame()
+        assertEquals(0, sync.stats().uploadOverflows)
+    }
+
+    @Test
     fun `two instanced meshes with one material have their own data`() {
         val material = StandardMaterial()
         instanced(count = 2, material = material)
@@ -348,6 +356,20 @@ class SceneSyncSpecialNodesTest : SyncHarness() {
         frame()
         assertEquals(2, renderable.boneCalls)
         assertSame(mesh, mesh)
+    }
+
+    @Test
+    fun `two meshes that share a skeleton update it once per frame`() {
+        val body = skinned()
+        val tack = SkinnedMesh(body.geometry, StandardMaterial())
+        scene.add(tack)
+        scene.updateMatrixWorld()
+        tack.bind(body.skeleton!!, tack.matrixWorld.clone())
+        frame()
+        val first = body.skeleton!!.version
+        frame()
+        assertEquals(first + 1, body.skeleton!!.version)
+        assertEquals(2, live().size)
     }
 
     @Test

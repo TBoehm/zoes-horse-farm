@@ -12,6 +12,7 @@ import app.zoeshorsefarm.render.filament.material.GlslSanity
 import app.zoeshorsefarm.render.filament.material.MaterialSources
 import app.zoeshorsefarm.scene.graph.PerspectiveCamera
 import app.zoeshorsefarm.scene.render.FakeRenderBackend
+import app.zoeshorsefarm.scene.render.GpuTracker
 import app.zoeshorsefarm.view3d.quality.presetFor
 import app.zoeshorsefarm.view3d.world.World
 import kotlin.test.Test
@@ -68,16 +69,38 @@ class WorldOnFilamentTest {
     }
 
     @Test
-    fun `a level change through the quality stages keeps the backend consistent`() {
-        val world = world(GraphicsLevel.HIGH)
-        draw(world)
-        for (level in listOf(GraphicsLevel.LOW, GraphicsLevel.HIGH, GraphicsLevel.MEDIUM)) {
+    fun `the program count follows the scene model through level changes`() {
+        val world = World(core, presetFor(GraphicsLevel.HIGH).copy(envMap = false))
+        world.setObstacles(course(), flags = true)
+        val tracker = GpuTracker(world.scene) { core.shadowsEnabled }
+        val levels =
+            listOf(GraphicsLevel.HIGH, GraphicsLevel.LOW, GraphicsLevel.HIGH, GraphicsLevel.MEDIUM, GraphicsLevel.LOW)
+        for (level in levels) {
             world.setQuality(presetFor(level).copy(envMap = false))
+            core.compile(world.compileRoot, camera, world.scene)
+            tracker.compile(world.compileRoot)
             draw(world)
             assertTrue(log.messages.isEmpty(), "$level: ${log.messages}")
+            assertEquals(tracker.snapshot().programs, core.info.programs, "$level programs")
         }
-        // the program books of the backend follow the scene's own accounting
-        assertEquals(core.info.programs, core.stats().programs)
+    }
+
+    @Test
+    fun `every compile after a level change prepares the shaders it needs`() {
+        val world = World(core, presetFor(GraphicsLevel.HIGH).copy(envMap = false))
+        world.setObstacles(course(), flags = true)
+        for (level in listOf(GraphicsLevel.HIGH, GraphicsLevel.LOW, GraphicsLevel.HIGH)) {
+            world.setQuality(presetFor(level).copy(envMap = false))
+            val before = device.preparedMaterials.size
+            core.compile(world.compileRoot, camera, world.scene)
+            val live = device.builtMaterials.keys
+            val prepared = device.preparedMaterials.drop(before).toSet()
+            // what this compile prepared is alive
+            assertTrue(prepared.all { it in live }, "$level")
+            draw(world)
+        }
+        // every material that is alive was prepared at least once since it was last built
+        assertTrue(device.builtMaterials.keys.all { it in device.preparedMaterials })
     }
 
     @Test

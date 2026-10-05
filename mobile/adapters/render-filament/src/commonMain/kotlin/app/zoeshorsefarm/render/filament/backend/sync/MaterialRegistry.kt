@@ -18,6 +18,8 @@ internal class MaterialRegistry(
     private val textures: TextureRegistry,
     private val disposeListener: DisposeListener,
     private val log: SyncLog,
+    /** Called when the Filament material of a spec was freed with its last instance. */
+    private val onSpecReleased: (MaterialSpec) -> Unit = {},
 ) {
     private class SpecRef(
         val spec: MaterialSpec,
@@ -117,6 +119,7 @@ internal class MaterialRegistry(
         if (ref.count <= 0) {
             specRefs.remove(key)
             device.releaseMaterial(ref.spec)
+            onSpecReleased(ref.spec)
         }
     }
 }

@@ -117,7 +117,11 @@ interface RenderableHandle {
 
     fun setFog(enabled: Boolean)
 
-    fun setPriority(priority: Int)
+    /** The coarse draw order and the blend order among transparent primitives. */
+    fun setDrawOrder(
+        priority: Int,
+        blendOrder: Int,
+    )
 
     fun setBounds(bounds: Aabb)
 

@@ -26,6 +26,7 @@ internal class InstanceFeed(
         private set
 
     private val world = FloatArray(MATRIX_SIZE)
+    private val corner = FloatArray(3)
     private val lastWorld = FloatArray(MATRIX_SIZE)
     private var baked: FloatArray? = null
     private var matrixVersion = -1
@@ -83,7 +84,7 @@ internal class InstanceFeed(
             boundsCurrent = false
         }
         if (wantBounds && !boundsCurrent && instanceCount > 0) {
-            bounds.copyFrom(Aabb.ofInstances(geometryBounds, worldMatrices(instanceCount), instanceCount))
+            bounds.setFromInstances(geometryBounds, worldMatrices(instanceCount), instanceCount, corner)
             boundsVersion++
             boundsCurrent = true
             changed = true

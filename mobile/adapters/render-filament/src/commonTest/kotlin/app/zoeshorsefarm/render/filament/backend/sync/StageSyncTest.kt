@@ -104,11 +104,27 @@ class StageSyncTest {
         val fog = assertNotNull(result.fog)
         assertEquals(40f, fog.distance)
         assertEquals(1f / 200f, fog.density, 1e-6f)
+        // tone mapping is off here: the fog colour is the scene's own
         assertEquals(Color(0xcfe2ee).r.toFloat(), fog.color.r)
         assertEquals(Color(0x3f7fcf).b.toFloat(), result.clearColor.b)
         scene.fog = null
         frame()
         assertNull(stage.settings.last().fog)
+    }
+
+    @Test
+    fun `with ACES the fog colour is passed through the inverse curve`() {
+        settings.toneMapping = SceneToneMapping.ACES_FILMIC
+        scene.fog = Fog(0xcfe2ee, near = 40.0, far = 240.0)
+        frame()
+        val fog = assertNotNull(stage.settings.last().fog)
+        val wanted = Color(0xcfe2ee)
+        val out =
+            app.zoeshorsefarm.render.filament.backend.mapping.AcesInverse
+                .forward(floatArrayOf(fog.color.r, fog.color.g, fog.color.b))
+        assertEquals(wanted.r.toFloat(), out[0], 0.004f)
+        assertEquals(wanted.b.toFloat(), out[2], 0.004f)
+        assertTrue(fog.color.r != wanted.r.toFloat())
     }
 
     @Test

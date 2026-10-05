@@ -2,6 +2,7 @@ package app.zoeshorsefarm.render.filament.backend.sync
 
 import app.zoeshorsefarm.render.filament.backend.device.GpuDevice
 import app.zoeshorsefarm.render.filament.backend.mapping.MaterialMapping
+import app.zoeshorsefarm.render.filament.material.MaterialSpec
 import app.zoeshorsefarm.scene.DisposeListener
 import app.zoeshorsefarm.scene.GpuObject
 import app.zoeshorsefarm.scene.geometry.Geometry
@@ -12,6 +13,7 @@ import app.zoeshorsefarm.scene.graph.Mesh
 import app.zoeshorsefarm.scene.graph.Node
 import app.zoeshorsefarm.scene.graph.Points
 import app.zoeshorsefarm.scene.graph.Scene
+import app.zoeshorsefarm.scene.graph.Skeleton
 import app.zoeshorsefarm.scene.graph.SkinnedMesh
 import app.zoeshorsefarm.scene.graph.Sprite
 import app.zoeshorsefarm.scene.graph.Traversable
@@ -56,14 +58,15 @@ class SceneSync(
     log: SyncLog = SyncLog.SILENT,
 ) {
     private val disposeListener = DisposeListener { handleDispose(it) }
+    private val preparedSpecs = HashSet<MaterialSpec>()
+    private val skeletonFrames = HashMap<Skeleton, IntArray>()
     private val textures = TextureRegistry(device, disposeListener)
     private val geometries = GeometryRegistry(device, disposeListener, log)
-    private val materials = MaterialRegistry(device, textures, disposeListener, log)
+    private val materials = MaterialRegistry(device, textures, disposeListener, log) { preparedSpecs.remove(it) }
     private val programs = ProgramBook()
     private val ctx = SyncContext(device, geometries, textures, materials, programs, disposeListener, log)
     private val entries = HashMap<Node, DrawEntry>()
     private val entryList = ArrayList<DrawEntry>()
-    private val preparedSpecs = HashSet<Any>()
 
     /** The lights of the last frame. */
     val lights = SceneLights()
@@ -105,7 +108,7 @@ class SceneSync(
             textures.count,
             geometryCount,
             materials.bindingCount,
-            geometries.uploadOverflows,
+            uploadOverflows(),
         )
 
     /** The shader programs of the books, by key (for messages and tests). */
@@ -162,6 +165,7 @@ class SceneSync(
         ctx.releaseQuad()
         programs.clear()
         preparedSpecs.clear()
+        skeletonFrames.clear()
         lights.clear()
     }
 
@@ -185,8 +189,24 @@ class SceneSync(
         for (i in children.indices) walk(children[i], visible)
     }
 
+    /** Body and tack of the horse share a skeleton: it is updated once per frame. */
+    private fun updateSkeleton(node: SkinnedMesh) {
+        val skeleton = node.skeleton ?: return
+        var frame = skeletonFrames[skeleton]
+        if (frame == null) {
+            // the skeletons of removed meshes are forgotten now and then; the next frame updates the rest again
+            if (skeletonFrames.size > MAX_TRACKED_SKELETONS) skeletonFrames.clear()
+            frame = IntArray(1) { -1 }
+            skeletonFrames[skeleton] = frame
+        }
+        // a holder instead of a boxed number: nothing is allocated per frame
+        if (frame[0] == ctx.frame) return
+        frame[0] = ctx.frame
+        skeleton.update()
+    }
+
     private fun beforeRender(node: Node) {
-        if (node is SkinnedMesh) node.skeleton?.update()
+        if (node is SkinnedMesh) updateSkeleton(node)
         val hook = node.onBeforeRender ?: return
         hook(backend, scene, camera)
     }
@@ -234,6 +254,12 @@ class SceneSync(
         for (i in entryList.indices) entryList[i].onDisposed(ctx, resource)
     }
 
+    private fun uploadOverflows(): Int {
+        var total = geometries.uploadOverflows
+        for (i in entryList.indices) total += entryList[i].uploadOverflows
+        return total
+    }
+
     private fun pointGeometryCount(): Int {
         var count = 0
         for (i in entryList.indices) if (entryList[i] is PointsEntry) count++
@@ -274,5 +300,9 @@ class SceneSync(
         if (preparedSpecs.add(spec)) ctx.device.prepareMaterial(spec)
         binding.sync(ctx.frame)
         if (book) ctx.bookProgram(node, material)
+    }
+
+    private companion object {
+        const val MAX_TRACKED_SKELETONS = 32
     }
 }

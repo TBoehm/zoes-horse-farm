@@ -54,6 +54,7 @@ class FilamentRenderable private constructor(
     val entity: Entity,
     val mesh: GpuMesh,
     private val boneCount: Int,
+    private val primitiveCount: Int,
 ) {
     private var inScene = true
     private var destroyed = false
@@ -154,9 +155,18 @@ class FilamentRenderable private constructor(
         renderables.setFogEnabled(renderables.getInstance(entity), enabled)
     }
 
-    fun setPriority(priority: Int) {
+    /** The coarse draw order (0..7) and the order among transparent primitives (see `RenderOrder`). */
+    fun setDrawOrder(
+        priority: Int,
+        blendOrder: Int,
+    ) {
         val renderables = engine.renderableManager
-        renderables.setPriority(renderables.getInstance(entity), priority)
+        val instance = renderables.getInstance(entity)
+        renderables.setPriority(instance, priority)
+        for (i in 0 until primitiveCount) {
+            renderables.setBlendOrderAt(instance, i, blendOrder)
+            renderables.setGlobalBlendOrderEnabledAt(instance, i, blendOrder != 0)
+        }
     }
 
     private fun applyBounds(bounds: Aabb) {
@@ -198,7 +208,7 @@ class FilamentRenderable private constructor(
             require(ranges == null || ranges.size == materials.size) { "one material per range" }
             val engine = context.engine
             val entity = engine.entityManager.create()
-            val renderable = FilamentRenderable(engine, context.scene, entity, mesh, options.boneCount)
+            val renderable = FilamentRenderable(engine, context.scene, entity, mesh, options.boneCount, materials.size)
             renderable.applyBounds(options.bounds ?: mesh.bounds)
             val builder =
                 RenderableManager
