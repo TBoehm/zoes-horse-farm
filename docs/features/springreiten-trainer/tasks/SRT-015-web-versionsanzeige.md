@@ -1,7 +1,7 @@
 ---
 id: SRT-015
 title: Versionsanzeige in den Einstellungen und in der Debug-Anzeige
-status: ready-for-dev
+status: in-review
 platform: web
 feature: docs/features/springreiten-trainer/concept.md
 priority: p2
@@ -29,11 +29,19 @@ Kein Design-Werkzeug. Unten in den Einstellungen eine kleine, dezente Zeile
 „Version 2026-10-05 · 3fdf19e" (EN „Version …"); in der Debug-Anzeige eine Zeile „Version …".
 
 ## Akzeptanzkriterien
-- [ ] Die Einstellungen zeigen unten die Version aus Datum und Kennung des Stands (Regel 58).
-- [ ] Die Debug-Anzeige zeigt dieselbe Version (Regel 58).
-- [ ] Die Version wird beim Build erzeugt: im GitHub-Build aus dem Commit, lokal aus dem
-  Git-Stand bzw. „dev", wenn keiner vorhanden ist (Regel 58).
-- [ ] Texte auf Deutsch und Englisch (Regel 6).
+- [x] Die Einstellungen zeigen unten die Version aus Datum und Kennung des Stands (Regel 58).
+  (Nachweis: tests/smoke/app.spec.js › the settings show the build version at the bottom (rule 58))
+- [x] Die Debug-Anzeige zeigt dieselbe Version (Regel 58). (Nachweis:
+  src/adapters/ui/debug-display.test.js › starts with the build version when one is given …;
+  tests/smoke/graphics.spec.js › shows GPU, level, pixel ratios, buffer, context counts and the last
+  errors – prüft auch dieselbe Version unten in den Einstellungen aus dem Pausemenü)
+- [x] Die Version wird beim Build erzeugt: im GitHub-Build aus dem Commit, lokal aus dem
+  Git-Stand bzw. „dev", wenn keiner vorhanden ist (Regel 58). (Nachweis:
+  tests/build/app-version.test.js › joins the commit date and the 7-character sha / prefers
+  GITHUB_SHA over git … / falls back to "dev" when git is unavailable;
+  src/adapters/platform/app-version.test.js)
+- [x] Texte auf Deutsch und Englisch (Regel 6). (Nachweis: src/adapters/ui/i18n/core.js und debug.js;
+  strings.test.js prüft gleiche Schlüssel DE/EN)
 
 ## Links
 Konzept Regeln 5, 58; SRT-008 (Debug-Anzeige).

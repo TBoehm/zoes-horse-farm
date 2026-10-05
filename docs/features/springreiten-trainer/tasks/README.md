@@ -18,7 +18,7 @@ Konzept: [../concept.md](../concept.md)
 | [SRT-012](SRT-012-web-bedienungs-tipps.md) | Bedienungs-Tipps – beim ersten Start und jederzeit wieder aufrufbar | in-review | web | p1 | M | SRT-001, SRT-007 |
 | [SRT-013](SRT-013-web-mittel-absturz.md) | „Mittel" stürzt nach ca. 5 s ab – leichter, sparsames Herunterstufen, Absturz-Erkennung | in-review | web | p1 | M | SRT-008, SRT-011 |
 | [SRT-014](SRT-014-web-automatik-hocharbeiten.md) | Automatik startet auf „Niedrig" und stuft dynamisch hoch | in-review | web | p1 | M | SRT-008, SRT-013 |
-| [SRT-015](SRT-015-web-versionsanzeige.md) | Versionsanzeige in den Einstellungen und in der Debug-Anzeige | ready-for-dev | web | p2 | S | SRT-001, SRT-008 |
+| [SRT-015](SRT-015-web-versionsanzeige.md) | Versionsanzeige in den Einstellungen und in der Debug-Anzeige | in-review | web | p2 | S | SRT-001, SRT-008 |
 
 Empfohlene Reihenfolge: SRT-001 → SRT-002 → SRT-003 → SRT-004 → SRT-005 → SRT-006.
 Umsetzung je Ticket mit `/implement-feature <ID>`.
