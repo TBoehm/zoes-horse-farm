@@ -16,6 +16,7 @@ import app.zoeshorsefarm.scene.graph.PerspectiveCamera
 import app.zoeshorsefarm.scene.math.Vec2
 import app.zoeshorsefarm.scene.math.Vec3
 import app.zoeshorsefarm.scene.render.RenderBackend
+import app.zoeshorsefarm.view3d.CONTEXT_RESTORE_TIMEOUT_MS
 import app.zoeshorsefarm.view3d.CameraRig
 import app.zoeshorsefarm.view3d.ErrorReporter
 import app.zoeshorsefarm.view3d.GpuEpoch
@@ -356,15 +357,27 @@ class Engine(
      */
     fun canHintLowerLevel(auto: Boolean): Boolean = canHintLowerLevel(auto, level)
 
+    private var restoreWatchdog: RestoreWatchdog? = null
+
     /**
-     * A countdown for a device that does not come back (8 s unless [timeoutMs] says otherwise):
-     * `start()` when the device is lost, `cancel()` when it is back; [onTimeout] asks the player to
-     * restart the 3D view. Runs on the engine's timer.
+     * Starts the countdown for a device that does not come back ([CONTEXT_RESTORE_TIMEOUT_MS] unless
+     * [timeoutMs] says otherwise); [onTimeout] fires once if [cancelRestoreWatchdog] was not called
+     * first and asks the player to restart the 3D view. A second start restarts it. Runs on the
+     * engine's timer, so the frame loop has to run.
      */
-    fun restoreWatchdog(
-        timeoutMs: Long = app.zoeshorsefarm.view3d.CONTEXT_RESTORE_TIMEOUT_MS,
+    fun startRestoreWatchdog(
+        timeoutMs: Long = CONTEXT_RESTORE_TIMEOUT_MS,
         onTimeout: () -> Unit,
-    ): RestoreWatchdog = RestoreWatchdog(scheduler, timeoutMs, onTimeout)
+    ) {
+        restoreWatchdog?.cancel()
+        restoreWatchdog = RestoreWatchdog(scheduler, timeoutMs, onTimeout).also { it.start() }
+    }
+
+    /** The device came back (or the ride was left): stops the countdown. */
+    fun cancelRestoreWatchdog() {
+        restoreWatchdog?.cancel()
+        restoreWatchdog = null
+    }
 
     // --- the frame loop ------------------------------------------------------------------------
 
@@ -416,17 +429,19 @@ class Engine(
         // each step on its own: a failing step is logged and the others still run
         guard.run("resize") { resize(false) }
         guard.run("frame") { frameHandler.frame(dt, rawDt) }
-        val draw = !paused || redraw || controller.stagesPending > 0
-        if (draw) {
+        drawAndAdvance()
+        notifyDemand()
+    }
+
+    // A paused ride draws only when something changed; the next quality stage follows a drawn frame.
+    private fun drawAndAdvance() {
+        if (!paused || redraw || controller.stagesPending > 0) {
             if (!contextWatch.lost) guard.run("render") { backend.render(world.scene, camera) }
             redraw = false
         }
-        if (controller.stagesPending > 0 &&
-            !contextWatch.lost
-        ) {
+        if (controller.stagesPending > 0 && !contextWatch.lost) {
             guard.run("quality stage") { controller.advanceStages() }
         }
-        notifyDemand()
     }
 
     // --- the graphics automatic and the hint ---------------------------------------------------
@@ -573,15 +588,16 @@ class Engine(
             aidParams = null
             return null
         }
-        val zone = aid.zone
         val current = aidParams
-        if (current != null && current.elementId == aid.elementId && current.dir == aid.dir &&
-            sameZone(current.zone, zone)
-        ) {
-            return current
-        }
+        if (current != null && sameAid(current, aid)) return current
+        val zone = aid.zone
         return AidParams(aid.elementId, aid.dir, zone?.copy()).also { aidParams = it }
     }
+
+    private fun sameAid(
+        current: AidParams,
+        aid: RideAid,
+    ): Boolean = current.elementId == aid.elementId && current.dir == aid.dir && sameZone(current.zone, aid.zone)
 
     private fun sameZone(
         a: Zone?,
@@ -627,6 +643,7 @@ class Engine(
     /** Stops listening and frees the world and the horse (the backend belongs to the host). */
     fun dispose() {
         run(null)
+        cancelRestoreWatchdog()
         controller.dispose()
         contextWatch.stop()
         horse.dispose()

@@ -35,6 +35,10 @@ private const val DT = 1.0 / 60
 // regression that allocates per frame costs several hundred KB here).
 private const val ALLOWED_BYTES = 64 * 1024
 
+// With "Automatic" on, the upgrade governor asks for a target level once per full window (every 10 s
+// of riding, 33 times in the measured frames) and the budget estimate behind it allocates a few KB
+private const val ALLOWED_AUTO_BYTES = 192 * 1024
+
 // High adds grazing horses and hoof dust of the world, which allocate a little per event (they have
 // their own allocation tests); here only a bound that a boxed number per call would break
 private const val ALLOWED_HIGH_BYTES_PER_FRAME = 200
@@ -158,7 +162,7 @@ class EngineAllocationTest {
         val s = Setup(GraphicsLevel.MEDIUM, auto = true, budgetMB = MEDIUM_ONLY_BUDGET_MB)
         repeat(WARM_UP_FRAMES) { s.frame() }
         val allocated = allocatedBytes { repeat(MEASURED_FRAMES) { s.frame() } }
-        assertTrue(allocated < ALLOWED_BYTES, "allocated $allocated bytes in $MEASURED_FRAMES frames")
+        assertTrue(allocated < ALLOWED_AUTO_BYTES, "allocated $allocated bytes in $MEASURED_FRAMES frames")
         assertEquals(GraphicsLevel.MEDIUM, s.engine.level)
     }
 

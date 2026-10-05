@@ -183,11 +183,24 @@ class EngineContextTest {
         val rig = EngineRig()
         rig.run()
         var timeouts = 0
-        val watchdog = rig.engine.restoreWatchdog { timeouts++ }
-        watchdog.start()
+        rig.engine.startRestoreWatchdog { timeouts++ }
         rig.frames(60 * 7)
         assertEquals(0, timeouts)
         rig.frames(60 * 2)
+        assertEquals(1, timeouts)
+    }
+
+    @Test
+    fun aSecondStartOfTheWatchdogRestartsTheCountdown() {
+        val rig = EngineRig()
+        rig.run()
+        var timeouts = 0
+        rig.engine.startRestoreWatchdog { timeouts++ }
+        rig.frames(60 * 6)
+        rig.engine.startRestoreWatchdog { timeouts++ }
+        rig.frames(60 * 6)
+        assertEquals(0, timeouts)
+        rig.frames(60 * 3)
         assertEquals(1, timeouts)
     }
 
@@ -196,10 +209,9 @@ class EngineContextTest {
         val rig = EngineRig()
         rig.run()
         var timeouts = 0
-        val watchdog = rig.engine.restoreWatchdog { timeouts++ }
-        watchdog.start()
+        rig.engine.startRestoreWatchdog { timeouts++ }
         rig.frames(60 * 3)
-        watchdog.cancel()
+        rig.engine.cancelRestoreWatchdog()
         rig.frames(60 * 10)
         assertEquals(0, timeouts)
     }

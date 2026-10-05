@@ -25,6 +25,10 @@ Later ports add their rows here (keep the table sorted by JS file).
 | `decor-plan.js` | `world/DecorPlan.kt` | `DecorPlanTest.kt` | plain data classes instead of object literals |
 | `detail-hold.js` | `DetailHold.kt` (`DetailHold`) | `DetailHoldTest.kt` | `createDetailHold()` is the class constructor |
 | `dust.js` | `world/Dust.kt` (`DustPool`, `Dust`) | `DustTest.kt` | `Points` + `ShaderMaterial("hoof-dust")`; levels are `DustQuality` |
+| `engine.js` | `engine/Engine.kt` (frame loop, context loss, ride sync, diagnostics), `engine/QualityController.kt` (level, budget fit, stages, governors), `engine/StartupPlan.kt`, `engine/EngineConfig.kt` | `EngineStartTest`, `EngineFrameTest`, `EngineQualityTest`, `EngineContextTest`, `EnginePowerTest`, `EngineRideTest`, `EngineAllocationTest` (jvmTest) | no JS test of its own; see "The engine" below |
+| `renderer.js` | `engine/Renderer.kt` (`configureRenderer`, `RenderSizing`, `ViewMetrics`) | `RendererTest` | the WebGL renderer became settings of the scene `RenderBackend` |
+| `ui/debug-display.js` (pure parts) | `engine/DebugDisplay.kt` (`formatDebugText`, `DebugBox`), `engine/EngineDiagnostics.kt` | `DebugDisplayTest` (all 21 JS cases), `DebugBoxTest` | the Compose UI shows `DebugBox.text` |
+| `ui/fps-display.js` | already in `:adapters:presentation` (`ride/FpsDisplay.kt`, `FpsDisplayTest`) | – | not ported again: view3d may not depend on presentation |
 | `environment.js` | `world/Environment.kt`, `world/PlantGeometry.kt` (terrain, trees, bushes, tufts), `world/Buildings.kt` | `WorldFingerprintTest.kt`, `WorldBudgetTest.kt` | the random numbers are drawn in the order of the JS, so the scenery is the same |
 | `flight-paths.js` | `FlightPaths.kt` | `FlightPathsTest.kt` | |
 | `flower-geometry.js` | `FlowerGeometry.kt` | `FlowerGeometryTest.kt` | |
@@ -49,6 +53,32 @@ Later ports add their rows here (keep the table sorted by JS file).
 - Randomness comes from the seeded generators of the JS (same numbers as the web app); time comes
   in as a parameter or through the `Scheduler` port.
 - Per-frame paths (`CameraRig.update`, flight poses, …) reuse scratch objects and do not allocate.
+
+## The engine
+
+`Engine(backend, settings, EngineConfig)` owns one world, one horse with rider and one camera, and
+draws through the scene `RenderBackend`. The platform drives the loop: `engine.run(FrameHandler)`
+starts it, the host calls `engine.frame(nowSeconds)` once per display frame (Compose, `CADisplayLink`,
+`Choreographer`) and `engine.run(null)` stops it.
+
+- **Before the backend exists:** `planStartup(level, view, device, budgetOverride)` answers the memory
+  budget and whether the context gets antialiasing (`chooseAntialias`); `Engine.antialias` says the same
+  afterwards. The device facts are the quality module's `DeviceInfo`.
+- **Ride:** `beginRide(obstacles, flags)`, `restartRide(appearance, startPose)`, `showLines`,
+  `setCameraMode`/`toggleCamera`, then per frame `updateRide(dt, rideView)` (horse, dust, poles, aid,
+  shadow focus, camera, world) and `governorFrame(rawDt, measuring, busy)` / `lowFpsHintFrame`.
+- **Level changes** (rule 4): applied at once without a running loop, in stages (6 frames apart, shader
+  hold of at most 2.5 s) while a ride draws. The engine follows the settings service by itself.
+- **Device loss:** `onContextLost` / `onContextRestored`, `takeGraphicsHint`, `takeCrashHint`,
+  `startRestoreWatchdog` / `cancelRestoreWatchdog` (8 s), `setVisible` (lifecycle, for the loss rule).
+- **Battery and thermal levers** (default: nothing changes): `setPaused(true)` draws one more frame and
+  then stops drawing until something visible changes (`wantsFrames` / `demandListener` tell the host it
+  may stop its display link); `setCapTo30Fps(true)` skips frames that come too early (the graphics
+  automatic and the low-fps hint do not measure then, 30 fps would look like a slow device).
+- **Diagnostics:** `diagnostics()` fills one `EngineDiagnostics` object; `formatDebugText` turns it into
+  the lines of the debug box.
+- The frame loop is allocation free (`EngineAllocationTest`); the level automatic reads the frame times
+  the host passes in, it has no clock of its own.
 
 ## Open points of the world
 
