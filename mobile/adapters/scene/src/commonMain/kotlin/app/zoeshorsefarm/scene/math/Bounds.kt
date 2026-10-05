@@ -3,9 +3,6 @@ package app.zoeshorsefarm.scene.math
 import kotlin.math.max
 import kotlin.math.sqrt
 
-private val sphereTmp1 = Vec3()
-private val sphereTmp2 = Vec3()
-
 /** Plane `normal . p + constant = 0` (three.js `Plane`). */
 class Plane(
     val normal: Vec3 = Vec3(1.0, 0.0, 0.0),
@@ -103,12 +100,15 @@ class Sphere(
             radius = 0.0
             return this
         }
-        sphereTmp1.subVectors(point, center)
-        val lengthSq = sphereTmp1.lengthSq()
+        val dx = point.x - center.x
+        val dy = point.y - center.y
+        val dz = point.z - center.z
+        val lengthSq = dx * dx + dy * dy + dz * dz
         if (lengthSq > radius * radius) {
             val length = sqrt(lengthSq)
             val delta = (length - radius) * 0.5
-            center.addScaledVector(sphereTmp1, delta / length)
+            val k = delta / length
+            center.set(center.x + dx * k, center.y + dy * k, center.z + dz * k)
             radius += delta
         }
         return this
@@ -124,9 +124,9 @@ class Sphere(
         if (center == sphere.center) {
             radius = max(radius, sphere.radius)
         } else {
-            sphereTmp2.subVectors(sphere.center, center).setLength(sphere.radius)
-            expandByPoint(sphereTmp1.copy(sphere.center).add(sphereTmp2))
-            expandByPoint(sphereTmp1.copy(sphere.center).sub(sphereTmp2))
+            val offset = Vec3().subVectors(sphere.center, center).setLength(sphere.radius)
+            expandByPoint(Vec3().copy(sphere.center).add(offset))
+            expandByPoint(Vec3().copy(sphere.center).sub(offset))
         }
         return this
     }
@@ -208,17 +208,18 @@ class Box3(
     /** Box around the eight transformed corners. */
     fun applyMatrix4(matrix: Mat4): Box3 {
         if (isEmpty()) return this
-        val corners = scratchCorners
-        corners[0].set(min.x, min.y, min.z).applyMatrix4(matrix)
-        corners[1].set(min.x, min.y, max.z).applyMatrix4(matrix)
-        corners[2].set(min.x, max.y, min.z).applyMatrix4(matrix)
-        corners[3].set(min.x, max.y, max.z).applyMatrix4(matrix)
-        corners[4].set(max.x, min.y, min.z).applyMatrix4(matrix)
-        corners[5].set(max.x, min.y, max.z).applyMatrix4(matrix)
-        corners[6].set(max.x, max.y, min.z).applyMatrix4(matrix)
-        corners[7].set(max.x, max.y, max.z).applyMatrix4(matrix)
+        val x0 = min.x
+        val y0 = min.y
+        val z0 = min.z
+        val x1 = max.x
+        val y1 = max.y
+        val z1 = max.z
         makeEmpty()
-        for (c in corners) expandByPoint(c)
+        val corner = Vec3()
+        for (i in 0 until 8) {
+            corner.set(if (i and 4 == 0) x0 else x1, if (i and 2 == 0) y0 else y1, if (i and 1 == 0) z0 else z1)
+            expandByPoint(corner.applyMatrix4(matrix))
+        }
         return this
     }
 
@@ -229,10 +230,6 @@ class Box3(
     }
 
     override fun toString(): String = "Box3($min, $max)"
-
-    private companion object {
-        val scratchCorners = Array(8) { Vec3() }
-    }
 }
 
 /** View frustum of six planes (three.js `Frustum`, WebGL clip space). */
@@ -296,7 +293,5 @@ class Frustum {
         return true
     }
 
-    private companion object {
-        val scratch = Vec3()
-    }
+    private val scratch = Vec3()
 }

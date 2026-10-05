@@ -61,14 +61,28 @@ internal object SfxVoices {
         )
     }
 
+    private val GAIT_NAMES = listOf("back", "walk", "trot", "canter")
+    private val GAIT_BY_INDEX = GAIT_NAMES.map { GAITS.getValue(it) }
+
+    /** Index of a gait for [hoofAt], -1 for gaits without a hoof sound. Does not allocate. */
+    fun gaitIndex(gait: String): Int = GAIT_NAMES.indexOf(gait)
+
     /** One hoof beat of the given gait ("back", "walk", "trot", "canter"); other gaits are silent. */
     fun hoof(
         v: VoiceContext,
         out: GainBus,
         t: Double,
         gait: String,
+    ) = hoofAt(v, out, t, gaitIndex(gait))
+
+    /** [hoof] for a gait given by its [gaitIndex]. */
+    fun hoofAt(
+        v: VoiceContext,
+        out: GainBus,
+        t: Double,
+        gaitIndex: Int,
     ) {
-        val g = GAITS[gait] ?: return
+        val g = GAIT_BY_INDEX.getOrNull(gaitIndex) ?: return
         v.hoofCount++
         val side = if (v.hoofCount % 2 == 0) 1.0 else 1.06 // left/right hoof slightly different
         val vol = g.vol * jitter(v, 0.1)
@@ -230,5 +244,23 @@ internal object SfxVoices {
         FINISH_RUN.forEachIndexed { i, midi -> chime(v, out, t + i * 0.09, midi, 0.32, 0.3) }
         val end = t + FINISH_RUN.size * 0.09 + 0.04
         for (midi in FINISH_CHORD) chime(v, out, end, midi, 0.2, 0.9)
+    }
+
+    /** Plays the effect with the ordinal [nameOrdinal] of [SfxName] (the command of the audio thread). */
+    fun play(
+        v: VoiceContext,
+        out: GainBus,
+        t: Double,
+        nameOrdinal: Int,
+        gaitIndex: Int,
+    ) {
+        when (SfxName.entries[nameOrdinal]) {
+            SfxName.Hoof -> hoofAt(v, out, t, gaitIndex)
+            SfxName.Takeoff -> takeoff(v, out, t)
+            SfxName.Landing -> landing(v, out, t)
+            SfxName.RailDown -> railDown(v, out, t)
+            SfxName.StartSignal -> startSignal(v, out, t)
+            SfxName.FinishSignal -> finishSignal(v, out, t)
+        }
     }
 }

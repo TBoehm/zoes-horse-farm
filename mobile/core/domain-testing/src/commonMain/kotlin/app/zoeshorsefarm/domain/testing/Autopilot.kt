@@ -2,17 +2,19 @@ package app.zoeshorsefarm.domain.testing
 
 import app.zoeshorsefarm.domain.course.Course
 import app.zoeshorsefarm.domain.course.Line
+import app.zoeshorsefarm.domain.sim.ApproachInfo
 import app.zoeshorsefarm.domain.sim.Element
 import app.zoeshorsefarm.domain.sim.Horse
 import app.zoeshorsefarm.domain.sim.SimEvent
 import app.zoeshorsefarm.domain.sim.SimInput
 import app.zoeshorsefarm.domain.sim.TUNING
 import app.zoeshorsefarm.domain.sim.Vec2
-import app.zoeshorsefarm.domain.sim.approachInfo
+import app.zoeshorsefarm.domain.sim.Zone
+import app.zoeshorsefarm.domain.sim.approachInfoInto
 import app.zoeshorsefarm.domain.sim.axisOf
 import app.zoeshorsefarm.domain.sim.headingOf
 import app.zoeshorsefarm.domain.sim.wrapAngle
-import app.zoeshorsefarm.domain.sim.zoneForElement
+import app.zoeshorsefarm.domain.sim.zoneInto
 import app.zoeshorsefarm.shared.clamp
 import kotlin.math.hypot
 import kotlin.math.min
@@ -73,14 +75,21 @@ data class RouteTarget(
 fun courseTargets(course: Course): List<RouteTarget> =
     course.obstacles.flatMap { o -> o.elements.map { RouteTarget(it, 1) } }
 
-/** Point `ahead` meters further along the polyline from the projection of p on segment s. */
-private fun lookaheadPoint(
+/** Reused result of [lookaheadInto]: a mutable point. */
+private class Point {
+    var x = 0.0
+    var z = 0.0
+}
+
+/** Writes the point `ahead` meters further along the polyline from the projection of p on segment s. */
+private fun lookaheadInto(
+    out: Point,
     points: List<Vec2>,
     s: Int,
     px: Double,
     pz: Double,
     ahead: Double,
-): Vec2 {
+) {
     var remaining = ahead
     var ax = points[s].x
     var az = points[s].z
@@ -97,7 +106,9 @@ private fun lookaheadPoint(
         val d = hypot(nx - ax, nz - az)
         if (d >= remaining || i + 2 >= points.size) {
             val k = if (d > 0) min(1.0, remaining / d) else 1.0
-            return Vec2(ax + (nx - ax) * k, az + (nz - az) * k)
+            out.x = ax + (nx - ax) * k
+            out.z = az + (nz - az) * k
+            return
         }
         remaining -= d
         ax = nx
@@ -130,6 +141,12 @@ class Autopilot(
     private var steps = 0
     private val delays = HashMap<Int, Double>()
 
+    // scratch objects: [next] allocates nothing once the delays are drawn
+    private val input = SimInput()
+    private val lookaheadPoint = Point()
+    private val info = ApproachInfo()
+    private val zone = Zone()
+
     private fun delayFor(i: Int): Double = delays.getOrPut(i) { (rng() * 2 - 1) * jitterS }
 
     private fun steer(horse: Horse): Double {
@@ -141,7 +158,8 @@ class Autopilot(
             if (along < len - NEAR_END) break
             segment++
         }
-        val target = lookaheadPoint(route, segment, horse.x, horse.z, lookahead)
+        val target = lookaheadPoint
+        lookaheadInto(target, route, segment, horse.x, horse.z, lookahead)
         val error = wrapAngle(headingOf(target.x - horse.x, target.z - horse.z) - horse.heading)
         return clamp(-3 * error, -1.0, 1.0)
     }
@@ -153,9 +171,9 @@ class Autopilot(
         target: RouteTarget,
         horse: Horse,
     ): Boolean {
-        val info = approachInfo(target.el, horse, TUNING.approachDistance)
-        if (info == null || !info.approaching || info.dir != target.dir) return false
-        val zone = zoneForElement(target.el, horse.speed, TUNING)
+        if (!approachInfoInto(target.el, horse, TUNING.approachDistance, info)) return false
+        if (!info.approaching || info.dir != target.dir) return false
+        zoneInto(target.el, horse.speed, TUNING, zone)
         val aim = (zone.near + zone.far) / 2 - delayFor(index) * horse.speed
         return info.distance <= aim
     }
@@ -171,14 +189,15 @@ class Autopilot(
     /** All targets are landed. */
     val done: Boolean get() = index >= targets.size
 
-    /** Next input for the current horse state. */
+    /** Next input for the current horse state. The same instance on every call: use it, do not keep it. */
     fun next(horse: Horse): SimInput {
         val first = steps++ == 0
         val steer = steer(horse)
         val throttle = clamp((speed - horse.speed) * 2, -1.0, 1.0)
         // one step without gallop first: after a restart the horse gallops only on a fresh press
         val gallop = canter && !first
-        return SimInput(steer = steer, throttle = throttle, gallop = gallop, jump = wantsJump(horse))
+        input.set(steer, throttle, gallop, wantsJump(horse))
+        return input
     }
 
     /** Feed the events of the last step back (landing -> next element, refusal -> press again). */

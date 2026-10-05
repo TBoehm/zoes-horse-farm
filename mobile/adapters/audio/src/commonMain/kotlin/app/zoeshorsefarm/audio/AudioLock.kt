@@ -1,8 +1,8 @@
 package app.zoeshorsefarm.audio
 
 /**
- * Reentrant lock that serialises the game thread (facade calls) with the audio thread (render
- * callback). Held only for short moments: scheduling a sound or rendering one block.
+ * Reentrant lock that serialises the callers of the [Audio] facade. The audio thread never takes it
+ * (the engine is lock-free, see [AudioEngine]), so holding it while calling the platform output is safe.
  */
 internal expect class AudioLock() {
     fun lock()

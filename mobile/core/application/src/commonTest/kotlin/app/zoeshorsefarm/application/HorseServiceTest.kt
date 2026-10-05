@@ -11,6 +11,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+// Not ported: JS "ignores values that are not part of the offered choices" (the typed Coat and Marking
+// enums cannot hold a value that is not offered).
 class HorseServiceTest {
     private val named = HorseProfile(name = "Blitz", nameAnswered = true)
 

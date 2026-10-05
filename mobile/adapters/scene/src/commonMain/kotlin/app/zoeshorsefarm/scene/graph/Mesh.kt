@@ -76,6 +76,7 @@ class InstancedMesh(
     var count: Int = capacity
 
     init {
+        val identity = Mat4()
         for (i in 0 until capacity) setMatrixAt(i, identity)
     }
 
@@ -135,11 +136,8 @@ class InstancedMesh(
         }
     }
 
-    private companion object {
-        val identity = Mat4()
-        val scratchMatrix = Mat4()
-        val scratchSphere = Sphere()
-    }
+    private val scratchMatrix = Mat4()
+    private val scratchSphere = Sphere()
 }
 
 /** The GPU-side bone matrices of a [Skeleton] (three.js `skeleton.boneTexture`); dispose it to free them. */
@@ -205,9 +203,7 @@ class Skeleton(
 
     fun getBoneByName(name: String): Bone? = bones.firstOrNull { it.name == name }
 
-    private companion object {
-        val offset = Mat4()
-    }
+    private val offset = Mat4()
 }
 
 /** A mesh deformed by a [Skeleton] through `skinIndex` (4 bone indices) and `skinWeight` attributes. */
@@ -286,12 +282,10 @@ class SkinnedMesh(
         for (i in 0 until count) result.expandByPoint(getVertexPosition(i, vertex))
     }
 
-    private companion object {
-        val base = Vec3()
-        val tmp = Vec3()
-        val vertex = Vec3()
-        val matrix4 = Mat4()
-    }
+    private val base = Vec3()
+    private val tmp = Vec3()
+    private val vertex = Vec3()
+    private val matrix4 = Mat4()
 }
 
 /** Point sprites: one point per vertex (three.js `Points`). Counts as one draw call without triangles. */

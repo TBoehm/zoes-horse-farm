@@ -18,15 +18,25 @@ data class SpeedBand(
 
 /**
  * Takeoff zone and reach in m before the leading edge: reach > far > near > lastPoint > 0.
- * `center` is the middle of the zone.
+ * `center` is the middle of the zone. Mutable so the per-frame code can reuse one instance with
+ * [zoneInto].
  */
 data class Zone(
-    val far: Double,
-    val near: Double,
-    val lastPoint: Double,
-    val reach: Double,
-    val center: Double,
-)
+    var far: Double = 0.0,
+    var near: Double = 0.0,
+    var lastPoint: Double = 0.0,
+    var reach: Double = 0.0,
+    var center: Double = 0.0,
+) {
+    /** Copies all fields of [other] into this one. */
+    fun set(other: Zone) {
+        far = other.far
+        near = other.near
+        lastPoint = other.lastPoint
+        reach = other.reach
+        center = other.center
+    }
+}
 
 /** State at the moment of a takeoff, input of [takeoffRisk]. */
 data class TakeoffState(
@@ -115,12 +125,16 @@ fun zoneWindow(
     return max(w.min, v)
 }
 
-/** Takeoff zone and reach for [element] at [speed]; depends on kind, height, spread and speed. */
-fun zoneForElement(
+/**
+ * Allocation-free [zoneForElement]: fills [out] with the takeoff zone of [element] at [speed];
+ * depends on kind, height, spread and speed.
+ */
+fun zoneInto(
     element: Element,
     speed: Double,
     tuning: Tuning,
-): Zone {
+    out: Zone,
+) {
     val j = tuning.jump
     val z = j.zone
     val v = max(if (speed.isNaN()) 0.0 else speed, z.minSpeed)
@@ -135,14 +149,23 @@ fun zoneForElement(
     val half = zoneWindow(element, tuning) * v
     val far = center + half
     val near = max(z.minNear, center - half)
-    val lastPoint =
+    out.far = far
+    out.near = near
+    out.lastPoint =
         min(
             near * j.lastPoint.maxShareOfNear,
             max(j.lastPoint.min, near - j.lastPoint.lead * v),
         )
-    val reach = far + max(j.reachMin, j.reachLead * v)
-    return Zone(far = far, near = near, lastPoint = lastPoint, reach = reach, center = center)
+    out.reach = far + max(j.reachMin, j.reachLead * v)
+    out.center = center
 }
+
+/** Takeoff zone and reach for [element] at [speed]; depends on kind, height, spread and speed. */
+fun zoneForElement(
+    element: Element,
+    speed: Double,
+    tuning: Tuning,
+): Zone = Zone().also { zoneInto(element, speed, tuning, it) }
 
 /**
  * Knockdown risk of a takeoff (rules 15, 18, 19, 20).

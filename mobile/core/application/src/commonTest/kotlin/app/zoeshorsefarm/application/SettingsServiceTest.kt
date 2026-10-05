@@ -9,6 +9,7 @@ import kotlin.test.assertTrue
 // Values that the web service ignores because they have the wrong type or are not offered (an
 // unknown language, level, camera, aid kind or channel; a non-boolean flag) cannot be passed to the
 // typed API; the ids a player or a save game may carry are covered by the enums' fromId tests.
+// Also not ported: JS "get returns a copy" (Settings is immutable, nothing to copy).
 class SettingsServiceTest {
     private class Setup(
         settings: Settings,

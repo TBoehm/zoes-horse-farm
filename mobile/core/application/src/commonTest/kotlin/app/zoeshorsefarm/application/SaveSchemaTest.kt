@@ -6,6 +6,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+// Not ported: the JS `addSettingsFields` tests (the settings registry is static in Kotlin: extra fields
+// are covered by MapSection-style sections in the storage tests).
 class SaveSchemaTest {
     // field specs
 

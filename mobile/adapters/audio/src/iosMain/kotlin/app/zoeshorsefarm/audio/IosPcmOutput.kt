@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
+@file:OptIn(ExperimentalForeignApi::class, BetaInteropApi::class, ExperimentalAtomicApi::class)
 
 package app.zoeshorsefarm.audio
 
@@ -30,6 +30,8 @@ import platform.darwin.NSObjectProtocol
 import platform.darwin.dispatch_after
 import platform.darwin.dispatch_get_main_queue
 import platform.darwin.dispatch_time
+import kotlin.concurrent.atomics.AtomicReference
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 private const val MAX_CALLBACK_FRAMES = 4096
 private const val DEFAULT_SAMPLE_RATE = 44100
@@ -46,7 +48,9 @@ private const val NANOS_PER_MILLI = 1_000_000L
 internal class IosPcmOutput : PcmOutput {
     private val engine = AVAudioEngine()
     private var listener: ((OutputState) -> Unit)? = null
-    private var renderer: PcmRenderer? = null
+
+    // Read on the real-time thread, set and cleared on the main thread
+    private val renderer = AtomicReference<PcmRenderer?>(null)
     private var observers = emptyList<NSObjectProtocol>()
 
     // Scratch buffers of the audio callback, allocated once
@@ -74,7 +78,7 @@ internal class IosPcmOutput : PcmOutput {
     }
 
     override fun start(renderer: PcmRenderer) {
-        this.renderer = renderer
+        this.renderer.store(renderer)
         val session = AVAudioSession.sharedInstance()
         session.setCategory(AVAudioSessionCategoryAmbient, error = null)
         session.setActive(true, error = null)
@@ -84,7 +88,7 @@ internal class IosPcmOutput : PcmOutput {
             AVAudioSourceNode(format = format) { isSilence, _, frameCount, outputData ->
                 isSilence?.pointed?.value = false
                 val list = outputData?.pointed
-                val current = this.renderer
+                val current = this.renderer.load()
                 if (list != null && current != null) {
                     val buffers = list.mBuffers
                     val planar = list.mNumberBuffers >= 2u
@@ -161,7 +165,7 @@ internal class IosPcmOutput : PcmOutput {
         observers.forEach { NSNotificationCenter.defaultCenter.removeObserver(it) }
         observers = emptyList()
         engine.stop()
-        renderer = null
+        renderer.store(null)
         AVAudioSession.sharedInstance().setActive(false, error = null)
         setState(OutputState.Closed)
     }

@@ -117,6 +117,7 @@ class RideSession(
     // Scratch objects reused every frame (the view is read by the render loop at 60 Hz)
     private val frame = RideFrame(sim.horse)
     private val aidScratch = RideAid()
+    private val aidZone = Zone()
     private val viewState = RideView(sim.horse, sim.rails, fallDirs)
     private val stepResult = StepResult()
     private val sounds = SoundMapper()
@@ -252,7 +253,7 @@ class RideSession(
             if (target != null) {
                 aidScratch.elementId = target.elementId
                 aidScratch.dir = target.dir
-                aidScratch.zone = sim.zoneFor(target.elementId, target.dir, sim.horse.speed)
+                aidScratch.zone = if (sim.zoneInto(target.elementId, sim.horse.speed, aidZone)) aidZone else null
                 viewState.aid = aidScratch
             } else {
                 viewState.aid = null

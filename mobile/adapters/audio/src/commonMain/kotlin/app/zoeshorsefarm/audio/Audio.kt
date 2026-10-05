@@ -1,8 +1,6 @@
 // Audio module: pure PCM synthesis, no audio files. See [Audio].
 package app.zoeshorsefarm.audio
 
-import app.zoeshorsefarm.audio.synth.GainBus
-
 private const val SUSPEND_DELAY_MS = 120L
 
 /** The effects that are counted in [AudioState.sfxCounts]. */
@@ -69,7 +67,7 @@ class Audio(
     private val platform: AudioPlatform,
 ) {
     // Guards the state of the facade. Held while calling the platform output (start, resume, suspend,
-    // close), which may wait for the audio thread: that thread only ever takes the lock of the engine.
+    // close), which may wait for the audio thread: that thread never takes a lock (see AudioEngine).
     private val lock = AudioLock()
     private var settings =
         normalizeSettings(
@@ -112,7 +110,7 @@ class Audio(
             val out = factory.create()
             output = out
             out.setStateListener { onStateChange() }
-            val created = AudioEngine(out.sampleRate, settings, hidden, AudioLock())
+            val created = AudioEngine(out.sampleRate, settings, hidden)
             engine = created
             out.start(created)
         } catch (_: Exception) {
@@ -171,12 +169,12 @@ class Audio(
 
     internal fun playSfx(
         name: SfxName,
-        recipe: (VoiceContext, GainBus, Double) -> Unit,
+        gait: String = "",
     ) {
         lock.withLock {
             if (!canPlaySfx()) return
             counts[name.ordinal]++
-            guard { engine?.playSfx(recipe) }
+            guard { engine?.playSfx(name, gait) }
         }
     }
 
@@ -379,17 +377,17 @@ class Sfx internal constructor(
     private val audio: Audio,
 ) {
     /** One hoof beat on sand; [gait] is "back", "walk", "trot" or "canter" (other gaits are silent). */
-    fun hoof(gait: String) = audio.playSfx(SfxName.Hoof) { v, out, t -> SfxVoices.hoof(v, out, t, gait) }
+    fun hoof(gait: String) = audio.playSfx(SfxName.Hoof, gait)
 
-    fun takeoff() = audio.playSfx(SfxName.Takeoff, SfxVoices::takeoff)
+    fun takeoff() = audio.playSfx(SfxName.Takeoff)
 
-    fun landing() = audio.playSfx(SfxName.Landing, SfxVoices::landing)
+    fun landing() = audio.playSfx(SfxName.Landing)
 
-    fun railDown() = audio.playSfx(SfxName.RailDown, SfxVoices::railDown)
+    fun railDown() = audio.playSfx(SfxName.RailDown)
 
-    fun startSignal() = audio.playSfx(SfxName.StartSignal, SfxVoices::startSignal)
+    fun startSignal() = audio.playSfx(SfxName.StartSignal)
 
-    fun finishSignal() = audio.playSfx(SfxName.FinishSignal, SfxVoices::finishSignal)
+    fun finishSignal() = audio.playSfx(SfxName.FinishSignal)
 }
 
 /** Creates the audio service for the current platform (iOS: AVAudioEngine, JVM: javax.sound). */

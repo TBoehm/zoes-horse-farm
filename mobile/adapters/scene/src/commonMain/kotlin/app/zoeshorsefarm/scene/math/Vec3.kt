@@ -16,6 +16,9 @@ import kotlin.math.truncate
  *
  * Mutable value type: [equals] and [hashCode] compare the current values, so do not use an
  * instance as a hash key while it is being mutated.
+ *
+ * Thread confinement: the scene model is confined to one thread (hot paths share scratch objects, like
+ * three.js). Do not touch it from two threads at the same time.
  */
 @Suppress("TooManyFunctions") // mirrors the three.js Vector3 API
 class Vec3(

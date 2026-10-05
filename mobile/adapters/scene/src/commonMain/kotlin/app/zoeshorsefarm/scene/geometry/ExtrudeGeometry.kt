@@ -1,5 +1,3 @@
-@file:Suppress("ktlint:standard:function-naming") // builders keep the three.js names (BoxGeometry(...))
-
 package app.zoeshorsefarm.scene.geometry
 
 import app.zoeshorsefarm.scene.math.Vec2

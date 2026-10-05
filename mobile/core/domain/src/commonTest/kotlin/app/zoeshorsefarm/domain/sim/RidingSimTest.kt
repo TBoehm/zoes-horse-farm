@@ -43,11 +43,8 @@ private fun atCenter(
     return zone.far * 0.5 + zone.near * 0.5
 }
 
-private fun untilQuiet(
-    s: RidingSim,
-    @Suppress("UNUSED_PARAMETER") ev: List<SimEvent>,
-    @Suppress("UNUSED_PARAMETER") t: Double,
-) = s.horse.jump == null && s.horse.refusal == null && s.horse.z > 4
+private val untilQuiet: (RidingSim, List<SimEvent>, Double) -> Boolean =
+    { s, _, _ -> s.horse.jump == null && s.horse.refusal == null && s.horse.z > 4 }
 
 private val vertical = ElementKind.VERTICAL
 private val cross = ElementKind.CROSS
@@ -128,7 +125,7 @@ class RidingSimTest {
         val c = makeElement(cross, 0.45)
         val sim = makeSim(listOf(c))
         placeBefore(sim, c, 6.0, speed = S.trotMedium)
-        val result = drive(sim, pressAt(TROT, ::atCenter), until = ::untilQuiet)
+        val result = drive(sim, pressAt(TROT, ::atCenter), until = untilQuiet)
         assertEquals(listOf(SimEvent.Takeoff(c.id, 1, false, 0.0)), result.events.ofType<SimEvent.Takeoff>())
         assertEquals(listOf(SimEvent.Landed(c.id, 1, false)), result.events.ofType<SimEvent.Landed>())
     }
@@ -150,7 +147,7 @@ class RidingSimTest {
         for (el in listOf(makeElement(vertical, 0.8), makeElement(oxer, 0.85))) {
             val sim = makeSim(listOf(el))
             placeBefore(sim, el, 8.0, speed = S.canterMedium, gallop = true)
-            val result = drive(sim, pressAt(CANTER, ::atCenter), until = ::untilQuiet)
+            val result = drive(sim, pressAt(CANTER, ::atCenter), until = untilQuiet)
             assertEquals(listOf(SimEvent.Landed(el.id, 1, false)), result.events.ofType<SimEvent.Landed>())
         }
     }
