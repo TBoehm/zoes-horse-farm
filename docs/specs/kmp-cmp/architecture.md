@@ -53,7 +53,7 @@ vom Build erzwungen (ersetzt `no-restricted-imports`).
 | `:core:domain-testing`, `:core:application-testing` | `…testing` | Test-Hilfen aus `tests/support/` (Autopilot, Layout-Prüfer, Fake-Store/-Uhr …); nur als `commonTest`-Abhängigkeit | domain bzw. application |
 | `:adapters:scene` | `app.zoeshorsefarm.scene` | renderer-neutrales Szenenmodell („three-lite“, siehe unten), Mathe, Geometrie-Bausteine, `Raster2D` (Canvas-Ersatz für Texturen), Szenen-Statistik | shared |
 | `:adapters:view3d` | `app.zoeshorsefarm.view3d` | `src/adapters/view3d/` (Welt, Hindernisse, Pferd, Reiter, Kamera, Grafikstufen, Engine-Logik) auf dem Szenenmodell | scene, application, domain, shared |
-| `:adapters:render-filament` | `app.zoeshorsefarm.render.filament` | Filament-Backend: überträgt das Szenenmodell auf Filament (Entities, Puffer, Materialien, Licht, Schatten, Kamera) | scene, filament |
+| `:adapters:render-filament` | `app.zoeshorsefarm.render.filament` | Filament-Backend: überträgt das Szenenmodell auf Filament (Entities, Puffer, Materialien, Licht, Schatten, Kamera) | scene, filament (Tests zusätzlich view3d und domain, um die echte Welt zu zeichnen) |
 | `:adapters:audio` | `app.zoeshorsefarm.audio` | `src/adapters/audio/` als PCM-Synthese; Ausgabe pro Plattform (`expect`/`actual`) | shared |
 | `:adapters:storage` | `app.zoeshorsefarm.storage` | `src/adapters/storage/` (Key-Value + JSON) | application |
 | `:adapters:platform` | `app.zoeshorsefarm.platform` | Lebenszyklus, Geräte-Infos, Version | application |
