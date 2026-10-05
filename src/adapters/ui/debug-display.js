@@ -25,8 +25,9 @@ function changeReason({ kind, fps }, t) {
  * crash guard detected at the start ({ level, auto, seconds, at }), or null. The automatic level
  * changes (rule 4) come with `info`: `blockedLevels` (crash guard), `leftLevels` (stepped down from
  * in this session) and `lastChange` ({ kind: 'up'|'down'|'loss'|'crash', fps? }, or null).
+ * `version` is the build version (rule 58), shown as the first line when given.
  */
-export function formatDebugText(info, errors, t, lastCrash = null) {
+export function formatDebugText(info, errors, t, lastCrash = null, version = null) {
   const at = (seconds) =>
     seconds === null || seconds === undefined
       ? t('debug.none')
@@ -35,6 +36,7 @@ export function formatDebugText(info, errors, t, lastCrash = null) {
   // the memory budget comes from the probe context: show its GPU name when it is another one
   const budgetGpuDiffers = Boolean(info.gpu && info.budgetGpu && info.budgetGpu !== info.gpu);
   const lines = [
+    ...(version ? [t('debug.version', { version })] : []),
     t('debug.gpu', { gpu: gpu || t('debug.none') }),
     ...(budgetGpuDiffers ? [t('debug.gpuBudget', { gpu: info.budgetGpu })] : []),
     t(info.auto ? 'debug.levelAuto' : 'debug.level', { level: t(`graphics.${info.level}`) }),
@@ -109,13 +111,13 @@ export function formatDebugText(info, errors, t, lastCrash = null) {
  * The box: `el` goes into the ride HUD, `frame(rawDt)` is called every frame and redraws about
  * twice per second, `renderTexts()` after a language change.
  * @param {{ diagnostics: () => object, errorLog: { entries: object[] },
- *   lastCrash?: object|null, t: Function }} deps
+ *   lastCrash?: object|null, version?: string|null, t: Function }} deps
  */
-export function createDebugBox({ diagnostics, errorLog, lastCrash = null, t }) {
+export function createDebugBox({ diagnostics, errorLog, lastCrash = null, version = null, t }) {
   const el = h('div', { class: 'ride-debug', dataset: { hud: 'debug' } });
   const meter = createFpsMeter({ intervalS: 0.5, maxFrameS: Infinity });
   function render() {
-    el.textContent = formatDebugText(diagnostics(), errorLog.entries, t, lastCrash);
+    el.textContent = formatDebugText(diagnostics(), errorLog.entries, t, lastCrash, version);
   }
   render();
   return {

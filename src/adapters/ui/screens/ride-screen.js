@@ -8,6 +8,7 @@ import { canHintLowerLevel, createLowFpsHint } from '../../view3d/quality.js';
 import { createRestoreWatchdog } from '../../view3d/resilience.js';
 import { createFpsMeter, formatFpsText } from '../fps-display.js';
 import { createDebugBox } from '../debug-display.js';
+import { APP_VERSION } from '../../platform/app-version.js';
 import { createInput } from '../../input/input.js';
 import { trapTab } from '../../input/focus-trap.js';
 import { createRideMode } from '../../../application/modes/index.js';
@@ -107,6 +108,7 @@ export function createRideScreen(ctx, params = {}, { rng }) {
         diagnostics: engine.diagnostics,
         errorLog: services.debug.errorLog,
         lastCrash: services.crashGuard?.lastCrash() ?? null,
+        version: APP_VERSION,
         t,
       })
     : null;

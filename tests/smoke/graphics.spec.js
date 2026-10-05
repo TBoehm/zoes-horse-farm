@@ -236,7 +236,8 @@ test.describe('debug box (?debug)', () => {
     await startFreeRide(page);
     const box = debugBox(page);
     await expect(box).toBeVisible();
-    await expect(box).toContainText(/^GPU: \S+/);
+    await expect(box).toContainText(/^Version: (\d{4}-\d{2}-\d{2} · [0-9a-f]{7}|dev)/);
+    await expect(box).toContainText(/GPU: \S+/);
     await expect(box).toContainText('Level: Low (auto)');
     await expect(box).toContainText(/Pixel ratio: device [\d.]+, drawing [\d.]+/);
     await expect(box).toContainText(/Canvas: \d+ × \d+/);
@@ -245,6 +246,18 @@ test.describe('debug box (?debug)', () => {
     await expect(box).toContainText(/GPU est\. \d+ \/ \d+ MB/);
     await expect(box).toContainText('Graphics lost: 0× (–), back: 0× (–)');
     await expect(box).toContainText('Errors: none');
+
+    // the same version is shown at the bottom of the settings, also from the pause menu (rule 58)
+    const version = (await box.innerText()).match(/^Version: (.+)$/m)[1];
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__zhfTest.ride().paused);
+    await page.locator('[data-action="settings"]').click();
+    await expect(page.locator('.panel-settings [data-field="version"]')).toHaveText(
+      `Version ${version}`,
+    );
+    await page.locator('.panel-settings [data-action="back"]').click();
+    await page.locator('[data-action="resume"]').click();
+    await page.waitForFunction(() => !window.__zhfTest.ride().paused);
 
     // it sits under the fps line in the HUD column (the fps line is off: it is the first line)
     const y = await box.evaluate((el) => el.getBoundingClientRect().top);

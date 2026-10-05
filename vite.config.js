@@ -1,8 +1,11 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { currentAppVersion } from './scripts/app-version.mjs';
 
 export default defineConfig({
   base: './',
+  // Commit date + short sha of this build, or "dev" (rule 58)
+  define: { __APP_VERSION__: JSON.stringify(currentAppVersion()) },
   build: {
     target: 'es2020',
     chunkSizeWarningLimit: 1500,

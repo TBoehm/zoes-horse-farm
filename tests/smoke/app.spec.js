@@ -41,6 +41,20 @@ test('switching the language takes effect immediately and persists after a reloa
   await expect(page.locator('.panel-settings h2')).toHaveText('Einstellungen');
 });
 
+test('the settings show the build version at the bottom (rule 58)', async ({
+  page,
+  browserName,
+}) => {
+  await page.goto('./');
+  await webglOrSkip(page, test, browserName);
+  await openMenu(page);
+  await page.click('[data-entry="settings"]');
+  const line = page.locator('.panel-settings [data-field="version"]');
+  await expect(line).toHaveText(/^Version (\d{4}-\d{2}-\d{2} · [0-9a-f]{7}|dev)$/);
+  await line.scrollIntoViewIfNeeded();
+  await expect(line).toBeInViewport();
+});
+
 test('without WebGL only the notice appears instead of the app', async ({ page }) => {
   await page.addInitScript(() => {
     const orig = HTMLCanvasElement.prototype.getContext;
