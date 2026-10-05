@@ -105,7 +105,7 @@ class ControlsHelpTest {
                 clock = app.clock,
                 i18n = app.i18n,
                 navigator = app.navigator,
-                scheduler = app.scheduler,
+                scheduler = app.scheduler.ui,
                 lifecycle = app.lifecycle,
                 badgeToasts = app.badgeToasts,
                 version = "x",

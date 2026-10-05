@@ -12,7 +12,8 @@ Depends on `:core:application` (`Language`, `LANGS`; the badge test also uses th
 - `StringArea(de, en)` and `texts(...)` – one table per feature area; `texts` rejects a key listed twice.
 - `STRING_AREAS` – the areas (`CORE_STRINGS`, `RIDING_STRINGS`, `PROFILE_STRINGS`, `BADGES_STRINGS`,
   `COURSES_STRINGS`, `AUDIO_STRINGS`, `HELP_STRINGS`, `DEBUG_STRINGS`): the same 200 keys and texts as the web
-  app (checked mechanically against the JS tables when they were ported).
+  app (checked mechanically against the JS tables when they were ported). Plus the native-only `DATE_STRINGS`
+  (`date.long` pattern and `date.month.1..12`; the web lets the browser format dates).
 
 Rules (checked by the tests): same keys and `{placeholders}` in `de` and `en`, no empty texts, no key in two
 areas, every domain badge has a name and a condition text. Keep new texts in the area files, never in the UI.

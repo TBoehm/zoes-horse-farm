@@ -23,6 +23,22 @@ interface RideEnginePort {
     /** Calls [listener] when the device is back; returns the function that unsubscribes. */
     fun onContextRestored(listener: () -> Unit): () -> Unit
 
+    /**
+     * "Is a hint to pick a lower level useful?" (rule 4): false for "Automatic" (the governor steps down
+     * itself) and at the lowest level. Web/view3d: `canHintLowerLevel(auto, level)`.
+     */
+    fun canHintLowerLevel(auto: Boolean): Boolean
+
+    /**
+     * Starts the countdown for a device that does not come back; [onTimeout] fires once if
+     * [cancelRestoreWatchdog] was not called first. A second start restarts it. Web/view3d:
+     * `RestoreWatchdog` with its timeout, which stays the engine's technical value.
+     */
+    fun startRestoreWatchdog(onTimeout: () -> Unit)
+
+    /** The device came back (or the ride was left): stop the countdown. */
+    fun cancelRestoreWatchdog()
+
     /** The saved camera mode at the start of a ride. */
     fun setCameraMode(mode: CameraMode)
 

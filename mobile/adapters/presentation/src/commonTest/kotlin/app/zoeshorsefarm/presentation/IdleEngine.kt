@@ -14,6 +14,12 @@ class IdleEngine : RideEnginePort {
 
     override fun onContextRestored(listener: () -> Unit): () -> Unit = {}
 
+    override fun canHintLowerLevel(auto: Boolean) = !auto && graphicsLevel != GraphicsLevel.LOW
+
+    override fun startRestoreWatchdog(onTimeout: () -> Unit) = Unit
+
+    override fun cancelRestoreWatchdog() = Unit
+
     override fun setCameraMode(mode: CameraMode) = Unit
 
     override fun toggleCamera(): CameraMode = CameraMode.FOLLOW

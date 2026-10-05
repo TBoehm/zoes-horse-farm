@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 class MusicGateTest {
     private val scheduler = ManualScheduler()
     private val calls = mutableListOf<Boolean>()
-    private val gate = MusicGate(scheduler) { calls += it }
+    private val gate = MusicGate(scheduler.ui) { calls += it }
 
     @Test
     fun passesTheMusicWishOfAScreenOnImmediately() {
