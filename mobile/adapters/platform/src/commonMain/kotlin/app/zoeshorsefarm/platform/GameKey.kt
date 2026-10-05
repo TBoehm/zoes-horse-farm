@@ -1,9 +1,10 @@
-package app.zoeshorsefarm.input
+package app.zoeshorsefarm.platform
 
 /**
- * The one list of keys the game reacts to (web: `GAME_KEYS`). The keyboard handles exactly these keys,
- * and pressing any of them ends the touch mode (rule 11), so the two must never drift apart.
- * [code] is the web `KeyboardEvent.code` the key was ported from.
+ * The one list of keys the game reacts to (web: `GAME_KEYS`). The keyboard adapter (`:adapters:input`)
+ * handles exactly these keys, and pressing any of them ends the touch mode (rule 11, [InputMode]), so
+ * the two must never drift apart: both use this enum. [code] is the web `KeyboardEvent.code` the key
+ * was ported from; a hardware keyboard on a tablet maps its key events to the enum.
  */
 enum class GameKey(
     val code: String,

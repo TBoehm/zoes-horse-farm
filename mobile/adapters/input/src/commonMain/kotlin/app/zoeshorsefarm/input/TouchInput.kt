@@ -63,17 +63,18 @@ class TouchInput {
         if (!visible) releaseStick()
     }
 
-    /** Reads the state; edges (jump, pause, camera) are reset in the process. */
+    private val state = InputState()
+
+    /** Reads the state; edges (jump, pause, camera) are reset in the process. Reused by the next poll. */
     fun poll(): InputState {
-        val state =
-            InputState(
-                steer = stick.steer,
-                throttle = stick.throttle,
-                gallop = gallop,
-                jump = jump,
-                pause = pause,
-                camera = camera,
-            )
+        state.set(
+            steer = stick.steer,
+            throttle = stick.throttle,
+            gallop = gallop,
+            jump = jump,
+            pause = pause,
+            camera = camera,
+        )
         clearEdges()
         return state
     }
