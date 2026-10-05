@@ -134,6 +134,12 @@ private class Maneuver(
     var aligned = false
 }
 
+// numeric tolerances
+private const val LAST_POINT_EPS = 1e-6
+private const val CONTACT_EPS = 1e-6
+private const val ALIGN_EPS = 1e-9
+private const val RAY_PARALLEL_EPS = 1e-9
+
 private fun sideOf(value: Double): Double = if (value >= 0) 1.0 else -1.0
 
 /**
@@ -141,6 +147,7 @@ private fun sideOf(value: Double): Double = if (value >= 0) 1.0 else -1.0
  * every frame; it returns the events of the step (valid copy, not reused). [horse] is live: the
  * simulation mutates it in place, read it every frame. All randomness comes from [rng].
  */
+@Suppress("LargeClass") // a direct port of one state machine whose parts share the mutable ride state
 class RidingSim(
     obstacles: List<Obstacle> = emptyList(),
     private val rules: SimRules = ALWAYS_REFUSE,
@@ -282,21 +289,34 @@ class RidingSim(
     private fun computeApproach(): SimApproach? {
         // A horse that reins back is not approaching anything, whatever it faces
         if (horse.speed < 0) return null
-        var best: Element? = null
-        var bestInfo: ApproachInfo? = null
+        val found = findNearestApproach(withinReach = false) ?: return null
+        return SimApproach(found.el.id, found.info.dir, found.info.distance, found.info.angle)
+    }
+
+    /** The nearest element being approached, with its approach info and (when asked) takeoff zone. */
+    private class Candidate(
+        val el: Element,
+        val info: ApproachInfo,
+        val zone: Zone?,
+    )
+
+    /**
+     * The nearest element the horse is approaching, ignoring the one being jumped; with
+     * [withinReach] only elements whose takeoff reach has been entered (the zone is then set).
+     */
+    private fun findNearestApproach(withinReach: Boolean): Candidate? {
+        var best: Candidate? = null
         val active = jump
         for (el in elements) {
-            if (active != null && active.el === el) continue
-            val info = approachInfo(el, horse, t.approachDistance)
-            if (info == null || !info.approaching) continue
-            val b = bestInfo
-            if (b == null || info.distance < b.distance) {
-                best = el
-                bestInfo = info
+            val info = if (active != null && active.el === el) null else approachInfo(el, horse, t.approachDistance)
+            if (info != null && info.approaching) {
+                val zone = if (withinReach) zoneForElement(el, horse.speed, t) else null
+                val inReach = zone == null || info.distance <= zone.reach
+                val b = best
+                if (inReach && (b == null || info.distance < b.info.distance)) best = Candidate(el, info, zone)
             }
         }
-        if (best == null || bestInfo == null) return null
-        return SimApproach(best.id, bestInfo.dir, bestInfo.distance, bestInfo.angle)
+        return best
     }
 
     // ---- Gallop ---------------------------------------------------------------
@@ -332,32 +352,26 @@ class RidingSim(
             if (horse.jump?.phase == JumpPhase.LANDING) spaceBuffer = t.jump.spaceBuffer
             return
         }
-        var candEl: Element? = null
-        var candInfo: ApproachInfo? = null
-        var candZone: Zone? = null
-        for (el in elements) {
-            val info = approachInfo(el, horse, t.approachDistance)
-            if (info == null || !info.approaching) continue
-            val zone = zoneForElement(el, horse.speed, t)
-            if (info.distance > zone.reach) continue
-            val c = candInfo
-            if (c == null || info.distance < c.distance) {
-                candEl = el
-                candInfo = info
-                candZone = zone
-            }
+        val cand = findNearestApproach(withinReach = true)
+        if (cand != null) {
+            jumpAtCandidate(cand)
+        } else if (!buffered) {
+            startHop()
         }
-        if (candEl != null && candInfo != null && candZone != null) {
-            spaceBuffer = 0.0
-            // Obstacle within reach: jump or nothing (no hop), rules 19, 21
-            val ok =
-                gaitAllows(candEl, horse.gait) &&
-                    candInfo.angle <= t.jump.maxAngle &&
-                    candInfo.distance >= candZone.lastPoint - 1e-6
-            if (ok) takeoff(candEl, candInfo, false)
-            return
-        }
-        if (buffered) return
+    }
+
+    /** Obstacle within reach: jump or nothing (no hop), rules 19, 21. */
+    private fun jumpAtCandidate(cand: Candidate) {
+        spaceBuffer = 0.0
+        val lastPoint = checkNotNull(cand.zone) { "candidate within reach has a zone" }.lastPoint
+        val ok =
+            gaitAllows(cand.el, horse.gait) &&
+                cand.info.angle <= t.jump.maxAngle &&
+                cand.info.distance >= lastPoint - LAST_POINT_EPS
+        if (ok) takeoff(cand.el, cand.info, false)
+    }
+
+    private fun startHop() {
         if ((horse.gait == Gait.TROT || horse.gait == Gait.CANTER) && !hopActive) {
             hopActive = true
             hopT = 0.0
@@ -491,26 +505,32 @@ class RidingSim(
     // ---- Last takeoff point, refusal, evasion ------------------------
 
     private fun checkLastPoints() {
-        var bestEl: Element? = null
-        var bestInfo: ApproachInfo? = null
+        var best: Candidate? = null
         for (el in elements) {
             val info = approachInfo(el, horse, t.approachDistance)
-            if (info == null || !info.approaching) {
+            if (info != null && info.approaching) {
+                val b = best
+                if (isArmedAtLastPoint(el, info) && (b == null || info.distance < b.info.distance)) {
+                    best = Candidate(el, info, null)
+                }
+            } else {
                 armed.remove(el.id)
-                continue
-            }
-            val zone = zoneForElement(el, horse.speed, t)
-            if (info.distance > zone.lastPoint) {
-                armed.add(el.id)
-                continue
-            }
-            val b = bestInfo
-            if (armed.contains(el.id) && (b == null || info.distance < b.distance)) {
-                bestEl = el
-                bestInfo = info
             }
         }
-        if (bestEl != null && bestInfo != null) decide(bestEl, bestInfo)
+        if (best != null) decide(best.el, best.info)
+    }
+
+    /** Arms an element while the horse is before its last takeoff point; true once it is past it, armed. */
+    private fun isArmedAtLastPoint(
+        el: Element,
+        info: ApproachInfo,
+    ): Boolean {
+        val zone = zoneForElement(el, horse.speed, t)
+        if (info.distance > zone.lastPoint) {
+            armed.add(el.id)
+            return false
+        }
+        return armed.contains(el.id)
     }
 
     private fun decide(
@@ -591,7 +611,7 @@ class RidingSim(
         val turn = clamp(diff, -maxStep, maxStep)
         horse.heading = wrapAngle(horse.heading + turn)
         horse.turnRate = -turn / dt
-        m.aligned = abs(diff - turn) < 1e-9
+        m.aligned = abs(diff - turn) < ALIGN_EPS
     }
 
     /** One axis of the ray/box test; narrows [rayMin]/[rayMax]. False when the ray misses the box. */
@@ -600,7 +620,7 @@ class RidingSim(
         d: Double,
         h: Double,
     ): Boolean {
-        if (abs(d) < 1e-9) return !(p < -h || p > h)
+        if (abs(d) < RAY_PARALLEL_EPS) return !(p < -h || p > h)
         var t1 = (-h - p) / d
         var t2 = (h - p) / d
         if (t1 > t2) {
@@ -690,43 +710,56 @@ class RidingSim(
     ) {
         val active = jump
         for (i in elements.indices) {
-            val el = elements[i]
-            if (active != null && active.el === el) continue
-            val ea = extAlong[i]
-            val ec = extAcross[i]
-            val pAlong = localAlong(el, horse.x, horse.z)
-            val pAcross = localAcross(el, horse.x, horse.z)
-            if (abs(pAlong) >= ea || abs(pAcross) >= ec) continue
-            val qAlong = localAlong(el, prevX, prevZ)
-            val qAcross = localAcross(el, prevX, prevZ)
-            var a = pAlong
-            var c = pAcross
-            val face: Face
-            val eps = 1e-6
-            if (abs(qAlong) >= ea - eps) {
-                a = sideOf(qAlong) * ea
-                face = Face.FRONT
-            } else if (abs(qAcross) >= ec - eps) {
-                c = sideOf(qAcross) * ec
-                face = Face.SIDE
-            } else if (ea - abs(pAlong) <= ec - abs(pAcross)) {
-                a = sideOf(pAlong) * ea
-                face = Face.FRONT
-            } else {
-                c = sideOf(pAcross) * ec
-                face = Face.SIDE
-            }
-            val w = fromLocal(el, a, c)
-            horse.x = w.x
-            horse.z = w.z
-            // Horse hits a stand/obstacle without jumping: evade sideways (rule 22). Rule 22 has no
-            // gait condition, so even a walking horse swerves instead of treading on the spot.
-            if (jump == null && maneuver == null && refusal == null && horse.speed >= t.speeds.haltBelow) {
-                startManeuver(el, face, if (face == Face.FRONT) pAcross else pAlong)
-                events.add(SimEvent.Swerve(el.id))
-            }
+            if (active == null || active.el !== elements[i]) constrainAgainst(i, prevX, prevZ)
         }
     }
+
+    /** The side of the blocked area the horse ran into, from where it came and where it is now. */
+    private fun contactFace(
+        i: Int,
+        q: Local,
+        p: Local,
+    ): Face =
+        when {
+            abs(q.along) >= extAlong[i] - CONTACT_EPS -> Face.FRONT
+            abs(q.across) >= extAcross[i] - CONTACT_EPS -> Face.SIDE
+            extAlong[i] - abs(p.along) <= extAcross[i] - abs(p.across) -> Face.FRONT
+            else -> Face.SIDE
+        }
+
+    /** Pushes the horse out of the blocked area of element [i] and makes it evade (rule 22). */
+    private fun constrainAgainst(
+        i: Int,
+        prevX: Double,
+        prevZ: Double,
+    ) {
+        val el = elements[i]
+        val ea = extAlong[i]
+        val ec = extAcross[i]
+        // primitives first: most elements are far away and must not allocate
+        val pAlong = localAlong(el, horse.x, horse.z)
+        val pAcross = localAcross(el, horse.x, horse.z)
+        if (abs(pAlong) >= ea || abs(pAcross) >= ec) return
+        val p = Local(pAlong, pAcross)
+        val q = toLocal(el, prevX, prevZ)
+        val face = contactFace(i, q, p)
+        // the point is pushed out through the face it came in through (else the nearer one)
+        val fromAlong = if (abs(q.along) >= ea - CONTACT_EPS) q.along else p.along
+        val fromAcross = if (abs(q.across) >= ec - CONTACT_EPS) q.across else p.across
+        val a = if (face == Face.FRONT) sideOf(fromAlong) * ea else p.along
+        val c = if (face == Face.SIDE) sideOf(fromAcross) * ec else p.across
+        val w = fromLocal(el, a, c)
+        horse.x = w.x
+        horse.z = w.z
+        // Horse hits a stand/obstacle without jumping: evade sideways (rule 22). Rule 22 has no
+        // gait condition, so even a walking horse swerves instead of treading on the spot.
+        if (isIdle() && horse.speed >= t.speeds.haltBelow) {
+            startManeuver(el, face, if (face == Face.FRONT) p.across else p.along)
+            events.add(SimEvent.Swerve(el.id))
+        }
+    }
+
+    private fun isIdle() = jump == null && maneuver == null && refusal == null
 
     private fun rearInside(
         i: Int,
@@ -838,57 +871,82 @@ class RidingSim(
         }
     }
 
-    private fun substep(dt: Double) {
-        val prevX = horse.x
-        val prevZ = horse.z
-        val prevHeading = horse.heading
-        // distance the rein-back intends to cover in this step (0 when not backing)
-        var backDistance = 0.0
-        if (spaceBuffer > 0) {
-            spaceBuffer = max(0.0, spaceBuffer - dt)
-            if (spaceBuffer > 0 && jump == null) pressJump(buffered = true)
+    /** A Space press that was kept during the landing is replayed while the buffer lasts. */
+    private fun replayBufferedPress(dt: Double) {
+        if (spaceBuffer <= 0) return
+        spaceBuffer = max(0.0, spaceBuffer - dt)
+        if (spaceBuffer > 0 && jump == null) pressJump(buffered = true)
+    }
+
+    /** Speed and steering on the ground: refusal stop, rein-back, normal control, evasion. */
+    private fun controlOnGround(dt: Double) {
+        val r = refusal
+        if (r != null && r.type == RefusalType.STOP) {
+            horse.speed = max(0.0, horse.speed - r.decel * dt)
+            horse.turnRate = 0.0
+            return
         }
+        control.speed = horse.speed
+        control.gallop = horse.gallop
+        control.settling = settling
+        // rein-back only from a calm halt: never during a refusal or an evasion
+        val backThrottle = if (r != null || maneuver != null) 0.0 else inThrottle
+        if (!updateReinBack(control, backThrottle, dt, t)) {
+            updateSpeed(control, if (r != null) 0.0 else inThrottle, dt, t)
+        }
+        horse.speed = control.speed
+        settling = control.settling
+        val m = maneuver
+        if (m != null) steerManeuver(m, dt) else updateSteering(horse, inSteer, dt, t)
+    }
+
+    /** Moves the horse for one substep (jump flight or ground control); returns the intended back distance. */
+    private fun moveHorse(dt: Double): Double {
         val active = jump
         if (active != null) {
             advanceJump(active, dt)
-        } else {
-            val r = refusal
-            if (r != null && r.type == RefusalType.STOP) {
-                horse.speed = max(0.0, horse.speed - r.decel * dt)
-                horse.turnRate = 0.0
-            } else {
-                control.speed = horse.speed
-                control.gallop = horse.gallop
-                control.settling = settling
-                // rein-back only from a calm halt: never during a refusal or an evasion
-                val backThrottle = if (r != null || maneuver != null) 0.0 else inThrottle
-                if (!updateReinBack(control, backThrottle, dt, t)) {
-                    updateSpeed(control, if (r != null) 0.0 else inThrottle, dt, t)
-                }
-                horse.speed = control.speed
-                settling = control.settling
-                val m = maneuver
-                if (m != null) steerManeuver(m, dt) else updateSteering(horse, inSteer, dt, t)
-            }
-            horse.gait = gaitForSpeed(horse.speed, horse.gallop, t.speeds)
-            if (horse.speed < 0) backDistance = -horse.speed * dt
-            advance(horse, horse.speed, dt)
+            return 0.0
         }
-        constrainObstacles(prevX, prevZ)
-        holdRearBack(prevX, prevZ, prevHeading)
-        handleFence(dt)
-        if (backDistance > 0 && horse.speed < 0) {
-            // fence or obstacle held the hindquarters back: the horse stops stepping back
-            val moved = (prevX - horse.x) * sin(horse.heading) + (prevZ - horse.z) * cos(horse.heading)
-            if (moved < backDistance * t.reinBack.blockedShare) stopBacking()
-        }
+        controlOnGround(dt)
+        horse.gait = gaitForSpeed(horse.speed, horse.gallop, t.speeds)
+        // distance the rein-back intends to cover in this step (0 when not backing)
+        val backDistance = if (horse.speed < 0) -horse.speed * dt else 0.0
+        advance(horse, horse.speed, dt)
+        return backDistance
+    }
+
+    /** Fence or obstacle held the hindquarters back: the horse stops stepping back. */
+    private fun stopBackingIfBlocked(
+        prevX: Double,
+        prevZ: Double,
+        backDistance: Double,
+    ) {
+        if (backDistance <= 0 || horse.speed >= 0) return
+        val moved = (prevX - horse.x) * sin(horse.heading) + (prevZ - horse.z) * cos(horse.heading)
+        if (moved < backDistance * t.reinBack.blockedShare) stopBacking()
+    }
+
+    private fun updateTimedStates(dt: Double) {
         maneuver?.let { updateManeuver(it, dt) }
         refusal?.let { updateRefusal(it, dt) }
         if (hopActive) {
             hopT += dt
             if (hopT >= t.jump.hop.duration) hopActive = false
         }
-        if (jump == null && refusal == null && maneuver == null && horse.speed >= 0) checkLastPoints()
+    }
+
+    private fun substep(dt: Double) {
+        val prevX = horse.x
+        val prevZ = horse.z
+        val prevHeading = horse.heading
+        replayBufferedPress(dt)
+        val backDistance = moveHorse(dt)
+        constrainObstacles(prevX, prevZ)
+        holdRearBack(prevX, prevZ, prevHeading)
+        handleFence(dt)
+        stopBackingIfBlocked(prevX, prevZ, backDistance)
+        updateTimedStates(dt)
+        if (isIdle() && horse.speed >= 0) checkLastPoints()
         releaseLocks()
         syncView()
     }
@@ -920,6 +978,7 @@ class RidingSim(
      * Takeoff zone of an element for a given speed (default: the horse's own), or null for an
      * unknown element. [dir] is accepted for symmetry with the web API and does not change the zone.
      */
+    @Suppress("UnusedParameter") // `dir` is kept for symmetry with the web API (the zone does not depend on it)
     fun zoneFor(
         elementId: String,
         dir: Int = 1,

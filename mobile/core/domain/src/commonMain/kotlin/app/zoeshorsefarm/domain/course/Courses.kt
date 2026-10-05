@@ -30,7 +30,13 @@ private const val S = PI // toward -z
 private const val LINE_LENGTH = 6.0
 private const val START_BACK = 5.0 // halt this far before the start line
 private val LANDING_FREE = TUNING.course.landingFree // straight stretch after landing before a turn
-private const val DIAG = (15 * PI) / 180 // angle of the diagonal to the longitudinal axis
+private const val DIAG_DEG = 15.0
+private const val DIAG = (DIAG_DEG * PI) / 180 // angle of the diagonal to the longitudinal axis
+private const val DIAG_EXIT_ARC_STEPS = 4 // segments of the turn at the end of the diagonal
+private const val QUARTER_TURN_DEG = 90.0
+private const val HALF_TURN_DEG = 180.0
+private const val FULL_TURN_DEG = 360.0
+private const val DIAG_ENTRY_SWEEP_DEG = 105.0 // arc from the short side onto the diagonal
 private const val DIAG_EXIT_Z = -21.9 // the turn at the end of the diagonal starts here
 private const val DEG = PI / 180
 
@@ -204,12 +210,12 @@ private fun intoDiag(
     zc: Double,
     e: Vec2,
     sx: Int,
-    r: Double = 8.0,
+    r: Double = TUNING.course.diagonalTurnRadius,
 ): List<Vec2> {
     val endZ = zc - r * sin(DIAG)
     val cx = diagX(e, sx, endZ) + sx * r * cos(DIAG)
-    return arc(fromX - sx * r, zc, r, if (sx > 0) 0.0 else 180.0, 90.0, 2) +
-        arc(cx, zc, r, 90.0, 90 + sx * 105.0)
+    return arc(fromX - sx * r, zc, r, if (sx > 0) 0.0 else HALF_TURN_DEG, QUARTER_TURN_DEG, 2) +
+        arc(cx, zc, r, QUARTER_TURN_DEG, QUARTER_TURN_DEG + sx * DIAG_ENTRY_SWEEP_DEG)
 }
 
 /** End of the diagonal through e: turn onto the longitudinal line laneX (toward +z). */
@@ -222,7 +228,9 @@ private fun outOfDiag(
     val r = abs(laneX - px) / (1 + cos(DIAG))
     val cx = px - sx * r * cos(DIAG)
     val cz = DIAG_EXIT_Z - r * sin(DIAG)
-    return arc(cx, cz, r, if (sx > 0) 15.0 else 165.0, if (sx > 0) -180.0 else 360.0, 4)
+    val startDeg = if (sx > 0) DIAG_DEG else HALF_TURN_DEG - DIAG_DEG
+    val endDeg = if (sx > 0) -HALF_TURN_DEG else FULL_TURN_DEG
+    return arc(cx, cz, r, startDeg, endDeg, DIAG_EXIT_ARC_STEPS)
 }
 
 private class CourseParts(
