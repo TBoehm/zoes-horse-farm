@@ -165,6 +165,76 @@ private class PlacedElement(
     val fp: LayoutRect,
 )
 
+private fun checkFences(
+    all: List<PlacedElement>,
+    limits: LayoutLimits,
+    issues: MutableList<String>,
+) {
+    for (placed in all) {
+        if (!rectCorners(placed.fp).all { insideArena(it, limits.fenceClearance) }) {
+            issues.add("${placed.element.id}: less than ${fmt(limits.fenceClearance)} m from the fence")
+        }
+    }
+}
+
+private fun checkCorridors(
+    obstacles: List<Obstacle>,
+    all: List<PlacedElement>,
+    limits: LayoutLimits,
+    issues: MutableList<String>,
+) {
+    obstacles.forEachIndexed { oi, obstacle ->
+        val corridor = corridorOf(obstacle, limits)
+        val label = obstacle.elements[0].id
+        if (!rectCorners(corridor).all { insideArena(it, 0.0) }) {
+            issues.add("$label: approach corridor extends outside the arena")
+        }
+        for (other in all) {
+            if (other.obstacleIndex != oi && rectsOverlap(corridor, other.fp)) {
+                issues.add("$label: ${other.element.id} is in the approach corridor")
+            }
+        }
+    }
+}
+
+private fun checkGaps(
+    all: List<PlacedElement>,
+    limits: LayoutLimits,
+    issues: MutableList<String>,
+) {
+    val half = limits.minGap / 2
+    for (i in all.indices) {
+        for (j in i + 1 until all.size) {
+            val different = all[i].obstacleIndex != all[j].obstacleIndex
+            if (different && rectsOverlap(grow(all[i].fp, half), grow(all[j].fp, half))) {
+                issues.add("${all[i].element.id}/${all[j].element.id}: too close together")
+            }
+        }
+    }
+}
+
+private fun checkLine(
+    line: LayoutLine,
+    obstacles: List<Obstacle>,
+    all: List<PlacedElement>,
+    limits: LayoutLimits,
+    issues: MutableList<String>,
+) {
+    for (p in listOf(line.a, line.b)) {
+        if (!insideArena(p, 3.0)) issues.add("${line.name}: end point too close to the fence")
+    }
+    for (placed in all) {
+        if (segmentHitsRect(line.a, line.b, grow(placed.fp, limits.lineClearance))) {
+            issues.add("${line.name}: too close to ${placed.element.id}")
+        }
+    }
+    for (obstacle in obstacles) {
+        if (segmentHitsRect(line.a, line.b, corridorOf(obstacle, limits))) {
+            issues.add("${line.name}: crosses the approach corridor of ${obstacle.elements[0].id}")
+        }
+    }
+}
+
 /**
  * Checks a layout and returns a list of problems (empty = fine).
  * [lines]: optional start/finish lines.
@@ -179,51 +249,10 @@ fun checkLayout(
     obstacles.forEachIndexed { oi, obstacle ->
         for (element in obstacle.elements) all.add(PlacedElement(oi, element, footprint(element)))
     }
-
-    for (placed in all) {
-        if (!rectCorners(placed.fp).all { insideArena(it, limits.fenceClearance) }) {
-            issues.add("${placed.element.id}: less than ${fmt(limits.fenceClearance)} m from the fence")
-        }
-    }
-
-    obstacles.forEachIndexed { oi, obstacle ->
-        val corridor = corridorOf(obstacle, limits)
-        val label = obstacle.elements[0].id
-        if (!rectCorners(corridor).all { insideArena(it, 0.0) }) {
-            issues.add("$label: approach corridor extends outside the arena")
-        }
-        for (other in all) {
-            if (other.obstacleIndex != oi && rectsOverlap(corridor, other.fp)) {
-                issues.add("$label: ${other.element.id} is in the approach corridor")
-            }
-        }
-    }
-
-    for (i in all.indices) {
-        for (j in i + 1 until all.size) {
-            if (all[i].obstacleIndex == all[j].obstacleIndex) continue
-            val half = limits.minGap / 2
-            if (rectsOverlap(grow(all[i].fp, half), grow(all[j].fp, half))) {
-                issues.add("${all[i].element.id}/${all[j].element.id}: too close together")
-            }
-        }
-    }
-
-    for (line in lines) {
-        for (p in listOf(line.a, line.b)) {
-            if (!insideArena(p, 3.0)) issues.add("${line.name}: end point too close to the fence")
-        }
-        for (placed in all) {
-            if (segmentHitsRect(line.a, line.b, grow(placed.fp, limits.lineClearance))) {
-                issues.add("${line.name}: too close to ${placed.element.id}")
-            }
-        }
-        for (obstacle in obstacles) {
-            if (segmentHitsRect(line.a, line.b, corridorOf(obstacle, limits))) {
-                issues.add("${line.name}: crosses the approach corridor of ${obstacle.elements[0].id}")
-            }
-        }
-    }
+    checkFences(all, limits, issues)
+    checkCorridors(obstacles, all, limits, issues)
+    checkGaps(all, limits, issues)
+    for (line in lines) checkLine(line, obstacles, all, limits, issues)
     return issues
 }
 

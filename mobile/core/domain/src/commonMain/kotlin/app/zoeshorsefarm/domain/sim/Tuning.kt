@@ -282,7 +282,31 @@ data class CourseTuning(
     val takeoffLanding: Double = 1.8,
     // straight stretch after landing before a turn (m)
     val landingFree: Double = 8.0,
+    // radius (m) of the turns into a diagonal, rideable at medium canter
+    val diagonalTurnRadius: Double = 8.0,
     val oxerSpread: OxerSpreadTuning = OxerSpreadTuning(),
+)
+
+// scoring (concept rules 32, 33, 36)
+data class ScoringTuning(
+    // fault points per knockdown and per refusal (rule 32)
+    val knockdownFaults: Int = 4,
+    val refusalFaults: Int = 4,
+    // one time fault per started 4 s over the allowed time, in hundredths of a second (rule 33)
+    val timeFaultStepCs: Int = 400,
+    // allowed time = ideal line / reference speed * this factor (rule 33)
+    val allowedTimeFactor: Double = 1.5,
+    // stars (rule 36): 0 faults = maxStars, up to twoStarMaxFaults = 2 stars, more = 1 star
+    val maxStars: Int = 3,
+    val twoStarMaxFaults: Int = 4,
+)
+
+// badges (rule 49)
+data class BadgeTuning(
+    // counted jumps for the "jump mouse" badge
+    val jumpsForJumpMouse: Int = 100,
+    // finished rides for the "busy" badge
+    val ridesForBusy: Int = 10,
 )
 
 data class Tuning(
@@ -301,6 +325,8 @@ data class Tuning(
     val missingHintS: Double = 5.0,
     val sim: SimTuning = SimTuning(),
     val course: CourseTuning = CourseTuning(),
+    val scoring: ScoringTuning = ScoringTuning(),
+    val badges: BadgeTuning = BadgeTuning(),
 )
 
 /** The game values. */
