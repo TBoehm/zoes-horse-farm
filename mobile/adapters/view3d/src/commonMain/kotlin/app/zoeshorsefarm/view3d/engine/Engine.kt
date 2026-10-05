@@ -16,6 +16,7 @@ import app.zoeshorsefarm.scene.math.Vec3
 import app.zoeshorsefarm.scene.render.RenderBackend
 import app.zoeshorsefarm.view3d.CONTEXT_RESTORE_TIMEOUT_MS
 import app.zoeshorsefarm.view3d.CameraRig
+import app.zoeshorsefarm.view3d.ContextLossWatch
 import app.zoeshorsefarm.view3d.ErrorReporter
 import app.zoeshorsefarm.view3d.GpuEpoch
 import app.zoeshorsefarm.view3d.LineLabels
@@ -63,7 +64,19 @@ private const val CAMERA_FAR = 900.0
  * draws (world, horse, camera, shadows, governor) lives behind it; [backend] is the only way to the
  * GPU.
  *
- * Not thread safe: build, update and render on one thread (see the scene module).
+ * Not thread safe: build, update and render on one thread (see the scene module). The engine
+ * subscribes to the [SettingsService] and reads the crash guard, so settings and crash-guard writes
+ * must happen on that render thread as well.
+ *
+ * Host duties for the loss rule (rule 4): call [setVisible] with false BEFORE the backend can report
+ * the loss of a background device or surface (on pause, before the surface is destroyed). A loss
+ * that arrives first counts as an overloaded device in the foreground and lowers the level; the
+ * `RenderBackend` listener API has no way to tell a surface loss from an overload.
+ *
+ * Crash guard: while the ride is paused and the host has stopped its display link, nothing calls the
+ * guard's `lease.frame`, so its heartbeat stops. That is harmless on the native app (one instance,
+ * no tab id): the rendering mark stays until the lease is released or the app goes to the
+ * background, only the "seconds" of a crash shown in the debug box end at the last heartbeat.
  *
  * @param backend the renderer; the host created it, the engine configures it ([configureRenderer])
  * @param settings the application settings service (the only writer of the settings section)
@@ -139,6 +152,9 @@ class Engine(
     private var demand = false
     private val diag = EngineDiagnostics()
 
+    // GPU name of the device (the budget is based on it), for the debug box
+    private val deviceRendererName: String = config.device.rendererName.orEmpty()
+
     /** True while the ride is paused: the scene is drawn once and then not again until something changes. */
     var paused: Boolean = false
         private set
@@ -167,13 +183,7 @@ class Engine(
             override fun requestRedraw() = this@Engine.requestRedraw()
         }
 
-    private val contextWatch =
-        watchContextLoss(
-            backend,
-            onLost = ::handleContextLost,
-            onRestored = ::handleContextRestored,
-            log = config.log ?: printingLog,
-        )
+    private val contextWatch: ContextLossWatch
 
     init {
         configureRenderer(backend)
@@ -190,6 +200,14 @@ class Engine(
             )
         world.scene.add(horse.group)
         controller = QualityController(host, settings, plan, config.startupCrash)
+        // last: the handlers need the world and the controller
+        contextWatch =
+            watchContextLoss(
+                backend,
+                onLost = ::handleContextLost,
+                onRestored = ::handleContextRestored,
+                log = config.log ?: printingLog,
+            )
         if (!contextWatch.lost) precompile() // the shaders of the first level, before the first frame
     }
 
@@ -210,12 +228,17 @@ class Engine(
     /**
      * Does the engine want [frame] calls? False while nothing runs, and while the ride is paused and
      * the one frame of the pause was drawn: the host may stop its display link then (battery) and
-     * restarts it when [demandListener] says so.
+     * restarts it when [demandListener] says so. It stays true while the engine's own timer has
+     * tasks waiting (the restore watchdog of a lost device, a shader-compile hold): that timer only
+     * advances inside [frame], so the host must keep delivering frames until they are done (at most
+     * a few seconds). With a timer of the host ([EngineConfig.scheduler]) this does not apply.
      */
     val wantsFrames: Boolean
         get() =
             handler != null &&
-                (!paused || redraw || controller.stagesPending > 0 || controller.hasPendingPixelRatio || gate.blocked)
+                (!paused || redraw || settling || timerPending)
+
+    private val timerPending: Boolean get() = (ownScheduler?.pending ?: 0) > 0
 
     private fun notifyDemand() {
         val now = wantsFrames
@@ -237,6 +260,10 @@ class Engine(
      */
     fun setPaused(value: Boolean) {
         if (paused == value) return
+        applyPaused(value)
+    }
+
+    private fun applyPaused(value: Boolean) {
         paused = value
         redraw = true // the last picture of the pause menu
         if (!value) hasLast = false // no hidden time passed while nothing was drawn
@@ -258,6 +285,7 @@ class Engine(
     ) {
         sizing.view.set(cssWidth, cssHeight, devicePixelRatio)
         guard.run("resize") { resize(false) }
+        notifyDemand()
     }
 
     /** The app is in the foreground (true) or not; a loss near this change says nothing about the game. */
@@ -273,7 +301,10 @@ class Engine(
             camera.aspect = max(sizing.view.cssWidth, 1.0) / max(sizing.view.cssHeight, 1.0)
             camera.updateProjectionMatrix()
         }
-        if (changed) redraw = true
+        if (changed) {
+            redraw = true
+            notifyDemand()
+        }
     }
 
     // --- shaders -------------------------------------------------------------------------------
@@ -290,6 +321,7 @@ class Engine(
                 backend.compile(world.compileRoot, camera, world.scene, done)
             }
         }
+        notifyDemand() // a hold keeps the loop (and the timer that ends it) running
     }
 
     // --- context loss --------------------------------------------------------------------------
@@ -367,12 +399,14 @@ class Engine(
     ) {
         restoreWatchdog?.cancel()
         restoreWatchdog = RestoreWatchdog(scheduler, timeoutMs, onTimeout).also { it.start() }
+        notifyDemand() // the countdown needs frames while the engine's own timer drives it
     }
 
     /** The device came back (or the ride was left): stops the countdown. */
     fun cancelRestoreWatchdog() {
         restoreWatchdog?.cancel()
         restoreWatchdog = null
+        notifyDemand()
     }
 
     // --- the frame loop ------------------------------------------------------------------------
@@ -380,10 +414,11 @@ class Engine(
     /**
      * Starts ([handler]) or stops (null) the frame loop. Nothing of the ride is on screen yet, so a
      * start is the time to finish a switch that was still in stages, fit the level to the window and
-     * give the textures the anisotropy of the level.
+     * give the textures the anisotropy of the level. Starting or stopping always ends a pause.
      */
     fun run(handler: FrameHandler?) {
         this.handler = handler
+        paused = false // a pause never carries over into the next ride (the screen pauses again if it wants)
         hasLast = false
         redraw = true
         if (handler != null) {
@@ -583,7 +618,7 @@ class Engine(
     fun diagnostics(): EngineDiagnostics {
         val d = diag
         if (d.gpu.isEmpty() && !contextWatch.lost) d.gpu = backend.gpuDescription
-        d.budgetGpu = backendBudgetGpu
+        d.budgetGpu = deviceRendererName
         d.level = controller.level
         d.auto = controller.auto
         d.devicePixelRatio = sizing.view.devicePixelRatio
@@ -610,8 +645,6 @@ class Engine(
         d.lastChange = controller.lastChange
         return d
     }
-
-    private val backendBudgetGpu: String = config.device.rendererName.orEmpty()
 
     /** Stops listening and frees the world and the horse (the backend belongs to the host). */
     fun dispose() {
