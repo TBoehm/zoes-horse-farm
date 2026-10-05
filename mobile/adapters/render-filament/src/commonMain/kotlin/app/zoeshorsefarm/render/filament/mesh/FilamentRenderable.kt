@@ -64,7 +64,10 @@ class FilamentRenderable private constructor(
             if (value) scene.addEntity(entity) else scene.remove(entity)
         }
 
-    /** The local transform, column-major (three.js `matrix.elements`; 16 floats). */
+    /**
+     * The world transform, column-major (three.js `matrixWorld.elements`; 16 floats). Filament has
+     * no parent links here, so the caller passes the world matrix of the node.
+     */
     fun setTransform(matrix: FloatArray) {
         require(matrix.size >= MATRIX_SIZE) { "a transform is a 4x4 matrix" }
         val transforms = engine.transformManager

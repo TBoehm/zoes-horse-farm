@@ -1,9 +1,9 @@
 # `:adapters:render-filament`
 
 The Filament backend of the native app: everything between "plain arrays and settings" and "pixels on
-the screen", without knowing the scene model. The integration step (next wave) connects it to
-`:adapters:scene`; until then this module only depends on filament-kmp 0.7.1 (Filament 1.77.x) and
-`filamat`. Package `app.zoeshorsefarm.render.filament`.
+the screen". The low level classes (packages below) do not know the scene model; they depend on
+filament-kmp 0.7.1 (Filament 1.77.x) and `filamat`. The module also depends on `:adapters:scene`, which
+the integration layer (`FilamentRenderBackend`, `SceneSync`) uses. Package `app.zoeshorsefarm.render.filament`.
 
 Everything that can be decided without a GPU is **pure Kotlin with unit tests** (272 tests on the
 JVM): shader code generation, variant keys, mesh packing, tangent frames, spherical harmonics, shadow
@@ -172,7 +172,9 @@ These follow the Filament documentation and sources but could not run here (no G
 
 * **Uploads are not copied** on iOS: `setBufferAt` / `setImage` pin the `ByteArray` and Filament reads it later;
   the array is freed by the release callback. Never write to an array that was passed in until its callback
-  fired. `UploadRing` handles this for the data that changes (particles, instance texture); static uploads
+  fired. `UploadRing` handles this for the data that changes (particles, instance texture, the normals of deformed
+  meshes such as the reins); `overflowCount` of a ring and `BackendStats.uploadOverflows` show when the driver
+  held every slot (should stay 0); static uploads
   (`MeshPacker`, `TextureData`) use arrays that are never written again.
 * **Per-call allocation on JVM/Android**: every `FloatArray` argument (`setTransform`, `setBones`,
   `setMaterialGlobal`, `setParameter`, light and shadow options) is copied into freshly allocated native

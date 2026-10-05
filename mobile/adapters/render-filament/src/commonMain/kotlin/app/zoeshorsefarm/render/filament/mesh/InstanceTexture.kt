@@ -39,6 +39,9 @@ class InstanceTexture(
 
     val byteSize: Long = InstanceData.byteSize(capacity)
 
+    /** How often an update had to use a one shot array because the driver still held every slot. */
+    val overflowCount: Int get() = ring.overflowCount
+
     private val trackerId = tracker.register(ResourceKind.TEXTURE, label, byteSize)
 
     /**

@@ -61,12 +61,21 @@ object TangentFrames {
     fun fromNormals(
         normals: FloatArray,
         vertexCount: Int,
-    ): FloatArray {
-        val out = FloatArray(vertexCount * 4)
+    ): FloatArray = FloatArray(vertexCount * 4).also { fromNormalsInto(normals, vertexCount, it) }
+
+    /**
+     * Like [fromNormals] but writes into `out` (at least `vertexCount * 4` floats) and allocates
+     * nothing: for meshes whose normals change every frame (the reins).
+     */
+    fun fromNormalsInto(
+        normals: FloatArray,
+        vertexCount: Int,
+        out: FloatArray,
+    ) {
+        require(out.size >= vertexCount * 4) { "out must hold $vertexCount quaternions" }
         for (v in 0 until vertexCount) {
             fromNormal(normals[v * 3], normals[v * 3 + 1], normals[v * 3 + 2], out, v * 4)
         }
-        return out
     }
 
     /**
@@ -106,6 +115,23 @@ object TangentFrames {
             out[i] = (max(-1f, min(1f, values[i])) * 32767f).roundToInt().toShort()
         }
         return out
+    }
+
+    /**
+     * [packSnorm16] of the first `count` values as little endian bytes straight into `out` (at least
+     * `count * 2` bytes), without an intermediate array.
+     */
+    fun packSnorm16Into(
+        values: FloatArray,
+        count: Int,
+        out: ByteArray,
+    ) {
+        require(out.size >= count * 2) { "out must hold $count 16 bit values" }
+        for (i in 0 until count) {
+            val packed = (max(-1f, min(1f, values[i])) * 32767f).roundToInt()
+            out[i * 2] = packed.toByte()
+            out[i * 2 + 1] = (packed shr 8).toByte()
+        }
     }
 
     private fun accumulateTriangle(
@@ -189,7 +215,7 @@ object TangentFrames {
     }
 
     /** Quaternion of the rotation whose columns are t, b and n (a right handed frame). */
-    @Suppress("LongParameterList")
+    @Suppress("LongParameterList") // the three frame vectors are the input; a holder object would allocate per vertex
     private fun writeQuaternion(
         tx: Float,
         ty: Float,
