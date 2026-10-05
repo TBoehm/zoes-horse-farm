@@ -26,6 +26,9 @@ object MaterialSources {
     const val ALPHA_MAP = "alphaMap"
     const val INSTANCE_DATA = "instanceData"
 
+    /** The half size of the arena (x width, y length) for the sand. */
+    const val ARENA_HALF = "arenaHalf"
+
     fun generate(
         spec: MaterialSpec,
         markings: MarkingRegions = MarkingRegions.WEB,
@@ -41,7 +44,7 @@ object MaterialSources {
             customSurfaceShading = spec.shading == Shading.LAMBERT,
             instanced = spec.usesInstanceData,
             linearFog = true,
-            highPrecision = spec.coat != null || spec.shading == Shading.SKY,
+            highPrecision = spec.coat != null || spec.sand || spec.shading == Shading.SKY,
             requires = declaredAttributes(spec),
             variables = variables,
             parameters = parametersOf(spec),
@@ -81,6 +84,7 @@ object MaterialSources {
     private fun variablesOf(spec: MaterialSpec): List<String> =
         when {
             spec.coat != null -> CoatGlsl.variables
+            spec.sand -> listOf("vGround")
             spec.shading == Shading.SKY -> listOf("vDir")
             spec.shading == Shading.SPRITE -> listOf("sprite")
             needsInstanceColorVariable(spec) -> listOf("instanceColor")
@@ -114,6 +118,7 @@ object MaterialSources {
                 }
                 if (spec.normalMap) parameters += UniformParameter(NORMAL_SCALE, UniformType.FLOAT)
                 if (spec.baseColorMap) parameters += SamplerParameter(BASE_COLOR_MAP)
+                if (spec.sand) parameters += UniformParameter(ARENA_HALF, UniformType.FLOAT3)
                 if (spec.normalMap) parameters += SamplerParameter(NORMAL_MAP)
                 if (spec.alphaMap) parameters += SamplerParameter(ALPHA_MAP)
             }
@@ -176,6 +181,7 @@ object MaterialSources {
         } else {
             body += baseColorLines(spec)
         }
+        if (spec.sand) body += "base.rgb *= sandTint(variable_vGround.xy, materialParams.$ARENA_HALF.xy);"
         if (spec.blend == Blend.TRANSPARENT) body += "base.rgb *= base.a;"
         body += "material.baseColor = base;"
         when {
@@ -201,6 +207,7 @@ object MaterialSources {
         }
         val parts = ArrayList<String>()
         if (coat != null) parts += CoatGlsl.functions(low = coat == CoatKind.LOW, regions = markings)
+        if (spec.sand) parts += SAND_FUNCTIONS
         parts += "void material(inout MaterialInputs material) {\n${indent(body)}\n}"
         if (spec.shading == Shading.LAMBERT) parts += LAMBERT_SURFACE_SHADING
         return parts.joinToString("\n")
@@ -211,6 +218,7 @@ object MaterialSources {
     private fun vertexOf(spec: MaterialSpec): String? =
         when {
             spec.coat != null -> COAT_VERTEX
+            spec.sand -> SAND_VERTEX
             spec.shading == Shading.SKY -> SKY_VERTEX
             spec.shading == Shading.SPRITE -> SPRITE_VERTEX
             spec.usesInstanceData || spec.wind != WindEffect.None -> instancedVertex(spec)
@@ -319,6 +327,38 @@ void material(inout MaterialInputs material) {
     float d = length(variable_sprite.xy);
     float a = (1.0 - smoothstep(0.35, 1.0, d)) * variable_sprite.z * materialParams.baseColor.a;
     material.baseColor = vec4(materialParams.baseColor.rgb * a, a);
+}"""
+
+    /** The ground position (xz) of the vertex in world space, for the sand pattern. */
+    private const val SAND_VERTEX = """
+void materialVertex(inout MaterialVertexInputs material) {
+    material.vGround = vec4(mulMat4x4Float3(getWorldFromModelMatrix(), getPosition().xyz).xz, 0.0, 0.0);
+}"""
+
+    /** `patchSandMaterial` of `arena.js`: the factor the base colour is multiplied by. */
+    private const val SAND_FUNCTIONS = """
+float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float gNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(gHash(i), gHash(i + vec2(1.0, 0.0)), f.x),
+               mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+vec3 sandTint(vec2 gp, vec2 arenaHalf) {
+    float n = gNoise(gp * 0.13) * 0.6 + gNoise(gp * 0.55) * 0.4;
+    vec3 tint = vec3(0.9 + 0.2 * n);
+    // track: band along a rounded rectangle about 1.7 m inside the fence
+    vec2 b = arenaHalf - vec2(1.7);
+    float R = 5.0;
+    vec2 q = abs(gp) - (b - vec2(R));
+    float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - R;
+    float wob = gNoise(gp * 0.8) * 0.5;
+    float band = 1.0 - smoothstep(0.35, 1.25, abs(d) + wob * 0.4);
+    tint *= mix(vec3(1.0), vec3(0.78, 0.72, 0.66), band);
+    // lighter sand pushed up against the fence
+    float edge = smoothstep(1.0, 0.0, min(arenaHalf.x - abs(gp.x), arenaHalf.y - abs(gp.y)));
+    return tint * (1.0 + edge * 0.08);
 }"""
 
     private const val COAT_VERTEX = """

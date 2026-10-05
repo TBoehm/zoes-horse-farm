@@ -18,4 +18,6 @@ data class BackendStats(
     val framesRendered: Long,
     /** GPU memory the accounting knows of, in MiB (buffers, textures, frame buffers, shadow map). */
     val trackedMegabytes: Double,
+    /** Uploads that fell back to a one shot array because the driver held every ring slot (should stay 0). */
+    val uploadOverflows: Int = 0,
 )

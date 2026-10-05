@@ -212,4 +212,39 @@ class TangentFramesTest {
         val packed = TangentFrames.packSnorm16(q)
         assertTrue(packed[3] > 0, "packed w ${packed[3]}")
     }
+
+    @Test
+    fun `fromNormalsInto writes the same frames as fromNormals into a reused array`() {
+        val normals = floatArrayOf(0f, 0f, 1f, 0f, 1f, 0f, 1f, 0f, 0f, 0f, 0f, -1f)
+        val expected = TangentFrames.fromNormals(normals, 4)
+        val out = FloatArray(16) { 9f }
+        TangentFrames.fromNormalsInto(normals, 4, out)
+        assertEquals(expected.toList(), out.toList())
+    }
+
+    @Test
+    fun `fromNormalsInto leaves the floats behind the vertex count alone`() {
+        val out = FloatArray(12) { 7f }
+        TangentFrames.fromNormalsInto(floatArrayOf(0f, 0f, 1f), 1, out)
+        assertEquals(List(8) { 7f }, out.drop(4))
+    }
+
+    @Test
+    fun `packSnorm16Into writes the little endian bytes of packSnorm16`() {
+        val values = floatArrayOf(0f, 1f, -1f, 0.5f, 2f, -2f)
+        val shorts = TangentFrames.packSnorm16(values)
+        val bytes = ByteArray(values.size * 2) { 5 }
+        TangentFrames.packSnorm16Into(values, values.size, bytes)
+        for (i in shorts.indices) {
+            val value = (bytes[i * 2].toInt() and 0xff) or (bytes[i * 2 + 1].toInt() shl 8)
+            assertEquals(shorts[i].toInt(), value.toShort().toInt(), "element $i")
+        }
+    }
+
+    @Test
+    fun `packSnorm16Into only touches the requested count`() {
+        val bytes = ByteArray(8) { 5 }
+        TangentFrames.packSnorm16Into(floatArrayOf(1f, 1f), 1, bytes)
+        assertEquals(listOf<Byte>(5, 5, 5, 5, 5, 5), bytes.drop(2))
+    }
 }
