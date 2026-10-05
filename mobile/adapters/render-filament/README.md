@@ -5,7 +5,7 @@ the screen", without knowing the scene model. The integration step (next wave) c
 `:adapters:scene`; until then this module only depends on filament-kmp 0.7.1 (Filament 1.77.x) and
 `filamat`. Package `app.zoeshorsefarm.render.filament`.
 
-Everything that can be decided without a GPU is **pure Kotlin with unit tests** (271 tests on the
+Everything that can be decided without a GPU is **pure Kotlin with unit tests** (272 tests on the
 JVM): shader code generation, variant keys, mesh packing, tangent frames, spherical harmonics, shadow
 snapping, fog and pixel ratio maths, memory accounting. The classes that call Filament are thin and are
 only compiled (jvm and both iOS targets) – the native library cannot be loaded in JVM tests.
