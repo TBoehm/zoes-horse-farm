@@ -122,6 +122,17 @@ private fun stepStrength(gait: Gait): Double =
         Gait.HALT -> STEP_STRENGTH_OTHER
     }
 
+/** The joint limiter as a primitive function type (a test hook; calling it does not box). */
+internal fun interface LimiterFn {
+    operator fun invoke(
+        s: JointLimit,
+        target: Double,
+        dt: Double,
+        maxSpeed: Double,
+        maxAccel: Double,
+    ): Double
+}
+
 /** What touched the ground: a [STEP] of one hoof or the [LANDING] of a jump. */
 enum class FootfallKind { STEP, LANDING }
 
@@ -157,6 +168,17 @@ class HorseView internal constructor(
     private val rig = Group()
     private val skel = createSkeletonBones()
     private val b: Map<String, Bone> = skel.bones
+    private val bRoot: Bone = b.getValue("root")
+    private val bSpineFront: Bone = b.getValue("spineFront")
+    private val bSpineRear: Bone = b.getValue("spineRear")
+    private val bBelly: Bone = b.getValue("belly")
+    private val bNeck1: Bone = b.getValue("neck1")
+    private val bNeck2: Bone = b.getValue("neck2")
+    private val bNeck3: Bone = b.getValue("neck3")
+    private val bHead: Bone = b.getValue("head")
+    private val bLear: Bone = b.getValue("Lear")
+    private val bRear: Bone = b.getValue("Rear")
+    private val bForelock: Bone = b.getValue("forelock")
     private val skeleton: Skeleton
     private val uniforms = createCoatUniforms()
     private val body: SkinnedMesh
@@ -174,10 +196,11 @@ class HorseView internal constructor(
     var onFootfall: ((gait: Gait, leg: Int) -> Unit)? = null
 
     /** The footfalls of the last [update]. */
-    val footfalls = ArrayList<Footfall>()
+    val footfalls: List<Footfall> get() = footfallList
+    private val footfallList = ArrayList<Footfall>()
 
     // Test hooks (internal, null in the app): what the joint limiter does and a pop of the IK
-    internal var limiter: (JointLimit, Double, Double, Double, Double) -> Double = ::limitJoint
+    internal var limiter: LimiterFn = LimiterFn(::limitJoint)
     internal var frontSolved: ((DoubleArray) -> Unit)? = null
 
     /** The motion state (read by the tests). */
@@ -195,6 +218,8 @@ class HorseView internal constructor(
     private val maneBones = (1..5).map { b.getValue("mane$it") }
     private val tailBones = (1..5).map { b.getValue("tail$it") }
     private val lidBones = listOf(b.getValue("Llid"), b.getValue("Rlid"))
+    private val lidAxes = lidBones.map { skel.lidAxes.getValue(it.name) }
+    private val maneRest = maneBones.map { skel.restQuaternion.getValue(it.name) }
 
     private val footfallPool = ArrayList<Footfall>() // the event objects, reused every frame
     private var airborne = 0.0 // 0..1, smoothed: how much the soft reach is used
@@ -301,7 +326,7 @@ class HorseView internal constructor(
                         SADDLE_SEAT.y - REST.root[1],
                         SADDLE_SEAT.z - REST.root[2],
                     )
-                    b.getValue("root").add(it.group)
+                    bRoot.add(it.group)
                 }
             } else {
                 null
@@ -310,7 +335,7 @@ class HorseView internal constructor(
         // ear anchor (rider view), looking forward
         earAnchor.name = "horse-ear-anchor"
         earAnchor.position.copy(earAnchor().sub(Vec3(REST.head[0], REST.head[1], REST.head[2])))
-        b.getValue("head").add(earAnchor)
+        bHead.add(earAnchor)
 
         // reins (dynamic, bit -> hands or neck)
         reins = if (withTack) createReins() else null
@@ -423,7 +448,7 @@ class HorseView internal constructor(
         updateRider(dt, state)
         updateWorldAndReins(dt)
         collectFootfalls(falls, state.gait)
-        return footfalls
+        return footfallList
     }
 
     /** Blend of the poses of a jump, a hop and a refusal into [pose]; sets the share [fWeight]. */
@@ -456,7 +481,7 @@ class HorseView internal constructor(
         fPitch = m.body.pitch * g + pose[POSE_PITCH]
         fLift = m.body.bob * g + pose[POSE_DY] + m.weights.halt * 0.004 * breath
         fRoll = m.lean + m.body.roll * g + m.runoutWeight * m.runoutDir * -0.1
-        val root = b.getValue("root")
+        val root = bRoot
         val ry = REST.root[1] + fLift
         val dz0 = -fPivotZ
         // rotation about (y = 0, z = pivotZ)
@@ -468,9 +493,9 @@ class HorseView internal constructor(
         root.rotation.set(fPitch, 0.0, fRoll, EulerOrder.XZY)
         val bend = pose[POSE_BEND]
         fTurnBend = m.bend + m.runoutWeight * m.runoutDir * 0.4
-        b.getValue("spineFront").rotation.set(bend * 0.55, fTurnBend * 0.3, 0.0)
-        b.getValue("spineRear").rotation.set(-bend * 0.45, -fTurnBend * 0.22, 0.0)
-        b.getValue("belly").scale.set(1 + 0.014 * breath, 1 + 0.01 * breath, 1.0)
+        bSpineFront.rotation.set(bend * 0.55, fTurnBend * 0.3, 0.0)
+        bSpineRear.rotation.set(-bend * 0.45, -fTurnBend * 0.22, 0.0)
+        bBelly.scale.set(1 + 0.014 * breath, 1 + 0.01 * breath, 1.0)
     }
 
     private fun moveNeckHeadEarsTail(
@@ -492,33 +517,33 @@ class HorseView internal constructor(
                 headGesture.neck
         fNeck = neckPose + graze * GRAZE_NECK_SUM
         val turn = fTurnBend
-        b.getValue("neck1").rotation.set(
+        bNeck1.rotation.set(
             neckPose * 0.3 + graze * GRAZE_NECK[0],
             turn * 0.33 + headGesture.yaw * 0.25,
             0.0,
         )
-        b.getValue("neck2").rotation.set(
+        bNeck2.rotation.set(
             neckPose * 0.35 + graze * GRAZE_NECK[1],
             turn * 0.33 + headGesture.yaw * 0.3,
             0.0,
         )
-        b.getValue("neck3").rotation.set(
+        bNeck3.rotation.set(
             neckPose * 0.35 + graze * GRAZE_NECK[2],
             turn * 0.3 + headGesture.yaw * 0.35,
             0.0,
         )
-        b.getValue("head").rotation.set(
+        bHead.rotation.set(
             pose[POSE_HEAD] + m.body.neck * 0.3 * g - lazy * 0.5 + headGesture.pitch + graze * GRAZE_HEAD + chew,
             turn * 0.2 + m.weights.halt * 0.08 * sin(t * 0.23) + headGesture.yaw * 0.6,
             0.0,
         )
         val earBack = m.stopWeight * 0.6
-        b.getValue("Lear").rotation.set(
+        bLear.rotation.set(
             -0.1 - earBack - earFlick(t, 1) * 0.5 * m.weights.halt,
             0.15 * sin(t * 0.3),
             0.0,
         )
-        b.getValue("Rear").rotation.set(
+        bRear.rotation.set(
             -0.1 - earBack - earFlick(t, 2) * 0.5 * m.weights.halt,
             -0.15 * sin(t * 0.27 + 1),
             0.0,
@@ -555,26 +580,26 @@ class HorseView internal constructor(
             val sway = if (seg.sway.x > 0) MANE_PRESS * tanh(seg.sway.x / MANE_PRESS) else seg.sway.x
             val pitch = MANE_SWING * tanh(seg.pitch.x / MANE_SWING)
             qTmp.setFromEuler(eTmp.set(pitch, 0.0, sway))
-            bone.quaternion.copy(skel.restQuaternion.getValue(bone.name)).multiply(qTmp)
+            bone.quaternion.copy(maneRest[k]).multiply(qTmp)
         }
         val fl = life.forelock.segments[0]
-        b.getValue("forelock").rotation.set(fl.pitch.x, 0.0, fl.sway.x)
+        bForelock.rotation.set(fl.pitch.x, 0.0, fl.sway.x)
         uniforms.flare = life.flare
         uniforms.blink = life.blinkClosure
-        for (lid in lidBones) {
-            lid.quaternion.setFromAxisAngle(skel.lidAxes.getValue(lid.name), -life.blinkClosure * Eye.CLOSE_ANGLE)
+        for (i in lidBones.indices) {
+            lidBones[i].quaternion.setFromAxisAngle(lidAxes[i], -life.blinkClosure * Eye.CLOSE_ANGLE)
         }
     }
 
     /** The legs by IK: gait target (or pose) of the hooves -> joint angles through the limiter. */
     private fun moveLegs(dt: Double) {
         val m = motion
-        val root = b.getValue("root")
+        val root = bRoot
         root.updateMatrix()
-        b.getValue("spineFront").updateMatrix()
-        b.getValue("spineRear").updateMatrix()
-        mFront.multiplyMatrices(root.matrix, b.getValue("spineFront").matrix)
-        mRear.multiplyMatrices(root.matrix, b.getValue("spineRear").matrix)
+        bSpineFront.updateMatrix()
+        bSpineRear.updateMatrix()
+        mFront.multiplyMatrices(root.matrix, bSpineFront.matrix)
+        mRear.multiplyMatrices(root.matrix, bSpineRear.matrix)
         // Airborne (a jump): the ground target of a hoof is out of reach, and the IK must not lock the
         // leg straight and bend it in a single frame when the target comes back (see softReach)
         airborne += (smoothstep(0.0, AIRBORNE_RAMP, fY) - airborne) * (1 - exp(-AIRBORNE_RATE * dt))
@@ -648,7 +673,7 @@ class HorseView internal constructor(
     /** World matrices, ear anchor and reins. */
     private fun updateWorldAndReins(dt: Double) {
         group.updateMatrixWorld(true)
-        val head = b.getValue("head")
+        val head = bHead
         rider?.lateUpdate(dt)
         group.matrixWorld.decompose(tmpA, qObj, tmpB)
         head.matrixWorld.decompose(tmpA, qHead, tmpB)
@@ -666,7 +691,7 @@ class HorseView internal constructor(
                 if (hands != null) {
                     tmpB.setFromMatrixPosition(hands[s].matrixWorld).applyMatrix4(mInvRig)
                 } else {
-                    tmpB.copy(restLocal[s]).applyMatrix4(b.getValue("spineFront").matrixWorld).applyMatrix4(mInvRig)
+                    tmpB.copy(restLocal[s]).applyMatrix4(bSpineFront.matrixWorld).applyMatrix4(mInvRig)
                 }
             r.setRein(s, bit, hand, if (hands != null) 0.06 else 0.02)
         }
@@ -678,7 +703,7 @@ class HorseView internal constructor(
         gait: Gait,
     ) {
         val m = motion
-        footfalls.clear()
+        footfallList.clear()
         val groundY = 0.0 - fY // (-0 -> 0)
         val strength = stepStrength(gait)
         for (i in 0 until falls.size) {
@@ -696,8 +721,8 @@ class HorseView internal constructor(
         pushLanding(0, m.landing.front, LANDING_REACH_FRONT, gait, groundY)
         pushLanding(2, m.landing.hind, LANDING_REACH_HIND, gait, groundY)
         val callback = onFootfall ?: return
-        for (i in 0 until footfalls.size) {
-            val e = footfalls[i]
+        for (i in 0 until footfallList.size) {
+            val e = footfallList[i]
             if (e.kind == FootfallKind.STEP) callback(gait, e.leg)
         }
     }
@@ -712,7 +737,7 @@ class HorseView internal constructor(
         y: Double,
         z: Double,
     ) {
-        val n = footfalls.size
+        val n = footfallList.size
         if (n >= footfallPool.size) footfallPool.add(Footfall())
         val e = footfallPool[n]
         e.kind = kind
@@ -722,7 +747,7 @@ class HorseView internal constructor(
         e.x = x
         e.y = y
         e.z = z
-        footfalls.add(e)
+        footfallList.add(e)
     }
 
     /** Landing of the legs [first] and [first] + 1 (strength 0 = nothing). */
