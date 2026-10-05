@@ -2,6 +2,7 @@
 // scheduler timing, randomness and the impulse response for the reverb.
 package app.zoeshorsefarm.audio
 
+import app.zoeshorsefarm.shared.clamp
 import kotlin.math.min
 import kotlin.math.pow
 
@@ -20,7 +21,7 @@ fun clamp01(
     fallback: Double = DEFAULT_VOLUME,
 ): Double {
     if (value == null || value.isNaN()) return fallback
-    return value.coerceIn(0.0, 1.0)
+    return clamp(value, 0.0, 1.0)
 }
 
 /** API volume 0..1 linear, internally quadratic (perceptual): 0.5 -> 0.25 (-12 dB). */

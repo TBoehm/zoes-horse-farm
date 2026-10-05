@@ -1,6 +1,7 @@
 package app.zoeshorsefarm.audio.synth
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.exp
 import kotlin.math.log10
@@ -152,92 +153,107 @@ internal class DynamicsCompressor(
         frames: Int,
     ) {
         require(frames % DIVISION_FRAMES == 0) { "frames must be a multiple of $DIVISION_FRAMES" }
-        var frameIndex = 0
         for (division in 0 until frames / DIVISION_FRAMES) {
-            if (detectorAverage.isNaN() || detectorAverage.isInfinite()) detectorAverage = 1f
-            val desiredGain = detectorAverage
-
-            // Pre-warp so that we get desiredGain after the sin() warp below
-            val scaledDesiredGain = asin(desiredGain) / (0.5f * PI.toFloat())
-
-            // The rate we slew from the current compressor level to the desired level
-            val envelopeRate: Float
-            val isReleasing = scaledDesiredGain > compressorGain
-            var compressionDiffDb = linearToDecibels(compressorGain / scaledDesiredGain)
-            if (isReleasing) {
-                maxAttackCompressionDiffDb = -1f
-                if (compressionDiffDb.isNaN() || compressionDiffDb.isInfinite()) compressionDiffDb = -1f
-                // Higher compression (lower compressionDiffDb) releases faster: -12..0 dB -> x = 0..3
-                var x = compressionDiffDb
-                x = maxOf(-12f, x)
-                x = minOf(0f, x)
-                x = 0.25f * (x + 12)
-                val x2 = x * x
-                val x3 = x2 * x
-                val x4 = x2 * x2
-                val releaseFrames = kA + kB * x + kC * x2 + kD * x3 + kE * x4
-                val dbPerFrame = SPACING_DB / releaseFrames
-                envelopeRate = decibelsToLinear(dbPerFrame)
-            } else {
-                if (compressionDiffDb.isNaN() || compressionDiffDb.isInfinite()) compressionDiffDb = 1f
-                // While still attacking, use the rate of the largest difference seen so far
-                if (maxAttackCompressionDiffDb == -1f || maxAttackCompressionDiffDb < compressionDiffDb) {
-                    maxAttackCompressionDiffDb = compressionDiffDb
-                }
-                val effAttenDiffDb = maxOf(0.5f, maxAttackCompressionDiffDb)
-                val x = 0.25f / effAttenDiffDb
-                envelopeRate = 1 - x.pow(1 / attackFrames)
-            }
-
-            var readIndex = preDelayReadIndex
-            var writeIndex = preDelayWriteIndex
-            var detector = detectorAverage
-            var gain = compressorGain
-            for (i in 0 until DIVISION_FRAMES) {
-                // Pre-delay the signal, computing the compression amount from the undelayed one
-                val l = left[frameIndex]
-                val r = right[frameIndex]
-                preDelayLeft[writeIndex] = l
-                preDelayRight[writeIndex] = r
-                val absL = if (l > 0f) l else -l
-                val absR = if (r > 0f) r else -r
-                val absInput = if (absL > absR) absL else absR
-
-                // Shaped power of the undelayed input: linear up to the threshold, then knee and ratio
-                val shapedInput = saturate(absInput, k)
-                val attenuation = if (absInput <= 0.0001f) 1f else shapedInput / absInput
-                var attenuationDb = -linearToDecibels(attenuation)
-                attenuationDb = maxOf(2f, attenuationDb)
-                val satReleaseRate = decibelsToLinear(attenuationDb / satReleaseFrames) - 1f
-                val rate = if (attenuation > detector) satReleaseRate else 1f
-                detector += (attenuation - detector) * rate
-                detector = minOf(1f, detector)
-                if (detector.isNaN() || detector.isInfinite()) detector = 1f
-
-                // Exponential approach to the desired gain
-                if (envelopeRate < 1f) {
-                    gain += (scaledDesiredGain - gain) * envelopeRate // attack
-                } else {
-                    gain *= envelopeRate // release
-                    gain = minOf(1f, gain)
-                }
-
-                // Warp the pre-compression gain to smooth out sharp exponential transition points
-                val postWarpGain = sin(0.5f * PI.toFloat() * gain)
-                val totalGain = masterLinearGain * postWarpGain
-                left[frameIndex] = preDelayLeft[readIndex] * totalGain
-                right[frameIndex] = preDelayRight[readIndex] * totalGain
-
-                frameIndex++
-                readIndex = (readIndex + 1) and MAX_PRE_DELAY_MASK
-                writeIndex = (writeIndex + 1) and MAX_PRE_DELAY_MASK
-            }
-            preDelayReadIndex = readIndex
-            preDelayWriteIndex = writeIndex
-            detectorAverage = flushDenormal(detector)
-            compressorGain = flushDenormal(gain)
+            if (isGremlin(detectorAverage)) detectorAverage = 1f
+            // Pre-warp so that we get the detector's gain after the sin() warp of the output
+            val scaledDesiredGain = asin(detectorAverage) / (0.5f * PI.toFloat())
+            processDivision(left, right, division * DIVISION_FRAMES, scaledDesiredGain, envelopeRate(scaledDesiredGain))
         }
     }
+
+    private fun isGremlin(x: Float) = x.isNaN() || x.isInfinite()
+
+    /** The rate at which the gain slews from the current compressor level to the desired level. */
+    private fun envelopeRate(scaledDesiredGain: Float): Float {
+        var compressionDiffDb = linearToDecibels(compressorGain / scaledDesiredGain)
+        return if (scaledDesiredGain > compressorGain) {
+            maxAttackCompressionDiffDb = -1f
+            if (isGremlin(compressionDiffDb)) compressionDiffDb = -1f
+            releaseRate(compressionDiffDb)
+        } else {
+            if (isGremlin(compressionDiffDb)) compressionDiffDb = 1f
+            attackRate(compressionDiffDb)
+        }
+    }
+
+    /** Adaptive release: higher compression (lower diff) releases faster. */
+    private fun releaseRate(compressionDiffDb: Float): Float {
+        // -12..0 dB -> x = 0..3
+        val x = 0.25f * (minOf(0f, maxOf(-12f, compressionDiffDb)) + 12)
+        val x2 = x * x
+        val x3 = x2 * x
+        val x4 = x2 * x2
+        val releaseFrames = kA + kB * x + kC * x2 + kD * x3 + kE * x4
+        return decibelsToLinear(SPACING_DB / releaseFrames)
+    }
+
+    private fun attackRate(compressionDiffDb: Float): Float {
+        // While still attacking, use the rate of the largest difference seen so far
+        if (maxAttackCompressionDiffDb == -1f || maxAttackCompressionDiffDb < compressionDiffDb) {
+            maxAttackCompressionDiffDb = compressionDiffDb
+        }
+        val effAttenDiffDb = maxOf(0.5f, maxAttackCompressionDiffDb)
+        return 1 - (0.25f / effAttenDiffDb).pow(1 / attackFrames)
+    }
+
+    private fun processDivision(
+        left: FloatArray,
+        right: FloatArray,
+        start: Int,
+        scaledDesiredGain: Float,
+        envelopeRate: Float,
+    ) {
+        var readIndex = preDelayReadIndex
+        var writeIndex = preDelayWriteIndex
+        var detector = detectorAverage
+        var gain = compressorGain
+        for (frame in start until start + DIVISION_FRAMES) {
+            // Pre-delay the signal, computing the compression amount from the undelayed one
+            val l = left[frame]
+            val r = right[frame]
+            preDelayLeft[writeIndex] = l
+            preDelayRight[writeIndex] = r
+            detector = nextDetector(detector, maxOf(abs(l), abs(r)))
+            gain = nextGain(gain, scaledDesiredGain, envelopeRate)
+
+            // Warp the pre-compression gain to smooth out sharp exponential transition points
+            val totalGain = masterLinearGain * sin(0.5f * PI.toFloat() * gain)
+            left[frame] = preDelayLeft[readIndex] * totalGain
+            right[frame] = preDelayRight[readIndex] * totalGain
+
+            readIndex = (readIndex + 1) and MAX_PRE_DELAY_MASK
+            writeIndex = (writeIndex + 1) and MAX_PRE_DELAY_MASK
+        }
+        preDelayReadIndex = readIndex
+        preDelayWriteIndex = writeIndex
+        detectorAverage = flushDenormal(detector)
+        compressorGain = flushDenormal(gain)
+    }
+
+    /** Shaped power average of the undelayed input: linear up to the threshold, then knee and ratio. */
+    private fun nextDetector(
+        detector: Float,
+        absInput: Float,
+    ): Float {
+        val attenuation = if (absInput <= 0.0001f) 1f else saturate(absInput, k) / absInput
+        val attenuationDb = maxOf(2f, -linearToDecibels(attenuation))
+        val satReleaseRate = decibelsToLinear(attenuationDb / satReleaseFrames) - 1f
+        val rate = if (attenuation > detector) satReleaseRate else 1f
+        val next = minOf(1f, detector + (attenuation - detector) * rate)
+        return if (isGremlin(next)) 1f else next
+    }
+
+    /** Exponential approach to the desired gain: attack below rate 1, release above. */
+    private fun nextGain(
+        gain: Float,
+        scaledDesiredGain: Float,
+        envelopeRate: Float,
+    ): Float =
+        if (envelopeRate < 1f) {
+            gain + (scaledDesiredGain - gain) * envelopeRate
+        } else {
+            minOf(1f, gain * envelopeRate)
+        }
 
     private fun flushDenormal(x: Float): Float = if (x > -1.17549435e-38f && x < 1.17549435e-38f) 0f else x
 }
