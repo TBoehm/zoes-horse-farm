@@ -112,7 +112,7 @@ class CourseRun(
     private val tuning: Tuning = TUNING,
 ) {
     private val obstacles = course.obstacles
-    private val allowedMs = course.allowedTimeS * 1000.0
+    private val allowedMs = course.allowedTimeS * MS_PER_SECOND
 
     private var currentPhase = RunPhase.PRESTART
     private var index = 0 // obstacle whose turn it is (= obstacles.size -> finish)
@@ -142,7 +142,7 @@ class CourseRun(
             RunPhase.RIDING -> max(0.0, nowMs - startMs)
         }
 
-    private fun overMs(ms: Double) = toCentiseconds(ms) * 10 - allowedMs
+    private fun overMs(ms: Double) = toCentiseconds(ms) * MS_PER_CS - allowedMs
 
     private fun timeFaultsNow() = if (currentPhase == RunPhase.PRESTART) 0 else timeFaults(overMs(rideMs()))
 
@@ -260,22 +260,36 @@ class CourseRun(
         backwards: Boolean = false,
     ): LineCross? {
         if (backwards) return null
-        if (currentPhase == RunPhase.PRESTART && crossesLine(course.start, prevX, prevZ, nextX, nextZ)) {
-            currentPhase = RunPhase.RIDING
-            startMs = timeMs
-            nowMs = timeMs
-            return LineCross.START
-        }
-        if (currentPhase == RunPhase.RIDING && crossesLine(course.finish, prevX, prevZ, nextX, nextZ)) {
-            if (currentElement() == null) {
-                finish(timeMs)
-                return LineCross.FINISH
+        return when (currentPhase) {
+            RunPhase.PRESTART -> {
+                if (crossesLine(course.start, prevX, prevZ, nextX, nextZ)) startRide(timeMs) else null
             }
-            currentHint = obstacles[index].number
-            hintSince = timeMs
-            return LineCross.MISSING
+
+            RunPhase.RIDING -> {
+                if (crossesLine(course.finish, prevX, prevZ, nextX, nextZ)) crossFinishLine(timeMs) else null
+            }
+
+            RunPhase.FINISHED -> {
+                null
+            }
         }
-        return null
+    }
+
+    private fun startRide(timeMs: Double): LineCross {
+        currentPhase = RunPhase.RIDING
+        startMs = timeMs
+        nowMs = timeMs
+        return LineCross.START
+    }
+
+    private fun crossFinishLine(timeMs: Double): LineCross {
+        if (currentElement() == null) {
+            finish(timeMs)
+            return LineCross.FINISH
+        }
+        currentHint = obstacles[index].number
+        hintSince = timeMs
+        return LineCross.MISSING
     }
 
     fun onLanded(
@@ -316,7 +330,7 @@ class CourseRun(
     ) {
         if (currentPhase != RunPhase.RIDING) return
         nowMs = timeMs
-        if (currentHint != null && timeMs - hintSince >= tuning.missingHintS * 1000) currentHint = null
+        if (currentHint != null && timeMs - hintSince >= tuning.missingHintS * MS_PER_SECOND) currentHint = null
         // Turning away between a and b (rule 31)
         if (part == 1) {
             val b = checkNotNull(currentElement()) { "part b without a current element" }

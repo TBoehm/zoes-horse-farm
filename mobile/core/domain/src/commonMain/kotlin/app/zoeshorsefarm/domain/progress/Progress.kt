@@ -3,6 +3,7 @@ package app.zoeshorsefarm.domain.progress
 import app.zoeshorsefarm.domain.course.RatedResult
 import app.zoeshorsefarm.domain.course.RideResult
 import app.zoeshorsefarm.domain.course.isBetterResult
+import app.zoeshorsefarm.domain.sim.TUNING
 import app.zoeshorsefarm.shared.clamp
 import kotlin.math.floor
 import kotlin.math.max
@@ -83,16 +84,21 @@ private fun entriesOf(value: Any?): List<Pair<String, Any?>> =
 
 private val COURSE_ENTRY_KEYS = setOf("faults", "timeCs", "stars")
 
+/** A finite number >= 0, or null. */
+private fun nonNegative(value: Any?): Double? = finiteNumber(value)?.takeIf { it >= 0 }
+
+/** A whole number of stars in 1..maxStars, or null. */
+private fun starCount(value: Any?): Int? =
+    finiteNumber(value)?.takeIf { it == floor(it) && it >= 1 && it <= TUNING.scoring.maxStars }?.toInt()
+
 private fun sanitizeCourse(entry: Any?): CourseBest? {
     if (entry !is Map<*, *>) return null
-    val faults = finiteNumber(entry["faults"])
-    val timeCs = finiteNumber(entry["timeCs"])
-    val stars = finiteNumber(entry["stars"])
-    if (faults == null || faults < 0) return null
-    if (timeCs == null || timeCs < 0) return null
-    if (stars == null || stars != floor(stars) || stars < 1 || stars > 3) return null
+    val faults = nonNegative(entry["faults"])
+    val timeCs = nonNegative(entry["timeCs"])
+    val stars = starCount(entry["stars"])
+    if (faults == null || timeCs == null || stars == null) return null
     val extra = entriesOf(entry).filter { it.first !in COURSE_ENTRY_KEYS }.toMap()
-    return CourseBest(toInt(floor(faults)), toInt(floor(timeCs)), stars.toInt(), extra)
+    return CourseBest(toInt(floor(faults)), toInt(floor(timeCs)), stars, extra)
 }
 
 /** Sanitized copy: invalid -> default, readable values are kept, unknown fields are kept. */
@@ -152,7 +158,7 @@ fun applyFinishedRide(
     val courseId = result.courseId
     if (courseId < 1 || courseId > COURSE_COUNT) return AppliedRide(progress, isNewBest = false, unlockedCourse = null)
     val key = courseId.toString()
-    val stars = min(3, max(1, result.stars))
+    val stars = min(TUNING.scoring.maxStars, max(1, result.stars))
     val previous = progress.courses[key]
     val isNewBest = isBetterResult(result, previous)
     val faults = if (isNewBest || previous == null) result.faults.total else previous.faults
@@ -204,28 +210,52 @@ private val ISO_DATE =
             "(?:[T ](\\d{2}):(\\d{2})(?::(\\d{2})(?:[.,]\\d+)?)?(Z|z|[+-]\\d{2}(?::?\\d{2})?)?)?$",
     )
 
+// capture groups of ISO_DATE
+private const val G_MONTH = 2
+private const val G_DAY = 3
+private const val G_HOUR = 4
+private const val G_MINUTE = 5
+private const val G_SECOND = 6
+private const val G_ZONE = 7
+
+// ranges of the date and time parts (24:00:00 is allowed as end of day, like in JavaScript)
+private const val MAX_MONTH = 12
+private const val MAX_DAY = 31
+private const val MAX_HOUR = 24
+private const val MAX_MINUTE = 59
+private const val MAX_SECOND = 59
+private const val MAX_ZONE_HOUR = 23
+private const val ZONE_HHMM_LENGTH = 4
+private const val ZONE_HOUR_DIGITS = 2
+
+private fun part(
+    groups: List<String>,
+    i: Int,
+): Int? = groups[i].takeIf { it.isNotEmpty() }?.toInt()
+
+private fun isDatePartValid(groups: List<String>): Boolean {
+    val month = part(groups, G_MONTH)
+    val day = part(groups, G_DAY)
+    return (month == null || month in 1..MAX_MONTH) && (day == null || day in 1..MAX_DAY)
+}
+
+private fun isTimePartValid(groups: List<String>): Boolean {
+    val hour = part(groups, G_HOUR) ?: return true
+    val minute = part(groups, G_MINUTE) ?: 0
+    val second = part(groups, G_SECOND) ?: 0
+    val endOfDay = hour == MAX_HOUR && (minute != 0 || second != 0)
+    return hour <= MAX_HOUR && minute <= MAX_MINUTE && second <= MAX_SECOND && !endOfDay
+}
+
+private fun isZoneValid(zone: String): Boolean {
+    if (zone.length <= 1) return true
+    val digits = zone.drop(1).replace(":", "")
+    val minutesValid = digits.length != ZONE_HHMM_LENGTH || digits.drop(ZONE_HOUR_DIGITS).toInt() <= MAX_MINUTE
+    return digits.take(ZONE_HOUR_DIGITS).toInt() <= MAX_ZONE_HOUR && minutesValid
+}
+
 /** Is [text] a date the saved badges may carry (a valid ISO 8601 date, optionally with a time)? */
 fun isValidIsoDate(text: String): Boolean {
-    val m = ISO_DATE.matchEntire(text) ?: return false
-    val groups = m.groupValues
-
-    fun part(i: Int): Int? = groups[i].takeIf { it.isNotEmpty() }?.toInt()
-    val month = part(2)
-    val day = part(3)
-    if (month != null && month !in 1..12) return false
-    if (day != null && day !in 1..31) return false
-    val hour = part(4)
-    val minute = part(5)
-    val second = part(6)
-    if (hour != null) {
-        if (hour > 24 || (minute ?: 0) > 59 || (second ?: 0) > 59) return false
-        if (hour == 24 && ((minute ?: 0) != 0 || (second ?: 0) != 0)) return false
-    }
-    val zone = groups[7]
-    if (zone.length > 1) {
-        val digits = zone.drop(1).replace(":", "")
-        if (digits.take(2).toInt() > 23) return false
-        if (digits.length == 4 && digits.drop(2).toInt() > 59) return false
-    }
-    return true
+    val groups = ISO_DATE.matchEntire(text)?.groupValues ?: return false
+    return isDatePartValid(groups) && isTimePartValid(groups) && isZoneValid(groups[G_ZONE])
 }

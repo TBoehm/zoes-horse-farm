@@ -11,6 +11,9 @@ import kotlin.math.sin
 
 // Geometry helpers for obstacle elements (see docs/specs/springreiten-trainer/architecture.md).
 
+// a heading closer than this to parallel to the obstacle does not approach it
+private const val PARALLEL_EPS = 1e-6
+
 /** A point or direction in the arena plane (x, z). */
 data class Vec2(
     val x: Double,
@@ -139,7 +142,7 @@ fun approachInfo(
     val fz = cos(horse.heading)
     val fAlong = fx * sin(element.rot) + fz * cos(element.rot)
     val fAcross = fx * -cos(element.rot) + fz * sin(element.rot)
-    if (abs(fAlong) < 1e-6) return null
+    if (abs(fAlong) < PARALLEL_EPS) return null
     val dir = if (along < 0) 1 else -1
     // is the horse moving toward the plane?
     if (sign(fAlong) != dir.toDouble()) return null

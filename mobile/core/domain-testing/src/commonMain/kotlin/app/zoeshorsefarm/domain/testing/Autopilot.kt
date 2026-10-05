@@ -146,15 +146,24 @@ class Autopilot(
         return clamp(-3 * error, -1.0, 1.0)
     }
 
-    /** Space as soon as the horse is in the middle of the take-off zone of the element due next. */
-    private fun wantsJump(horse: Horse): Boolean {
-        val target = targets.getOrNull(index)
-        if (target == null || pressed || horse.jump != null || horse.speed < TUNING.speeds.trotMin) return false
+    private fun canPress(horse: Horse) = !pressed && horse.jump == null && horse.speed >= TUNING.speeds.trotMin
+
+    /** Is the horse approaching [target] in its direction and in the middle of the take-off zone? */
+    private fun isInTakeoffZone(
+        target: RouteTarget,
+        horse: Horse,
+    ): Boolean {
         val info = approachInfo(target.el, horse, TUNING.approachDistance)
         if (info == null || !info.approaching || info.dir != target.dir) return false
         val zone = zoneForElement(target.el, horse.speed, TUNING)
         val aim = (zone.near + zone.far) / 2 - delayFor(index) * horse.speed
-        if (info.distance > aim) return false
+        return info.distance <= aim
+    }
+
+    /** Space as soon as the horse is in the middle of the take-off zone of the element due next. */
+    private fun wantsJump(horse: Horse): Boolean {
+        val target = targets.getOrNull(index)
+        if (target == null || !canPress(horse) || !isInTakeoffZone(target, horse)) return false
         pressed = true
         return true
     }

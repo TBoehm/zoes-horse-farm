@@ -18,6 +18,15 @@ import kotlin.math.sqrt
 /** Longest time step (s) that a spring integrates in one go; a longer frame is clamped to it. */
 private const val MAX_SPRING_DT = 0.4
 
+/** Smallest angular frequency used (guard against division by zero). */
+private const val MIN_OMEGA = 1e-6
+
+/** Damping ratios this close to 1 count as critically damped. */
+private const val CRITICAL_DAMPING_TOLERANCE = 1e-4
+
+/** The velocity limit is this many times the position limit. */
+private const val VELOCITY_LIMIT_FACTOR = 10.0
+
 /** Output limit of a spring state (guard against bad input, in the unit of the spring). */
 private const val STATE_LIMIT = 50.0
 
@@ -47,11 +56,11 @@ fun stepSpring(
     val h = min(dt, MAX_SPRING_DT)
     val e = s.x - target
     val v = s.v
-    val w = max(omega, 1e-6)
+    val w = max(omega, MIN_OMEGA)
     val z = max(zeta, 0.0)
     val ne: Double
     val nv: Double
-    if (abs(z - 1) < 1e-4) {
+    if (abs(z - 1) < CRITICAL_DAMPING_TOLERANCE) {
         val ex = exp(-w * h)
         val j = v + w * e
         ne = (e + j * h) * ex
@@ -76,7 +85,7 @@ fun stepSpring(
         nv = c1 * r1 * e1 + c2 * r2 * e2
     }
     s.x = clamp(target + ne, -STATE_LIMIT, STATE_LIMIT)
-    s.v = clamp(nv, -STATE_LIMIT * 10, STATE_LIMIT * 10)
+    s.v = clamp(nv, -STATE_LIMIT * VELOCITY_LIMIT_FACTOR, STATE_LIMIT * VELOCITY_LIMIT_FACTOR)
     return s
 }
 
