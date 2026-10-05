@@ -3,6 +3,7 @@ package app.zoeshorsefarm.render.filament.material
 import app.zoeshorsefarm.render.filament.mesh.VertexSemantic
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -124,6 +125,9 @@ class MaterialSourcesTest {
                 // sky and dust
                 MaterialSpec(Shading.SKY),
                 MaterialSpec(Shading.SPRITE, blend = Blend.TRANSPARENT),
+                // the arena sand
+                MaterialSpec(Shading.LIT, vertexColors = true, baseColorMap = true, normalMap = true, sand = true),
+                MaterialSpec(Shading.LAMBERT, vertexColors = true, baseColorMap = true, sand = true),
                 // birds and butterflies
                 MaterialSpec(Shading.LIT, instancing = instanced, wind = WindEffect.Wings(9f, 0.5f, 1f)),
                 MaterialSpec(Shading.LIT, instancing = instanced, wind = WindEffect.Wings(24f, 1.4f, 0f)),
@@ -487,5 +491,33 @@ class MaterialSourcesTest {
         assertTrue(
             setOf(VertexSemantic.CUSTOM0, VertexSemantic.CUSTOM1, VertexSemantic.CUSTOM2).all { it in source.requires },
         )
+    }
+
+    // ---- sand ----------------------------------------------------------------------------------
+
+    @Test
+    fun `the sand multiplies the colour by the web pattern and needs the world position`() {
+        val source = generate(MaterialSpec(Shading.LIT, vertexColors = true, sand = true))
+        assertEquals(listOf("vGround"), source.variables)
+        assertTrue(source.highPrecision)
+        assertTrue("arenaHalf" in uniformNames(source))
+        assertTrue("base.rgb *= sandTint(variable_vGround.xy, materialParams.arenaHalf.xy);" in source.fragment)
+        assertTrue(
+            "material.vGround = vec4(mulMat4x4Float3(getWorldFromModelMatrix(), getPosition().xyz).xz" in
+                source.vertex!!,
+        )
+        assertTrue("float R = 5.0;" in source.fragment)
+        assertTrue("smoothstep(0.35, 1.25, abs(d) + wob * 0.4)" in source.fragment)
+        assertTrue("vec3(0.78, 0.72, 0.66)" in source.fragment)
+    }
+
+    @Test
+    fun `the sand is a variant of its own and only for plain lit meshes`() {
+        assertTrue(MaterialSpec(Shading.LIT, sand = true).key != MaterialSpec(Shading.LIT).key)
+        assertFailsWith<IllegalArgumentException> { MaterialSpec(Shading.UNLIT, sand = true) }
+        assertFailsWith<IllegalArgumentException> {
+            MaterialSpec(Shading.LIT, instancing = InstancingMode.TRANSFORMS, sand = true)
+        }
+        assertFailsWith<IllegalArgumentException> { MaterialSpec(Shading.LIT, skinning = true, sand = true) }
     }
 }

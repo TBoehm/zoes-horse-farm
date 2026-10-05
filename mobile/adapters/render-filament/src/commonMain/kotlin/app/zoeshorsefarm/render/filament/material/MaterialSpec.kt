@@ -117,6 +117,12 @@ data class MaterialSpec(
     val toneMapped: Boolean = true,
     val wind: WindEffect = WindEffect.None,
     val coat: CoatKind? = null,
+    /**
+     * The arena sand (`patchSandMaterial` of `arena.js`): large scale variation of the colour, the worn
+     * track and the lighter edge, computed from the world position. Lit, plain meshes only; the arena
+     * size is the `arenaHalf` parameter of the material instance.
+     */
+    val sand: Boolean = false,
 ) {
     init {
         validate()
@@ -170,6 +176,7 @@ data class MaterialSpec(
                 if (!toneMapped) add("notm")
                 if (wind != WindEffect.None) add(wind.id)
                 if (coat != null) add(coat.id)
+                if (sand) add("sand")
             }.joinToString("-")
 
     private fun validate() {
@@ -178,6 +185,15 @@ data class MaterialSpec(
         validateNormalMap()
         validateSkyAndSprite()
         validateCoat()
+        validateSand()
+    }
+
+    private fun validateSand() {
+        if (!sand) return
+        require(isLit) { "the sand needs a lit material" }
+        require(instancing == InstancingMode.NONE && wind == WindEffect.None && !skinning && coat == null) {
+            "the sand is for plain meshes"
+        }
     }
 
     private fun validateSkinning() {

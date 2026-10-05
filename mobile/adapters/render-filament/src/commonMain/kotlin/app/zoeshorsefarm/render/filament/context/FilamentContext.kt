@@ -367,8 +367,11 @@ class FilamentContext private constructor(
                 settings.msaaSamples,
             )
 
-    /** Object counts of Filament and the tracked GPU memory. */
-    fun stats(): BackendStats =
+    /**
+     * Object counts of Filament and the tracked GPU memory. `uploadOverflows` is the sum of the
+     * `overflowCount` of the upload rings the caller owns (sprite batches, instance textures).
+     */
+    fun stats(uploadOverflows: Int = 0): BackendStats =
         BackendStats(
             entities = scene.entityCount,
             renderables = scene.renderableCount,
@@ -380,6 +383,7 @@ class FilamentContext private constructor(
             indexBuffers = engine.indexBufferCount,
             framesRendered = framesRendered,
             trackedMegabytes = tracker.totalMegabytes,
+            uploadOverflows = uploadOverflows,
         )
 
     // ---- teardown ------------------------------------------------------------------------------

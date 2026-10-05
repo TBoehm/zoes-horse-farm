@@ -1,6 +1,5 @@
 package app.zoeshorsefarm.presentation.ride
 
-import app.zoeshorsefarm.application.GraphicsLevel
 import app.zoeshorsefarm.application.RideCommand
 import app.zoeshorsefarm.application.RideSession
 import app.zoeshorsefarm.application.RideView
@@ -8,7 +7,6 @@ import app.zoeshorsefarm.application.Rng
 import app.zoeshorsefarm.application.canStart
 import app.zoeshorsefarm.application.modes.RideModeId
 import app.zoeshorsefarm.application.modes.createRideMode
-import app.zoeshorsefarm.audio.Cancellable
 import app.zoeshorsefarm.domain.sim.SimInput
 import app.zoeshorsefarm.input.Input
 import app.zoeshorsefarm.platform.AppState
@@ -33,10 +31,6 @@ import app.zoeshorsefarm.presentation.nav.toRoute
 
 private const val FEEDBACK_VISIBLE_S = 2.0
 private const val HINT_VISIBLE_S = 5.0 // the "graphics too high" hint is longer than a jump message
-
-// How long the model waits for the graphics device to come back before it asks to restart the view
-// (some systems stop restoring after repeated losses). A technical value, not a game value.
-private const val CONTEXT_RESTORE_TIMEOUT_MS = 8000L
 
 /** The buttons of the pause menu, in the order they are shown. */
 enum class PauseAction {
@@ -81,7 +75,6 @@ class RideScreenModel(
     route: Route.Ride,
     rng: Rng,
     private val engine: RideEnginePort,
-    private val restoreTimeoutMs: Long = CONTEXT_RESTORE_TIMEOUT_MS,
 ) : ScreenModel {
     /** Changes whenever something the UI shows changes (not once per frame). */
     val changes = Changes()
@@ -107,7 +100,6 @@ class RideScreenModel(
 
     private var contextLost = false
     private var restoreOverdue = false // the lost device did not come back in time: ask for a reload
-    private var watchdog: Cancellable? = null
     private var destroyed = false
 
     private var feedbackKey: String? = null
@@ -197,10 +189,15 @@ class RideScreenModel(
         subscriptions +=
             ctx.i18n.onLangChange {
                 applyLines()
+                refreshHud() // a paused course HUD must not keep the old language
                 changes.fire()
             }
         // a switch between touch and keyboard ends an active gallop (rules 9, 11)
-        subscriptions += ctx.inputMode.onChange { input.onTouchModeChange(it) }
+        subscriptions +=
+            ctx.inputMode.onChange {
+                input.onTouchModeChange(it)
+                changes.fire() // the pause hint and the touch controls show or hide
+            }
         subscriptions += engine.onContextLost { onContextLost() }
         subscriptions += engine.onContextRestored { onContextRestored() }
         // auto-pause when the app goes to the background (rules 12, 38) or the rotate notice blocks
@@ -213,8 +210,6 @@ class RideScreenModel(
         if (engine.contextLost) onContextLost() else showContextLossHint() // a loss between two rides may leave a hint
         showCrashHint()
     }
-
-    private fun canHintLowerLevel() = !autoGraphics && engine.graphicsLevel != GraphicsLevel.LOW
 
     // ---- feedback ----
 
@@ -242,7 +237,11 @@ class RideScreenModel(
      * the same hint, once. Not when the player has lowered the level since.
      */
     private fun showCrashHint() {
-        if (engine.takeCrashHint() && canHintLowerLevel()) showFeedback("ride.graphicsContextLost", long = true)
+        if (engine.takeCrashHint() &&
+            engine.canHintLowerLevel(autoGraphics)
+        ) {
+            showFeedback("ride.graphicsContextLost", long = true)
+        }
     }
 
     // ---- lines and HUD ----
@@ -256,9 +255,9 @@ class RideScreenModel(
         )
     }
 
-    private fun refreshHud(view: RideView) {
+    private fun refreshHud() {
         val presenter = hud ?: return
-        val model = view.hud ?: return
+        val model = session.view.hud ?: return
         val next = presenter.update(model)
         if (next !== hudState) {
             hudState = next
@@ -307,7 +306,7 @@ class RideScreenModel(
         execute(session.restart())
         input.clearEdges()
         applyLines()
-        refreshHud(session.view)
+        refreshHud()
         engine.onRideRestarted()
     }
 
@@ -346,7 +345,7 @@ class RideScreenModel(
         if (!paused) return
         when (action) {
             PauseAction.RELOAD -> {
-                engine.reloadGraphics()
+                if (restoreOverdue) engine.reloadGraphics()
             }
 
             PauseAction.RESUME -> {
@@ -378,21 +377,17 @@ class RideScreenModel(
         contextLost = true
         restoreOverdue = false
         setPaused(true)
-        watchdog?.cancel()
-        watchdog =
-            ctx.scheduler.postDelayed(restoreTimeoutMs) {
-                watchdog = null
-                if (destroyed) return@postDelayed
-                restoreOverdue = true
-                changes.fire()
-            }
+        engine.startRestoreWatchdog {
+            if (destroyed) return@startRestoreWatchdog
+            restoreOverdue = true
+            changes.fire()
+        }
         changes.fire()
     }
 
     private fun onContextRestored() {
         contextLost = false
-        watchdog?.cancel()
-        watchdog = null
+        engine.cancelRestoreWatchdog()
         restoreOverdue = false
         engine.interruptMeasuring()
         changes.fire()
@@ -445,9 +440,9 @@ class RideScreenModel(
                 changes.fire()
             }
         }
-        refreshHud(session.view)
+        refreshHud()
         // a manual level that is too high: one hint per ride, the level stays (rule 4)
-        val measuring = ctx.lifecycle.state == AppState.FOREGROUND && canHintLowerLevel()
+        val measuring = ctx.lifecycle.state == AppState.FOREGROUND && engine.canHintLowerLevel(autoGraphics)
         if (engine.lowFpsHintFrame(rawDt, measuring)) showFeedback("ride.graphicsTooHigh", long = true)
         return FrameResult.RUNNING
     }
@@ -459,8 +454,7 @@ class RideScreenModel(
 
     override fun destroy() {
         destroyed = true
-        watchdog?.cancel()
-        watchdog = null
+        engine.cancelRestoreWatchdog()
         subscriptions.forEach { it() }
         subscriptions.clear()
         session.dispose()

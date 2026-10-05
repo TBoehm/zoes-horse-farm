@@ -38,7 +38,7 @@ class CourseHudTest {
         val state = riding(timeCs = 7520, faults = 4)
         assertTrue(state.timeVisible)
         assertTrue(state.faultsVisible)
-        assertEquals("01:15.20", state.timeText)
+        assertEquals("01:15.20", hud.timeText)
         assertEquals("4", state.faultsText)
         assertNull(state.notice)
     }
@@ -62,9 +62,9 @@ class CourseHudTest {
 
     @Test
     fun theTimeUsesTheDecimalSeparatorOfTheLanguage() {
-        assertEquals("00:48.27", riding().timeText)
+        assertEquals("00:48.27", riding().let { hud.timeText })
         i18n.setLang(Language.DE)
-        assertEquals("00:48,27", riding().timeText)
+        assertEquals("00:48,27", riding().let { hud.timeText })
     }
 
     @Test
@@ -78,9 +78,12 @@ class CourseHudTest {
     }
 
     @Test
-    fun anUnchangedModelGivesTheSameStateObjectAgain() {
-        val first = riding()
-        assertSame(first, riding())
+    fun anUnchangedModelGivesTheSameStateObjectAgainEvenWhenOnlyTheTimeMoved() {
+        val first = riding(timeCs = 4827)
+        assertSame(first, riding(timeCs = 4828))
+        assertEquals(4828, hud.timeCs)
+        assertEquals("00:48.28", hud.timeText)
+        assertSame(hud.timeText, hud.timeText) // formatted once per value
         val changed = riding(faults = 4)
         assertTrue(first !== changed)
     }

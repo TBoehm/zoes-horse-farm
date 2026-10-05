@@ -127,3 +127,15 @@ class CoatEffect(
     val uniforms: CoatUniforms,
     val low: Boolean,
 ) : MaterialEffect("zhf-horse-coat-${if (low) "low" else "std"}")
+
+/**
+ * The arena sand (web app: `patchSandMaterial`): fragment-only patch of the colour map. The sand is
+ * darkened by large-scale noise, worn along a track about 1.7 m inside the fence and a little
+ * lighter against the fence. [arenaHalfWidth] and [arenaHalfLength] are the half extents of the
+ * riding area (the web app's `arenaHalf` uniform); the world position of the fragment (xz) is the
+ * input. The maths is in the scene README (section "Sand effect").
+ */
+class SandEffect(
+    val arenaHalfWidth: Double,
+    val arenaHalfLength: Double,
+) : MaterialEffect("sand-v1")

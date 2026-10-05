@@ -52,7 +52,18 @@ class StringsTest {
     @Test
     fun theTableHasEveryKeyOfTheWebApp() {
         // 19 core + 31 riding + 32 profile + 17 badges + 38 courses + 6 audio + 21 help + 36 debug
-        assertEquals(200, de.size)
-        assertEquals(8, STRING_AREAS.size)
+        val webAreas = STRING_AREAS - DATE_STRINGS
+        assertEquals(200, webAreas.sumOf { it.de.size })
+        assertEquals(8, webAreas.size)
+    }
+
+    @Test
+    fun theNativeDateAreaHasTheLongPatternAndTwelveMonthNames() {
+        for (table in listOf(DATE_STRINGS.de, DATE_STRINGS.en)) {
+            assertEquals(13, table.size)
+            val pattern = table.getValue("date.long")
+            assertTrue("{day}" in pattern && "{month}" in pattern && "{year}" in pattern)
+            for (month in 1..12) assertTrue(table.getValue("date.month.$month").isNotBlank())
+        }
     }
 }

@@ -44,6 +44,27 @@ class SkinPalette(
         }
     }
 
+    /**
+     * Like [compute] for bone matrices that already are `boneWorld * boneInverse` (what the scene model's
+     * `Skeleton.update()` leaves in `boneMatrices`): `out[i] = bindInverse * boneMatrices[i] * bind`.
+     */
+    fun fromBoneMatrices(
+        bindInverse: FloatArray,
+        bind: FloatArray,
+        boneMatrices: FloatArray,
+        out: FloatArray,
+    ) {
+        val needed = boneCount * 16
+        require(boneMatrices.size >= needed && out.size >= needed) {
+            "bone arrays must hold $boneCount matrices (16 floats each)"
+        }
+        for (i in 0 until boneCount) {
+            val o = i * 16
+            Mat4Ops.multiply(bindInverse, 0, boneMatrices, o, scratch, 0)
+            Mat4Ops.multiply(scratch, 0, bind, 0, out, o)
+        }
+    }
+
     companion object {
         /** The most bones Filament skins one renderable with. */
         const val MAX_BONES = 256

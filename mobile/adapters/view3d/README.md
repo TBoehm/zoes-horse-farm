@@ -52,9 +52,11 @@ Later ports add their rows here (keep the table sorted by JS file).
 
 ## Open points of the world
 
-- **Sand shader patch.** The web app's `patchSandMaterial` (worn track along the fence, large-scale
-  variation of the sand colour, program key `sand-v1`) has no counterpart in `:adapters:scene`: its
-  `MaterialEffect` is a sealed class, so view3d cannot add one. Needed: a `SandEffect(arenaHalfWidth,
-  arenaHalfLength)` in `Effects.kt` (key `sand-v1`), set on `sandMats.standard` and `.lambert` in
-  `world/Arena.kt`, and the shader in the Filament backend. Until then `GpuTracker` counts one program
-  less on low than the web app (the Lambert sand and the Lambert grass share a program).
+- **Sand shader.** The sand material carries a `SandEffect` (key `sand-v1`, `:adapters:scene`); the
+  GLSL maths of the web app is documented in the scene README ("Sand effect") for the Filament
+  backend, which still has to implement it. The program counts per level are those of the web app
+  (low 10, medium 12, high 20, see `WorldFingerprintTest`).
+- **Allocation.** `World.update` allocates nothing per frame; with the grazing horses in view it
+  allocates about 4 bytes per frame on average (the horses pick a new spot now and then), see
+  `WorldAllocationTest`. The hoof dust draws its numbers from an `rng: () -> Double`, which boxes once
+  per footfall (not per frame).

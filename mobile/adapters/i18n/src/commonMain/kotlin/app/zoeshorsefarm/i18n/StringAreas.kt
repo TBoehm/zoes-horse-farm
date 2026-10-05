@@ -14,4 +14,5 @@ val STRING_AREAS: List<StringArea> =
         AUDIO_STRINGS,
         HELP_STRINGS,
         DEBUG_STRINGS,
+        DATE_STRINGS,
     )

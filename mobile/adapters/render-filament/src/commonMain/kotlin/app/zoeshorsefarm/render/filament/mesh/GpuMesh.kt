@@ -28,6 +28,7 @@ class GpuMesh private constructor(
     private val trackerIds: List<Int>,
 ) {
     private var destroyed = false
+    private var frameScratch: FloatArray? = null
 
     /** GPU bytes of this mesh. */
     val byteSize: Long get() = vertexByteSizes.sumOf { it.toLong() } + indexBytes
@@ -58,19 +59,25 @@ class GpuMesh private constructor(
         vertexBuffer.setBufferAt(engine, attribute.bufferIndex, slot.bytes, 0, bytes, slot.onConsumed)
     }
 
-    /** Rewrites the normals (as new tangent frames) of a mesh whose geometry was deformed on the CPU. */
-    fun updateNormals(normals: FloatArray) {
+    /**
+     * Rewrites the normals (as new tangent frames) of a mesh whose geometry was deformed on the CPU
+     * (the reins, every frame). Nothing is allocated after the first call: the frames are computed
+     * into a scratch array of the mesh and packed straight into a slot of `ring`.
+     */
+    fun updateNormals(
+        normals: FloatArray,
+        ring: UploadRing,
+    ) {
         check(!destroyed) { "mesh $label is destroyed" }
         val attribute = requireNotNull(layout.attribute(VertexSemantic.TANGENTS)) { "mesh $label has no normals" }
         require(normals.size == vertexCount * 3) { "normals must hold one xyz per vertex" }
-        val frames = TangentFrames.packSnorm16(TangentFrames.fromNormals(normals, vertexCount))
-        val bytes = ByteArray(frames.size * 2)
-        for (i in frames.indices) {
-            bytes[i * 2] = frames[i].toByte()
-            bytes[i * 2 + 1] = (frames[i].toInt() shr 8).toByte()
-        }
-        // a fresh array: Filament keeps reading it after this call returns
-        vertexBuffer.setBufferAt(engine, attribute.bufferIndex, bytes)
+        if (vertexCount == 0) return
+        val frames = frameScratch ?: FloatArray(vertexCount * FRAME_FLOATS).also { frameScratch = it }
+        TangentFrames.fromNormalsInto(normals, vertexCount, frames)
+        val bytes = vertexCount * FRAME_FLOATS * SHORT_BYTES
+        val slot = ring.acquire(bytes)
+        TangentFrames.packSnorm16Into(frames, vertexCount * FRAME_FLOATS, slot.bytes)
+        vertexBuffer.setBufferAt(engine, attribute.bufferIndex, slot.bytes, 0, bytes, slot.onConsumed)
     }
 
     /** Frees the buffers. Safe to call twice. */
@@ -84,6 +91,8 @@ class GpuMesh private constructor(
 
     companion object {
         private const val FLOAT_BYTES = 4
+        private const val SHORT_BYTES = 2
+        private const val FRAME_FLOATS = 4
 
         /**
          * Packs `data` and creates the GPU buffers. The packed bytes are handed to Filament as they

@@ -51,7 +51,7 @@ class BadgeToastQueueTest {
     private val i18n = I18n().apply { setLang(Language.EN) }
     private val scheduler = ManualScheduler()
     private var height = 800
-    private val queue = BadgeToastQueue(i18n, scheduler, viewportHeight = { height })
+    private val queue = BadgeToastQueue(i18n, scheduler.ui, viewportHeight = { height })
 
     @Test
     fun aToastNamesTheBadgeAndShowsItsEmblem() {
@@ -136,7 +136,7 @@ class BadgeToastQueueTest {
 
     @Test
     fun aCustomDurationIsUsed() {
-        val quick = BadgeToastQueue(i18n, scheduler, viewportHeight = { 800 }, durationMs = 1000)
+        val quick = BadgeToastQueue(i18n, scheduler.ui, viewportHeight = { 800 }, durationMs = 1000)
         quick.show("busy")
         scheduler.advance(1000)
         assertTrue(quick.toasts.isEmpty())

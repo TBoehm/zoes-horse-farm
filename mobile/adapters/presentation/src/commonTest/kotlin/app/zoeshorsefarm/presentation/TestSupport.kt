@@ -4,9 +4,8 @@ import app.zoeshorsefarm.application.RideSound
 import app.zoeshorsefarm.application.SettingsService
 import app.zoeshorsefarm.application.testing.FakeStore
 import app.zoeshorsefarm.application.testing.ManualClock
-import app.zoeshorsefarm.audio.Cancellable
-import app.zoeshorsefarm.audio.Scheduler
 import app.zoeshorsefarm.i18n.I18n
+import app.zoeshorsefarm.platform.DeviceClass
 import app.zoeshorsefarm.platform.InputMode
 import app.zoeshorsefarm.platform.ManualAppLifecycle
 import app.zoeshorsefarm.presentation.audio.SoundPort
@@ -14,40 +13,18 @@ import app.zoeshorsefarm.presentation.nav.AppNavigator
 import app.zoeshorsefarm.presentation.nav.ScreenModel
 import app.zoeshorsefarm.presentation.profile.BadgeToastQueue
 
-/** A timer that only fires when the test advances time. */
-class ManualScheduler : Scheduler {
-    private class Task(
-        val at: Long,
-        val action: () -> Unit,
-    ) : Cancellable {
-        var cancelled = false
+/** The UI scheduler on a manual clock: tasks fire only when the test advances time. */
+class ManualScheduler(
+    val clock: ManualClock = ManualClock(),
+) {
+    val ui = UiScheduler(clock)
 
-        override fun cancel() {
-            cancelled = true
-        }
-    }
-
-    private val tasks = mutableListOf<Task>()
-    private var now = 0L
-
-    val pending: Int get() = tasks.count { !it.cancelled }
-
-    override fun postDelayed(
-        delayMillis: Long,
-        task: () -> Unit,
-    ): Cancellable = Task(now + delayMillis, task).also { tasks += it }
+    val pending: Int get() = ui.pending
 
     /** Lets [ms] milliseconds pass and runs the tasks that fall due, in order. */
     fun advance(ms: Long) {
-        val target = now + ms
-        while (true) {
-            tasks.removeAll { it.cancelled }
-            val next = tasks.filter { it.at <= target }.minByOrNull { it.at } ?: break
-            tasks.remove(next)
-            now = maxOf(now, next.at)
-            next.action()
-        }
-        now = target
+        clock.advance(ms)
+        ui.tick()
     }
 }
 
@@ -92,17 +69,27 @@ class RecordingSound : SoundPort {
 /** Everything a screen model needs, with fakes for the ports. */
 class TestApp(
     val touch: Boolean = true,
+    device: DeviceClass? = null,
 ) {
     val store = FakeStore()
     val settings = SettingsService(store)
     val i18n = I18n().apply { setLang(app.zoeshorsefarm.application.Language.EN) }
-    val clock = ManualClock()
     val scheduler = ManualScheduler()
+    val clock = scheduler.clock
     val sound = RecordingSound()
-    val inputMode = if (touch) InputMode.mobile() else InputMode(app.zoeshorsefarm.platform.DeviceClass.KEYBOARD)
+    val inputMode =
+        if (device !=
+            null
+        ) {
+            InputMode(device)
+        } else if (touch) {
+            InputMode.mobile()
+        } else {
+            InputMode(DeviceClass.KEYBOARD)
+        }
     val navigator = AppNavigator(i18n)
     val lifecycle = ManualAppLifecycle()
-    val badgeToasts = BadgeToastQueue(i18n, scheduler, viewportHeight = { 800 })
+    val badgeToasts = BadgeToastQueue(i18n, scheduler.ui, viewportHeight = { 800 })
     val ctx =
         AppContext(
             store = store,
@@ -112,7 +99,7 @@ class TestApp(
             i18n = i18n,
             navigator = navigator,
             sound = sound,
-            scheduler = scheduler,
+            scheduler = scheduler.ui,
             lifecycle = lifecycle,
             badgeToasts = badgeToasts,
             version = "1.2.3",

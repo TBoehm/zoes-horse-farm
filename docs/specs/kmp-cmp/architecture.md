@@ -20,6 +20,9 @@ regelt das „Wie“ der nativen App. Abweichungen erst hier ändern.
   Laufzeit mit `filamat`/`MaterialBuilder` aus Quelltext gebaut) und Klänge entstehen im Code.
   Ausnahme später: App-Icon.
 - **Kein Allokieren pro Frame** in Sim-, Animations- und Render-Pfaden (Scratch-Objekte wie in JS).
+  Nachweis per JVM-Allokationstest (`jvmTest`, `ThreadMXBean.getCurrentThreadAllocatedBytes`); die Tests
+  laufen ohne Escape-Analyse (`-XX:-DoEscapeAnalysis`), damit verstecktes Boxing (Funktionstypen mit
+  primitiven Parametern, generische Ranges) sichtbar wird wie auf Kotlin/Native und ART.
 - **Zeit/Zufall injiziert** (Ports `Clock`, `Rng`), nie `System.currentTimeMillis()`/`Random` in
   Domain/Application.
 

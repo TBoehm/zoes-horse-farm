@@ -11,6 +11,7 @@ import app.zoeshorsefarm.application.modes.CourseLines
 import app.zoeshorsefarm.application.modes.RideModeId
 import app.zoeshorsefarm.application.testing.seededRng
 import app.zoeshorsefarm.platform.AppState
+import app.zoeshorsefarm.platform.DeviceClass
 import app.zoeshorsefarm.platform.GameKey
 import app.zoeshorsefarm.presentation.TestApp
 import app.zoeshorsefarm.presentation.nav.RedirectModel
@@ -47,6 +48,18 @@ private class FakeEngine : RideEnginePort {
     override fun onContextRestored(listener: () -> Unit): () -> Unit {
         restoredListeners += listener
         return { restoredListeners -= listener }
+    }
+
+    var watchdog: (() -> Unit)? = null
+
+    override fun canHintLowerLevel(auto: Boolean) = !auto && graphicsLevel != GraphicsLevel.LOW
+
+    override fun startRestoreWatchdog(onTimeout: () -> Unit) {
+        watchdog = onTimeout
+    }
+
+    override fun cancelRestoreWatchdog() {
+        watchdog = null
     }
 
     override fun setCameraMode(mode: CameraMode) {
@@ -175,6 +188,30 @@ class RideScreenTest {
         assertEquals("Ziel", engine.lines?.third)
         assertTrue(told >= 1)
         assertEquals("Pause", model.pauseTitle)
+    }
+
+    @Test
+    fun aPausedCourseHudFollowsTheLanguage() {
+        val model = start(Route.Ride(RideModeId.COURSE, 1))
+        model.input.touch.pressPause()
+        model.frame(FRAME, FRAME)
+        assertEquals("Ride over the start line", model.hudState?.notice)
+        app.i18n.setLang(Language.DE)
+        assertEquals("Reite über die Startlinie", model.hudState?.notice)
+    }
+
+    @Test
+    fun aSwitchBetweenTouchAndKeyboardTellsTheUi() {
+        val hybrid = TestApp(device = DeviceClass.HYBRID)
+        hybrid.registerStubs("menu")
+        val ride = RideScreenModel(hybrid.ctx, Route.Ride(), seededRng(), engine)
+        assertTrue(ride.showPauseHint)
+        var told = 0
+        ride.changes.listen { told++ }
+        hybrid.inputMode.onTouch()
+        assertEquals(1, told)
+        assertFalse(ride.showPauseHint)
+        assertTrue(ride.input.touch.visible)
     }
 
     @Test
@@ -373,12 +410,12 @@ class RideScreenTest {
     }
 
     @Test
-    fun aDeviceThatDoesNotComeBackAsksForAReloadAfterTheWatchdog() {
+    fun aDeviceThatDoesNotComeBackAsksForAReloadWhenTheWatchdogFires() {
         val model = start()
         engine.loseContext()
-        app.scheduler.advance(7999)
+        assertNotNull(engine.watchdog)
         assertNull(model.pauseButtons.firstOrNull { it.action == PauseAction.RELOAD })
-        app.scheduler.advance(1)
+        engine.watchdog?.invoke()
         assertEquals("Please reload the page.", model.lostNote)
         assertEquals(PauseAction.RELOAD, model.focusedPauseAction)
         assertEquals("Reload", model.pauseButtons.first().label)
@@ -387,26 +424,35 @@ class RideScreenTest {
     }
 
     @Test
-    fun aRestoredDeviceBringsBackTheContinueButton() {
+    fun theReloadActionDoesNothingBeforeTheWatchdogFired() {
         val model = start()
         engine.loseContext()
-        app.scheduler.advance(8000)
+        model.onPauseAction(PauseAction.RELOAD)
+        assertFalse(engine.calls.contains("reload"))
+    }
+
+    @Test
+    fun aRestoredDeviceBringsBackTheContinueButtonAndStopsTheWatchdog() {
+        val model = start()
+        engine.loseContext()
+        engine.watchdog?.invoke()
         engine.restoreContext()
         assertNull(model.lostNote)
         assertTrue(model.pauseButtons.first { it.action == PauseAction.RESUME }.enabled)
         assertNull(model.pauseButtons.firstOrNull { it.action == PauseAction.RELOAD })
-        assertEquals(0, app.scheduler.pending)
+        assertNull(engine.watchdog)
         model.onPauseAction(PauseAction.RESUME)
         assertFalse(model.paused)
     }
 
     @Test
-    fun theWatchdogIsCanceledWhenTheDeviceComesBackInTime() {
+    fun theWatchdogIsStoppedWhenTheRideIsLeft() {
         val model = start()
         engine.loseContext()
-        app.scheduler.advance(3000)
-        engine.restoreContext()
-        app.scheduler.advance(10_000)
+        val timeout = engine.watchdog
+        model.destroy()
+        assertNull(engine.watchdog)
+        timeout?.invoke() // a late timeout of a left ride changes nothing
         assertNull(model.pauseButtons.firstOrNull { it.action == PauseAction.RELOAD })
     }
 

@@ -85,4 +85,26 @@ class SkinPaletteTest {
     fun `byteSize is 64 bytes per bone`() {
         assertEquals(64L * 40, SkinPalette.byteSize(40))
     }
+
+    @Test
+    fun `fromBoneMatrices equals compute for the same bones`() {
+        val bind = translation(0f, 1f, 0f)
+        val inverseBind = FloatArray(16).also { Mat4Ops.invert(bind, 0, it, 0) }
+        val bone = translation(2f, 1f, 0.5f)
+        val meshWorld = translation(5f, 0f, 0f)
+        val meshWorldInverse = FloatArray(16).also { Mat4Ops.invert(meshWorld, 0, it, 0) }
+        val expected = FloatArray(16)
+        SkinPalette(1).compute(meshWorldInverse, bind, bone, inverseBind, expected)
+        val boneMatrix = FloatArray(16).also { Mat4Ops.multiply(bone, 0, inverseBind, 0, it, 0) }
+        val actual = FloatArray(16)
+        SkinPalette(1).fromBoneMatrices(meshWorldInverse, bind, boneMatrix, actual)
+        assertMatrix(expected, actual)
+    }
+
+    @Test
+    fun `fromBoneMatrices rejects short arrays`() {
+        assertFailsWith<IllegalArgumentException> {
+            SkinPalette(2).fromBoneMatrices(identity(), identity(), FloatArray(16), FloatArray(32))
+        }
+    }
 }
