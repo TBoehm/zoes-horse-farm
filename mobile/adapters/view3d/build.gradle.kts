@@ -10,6 +10,7 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(project(":core:domain-testing"))
+            implementation(project(":core:application-testing"))
         }
     }
 }

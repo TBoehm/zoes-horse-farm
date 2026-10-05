@@ -13,11 +13,11 @@ import kotlin.time.TimeSource
 /** Where errors that were caught go: a message and the error (web app: `console.error`). */
 typealias ErrorLog = (message: String, error: Throwable) -> Unit
 
-private val printingLog: ErrorLog = { message, error -> println("$message\n${error.stackTraceToString()}") }
+internal val printingLog: ErrorLog = { message, error -> println("$message\n${error.stackTraceToString()}") }
 
 // How long the ride screen waits for the device to come back before it asks to restart the view
 // (some systems stop restoring after repeated losses). A technical value, not a game value.
-private const val CONTEXT_RESTORE_TIMEOUT_MS = 8000L
+const val CONTEXT_RESTORE_TIMEOUT_MS = 8000L
 
 /**
  * Watches the render backend for a lost and restored graphics device. Callbacks may throw: the
