@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalAtomicApi::class)
+
 package app.zoeshorsefarm.audio
 
 import app.zoeshorsefarm.audio.synth.AutomationParam
@@ -9,7 +11,9 @@ import app.zoeshorsefarm.audio.synth.PartitionedConvolver
 import app.zoeshorsefarm.audio.synth.QUANTUM
 import app.zoeshorsefarm.audio.synth.Synth
 import app.zoeshorsefarm.audio.synth.convolverNormalizationScale
-import kotlin.concurrent.Volatile
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.math.ceil
 
 internal const val MASTER_LEVEL = 2.0
@@ -34,12 +38,13 @@ private const val BUS_POOL = 4
 private const val VOICE_SEED = 2024
 private const val COMMAND_CAPACITY = 512
 
-private const val CMD_CHANNELS = 1
-private const val CMD_MASTER = 2
-private const val CMD_START_MUSIC = 3
-private const val CMD_STOP_MUSIC = 4
-private const val CMD_DROP_SESSION = 5
-private const val CMD_SFX = 6
+private const val CMD_DROP_SESSION = 1
+private const val CMD_SFX = 2
+
+// Wanted state of the melody (latest value wins)
+private const val MUSIC_OFF = 0
+private const val MUSIC_ON = 1
+private const val MUSIC_OFF_FAST = 2
 
 /**
  * The synthesiser and mixer behind the audio facade: the node graph of the web app, rendered as
@@ -56,9 +61,10 @@ private const val CMD_SFX = 6
  * scheduler on the audio clock), so no timer thread is needed. Rendering does not allocate.
  *
  * Thread safety: [render] runs on the platform's audio thread and never waits. The controls
- * (called by the game thread, one at a time) do not touch the audio state: they put a small command
- * into a lock-free single-producer/single-consumer [CommandQueue], and [render] executes the
- * commands at the start of the next quantum. A full queue drops the command ([droppedCommands]).
+ * (called by the game thread, one at a time) do not touch the audio state. State-like controls (channel
+ * gains, hidden, music on/off) are latest-value atomics that [render] reads once per quantum, so they
+ * can never be lost. One-shot controls (effects, dropping the effects session) go through a lock-free
+ * single-producer/single-consumer [CommandQueue]; a full queue drops the command ([droppedCommands]).
  * Only the plain counters and gains read by the tests are read directly, from the rendering thread.
  */
 internal class AudioEngine(
@@ -72,8 +78,16 @@ internal class AudioEngine(
     private val loop = buildLoop()
     private val commands = CommandQueue(COMMAND_CAPACITY)
 
-    @Volatile
-    private var musicRequested = false
+    // Wanted state, written by the game thread, read by the audio thread once per quantum
+    private val wantedMusic = AtomicInt(MUSIC_OFF)
+    private val wantedHidden = AtomicInt(if (hidden) 1 else 0)
+    private val wantedMusicGain = AtomicLong(channelGain(settings.musicVolume, settings.musicMuted).toRawBits())
+    private val wantedSfxGain = AtomicLong(channelGain(settings.sfxVolume, settings.sfxMuted).toRawBits())
+    private val channelVersion = AtomicInt(0)
+
+    // Last state the audio thread applied
+    private var appliedHidden = if (hidden) 1 else 0
+    private var appliedChannelVersion = 0
 
     private val master = AutomationParam(rate, if (hidden) 0.0 else MASTER_LEVEL)
     private val musicChannel = AutomationParam(rate, channelGain(settings.musicVolume, settings.musicMuted))
@@ -115,8 +129,8 @@ internal class AudioEngine(
     /** Time of the next quantum on the audio clock, in seconds. */
     val currentTime: Double get() = synth.currentFrame / rate
 
-    /** The melody was started and not stopped since (as requested by the game thread). */
-    val musicRunning: Boolean get() = musicRequested
+    /** The melody was started and not stopped since (as wanted by the game thread). */
+    val musicRunning: Boolean get() = wantedMusic.load() == MUSIC_ON
 
     /** Commands that were dropped because the queue was full (debug counter). */
     val droppedCommands: Int get() = commands.dropped
@@ -133,33 +147,26 @@ internal class AudioEngine(
 
     val masterGain: Double get() = master.peek
 
-    // ---- Controls (game thread): queue a command, the audio thread executes it ----
+    // ---- Controls (game thread) ----
 
     /** Fades the channels to their new gains (no clicks while dragging a volume slider). */
     fun setChannelTargets(
         musicGain: Double,
         sfxGain: Double,
     ) {
-        commands.offer(CMD_CHANNELS, 0, musicGain, sfxGain)
+        wantedMusicGain.store(musicGain.toRawBits())
+        wantedSfxGain.store(sfxGain.toRawBits())
+        // Published last; a reader that sees a torn pair re-reads it when the version changes again
+        channelVersion.store(channelVersion.load() + 1)
     }
 
-    fun setMasterHidden(hidden: Boolean) {
-        commands.offer(CMD_MASTER, if (hidden) 1 else 0, 0.0, 0.0)
-    }
+    fun setMasterHidden(hidden: Boolean) = wantedHidden.store(if (hidden) 1 else 0)
 
     /** Starts the melody from the beginning with a soft fade-in. */
-    fun startMusic() {
-        if (musicRequested) return
-        musicRequested = true
-        commands.offer(CMD_START_MUSIC, 0, 0.0, 0.0)
-    }
+    fun startMusic() = wantedMusic.store(MUSIC_ON)
 
     /** Fades the melody out. The fast variant is for the background: the audio stops almost at once. */
-    fun stopMusic(fast: Boolean) {
-        if (!musicRequested) return
-        musicRequested = false
-        commands.offer(CMD_STOP_MUSIC, if (fast) 1 else 0, 0.0, 0.0)
-    }
+    fun stopMusic(fast: Boolean) = wantedMusic.store(if (fast) MUSIC_OFF_FAST else MUSIC_OFF)
 
     /** Cuts all running effects (pause, background); later effects use a new session. */
     fun dropSfxSession() {
@@ -174,28 +181,36 @@ internal class AudioEngine(
         commands.offer(CMD_SFX, name.ordinal, SfxVoices.gaitIndex(gait).toDouble(), 0.0)
     }
 
-    // ---- Commands (audio thread) ----
+    // ---- Control state and commands (audio thread) ----
+
+    private fun applyControls() {
+        val version = channelVersion.load()
+        if (version != appliedChannelVersion) {
+            appliedChannelVersion = version
+            val now = currentTime
+            musicChannel.setTargetAtTime(Double.fromBits(wantedMusicGain.load()), now, SMOOTH)
+            sfxChannel.setTargetAtTime(Double.fromBits(wantedSfxGain.load()), now, SMOOTH)
+        }
+        val hidden = wantedHidden.load()
+        if (hidden != appliedHidden) {
+            appliedHidden = hidden
+            master.setTargetAtTime(if (hidden == 1) 0.0 else MASTER_LEVEL, currentTime, MASTER_SMOOTH)
+        }
+        val music = wantedMusic.load()
+        if (music == MUSIC_ON) {
+            if (run == null) startMusicNow()
+        } else if (run != null) {
+            stopMusicNow(music == MUSIC_OFF_FAST)
+        }
+    }
 
     private fun executeCommands() {
-        commands.drain { kind, arg, first, second ->
+        commands.drain { kind, arg, first, _ ->
             when (kind) {
-                CMD_CHANNELS -> applyChannelTargets(first, second)
-                CMD_MASTER -> master.setTargetAtTime(if (arg == 1) 0.0 else MASTER_LEVEL, currentTime, MASTER_SMOOTH)
-                CMD_START_MUSIC -> startMusicNow()
-                CMD_STOP_MUSIC -> stopMusicNow(arg == 1)
                 CMD_DROP_SESSION -> dropSfxSessionNow()
                 CMD_SFX -> playSfxNow(arg, first.toInt())
             }
         }
-    }
-
-    private fun applyChannelTargets(
-        musicGain: Double,
-        sfxGain: Double,
-    ) {
-        val now = currentTime
-        musicChannel.setTargetAtTime(musicGain, now, SMOOTH)
-        sfxChannel.setTargetAtTime(sfxGain, now, SMOOTH)
     }
 
     private fun startMusicNow() {
@@ -299,6 +314,7 @@ internal class AudioEngine(
 
     private fun renderQuantum() {
         val frame = synth.currentFrame
+        applyControls()
         executeCommands()
         tickMusic()
         endExpiredBuses(frame)
