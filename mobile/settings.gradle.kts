@@ -30,4 +30,5 @@ include(
     ":adapters:platform",
     ":adapters:input",
     ":adapters:i18n",
+    ":adapters:presentation",
 )

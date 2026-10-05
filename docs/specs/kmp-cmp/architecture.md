@@ -56,6 +56,7 @@ vom Build erzwungen (ersetzt `no-restricted-imports`).
 | `:adapters:platform` | `app.zoeshorsefarm.platform` | Lebenszyklus, Geräte-Infos, Version | application |
 | `:adapters:input` | `app.zoeshorsefarm.input` | `src/adapters/input/` (Joystick-Mapping, Eingabezustand, Tastatur); die Touch-Bedienelemente gehören zu `:adapters:ui` | application, platform |
 | `:adapters:i18n` | `app.zoeshorsefarm.i18n` | `src/adapters/ui/i18n/` (Texttabellen DE/EN, `t()`) | application |
+| `:adapters:presentation` | `app.zoeshorsefarm.presentation` | Bildschirm-Logik ohne UI-Toolkit aus `src/adapters/ui/` (Navigation, Menü, Einstellungen, Hinweise, Parcours-Plan, HUD-, Profil- und Hilfe-Modelle, Design-Tokens); die Compose-UI zeigt diese Modelle an und meldet Aktionen zurück | application, i18n, input, platform, audio |
 | `:adapters:ui` (später) | `app.zoeshorsefarm.ui` | Compose-Bildschirme | alles Innere |
 | `:app` (später) | `app.zoeshorsefarm.app` | Composition Root, Android-App, iOS-Framework | alles |
 
