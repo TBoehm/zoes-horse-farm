@@ -1,6 +1,7 @@
 package app.zoeshorsefarm.view3d.world
 
 import app.zoeshorsefarm.application.GraphicsLevel
+import app.zoeshorsefarm.application.RideAid
 import app.zoeshorsefarm.domain.horse.Coat
 import app.zoeshorsefarm.domain.sim.Obstacle
 import app.zoeshorsefarm.domain.sim.Zone
@@ -45,6 +46,7 @@ import app.zoeshorsefarm.view3d.quality.MEDIUM_PRESET
 import app.zoeshorsefarm.view3d.quality.MERGED_STAGE_ID
 import app.zoeshorsefarm.view3d.quality.MaterialKind
 import app.zoeshorsefarm.view3d.quality.QualityPreset
+import app.zoeshorsefarm.view3d.quality.QualityStageId
 import app.zoeshorsefarm.view3d.quality.ShadowCasters
 import app.zoeshorsefarm.view3d.quality.TextureInfo
 import app.zoeshorsefarm.view3d.quality.sameMaterialStage
@@ -73,13 +75,6 @@ private const val GRAZING_SEED = 31
 private const val DUST_MIN_STRENGTH = 0.3
 private const val DUST_EDGE_MARGIN = 0.2 // m, no dust right at the fence
 
-/** The take-off aid of an element: a band on the sand in front of the front rail. */
-class AidParams(
-    val elementId: String,
-    val dir: Int,
-    val zone: Zone?,
-)
-
 /** The aid parameters that are applied to the marker now (compared field by field, nothing is allocated). */
 private class AidState {
     var shown = false
@@ -90,16 +85,23 @@ private class AidState {
     private var near = 0.0
     private var far = 0.0
 
-    fun matches(p: AidParams): Boolean = shown && elementId == p.elementId && dir == p.dir && sameZone(p.zone)
+    fun matches(
+        id: String,
+        direction: Int,
+        zone: Zone?,
+    ): Boolean = shown && elementId == id && dir == direction && sameZone(zone)
 
     private fun sameZone(zone: Zone?): Boolean =
         if (zone == null) !hasZone else hasZone && near == zone.near && far == zone.far
 
-    fun remember(p: AidParams) {
+    fun remember(
+        id: String,
+        direction: Int,
+        zone: Zone?,
+    ) {
         shown = true
-        elementId = p.elementId
-        dir = p.dir
-        val zone = p.zone
+        elementId = id
+        dir = direction
         hasZone = zone != null
         near = if (zone != null) zone.near else 0.0
         far = if (zone != null) zone.far else 0.0
@@ -111,9 +113,10 @@ private class AidState {
 }
 
 /**
- * The 3D world on the scene model; the renderer ([backend]) is only asked for its settings
- * (shadows on or off, the anisotropy limit). [release] frees GPU objects that the world replaces
- * while it runs (see `GpuEpoch`). [textRasterizer] draws the texts (number boards, signs).
+ * The 3D world on the scene model; the renderer ([backend]) is only asked for its limits (the
+ * anisotropy) and told whether shadows are on (`shadowsEnabled`, part of every program). [release]
+ * frees GPU objects that the world replaces while it runs (see `GpuEpoch`). [textRasterizer] draws
+ * the texts (number boards, signs).
  * [quality] is the preset to start with.
  */
 @Suppress("TooManyFunctions") // the facade of the view: one function per operation of the spec
@@ -540,9 +543,9 @@ class World(
         preset: QualityPreset,
     ) {
         // the merged stage is the shadow stage and the material stage in one go
-        if (id == "shadows" || id == MERGED_STAGE_ID) applyShadowStage(preset)
-        if (id == "materials" || id == MERGED_STAGE_ID) applyMaterialStage(preset, true)
-        if (id == "density") applyDensityStage(preset)
+        if (id == QualityStageId.SHADOWS.id || id == MERGED_STAGE_ID) applyShadowStage(preset)
+        if (id == QualityStageId.MATERIALS.id || id == MERGED_STAGE_ID) applyMaterialStage(preset, true)
+        if (id == QualityStageId.DENSITY.id) applyDensityStage(preset)
     }
 
     /**
@@ -619,24 +622,37 @@ class World(
         obstacles.highlight(elementId, number)
     }
 
-    /** Shows the take-off aid (null hides it). Called every frame with an equal value most of the time. */
-    fun setAid(params: AidParams?) {
-        if (params == null) {
+    /** Shows the take-off aid of the ride (null hides it); the aid object of the session is read, not kept. */
+    fun setAid(aid: RideAid?) {
+        if (aid == null) setAid(null, 1, null) else setAid(aid.elementId, aid.dir, aid.zone)
+    }
+
+    /**
+     * Shows the take-off aid: a band on the sand in front of the front rail of the element [elementId]
+     * (null hides it). Called every frame with equal values most of the time: nothing is allocated
+     * and nothing is placed then.
+     */
+    fun setAid(
+        elementId: String?,
+        dir: Int,
+        zone: Zone?,
+    ) {
+        if (elementId == null) {
             if (aidState.shown) aid.hide()
             aidState.forget()
             return
         }
         // skip the placement when nothing changed
-        if (aidState.matches(params)) return
-        val element = obstacles.getElement(params.elementId)
+        if (aidState.matches(elementId, dir, zone)) return
+        val element = obstacles.getElement(elementId)
         if (element == null) {
             aid.hide()
             aidState.forget()
             return
         }
-        approachDirs[params.elementId] = if (params.dir < 0) -1 else 1
-        aid.set(element, params.dir, params.zone)
-        aidState.remember(params)
+        approachDirs[elementId] = if (dir < 0) -1 else 1
+        aid.set(element, dir, zone)
+        aidState.remember(elementId, dir, zone)
     }
 
     fun setLines(params: CourseLines?) {

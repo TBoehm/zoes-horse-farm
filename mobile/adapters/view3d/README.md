@@ -86,7 +86,10 @@ starts it, the host calls `engine.frame(nowSeconds)` once per display frame (Com
   GLSL maths of the web app is documented in the scene README ("Sand effect") for the Filament
   backend, which still has to implement it. The program counts per level are those of the web app
   (low 10, medium 12, high 20, see `WorldFingerprintTest`).
-- **Allocation.** `World.update` allocates nothing per frame; with the grazing horses in view it
-  allocates about 4 bytes per frame on average (the horses pick a new spot now and then), see
-  `WorldAllocationTest`. The hoof dust draws its numbers from an `rng: () -> Double`, which boxes once
-  per footfall (not per frame).
+- **Allocation.** `World.update`, the pole stepping, the dust (also a footfall, `emitHoofDust`) and
+  `setAid` allocate nothing per frame; with the grazing horses in view about 4 bytes per frame on
+  average (the horses pick a new spot now and then); a pole transition costs about 0.5 KB. See
+  `WorldAllocationTest` (JVM tests run without escape analysis, so boxing shows). The dust takes its
+  numbers from a primitive `RandomSource` (`SeededRandom` has the numbers of `createRng`).
+- **Take-off aid.** `World.setAid(elementId, dir, zone)` (or `setAid(RideAid?)` with the aid object of
+  the ride session) instead of the web app's parameter object, so the ride screen allocates nothing.

@@ -12,19 +12,18 @@ import kotlin.test.assertTrue
 
 private const val WARM_UP_FRAMES = 3000
 private const val MEASURED_FRAMES = 20000
-private const val DUST_FRAMES = 60
+private const val DUST_FRAMES = 3000
 private const val DT = 1.0 / 60
 
 // The JVM measures the bytes this thread allocated; some slack for the JIT and the test runner (a
 // regression that allocates per frame costs several hundred KB here).
 private const val ALLOWED_BYTES = 64 * 1024
-private const val ALLOWED_DUST_BYTES = 8 * 1024
 
 // The grazing horses pick a new spot now and then (a few numbers each time); a boxed number per call
 // would cost about 130 bytes per frame. Measured: about 4 bytes per frame.
 private const val ALLOWED_GRAZING_BYTES_PER_FRAME = 16
 
-private fun allocatedBytes(block: () -> Unit): Long {
+private inline fun allocatedBytes(block: () -> Unit): Long {
     val threads = ManagementFactory.getThreadMXBean() as ThreadMXBean
     val before = threads.currentThreadAllocatedBytes
     block()
@@ -34,7 +33,7 @@ private fun allocatedBytes(block: () -> Unit): Long {
 /** The per-frame path of the world: update, the poles, the highlight, the aid, the dust. */
 class WorldAllocationTest {
     private val camera = PerspectiveCamera(50.0, 1.6, 0.1, 900.0).also { it.updateMatrixWorld(true) }
-    private val aid = AidParams("b", 1, Zone(far = 4.0, near = 1.5, lastPoint = 1.0, reach = 5.0, center = 2.0))
+    private val zone = Zone(far = 4.0, near = 1.5, lastPoint = 1.0, reach = 5.0, center = 2.0)
     private val down =
         mapOf(
             "a" to booleanArrayOf(false),
@@ -54,7 +53,7 @@ class WorldAllocationTest {
     private fun frame(world: World) {
         world.syncRails(null, DT)
         world.highlight("d2", 3)
-        world.setAid(aid)
+        world.setAid("b", 1, zone)
         world.update(DT, camera)
     }
 
@@ -98,19 +97,25 @@ class WorldAllocationTest {
     }
 
     @Test
-    fun poleAnimationDoesNotAllocate() {
+    fun polesSteppingDoNotAllocate() {
         val world = highWorld()
         repeat(WARM_UP_FRAMES) { i ->
             world.syncRails(if ((i / 100) % 2 == 0) down else up, DT)
             world.update(DT, camera)
         }
-        // the poles fall or rise during most of these frames; starting a fall draws a few numbers
-        // (the target pose), so the allowance is higher than for the idle frame
-        val allocated =
-            allocatedBytes {
-                repeat(MEASURED_FRAMES) { i -> world.syncRails(if ((i / 100) % 2 == 0) down else up, DT) }
-            }
-        assertTrue(allocated < ALLOWED_POLE_BYTES, "allocated $allocated bytes in $MEASURED_FRAMES frames")
+        // 200 transitions (a fall or a rise); the frames between them step the poles on
+        var stepping = 0L
+        var transitions = 0L
+        repeat(CYCLES) { i ->
+            transitions += allocatedBytes { world.syncRails(if (i % 2 == 0) down else up, DT) }
+            stepping += allocatedBytes { repeat(CYCLE_FRAMES) { world.syncRails(null, DT) } }
+        }
+        assertTrue(stepping < ALLOWED_BYTES, "allocated $stepping bytes stepping the poles")
+        // a fall draws its target pose (a few numbers and arrays), once per pole and fall
+        assertTrue(
+            transitions < ALLOWED_TRANSITION_BYTES * CYCLES,
+            "allocated $transitions bytes in $CYCLES transitions",
+        )
         world.dispose()
     }
 
@@ -118,15 +123,25 @@ class WorldAllocationTest {
     fun hoofDustInFlightDoesNotAllocate() {
         val world = highWorld()
         repeat(WARM_UP_FRAMES) { i ->
-            if (i % 30 == 0) world.emitHoofDust(0.0, 0.0, 5.0, 0.8)
+            if (i % EMIT_EVERY == 0) world.emitHoofDust(0.0, 0.0, 5.0, 0.8)
             frame(world)
         }
-        world.emitHoofDust(0.0, 0.0, 5.0, 1.0)
-        val allocated = allocatedBytes { repeat(DUST_FRAMES) { frame(world) } }
-        assertTrue(allocated < ALLOWED_DUST_BYTES, "allocated $allocated bytes in $DUST_FRAMES frames")
+        // footfalls are part of the measured block: a puff takes its numbers without boxing
+        val allocated =
+            allocatedBytes {
+                repeat(DUST_FRAMES) { i ->
+                    if (i % EMIT_EVERY == 0) world.emitHoofDust(0.0, 0.0, 5.0, 1.0)
+                    frame(world)
+                }
+            }
+        assertTrue(allocated < ALLOWED_BYTES, "allocated $allocated bytes in $DUST_FRAMES frames")
         world.dispose()
     }
 }
 
-// 200 falls and 200 rises over the measured frames; each fall allocates its target pose
-private const val ALLOWED_POLE_BYTES = 512 * 1024
+private const val CYCLES = 200
+private const val CYCLE_FRAMES = 60 // 1 s: a fall (0.7 s) and a rise (0.45 s) are over
+private const val EMIT_EVERY = 20
+
+// a transition starts the fall of some poles: measured about 512 bytes
+private const val ALLOWED_TRANSITION_BYTES = 1024

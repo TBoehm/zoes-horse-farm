@@ -7,7 +7,6 @@ import app.zoeshorsefarm.scene.graph.Scene
 import app.zoeshorsefarm.scene.material.ShaderMaterial
 import app.zoeshorsefarm.scene.render.FakeRenderBackend
 import app.zoeshorsefarm.scene.texture.Texture
-import app.zoeshorsefarm.scene.texture.createRng
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.max
@@ -24,7 +23,7 @@ private const val DT = 1.0 / 60
 class DustPoolTest {
     @Test
     fun `emits more puffs for a stronger footfall and never beyond the capacity`() {
-        val pool = DustPool(20, createRng(1))
+        val pool = DustPool(20, SeededRandom(1))
         val weak = pool.emit(0.0, 0.0, 0.0, 0.1)
         val strong = pool.emit(0.0, 0.0, 0.0, 1.0)
         assertTrue(strong > weak)
@@ -36,17 +35,17 @@ class DustPoolTest {
 
     @Test
     fun `ignores a footfall without strength and an empty pool`() {
-        val pool = DustPool(8, createRng(1))
+        val pool = DustPool(8, SeededRandom(1))
         assertEquals(0, pool.emit(0.0, 0.0, 0.0, 0.0))
         assertEquals(0, pool.update(DT))
-        val none = DustPool(0, createRng(1))
+        val none = DustPool(0, SeededRandom(1))
         assertEquals(0, none.emit(0.0, 0.0, 0.0, 1.0))
         assertEquals(0, none.update(DT))
     }
 
     @Test
     fun `puffs rise from the sand drift apart grow fade out and are free again`() {
-        val pool = DustPool(16, createRng(2))
+        val pool = DustPool(16, SeededRandom(2))
         pool.emit(5.0, 0.0, 7.0, 1.0)
         var alive = pool.update(DT)
         assertTrue(alive > 0)
@@ -76,7 +75,7 @@ class DustPoolTest {
 
     @Test
     fun `puffs start where the footfall is within the scatter`() {
-        val pool = DustPool(8, createRng(3))
+        val pool = DustPool(8, SeededRandom(3))
         pool.emit(10.0, 0.0, -4.0, 0.6)
         for (i in 0 until 8) {
             if (pool.life[i] > 0) {
@@ -88,7 +87,7 @@ class DustPoolTest {
 
     @Test
     fun `a very long frame does not throw the puffs away`() {
-        val pool = DustPool(16, createRng(4))
+        val pool = DustPool(16, SeededRandom(4))
         pool.emit(0.0, 0.0, 0.0, 1.0)
         pool.update(5.0)
         for (i in 0 until 16) {
@@ -99,8 +98,8 @@ class DustPoolTest {
 
     @Test
     fun `fewer puffs at medium than at high for the same footfall`() {
-        val med = DustPool(40, createRng(5), DustQuality.MEDIUM)
-        val high = DustPool(40, createRng(5), DustQuality.HIGH)
+        val med = DustPool(40, SeededRandom(5), DustQuality.MEDIUM)
+        val high = DustPool(40, SeededRandom(5), DustQuality.HIGH)
         assertTrue(med.emit(0.0, 0.0, 0.0, 1.0) < high.emit(0.0, 0.0, 0.0, 1.0))
     }
 }

@@ -12,7 +12,6 @@ import app.zoeshorsefarm.scene.material.Uniform
 import app.zoeshorsefarm.scene.math.Color
 import app.zoeshorsefarm.scene.math.MathUtils
 import app.zoeshorsefarm.scene.math.Vec2
-import app.zoeshorsefarm.scene.texture.createRng
 import app.zoeshorsefarm.view3d.jsRound
 import app.zoeshorsefarm.view3d.releaseNow
 import kotlin.math.PI
@@ -39,6 +38,26 @@ import kotlin.math.tan
 // (no allocation per frame). The puffs are round soft sprites of the backend's `hoof-dust`
 // program (no textures, rule 2).
 
+/** Random numbers in [0, 1) without boxing (a `() -> Double` boxes every number it returns). */
+fun interface RandomSource {
+    fun next(): Double
+}
+
+/** The mulberry32 numbers of the web app's `createRng` (and of the scene module's), as a [RandomSource]. */
+class SeededRandom(
+    seed: Int = 1,
+) : RandomSource {
+    private var a = seed
+
+    override fun next(): Double {
+        a += 0x6d2b79f5
+        var t = a
+        t = (t xor (t ushr 15)) * (t or 1)
+        t = t xor (t + (t xor (t ushr 7)) * (t or 61))
+        return ((t xor (t ushr 14)).toLong() and 0xFFFFFFFFL) / 4294967296.0
+    }
+}
+
 /** Dust level: the pool size and the share of puffs per footfall. */
 enum class DustQuality(
     val pool: Int,
@@ -53,9 +72,12 @@ enum class DustQuality(
 private const val PUFFS_MIN = 1.0
 private const val PUFFS_MAX = 4.0
 private const val JITTER = 0.1 // m, start position scatter
-private val SPEED = 0.3..1.5 // m/s, outwards (scaled by strength)
-private val RISE = 0.5..1.3 // m/s, upwards at the start (scaled by strength)
-private val LIFE = 0.5..1.2 // s
+private const val SPEED_MIN = 0.3 // m/s, outwards (scaled by strength)
+private const val SPEED_MAX = 1.5
+private const val RISE_MIN = 0.5 // m/s, upwards at the start (scaled by strength)
+private const val RISE_MAX = 1.3
+private const val LIFE_MIN = 0.5 // s
+private const val LIFE_MAX = 1.2
 private const val SIZE_START = 0.18 // m, grows from the first to the second value
 private const val SIZE_END = 0.7
 private const val PEAK_ALPHA = 0.6 // peak opacity (scaled by strength)
@@ -76,7 +98,7 @@ private const val DEFAULT_SEED = 21
  */
 class DustPool(
     val capacity: Int,
-    private val rng: () -> Double,
+    private val rng: RandomSource,
     level: DustQuality = DustQuality.HIGH,
 ) {
     val pos = FloatArray(capacity * 3)
@@ -104,8 +126,10 @@ class DustPool(
 
     private val share = level.emitShare
 
-    private fun between(range: ClosedFloatingPointRange<Double>): Double =
-        range.start + (range.endInclusive - range.start) * rng()
+    private fun between(
+        min: Double,
+        max: Double,
+    ): Double = min + (max - min) * rng.next()
 
     /** Starts the puffs of one footfall; the oldest puffs are overwritten when the pool is full. */
     fun emit(
@@ -121,16 +145,16 @@ class DustPool(
         for (c in 0 until count) {
             val i = next
             next = (i + 1) % capacity
-            val a = rng() * PI * 2
-            val out = between(SPEED) * (0.35 + 0.65 * s)
-            pos[i * 3] = (x + (rng() - 0.5) * 2 * JITTER).toFloat()
-            pos[i * 3 + 1] = (y + 0.03 + rng() * 0.05).toFloat()
-            pos[i * 3 + 2] = (z + (rng() - 0.5) * 2 * JITTER).toFloat()
+            val a = rng.next() * PI * 2
+            val out = between(SPEED_MIN, SPEED_MAX) * (0.35 + 0.65 * s)
+            pos[i * 3] = (x + (rng.next() - 0.5) * 2 * JITTER).toFloat()
+            pos[i * 3 + 1] = (y + 0.03 + rng.next() * 0.05).toFloat()
+            pos[i * 3 + 2] = (z + (rng.next() - 0.5) * 2 * JITTER).toFloat()
             vel[i * 3] = (cos(a) * out).toFloat()
-            vel[i * 3 + 1] = (between(RISE) * (0.3 + 0.7 * s)).toFloat()
+            vel[i * 3 + 1] = (between(RISE_MIN, RISE_MAX) * (0.3 + 0.7 * s)).toFloat()
             vel[i * 3 + 2] = (sin(a) * out).toFloat()
             age[i] = 0f
-            life[i] = (between(LIFE) * (0.6 + 0.4 * s)).toFloat()
+            life[i] = (between(LIFE_MIN, LIFE_MAX) * (0.6 + 0.4 * s)).toFloat()
             peak[i] = (PEAK_ALPHA * (0.4 + 0.6 * s)).toFloat()
             size[i] = SIZE_START.toFloat()
             alpha[i] = 0f
@@ -243,7 +267,7 @@ private fun buildPoints(pool: DustPool): DustPoints {
 class Dust(
     quality: DustQuality = DustQuality.MEDIUM,
     private val release: (GpuObject?) -> Unit = ::releaseNow,
-    private val rng: () -> Double = createRng(DEFAULT_SEED),
+    private val rng: RandomSource = SeededRandom(DEFAULT_SEED),
 ) {
     val obj = Group().also { it.name = "dust" }
     private var level = quality
