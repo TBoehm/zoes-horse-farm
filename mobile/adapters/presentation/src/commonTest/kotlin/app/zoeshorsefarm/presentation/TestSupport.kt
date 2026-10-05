@@ -93,7 +93,7 @@ class TestApp(
 ) {
     val store = FakeStore()
     val settings = SettingsService(store)
-    val i18n = I18n()
+    val i18n = I18n().apply { setLang(app.zoeshorsefarm.application.Language.EN) }
     val clock = ManualClock()
     val scheduler = ManualScheduler()
     val sound = RecordingSound()
