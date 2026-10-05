@@ -7,6 +7,7 @@ import app.zoeshorsefarm.scene.material.CoatEffect
 import app.zoeshorsefarm.scene.material.CoatUniforms
 import app.zoeshorsefarm.scene.material.Material
 import app.zoeshorsefarm.scene.material.PointsMaterial
+import app.zoeshorsefarm.scene.material.SandEffect
 import app.zoeshorsefarm.scene.material.ShaderMaterial
 import app.zoeshorsefarm.scene.material.StandardMaterial
 import app.zoeshorsefarm.scene.math.Color
@@ -85,6 +86,10 @@ object MaterialValues {
                 c.b.toFloat(),
                 material.opacity.toFloat(),
             )
+        }
+        val sand = material.activeEffect as? SandEffect
+        if (spec.sand && sand != null) {
+            out.setFloat3(MaterialSources.ARENA_HALF, sand.arenaHalfWidth.toFloat(), sand.arenaHalfLength.toFloat(), 0f)
         }
         val standard = material as? StandardMaterial ?: return
         if (spec.shading == Shading.LIT) {

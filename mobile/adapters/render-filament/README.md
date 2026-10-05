@@ -10,12 +10,15 @@ The Filament backend of the native app. Two layers:
 The module depends on filament-kmp 0.7.1 (Filament 1.77.x), `filamat` and `:adapters:scene`. Package
 `app.zoeshorsefarm.render.filament`.
 
-Everything that can be decided without a GPU is **pure Kotlin with unit tests** (about 500 tests on the
+Everything that can be decided without a GPU is **pure Kotlin with unit tests** (about 510 tests on the
 JVM): shader code generation, variant keys, mesh packing, tangent frames, spherical harmonics, shadow
 snapping, fog and pixel ratio maths, memory accounting, the mapping of the scene model onto all of that
 and the whole synchronisation of the node graph (it runs against a fake device that also fails on a use
 after free). The classes that call Filament are thin and are only compiled (jvm and both iOS targets) –
-the native library cannot be loaded in JVM tests.
+the native library cannot be loaded in JVM tests. The test source set also depends on `:adapters:view3d` and
+`:core:domain` (tests only): the real world, horse and rider are drawn through `RenderCore` on the fake device
+(`WorldOnFilamentTest`, `HorseOnFilamentTest`), which checks that every material of the game has a valid shader
+and that quality changes and disposals never leave a renderable on a destroyed object.
 
 ## Packages
 
@@ -184,6 +187,7 @@ Materials (`MaterialMapping` -> `MaterialSpec`, `MaterialValues` -> uniforms):
 | `WindEffect` `BLOSSOMS` | needs instance colours, vertex colours and the `petal` attribute |
 | `WindEffect` `BUNTING` | needs `aFlutter`, not instanced |
 | `CoatEffect` (`low`) | `CoatKind.STANDARD` / `LOW`, needs `aRest`, `aMat`, `aFace`; the coat paints the whole surface, so maps, vertex colours and wind are dropped. `CoatUniforms` is written every frame (flare, blink) but only changed values reach Filament |
+| `SandEffect(arenaHalfWidth, arenaHalfLength)` | `sand = true` (lit, plain meshes): `sandTint` of the web `patchSandMaterial` multiplies the colour, the ground position comes from the vertex stage, `arenaHalf` is a material parameter |
 | `SkyMaterial` / `ShaderMaterial("sky")` | `SKY` |
 | `ShaderMaterial("hoof-dust")`, `PointsMaterial` | `SPRITE` (transparent) |
 | `SpriteMaterial` on a `Sprite` | `UNLIT` with its map, transparent, double sided |

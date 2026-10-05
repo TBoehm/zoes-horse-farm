@@ -60,6 +60,7 @@ class WorldOnFilamentTest {
                 val problems = GlslSanity.check(MaterialSources.generate(spec))
                 assertTrue(problems.isEmpty(), "$level ${spec.key}: $problems")
             }
+            assertTrue(device.builtMaterials.keys.any { it.sand }, "$level has the sand shader")
             assertTrue(core.info.drawCalls > 10, "$level: ${core.info.drawCalls} draw calls")
             world.dispose()
             draw(world, 1)

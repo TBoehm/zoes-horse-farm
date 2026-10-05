@@ -17,6 +17,7 @@ import app.zoeshorsefarm.scene.material.CoatEffect
 import app.zoeshorsefarm.scene.material.LambertMaterial
 import app.zoeshorsefarm.scene.material.Material
 import app.zoeshorsefarm.scene.material.PointsMaterial
+import app.zoeshorsefarm.scene.material.SandEffect
 import app.zoeshorsefarm.scene.material.ShaderMaterial
 import app.zoeshorsefarm.scene.material.Side
 import app.zoeshorsefarm.scene.material.SpriteMaterial
@@ -97,6 +98,7 @@ object MaterialMapping {
         // the coat paints the whole surface: no maps, no vertex colours, no wind
         val look = if (coat == null) lookOf(shading, node, material, geometry, instancing) else Look.PLAIN
         val moving = skinned || coat != null
+        val sand = material.activeEffect is SandEffect && coat == null && !skinned && instancing == InstancingMode.NONE
         val wind = if (moving) FilamentWind.None else windOf(material, instancing, look.vertexColors, geometry)
         return MaterialSpec(
             shading,
@@ -112,6 +114,7 @@ object MaterialMapping {
             toneMapped = material.toneMapped,
             wind = wind,
             coat = coat,
+            sand = sand,
         )
     }
 

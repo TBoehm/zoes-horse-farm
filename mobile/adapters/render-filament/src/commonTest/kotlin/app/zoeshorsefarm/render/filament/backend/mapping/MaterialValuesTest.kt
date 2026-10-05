@@ -9,6 +9,7 @@ import app.zoeshorsefarm.scene.material.CoatEffect
 import app.zoeshorsefarm.scene.material.CoatUniforms
 import app.zoeshorsefarm.scene.material.LambertMaterial
 import app.zoeshorsefarm.scene.material.PointsMaterial
+import app.zoeshorsefarm.scene.material.SandEffect
 import app.zoeshorsefarm.scene.material.ShaderMaterial
 import app.zoeshorsefarm.scene.material.SkyMaterial
 import app.zoeshorsefarm.scene.material.StandardMaterial
@@ -110,6 +111,14 @@ class MaterialValuesTest {
         assertEquals(listOf(0.6f), values["roughness"])
         assertEquals(null, values["baseColor"])
         assertEquals(14, values.keys.count { it.startsWith("u") })
+    }
+
+    @Test
+    fun `the sand writes the half size of the arena next to the colour`() {
+        val material = StandardMaterial(effect = SandEffect(20.0, 35.0))
+        val values = write(material, MaterialSpec(Shading.LIT, sand = true))
+        assertEquals(listOf(20f, 35f, 0f), values["arenaHalf"])
+        assertTrue("baseColor" in values.keys && "roughness" in values.keys)
     }
 
     @Test

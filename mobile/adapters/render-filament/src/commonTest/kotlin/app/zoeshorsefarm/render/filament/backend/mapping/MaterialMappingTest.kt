@@ -21,6 +21,7 @@ import app.zoeshorsefarm.scene.material.CoatEffect
 import app.zoeshorsefarm.scene.material.CoatUniforms
 import app.zoeshorsefarm.scene.material.LambertMaterial
 import app.zoeshorsefarm.scene.material.PointsMaterial
+import app.zoeshorsefarm.scene.material.SandEffect
 import app.zoeshorsefarm.scene.material.ShaderMaterial
 import app.zoeshorsefarm.scene.material.Side
 import app.zoeshorsefarm.scene.material.SkyMaterial
@@ -299,6 +300,23 @@ class MaterialMappingTest {
         assertEquals(Blend.TRANSPARENT, spec?.blend)
         assertEquals(true, spec?.doubleSided)
         assertEquals(true, spec?.baseColorMap)
+    }
+
+    @Test
+    fun `the sand effect becomes the sand variant on standard and lambert materials`() {
+        val standard = StandardMaterial(vertexColors = true, effect = SandEffect(20.0, 35.0))
+        val lambert = LambertMaterial(effect = SandEffect(20.0, 35.0))
+        assertEquals(true, specOf(mesh(standard, withColors(box())))?.sand)
+        assertEquals(true, specOf(Mesh(box(), lambert))?.sand)
+        standard.effectEnabled = false
+        assertEquals(false, specOf(mesh(standard, withColors(box())))?.sand)
+    }
+
+    @Test
+    fun `the sand is dropped on instanced meshes`() {
+        val material = StandardMaterial(effect = SandEffect(20.0, 35.0))
+        val instanced = InstancedMesh(box(), material, 2)
+        assertEquals(false, MaterialMapping.specFor(instanced, material, instanced.geometry)?.sand)
     }
 
     @Test
