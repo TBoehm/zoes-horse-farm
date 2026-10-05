@@ -49,16 +49,38 @@ class TickScheduler : Scheduler {
         return task
     }
 
-    /** Lets [deltaMs] milliseconds pass and runs what falls due. */
+    /**
+     * Lets [deltaMs] milliseconds pass and runs what falls due. Called every frame: does not
+     * allocate while nothing runs.
+     */
     fun advance(deltaMs: Long) {
         val target = now + deltaMs
-        while (true) {
-            tasks.removeAll { it.cancelled }
-            val next = tasks.filter { it.due <= target }.minByOrNull { it.due } ?: break
-            tasks.remove(next)
+        while (tasks.isNotEmpty()) {
+            removeCancelled()
+            val index = indexOfNextDue(target)
+            if (index < 0) break
+            val next = tasks.removeAt(index)
             now = maxOf(now, next.due)
             next.action()
         }
         now = target
+    }
+
+    private fun removeCancelled() {
+        var i = tasks.size - 1
+        while (i >= 0) {
+            if (tasks[i].cancelled) tasks.removeAt(i)
+            i--
+        }
+    }
+
+    /** Index of the earliest task due by [target] (the first one scheduled on a tie), or -1. */
+    private fun indexOfNextDue(target: Long): Int {
+        var best = -1
+        for (i in tasks.indices) {
+            val due = tasks[i].due
+            if (due <= target && (best < 0 || due < tasks[best].due)) best = i
+        }
+        return best
     }
 }
