@@ -464,6 +464,11 @@ Konzept hält nur fest, was diese Erweiterbarkeit vom ersten Feature verlangt (R
     löschen, rot. Die Schrift auf allen Buttons MUSS gut lesbar sein (Kontrast mindestens 4,5 : 1),
     und die Art eines Buttons DARF nicht nur an der Farbe erkennbar sein (Beschriftung, Form).
 
+58. Versionsanzeige: In den Einstellungen MUSS unten klein die laufende Spielversion stehen
+    (Datum des Stands und eine kurze Kennung, z. B. „Version 2026-10-05 · 3fdf19e"), damit man
+    prüfen kann, ob nach einem Update schon die neue Version läuft (Regel 5). Dieselbe Angabe MUSS
+    in der Debug-Anzeige stehen.
+
 ## Grenzfälle
 
 - **Erster Start / leerer Speicher:** Frage nach dem Pferdenamen (Regel 43), dann

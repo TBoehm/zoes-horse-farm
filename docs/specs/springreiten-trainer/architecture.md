@@ -15,6 +15,8 @@ das „Wie": Module, Schnittstellen, Koordinaten, Datei-Ownership. Abweichungen 
   zeigen das Zusammenspiel im Browser; Regeln und Grenzwerte sind Unit-Tests (Vitest).
 - PWA: vite-plugin-pwa (generateSW, kein skipWaiting/clientsClaim → neue Version erst nach
   Schließen aller Tabs).
+- Version (SRT-015, Regel 58): `vite.config.js` setzt per `define` die Konstante `__APP_VERSION__`
+  (siehe „Versionsanzeige“).
 - **Keine Asset-Dateien.** Texturen nur zur Laufzeit (CanvasTexture / DataTexture / Vertex-Farben /
   Shader), Klänge nur per WebAudio-Synthese, Schrift = Systemschrift. Einzige Datei-Ausnahme:
   `public/icon.svg` (+ beim Build erzeugte PNGs in `public/generated/`).
@@ -1061,6 +1063,22 @@ addBlockedLevel(blocked, level)    // rein: eindeutig, von low nach high geordne
   wird, sichert die reine Torfunktion `upgradeMeasuring({ measuring, auto })` (`quality-upgrade.js`), die die Engine vor
   jedem Messschritt des Aufstiegs fragt (Test in `quality-upgrade.test.js`).
 
+### Versionsanzeige (SRT-015, Regel 58)
+
+Beim Build entsteht die Version `"<Commit-Datum> · <7 Zeichen der Kennung>"`, z. B. `2026-10-05 · 3fdf19e`
+(Datum des Commits, nicht der Bauzeit), oder `dev`, wenn kein Git-Stand vorhanden ist. Berechnet wird sie
+vom reinen, getesteten Node-Helfer `scripts/app-version.mjs` (`formatAppVersion`, `resolveAppVersion`
+mit injiziertem `git`; Test `tests/build/app-version.test.js`): die Kennung kommt aus `GITHUB_SHA`
+(GitHub-Build), sonst aus `git rev-parse HEAD`; das Datum immer aus `git log -1 --format=%cs` (der
+Standard-Checkout mit Tiefe 1 genügt); fehlt eines von beiden oder ist es ungültig, ist das Ergebnis `dev`
+(der Helfer wirft nie). `vite.config.js` reicht das Ergebnis als `define: { __APP_VERSION__ }` in den Build
+(ESLint kennt sie als globale Konstante). Gelesen wird die Konstante nur in
+`src/adapters/platform/app-version.js` (`APP_VERSION`, Rückfall `dev`, wenn sie fehlt, z. B. in Vitest).
+Angezeigt wird `APP_VERSION` an zwei Stellen: als dezente Zeile `[data-field="version"]`
+(`settings.version`: „Version {version}“) im Einstellungs-Abschnitt `version` (`order: 99`, also ganz unten,
+registriert in `ui/settings-sections.js`; aus Hauptmenü und Pausenmenü) und als erste Zeile der
+Diagnose-Box (`debug.version`).
+
 ### Diagnose-Box (`?debug`)
 
 Nur mit `?debug` in der Adresse (Erkennung `debugRequested` in `adapters/platform/debug-info.js`,
@@ -1071,7 +1089,7 @@ höchstens 160 Zeichen; `console.error` druckt weiter). Der Ritt-Bildschirm hän
 fps-Zeile (`.ride-hud`) die Box `[data-hud="debug"]` (`ui/debug-display.js`, `createDebugBox`): sie
 aktualisiert sich etwa zweimal pro Sekunde (eigener `createFpsMeter`-Takt, kein Objekt pro Frame
 im Ritt), auch im Pausenmenü und bei verlorenem Kontext. Der Text kommt aus der reinen Funktion
-`formatDebugText(info, errors, t)`; alle Wörter stehen in `ui/i18n/debug.js` (`debug.*`, DE + EN),
+`formatDebugText(info, errors, t, lastCrash, version)` (erste Zeile: die Version, Regel 58); alle Wörter stehen in `ui/i18n/debug.js` (`debug.*`, DE + EN),
 eingesetzt werden nur Zahlen und technische Zeichenketten (GPU-Name, Fehlertexte). Die Zahlen
 liefert `engine.diagnostics()` (immer dasselbe Objekt): GPU (`WEBGL_debug_renderer_info`, sonst
 `RENDERER`), Stufe und Automatik, `devicePixelRatio`, Pixel-Ratio des Renderers, Zeichenpuffer,

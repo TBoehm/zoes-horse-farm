@@ -178,6 +178,13 @@ describe('formatDebugText', () => {
     ]);
   });
 
+  it('starts with the build version when one is given and omits the line otherwise', () => {
+    const withVersion = formatDebugText(BASE, [], t, null, '2026-10-05 · 3fdf19e').split('\n');
+    expect(withVersion[0]).toBe('[debug.version version=2026-10-05 · 3fdf19e]');
+    expect(withVersion[1]).toBe('[debug.gpu gpu=ANGLE (Mali-G52)]');
+    expect(lines(BASE).some((line) => line.startsWith('[debug.version'))).toBe(false);
+  });
+
   it('builds no text of its own: every line starts with a translated piece', () => {
     for (const line of lines(BASE, [{ atS: 1, message: 'x' }]))
       expect(line.startsWith('[')).toBe(true);

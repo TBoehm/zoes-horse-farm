@@ -2,6 +2,7 @@
 export default {
   de: {
     'debug.none': '–',
+    'debug.version': 'Version: {version}',
     'debug.atSeconds': 'bei {s} s',
     'debug.gpu': 'GPU: {gpu}',
     'debug.gpuBudget': 'GPU für das Speicher-Budget: {gpu}',
@@ -40,6 +41,7 @@ export default {
   },
   en: {
     'debug.none': '–',
+    'debug.version': 'Version: {version}',
     'debug.atSeconds': 'at {s} s',
     'debug.gpu': 'GPU: {gpu}',
     'debug.gpuBudget': 'GPU used for the memory budget: {gpu}',
