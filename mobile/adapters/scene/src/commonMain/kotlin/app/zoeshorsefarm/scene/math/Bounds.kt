@@ -47,7 +47,10 @@ class Plane(
     fun distanceToPoint(point: Vec3): Double = normal.dot(point) + constant
 }
 
-/** Bounding sphere (three.js `Sphere`). */
+/**
+ * Bounding sphere (three.js `Sphere`). Mutable value type: [equals] and [hashCode] compare the
+ * current values, so do not use an instance as a hash key while it is being mutated.
+ */
 class Sphere(
     val center: Vec3 = Vec3(),
     var radius: Double = -1.0,
@@ -118,7 +121,7 @@ class Sphere(
             copy(sphere)
             return this
         }
-        if (center.equals(sphere.center)) {
+        if (center == sphere.center) {
             radius = max(radius, sphere.radius)
         } else {
             sphereTmp2.subVectors(sphere.center, center).setLength(sphere.radius)
@@ -128,7 +131,9 @@ class Sphere(
         return this
     }
 
-    fun equals(sphere: Sphere): Boolean = sphere.center.equals(center) && sphere.radius == radius
+    override fun equals(other: Any?): Boolean = other is Sphere && other.center == center && other.radius == radius
+
+    override fun hashCode(): Int = 31 * center.hashCode() + radius.hashCode()
 
     /** Smallest sphere around `points` (centre = box centre, like [Geometry.computeBoundingSphere]). */
     fun setFromPoints(points: List<Vec3>): Sphere {

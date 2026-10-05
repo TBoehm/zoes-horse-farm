@@ -32,7 +32,7 @@ class SceneStatsTest {
     }
 
     @Test
-    fun `counts an instanced mesh once, times its instances`() {
+    fun `counts an instanced mesh once times its instances`() {
         val scene = Scene()
         val mesh = InstancedMesh(box(), material, 50)
         mesh.count = 30
@@ -58,7 +58,7 @@ class SceneStatsTest {
     }
 
     @Test
-    fun `skips hidden meshes, hidden parents and empty instanced meshes`() {
+    fun `skips hidden meshes and hidden parents and empty instanced meshes`() {
         val scene = Scene()
         val hidden = Mesh(box(), material).also { it.visible = false }
         val group = Group().also { it.visible = false }

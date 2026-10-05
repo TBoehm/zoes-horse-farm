@@ -22,7 +22,7 @@ class GpuTrackerTest {
     }
 
     @Test
-    fun `counts programs by key, equal materials share one, different ones do not`() {
+    fun `counts programs by key where equal materials share one and different ones do not`() {
         val s = Setup()
         val a = Mesh(BoxGeometry(), StandardMaterial())
         val b = Mesh(BoxGeometry(), StandardMaterial())
@@ -68,7 +68,7 @@ class GpuTrackerTest {
     }
 
     @Test
-    fun `only draws what the root yields, hidden objects are not uploaded`() {
+    fun `only draws what the root yields so hidden objects are not uploaded`() {
         val s = Setup()
         val hidden = Mesh(BoxGeometry(), StandardMaterial()).also { it.visible = false }
         s.scene.add(hidden)
@@ -83,7 +83,7 @@ class GpuTrackerTest {
     }
 
     @Test
-    fun `the program key separates instancing, skinning, colours, fog and effects`() {
+    fun `the program key separates instancing skinning colours fog and effects`() {
         val standard = StandardMaterial(vertexColors = true)
         val plain = Mesh(BoxGeometry(), standard)
         val inst = InstancedMesh(BoxGeometry(), standard, 2)

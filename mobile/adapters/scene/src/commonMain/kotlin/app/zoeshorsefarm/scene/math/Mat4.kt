@@ -6,7 +6,13 @@ import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** 4x4 matrix, column-major like three.js `Matrix4` (WebGL clip space, depth -1..1). */
+/**
+ * 4x4 matrix, column-major like three.js `Matrix4` (WebGL clip space, depth -1..1).
+ *
+ * Mutable value type: [equals] and [hashCode] compare the current values, so do not use an
+ * instance as a hash key while it is being mutated.
+ */
+@Suppress("TooManyFunctions", "LargeClass") // mirrors the three.js Matrix4 API
 class Mat4 {
     /** Column-major elements: `e[12..14]` is the translation. */
     val e: DoubleArray = doubleArrayOf(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
@@ -133,6 +139,7 @@ class Mat4 {
         return this
     }
 
+    @Suppress("LongMethod") // one branch per rotation order, as in three.js
     fun makeRotationFromEuler(euler: Euler): Mat4 {
         val te = e
         val x = euler.x
@@ -731,9 +738,16 @@ class Mat4 {
         return this
     }
 
-    fun equals(m: Mat4): Boolean {
-        for (i in 0 until 16) if (e[i] != m.e[i]) return false
+    override fun equals(other: Any?): Boolean {
+        if (other !is Mat4) return false
+        for (i in 0 until 16) if (e[i] != other.e[i]) return false
         return true
+    }
+
+    override fun hashCode(): Int {
+        var h = 1
+        for (v in e) h = 31 * h + v.hashCode()
+        return h
     }
 
     fun fromArray(
