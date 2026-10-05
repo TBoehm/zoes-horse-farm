@@ -421,6 +421,8 @@ class FilamentContext private constructor(
         view.renderQuality = RenderQuality().apply { hdrColorBuffer = QualityLevel.MEDIUM }
         sun = disposal.add(SunLight.create(engine, scene)) { it.destroy() }
         ambient = disposal.add(AmbientLight(engine, scene)) { it.destroy() }
+        // fog needs an indirect light (see AmbientLight): start with a black one
+        ambient.clear()
         applyToneMapping()
         applyClearColor()
         applyFog()

@@ -51,6 +51,8 @@ class GpuMesh private constructor(
         require(attribute.format.isFloat) { "$semantic is not stored as floats" }
         val bytes = count * FLOAT_BYTES
         require(bytes <= vertexByteSizes[attribute.bufferIndex]) { "$count floats do not fit into $semantic" }
+        // Filament reads a byte count of 0 as "the whole array"
+        if (bytes == 0) return
         val slot = ring.acquire(bytes)
         MeshPacker.packFloatsInto(values, count, slot.bytes)
         vertexBuffer.setBufferAt(engine, attribute.bufferIndex, slot.bytes, 0, bytes, slot.onConsumed)

@@ -2,7 +2,8 @@ package app.zoeshorsefarm.render.filament.context
 
 import app.zoeshorsefarm.render.filament.math.LinearRgb
 import kotlin.math.abs
-import kotlin.math.exp
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -11,10 +12,21 @@ import kotlin.test.assertTrue
 class FogParamsTest {
     private val horizon = LinearRgb(0.6f, 0.75f, 0.85f)
 
+    /** Filament's linear fog with the height falloff off: opacity = density * (distance - start), clamped. */
     private fun opacityAt(
         fog: FogParams,
         distance: Float,
-    ): Float = 1f - exp(-fog.density * maxOf(0f, distance - fog.distance))
+    ): Float = min(fog.maximumOpacity, max(0f, fog.density * (distance - fog.distance)))
+
+    /** three.js `Fog`: `smoothstep(near, far, depth)` of the fog colour. */
+    private fun threeOpacityAt(
+        near: Float,
+        far: Float,
+        distance: Float,
+    ): Float {
+        val t = min(1f, max(0f, (distance - near) / (far - near)))
+        return t * t * (3f - 2f * t)
+    }
 
     @Test
     fun `fog starts at the near distance of the linear fog`() {
@@ -25,21 +37,33 @@ class FogParamsTest {
     }
 
     @Test
-    fun `fog is nearly opaque at the far distance of the linear fog`() {
+    fun `fog is fully opaque at the far distance of the linear fog`() {
         val fog = FogParams.fromLinear(near = 120f, far = 520f, color = horizon)
-        val opacity = opacityAt(fog, 520f)
-        assertTrue(abs(opacity - FogParams.OPACITY_AT_FAR) < 1e-3f, "opacity $opacity")
+        assertTrue(abs(opacityAt(fog, 520f) - 1f) < 1e-5f)
     }
 
     @Test
-    fun `the high level fog is denser than the medium level fog`() {
-        val medium = FogParams.fromLinear(120f, 520f, horizon)
-        val high = FogParams.fromLinear(90f, 480f, horizon)
-        assertTrue(opacityAt(high, 300f) > opacityAt(medium, 300f))
+    fun `the fog meets three js at near, in the middle and at far`() {
+        // three.js eases in and out with smoothstep, Filament is linear: the ends and the middle agree
+        for ((near, far) in listOf(120f to 520f, 90f to 480f)) {
+            val fog = FogParams.fromLinear(near, far, horizon)
+            for (d in listOf(near - 10f, near, (near + far) / 2f, far, far + 100f)) {
+                assertTrue(abs(opacityAt(fog, d) - threeOpacityAt(near, far, d)) < 1e-4f, "near $near far $far at $d")
+            }
+        }
     }
 
     @Test
-    fun `height falloff is off so that the fog depends on distance only`() {
+    fun `between the ends the linear fog is within a tenth of the three js curve`() {
+        val fog = FogParams.fromLinear(120f, 520f, horizon)
+        for (d in 120..520 step 10) {
+            val difference = abs(opacityAt(fog, d.toFloat()) - threeOpacityAt(120f, 520f, d.toFloat()))
+            assertTrue(difference < 0.1f, "at $d the fogs differ by $difference")
+        }
+    }
+
+    @Test
+    fun `height falloff is off so that the density is the slope of the fog`() {
         assertEquals(0f, FogParams.fromLinear(10f, 100f, horizon).heightFalloff)
     }
 

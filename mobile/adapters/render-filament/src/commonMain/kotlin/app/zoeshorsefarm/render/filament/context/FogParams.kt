@@ -1,17 +1,18 @@
 package app.zoeshorsefarm.render.filament.context
 
 import app.zoeshorsefarm.render.filament.math.LinearRgb
-import kotlin.math.ln
 import kotlin.math.max
 
 /**
- * Filament's global fog (`View.fogOptions`), set up to look like the web scene's `THREE.Fog`.
+ * Filament's global fog (`View.fogOptions`), set up to be the web scene's `THREE.Fog`.
  *
- * three.js blends linearly from `near` (no fog) to `far` (full fog). Filament only has exponential
- * fog: no fog up to `distance`, then `1 - exp(-density * (d - distance))`. The density is chosen so
- * that the fog reaches [OPACITY_AT_FAR] at the far distance, which is close enough to opaque that
- * the end of the world is hidden like in three.js. Height falloff is off: the fog depends on the
- * distance only (as does the web fog).
+ * three.js blends from `near` (no fog) to `far` (full fog) with a smoothstep. Materials compiled with
+ * `linearFog` (all of ours, see `MaterialSource.linearFog`) use Filament's linear fog equation:
+ * no fog up to `distance`, then an opacity that grows by `density` per metre. With the height
+ * falloff at 0 `density` is exactly that slope, so `density = 1 / (far - near)` reaches full fog at
+ * `far`. The curve is a straight line instead of three.js' S-curve (at most 0.1 apart, the same
+ * at near, in the middle and at far), and the distance is Filament's (eye distance, not depth).
+ * The fog colour is multiplied by the intensity of the scene's indirect light (see `AmbientLight`).
  */
 data class FogParams(
     val distance: Float,
@@ -21,17 +22,13 @@ data class FogParams(
     val maximumOpacity: Float = 1f,
 ) {
     companion object {
-        const val OPACITY_AT_FAR = 0.95f
         private const val MIN_RANGE = 1f
 
         fun fromLinear(
             near: Float,
             far: Float,
             color: LinearRgb,
-        ): FogParams {
-            val range = max(MIN_RANGE, far - near)
-            return FogParams(distance = near, density = -ln(1f - OPACITY_AT_FAR) / range, color = color)
-        }
+        ): FogParams = FogParams(distance = near, density = 1f / max(MIN_RANGE, far - near), color = color)
 
         fun fromLinearOrNull(
             near: Float?,

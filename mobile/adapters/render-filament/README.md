@@ -102,8 +102,12 @@ Notes:
   multiplies hemisphere light by `albedo / PI`. The PMREM environment map is approximated by
   `AmbientSh.environment` (diffuse only; there is no specular reflection without a cubemap).
 * Tone mapping is Filament's `ACESLegacy`, which is the curve of three.js `ACESFilmicToneMapping`.
-* Fog: Filament has exponential fog only; `FogParams.fromLinear(near, far, color)` starts at `near` and
-  reaches 95 % at `far` (height falloff off). Materials are compiled with `linearFog`.
+* Fog: all materials are compiled with `linearFog` (Filament's linear fog equation), so
+  `FogParams.fromLinear(near, far, color)` gives a fog that starts at `near` and is opaque at `far`
+  (`density = 1 / (far - near)`, height falloff 0). three.js eases with a smoothstep; the straight line is at
+  most 0.1 away from it and equal at both ends and in the middle. The fog colour is multiplied by the intensity
+  of the scene's indirect light, so the scene always has one (`AmbientLight.clear()` makes it black, it does
+  not remove it). The sky and the clouds are drawn with `RenderableOptions(fog = false)`.
 * Shadows: PCF, one cascade, `stable`. Filament fits the shadow map to the camera frustum, so the web
   `setShadowFocus` becomes `SunLight.setFocus`: `ShadowFocus` snaps the focus to the light-space texel grid
   (the web maths) and sets `shadowFar` to the camera distance to the focus plus the 24 m half extent, in
@@ -156,6 +160,7 @@ These follow the Filament documentation and sources but could not run here (no G
   `mulMat4x4Float3(getWorldFromModelMatrix(), inst * position)` is right with an identity entity transform.
 * `inverseTonemap()` (used by `toneMapped = false`, the number signs) exists in 1.77 and inverts the ACES curve
   well enough; colours near white may clip.
+* An `IndirectLight` with irradiance only (no reflections cubemap) is accepted by `build()`.
 * `IndirectLight.irradiance(2, sh)` takes pre-scaled coefficients in the order constant, y, z, x (as the
   shader sums them), so `AmbientSh` values are used as they are.
 * RGBA32F data textures can be read with `texelFetch` in the vertex shader on every target GPU
@@ -183,5 +188,6 @@ These follow the Filament documentation and sources but could not run here (no G
   iOS `CAMetalLayer` pointer) creates it. Nothing is assumed about it here.
 * **`filamat` run time compile** needs `MaterialBuilder.init()` / `shutdown()` around its use and is not
   thread safe; there is no async variant.
-* There is no `IndirectLight` from SH *radiance* with reflections on the cheap: specular image based light
-  needs a prefiltered cubemap (`IBLPrefilterContext` in filament-utils exists but was not used here).
+* Specular image based light needs a prefiltered reflections cubemap (`IBLPrefilterContext` in filament-utils
+  could make one from the sky); the ambient light here is SH irradiance only, so there are no environment
+  reflections (rough surfaces in the web scene barely show them).

@@ -36,8 +36,7 @@ class GpuTexture private constructor(
             data: TextureData,
         ): GpuTexture {
             val format = if (data.srgb) Texture.InternalFormat.SRGB8_A8 else Texture.InternalFormat.RGBA8
-            var usage = Texture.Usage.DEFAULT
-            if (data.mipmaps) usage = usage or Texture.Usage.GEN_MIPMAPPABLE
+            // no usage is set on purpose: Filament then adds what generateMipmaps() needs by itself
             val texture =
                 Texture
                     .Builder()
@@ -46,7 +45,6 @@ class GpuTexture private constructor(
                     .levels(data.levels)
                     .sampler(Texture.Sampler.SAMPLER_2D)
                     .format(format)
-                    .usage(usage)
                     .build(engine)
             // the pixel array is read by the render thread later: it is never written again
             texture.setImage(
