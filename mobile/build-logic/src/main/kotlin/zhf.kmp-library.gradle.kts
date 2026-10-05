@@ -43,8 +43,10 @@ detekt {
     )
 }
 
-// Test fixtures (:core:*-testing) bring kotlin-test with them: only test source sets may use them.
+// Test fixtures (:core:*-testing) bring kotlin-test with them: only test source sets (and other
+// fixture modules) may use them.
 afterEvaluate {
+    if (project.name.endsWith("-testing")) return@afterEvaluate
     configurations
         .filter { conf ->
             val name = conf.name
