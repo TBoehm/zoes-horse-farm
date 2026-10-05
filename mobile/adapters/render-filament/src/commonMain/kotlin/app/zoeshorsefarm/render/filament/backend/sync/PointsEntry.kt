@@ -46,6 +46,8 @@ internal class PointsEntry(
     private var booked: MaterialBinding? = null
     private var bookedBits = -1
 
+    override val uploadOverflows: Int get() = batch?.uploadOverflows ?: 0
+
     override fun update(
         ctx: SyncContext,
         visible: Boolean,
@@ -230,7 +232,7 @@ internal class PointsEntry(
         }
         if (points.renderOrder != renderOrder) {
             renderOrder = points.renderOrder
-            drawable.setPriority(RenderOrder.priority(renderOrder))
+            drawable.setDrawOrder(RenderOrder.priority(renderOrder), RenderOrder.blendOrder(renderOrder))
         }
         if (current.material.fog != fog) {
             fog = current.material.fog

@@ -309,6 +309,20 @@ class SceneSyncResourcesTest : SyncHarness() {
     }
 
     @Test
+    fun `a material that was freed is prepared again by the next compile`() {
+        val material = StandardMaterial()
+        meshAt(material = material)
+        sync.compile(scene, scene, false)
+        assertEquals(1, device.preparedMaterials.size)
+        material.dispose()
+        assertTrue(device.builtMaterials.isEmpty())
+        sync.compile(scene, scene, false)
+        assertEquals(2, device.preparedMaterials.size)
+        sync.compile(scene, scene, false)
+        assertEquals(2, device.preparedMaterials.size)
+    }
+
+    @Test
     fun `compile also reaches invisible nodes`() {
         val group = Group().also { it.visible = false }
         group.add(Mesh(box(), StandardMaterial()))

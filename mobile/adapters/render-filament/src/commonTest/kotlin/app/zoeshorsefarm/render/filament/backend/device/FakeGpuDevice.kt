@@ -407,6 +407,8 @@ class FakeRenderable(
         private set
     var priority = options.priority
         private set
+    var blendOrder = options.blendOrder
+        private set
     var bounds: Aabb = options.bounds ?: mesh.bounds
         private set
     var boundsCalls = 0
@@ -454,9 +456,13 @@ class FakeRenderable(
         fog = enabled
     }
 
-    override fun setPriority(priority: Int) {
+    override fun setDrawOrder(
+        priority: Int,
+        blendOrder: Int,
+    ) {
         live()
         this.priority = priority
+        this.blendOrder = blendOrder
     }
 
     override fun setBounds(bounds: Aabb) {

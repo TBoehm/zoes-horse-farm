@@ -43,7 +43,7 @@ interface ParamSink {
  * pass only what changed on to Filament.
  */
 object MaterialValues {
-    private val SKY_COLORS = listOf("zenith", "horizon", "groundColor", "sunColor")
+    private val SKY_COLORS = arrayOf("zenith", "horizon", "groundColor", "sunColor")
 
     private val COAT_COLORS: List<Pair<String, (CoatUniforms) -> Color>> =
         listOf(
@@ -122,9 +122,10 @@ object MaterialValues {
         out: ParamSink,
     ) {
         val uniforms = (material as? ShaderMaterial)?.uniforms ?: return
-        for (name in SKY_COLORS) {
-            val color = uniforms[name]?.value as? Color ?: continue
-            out.setFloat3(name, color.r.toFloat(), color.g.toFloat(), color.b.toFloat())
+        for (i in SKY_COLORS.indices) {
+            val name = SKY_COLORS[i]
+            val color = uniforms[name]?.value as? Color
+            if (color != null) out.setFloat3(name, color.r.toFloat(), color.g.toFloat(), color.b.toFloat())
         }
         val direction = uniforms["sunDir"]?.value as? Vec3 ?: return
         out.setFloat3("sunDir", direction.x.toFloat(), direction.y.toFloat(), direction.z.toFloat())

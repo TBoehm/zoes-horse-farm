@@ -267,7 +267,10 @@ class FilamentGpuDevice(
 
         override fun setFog(enabled: Boolean) = renderable.setFog(enabled)
 
-        override fun setPriority(priority: Int) = renderable.setPriority(priority)
+        override fun setDrawOrder(
+            priority: Int,
+            blendOrder: Int,
+        ) = renderable.setDrawOrder(priority, blendOrder)
 
         override fun setBounds(bounds: Aabb) = renderable.setBounds(bounds)
 

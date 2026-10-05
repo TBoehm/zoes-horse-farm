@@ -158,6 +158,28 @@ class SceneSyncMeshTest : SyncHarness() {
     }
 
     @Test
+    fun `the blend order follows the render order and the transparency of a live renderable`() {
+        val material = StandardMaterial()
+        val mesh = meshAt(material = material)
+        frame()
+        val renderable = live().single()
+        assertEquals(0, renderable.blendOrder)
+        mesh.renderOrder = 3
+        frame()
+        assertEquals(0, renderable.blendOrder)
+        assertEquals(7, renderable.priority)
+        material.transparent = true
+        material.needsUpdate = true
+        frame()
+        assertSame(renderable, live().single())
+        assertTrue(renderable.blendOrder > 0)
+        val before = renderable.blendOrder
+        mesh.renderOrder = 5
+        frame()
+        assertTrue(renderable.blendOrder > before)
+    }
+
+    @Test
     fun `opaque meshes keep the Filament blend order`() {
         meshAt()
         frame()

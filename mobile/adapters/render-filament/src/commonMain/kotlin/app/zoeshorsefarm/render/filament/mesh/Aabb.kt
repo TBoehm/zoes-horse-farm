@@ -54,6 +54,29 @@ class Aabb(
         }
     }
 
+    /**
+     * Refits the box to `geometry` at the first `count` instance matrices (column-major, 16 floats each);
+     * `scratch` (3 floats) takes the corner points, so nothing is allocated.
+     */
+    fun setFromInstances(
+        geometry: Aabb,
+        matrices: FloatArray,
+        count: Int,
+        scratch: FloatArray,
+    ) {
+        reset()
+        if (geometry.isEmpty) return
+        for (i in 0 until count) {
+            for (c in 0 until 8) {
+                val x = if (c and 1 == 0) geometry.min[0] else geometry.max[0]
+                val y = if (c and 2 == 0) geometry.min[1] else geometry.max[1]
+                val z = if (c and 4 == 0) geometry.min[2] else geometry.max[2]
+                Mat4Ops.transformPoint(matrices, i * 16, x, y, z, scratch)
+                expand(scratch[0], scratch[1], scratch[2])
+            }
+        }
+    }
+
     /** The box around a sphere. */
     fun setFromSphere(
         x: Float,
@@ -100,20 +123,6 @@ class Aabb(
             geometry: Aabb,
             matrices: FloatArray,
             count: Int,
-        ): Aabb {
-            val box = Aabb()
-            if (geometry.isEmpty) return box
-            val corner = FloatArray(3)
-            for (i in 0 until count) {
-                for (c in 0 until 8) {
-                    val x = if (c and 1 == 0) geometry.min[0] else geometry.max[0]
-                    val y = if (c and 2 == 0) geometry.min[1] else geometry.max[1]
-                    val z = if (c and 4 == 0) geometry.min[2] else geometry.max[2]
-                    Mat4Ops.transformPoint(matrices, i * 16, x, y, z, corner)
-                    box.expand(corner[0], corner[1], corner[2])
-                }
-            }
-            return box
-        }
+        ): Aabb = Aabb().also { it.setFromInstances(geometry, matrices, count, FloatArray(3)) }
     }
 }

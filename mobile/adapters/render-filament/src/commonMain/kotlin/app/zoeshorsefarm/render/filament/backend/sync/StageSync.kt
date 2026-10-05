@@ -1,6 +1,7 @@
 package app.zoeshorsefarm.render.filament.backend.sync
 
 import app.zoeshorsefarm.render.filament.backend.device.StagePort
+import app.zoeshorsefarm.render.filament.backend.mapping.AcesInverse
 import app.zoeshorsefarm.render.filament.backend.mapping.EnvironmentSh
 import app.zoeshorsefarm.render.filament.context.FogParams
 import app.zoeshorsefarm.render.filament.context.RenderSettings
@@ -139,15 +140,7 @@ class StageSync(
 
     private fun toRenderSettings(next: SettingsInputs): RenderSettings {
         val fog =
-            if (next.fogNear.isNaN()) {
-                null
-            } else {
-                FogParams.fromLinear(
-                    next.fogNear,
-                    next.fogFar,
-                    LinearRgb(next.fogColor[0], next.fogColor[1], next.fogColor[2]),
-                )
-            }
+            if (next.fogNear.isNaN()) null else FogParams.fromLinear(next.fogNear, next.fogFar, fogColorOf(next))
         val shadows =
             if (next.shadowMapSize == 0) {
                 null
@@ -170,6 +163,17 @@ class StageSync(
             exposure = max(MIN_EXPOSURE, next.exposure),
             clearColor = LinearRgb(next.clear[0], next.clear[1], next.clear[2]),
         )
+    }
+
+    /**
+     * three.js fogs in output space (after tone mapping), Filament in HDR before it: with ACES the fog colour
+     * is passed through the inverse curve, so that a fully fogged pixel comes out as the fog colour.
+     */
+    private fun fogColorOf(next: SettingsInputs): LinearRgb {
+        val rgb = next.fogColor
+        if (next.toneMapping == SceneToneMapping.NONE) return LinearRgb(rgb[0], rgb[1], rgb[2])
+        val hdr = AcesInverse.inverse(rgb, max(MIN_EXPOSURE, next.exposure).toDouble())
+        return LinearRgb(hdr[0], hdr[1], hdr[2])
     }
 
     private fun shadowMapSizeOf(light: DirectionalLight): Int {

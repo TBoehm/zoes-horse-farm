@@ -144,7 +144,7 @@ and never stops at a failing destroy.
 val backend = FilamentRenderBackend.create(cache = packageCache) ?: showNoGraphics()   // RenderBackend
 backend.attachSurface(surface, widthPx, heightPx, devicePixelRatio)    // Android Surface / iOS CAMetalLayer
 backend.msaaSamples = 4                                                // 0, 2 or 4 (not in the port)
-backend.toneMapping = ToneMapping.ACES_FILMIC; backend.toneMappingExposure = 1.0
+backend.toneMapping = ToneMapping.ACES_FILMIC; backend.toneMappingExposure = 1.0  // like renderer.js: the app must set it
 backend.setPixelRatio(1.5); backend.shadowsEnabled = true
 backend.compile(world.compileRoot, camera, scene) { /* the first screen is built */ }
 // every frame
@@ -213,7 +213,11 @@ The Filament programs of the materials it built are a separate number (`estimate
 * `HemisphereLight`s (up to 4) and `scene.environment` (`EnvironmentLight`) become one ambient SH light
   (`AmbientSh.hemisphere` and `EnvironmentSh`, which integrates the web sky dome, sun glow, sun disc and floor over the
   sphere; `scene.environmentIntensity` scales it). It is recomputed only when an input changed.
-* `scene.fog` -> `FogParams.fromLinear`, `scene.background` -> clear colour, `toneMapping` (`NONE` -> linear, `ACES_FILMIC`
+* `scene.fog` -> `FogParams.fromLinear`. three.js fogs in output space (after tone mapping) with view depth; Filament fogs
+  the HDR colour before tone mapping with eye distance. With ACES the fog colour therefore goes through
+  `AcesInverse`, so that a fully fogged pixel is the fog colour as in the web; the fog still starts and ends a little
+  differently at the screen edges (distance instead of depth) and mixes through the curve instead of linearly.
+* `scene.background` -> clear colour, `toneMapping` (`NONE` -> linear, `ACES_FILMIC`
   -> `ACESLegacy`), `toneMappingExposure`, `setPixelRatio`, `msaaSamples` -> `RenderSettings`; only changes are sent.
 * The camera: lens from `PerspectiveCamera` (effective fov, near, far; the aspect follows the surface), pose from
   `matrixWorld`, both sent only when they changed. The wind (`time`, `strength`) of the first wind material found
@@ -225,7 +229,7 @@ The Filament programs of the materials it built are a separate number (`estimate
 * `setPixelRatio(r)` is a cap on the physical surface: the backing store is `size * min(r, devicePixelRatio)`, drawn
   at a fixed render scale below the surface size (`PixelPlan`). `setSize` takes logical pixels; the platform reports
   the physical surface with `attachSurface` / `onSurfaceResized`.
-* No specular environment reflections (no prefiltered cubemap); `Lambert` materials also get the ambient light.
+* No specular environment reflections (no prefiltered cubemap).
 * Not supported (the web view does not use them): `alphaTest`, `flatShading`, `emissive`, `envMapIntensity`; `Side.BACK`
   outside the sky is drawn double sided; texture filtering is always linear; `shadow.bias`.
 * `info.drawCalls` / `triangles` count what `SceneStats` counts (every visible object, no culling), plus the shadow pass

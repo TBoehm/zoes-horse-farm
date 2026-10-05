@@ -10,6 +10,9 @@ internal abstract class DrawEntry(
     /** The frame in which the walk last reached the node. */
     var seenFrame = -1
 
+    /** Uploads of this entry that fell back to a one shot array (should stay 0). */
+    open val uploadOverflows: Int get() = 0
+
     /**
      * Brings the device objects in step with the node: creates them when the node is first drawn, sets
      * what changed, and keeps the entity out of the Filament scene while `visible` is false.
