@@ -25,7 +25,8 @@ input.touch.toggleGallop(); input.touch.pressJump()   // pressPause(), pressCame
 if (key != null) consumed = input.keyboard.onKeyDown(key, repeat) // onKeyUp(key), onFocusLost()
 // input mode changed (touch <-> keyboard): call BEFORE passing the key press that caused it
 input.onTouchModeChange(on)
-val state = input.poll()             // once per frame; jump/pause/camera are one-shot edges
+val state = input.poll()             // once per frame; jump/pause/camera are one-shot edges.
+                                     // The state is reused by the next poll (no allocation per frame): copy what you keep
 ```
 
 ## Deviations from the web app
