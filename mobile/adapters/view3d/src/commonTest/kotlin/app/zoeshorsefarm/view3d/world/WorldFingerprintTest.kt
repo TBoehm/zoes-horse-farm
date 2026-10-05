@@ -128,7 +128,7 @@ class WorldFingerprintTest {
 
     @Test
     fun `places the take off aid like the web app`() {
-        world.setAid(AidParams("b", 1, Zone(far = 4.0, near = 1.5, lastPoint = 1.0, reach = 5.0, center = 2.0)))
+        world.setAid("b", 1, Zone(far = 4.0, near = 1.5, lastPoint = 1.0, reach = 5.0, center = 2.0))
         val aid = mesh(world, "aid-marker")
         assertTrue(aid.visible)
         assertEquals(10.0, aid.position.x, 1e-4)
@@ -142,7 +142,7 @@ class WorldFingerprintTest {
     @Test
     fun `lets the poles fall and rise like the web app`() {
         fun poleSum(name: String): Double = instanceSum(mesh(world, name))
-        world.setAid(AidParams("b", 1, Zone(far = 4.0, near = 1.5, lastPoint = 1.0, reach = 5.0, center = 2.0)))
+        world.setAid("b", 1, Zone(far = 4.0, near = 1.5, lastPoint = 1.0, reach = 5.0, center = 2.0))
         val down =
             mapOf(
                 "a" to booleanArrayOf(false),
