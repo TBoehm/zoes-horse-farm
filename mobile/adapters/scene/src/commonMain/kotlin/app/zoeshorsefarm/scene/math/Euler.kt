@@ -13,6 +13,9 @@ enum class EulerOrder { XYZ, YXZ, ZXY, ZYX, YZX, XZY }
  *
  * Mutable value type: [equals] and [hashCode] compare the current values, so do not use an
  * instance as a hash key while it is being mutated.
+ *
+ * Thread confinement: the scene model is confined to one thread (hot paths share scratch objects, like
+ * three.js). Do not touch it from two threads at the same time.
  */
 class Euler(
     x: Double = 0.0,

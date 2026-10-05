@@ -20,6 +20,9 @@ class Hsl(
  *
  * Mutable value type: [equals] and [hashCode] compare the current values, so do not use an
  * instance as a hash key while it is being mutated.
+ *
+ * Thread confinement: the scene model is confined to one thread (hot paths share scratch objects, like
+ * three.js). Do not touch it from two threads at the same time.
  */
 @Suppress("TooManyFunctions") // mirrors the three.js Color API
 class Color(
@@ -196,7 +199,7 @@ class Color(
 
     /** `0xRRGGBB` in the given space (default sRGB). */
     fun getHex(colorSpace: ColorSpace = ColorSpace.SRGB): Int {
-        scratch.copy(this).workingToColorSpace(colorSpace)
+        val scratch = Color().copy(this).workingToColorSpace(colorSpace)
         return jsRound(MathUtils.clamp(scratch.r * 255, 0.0, 255.0)).toInt() * 65536 +
             jsRound(MathUtils.clamp(scratch.g * 255, 0.0, 255.0)).toInt() * 256 +
             jsRound(MathUtils.clamp(scratch.b * 255, 0.0, 255.0)).toInt()
@@ -206,7 +209,7 @@ class Color(
         target: Hsl,
         colorSpace: ColorSpace = ColorSpace.LINEAR_SRGB,
     ): Hsl {
-        scratch.copy(this).workingToColorSpace(colorSpace)
+        val scratch = Color().copy(this).workingToColorSpace(colorSpace)
         val cr = scratch.r
         val cg = scratch.g
         val cb = scratch.b
@@ -236,7 +239,7 @@ class Color(
 
     /** CSS string `rgb(r,g,b)` in sRGB. */
     fun getStyle(): String {
-        scratch.copy(this).workingToColorSpace(ColorSpace.SRGB)
+        val scratch = Color().copy(this).workingToColorSpace(ColorSpace.SRGB)
         return "rgb(${jsRound(scratch.r * 255).toInt()},${jsRound(scratch.g * 255).toInt()}," +
             "${jsRound(scratch.b * 255).toInt()})"
     }
@@ -384,7 +387,6 @@ class Color(
 
     companion object {
         private val FUNCTION = Regex("""^(\w+)\(([^)]*)\)""")
-        private val scratch = Color()
         private val hslA = Hsl()
         private val hslB = Hsl()
 

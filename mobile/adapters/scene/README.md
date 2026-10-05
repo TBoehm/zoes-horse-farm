@@ -18,6 +18,11 @@ render/     RenderBackend (port), FakeRenderBackend, SceneStats, GpuTracker
 
 ## Conventions
 
+- **The scene model is confined to one thread.** Math, nodes, geometry, materials and textures use shared
+  scratch objects in hot paths (exactly like three.js), so building geometry or textures on a background
+  thread while another thread does math or renders would corrupt results. Build and render on one thread,
+  or hand finished objects over with a proper happens-before edge and stop touching them.
+
 - **Math is `Double`** (like JS numbers); **GPU data is `Float`** (like `Float32Array`). Builders compute in
   double and narrow when the attribute is filled, exactly as three.js does, so the numbers match.
 - Math objects are **mutable and chainable** (`v.copy(a).sub(b).normalize()`), no operators, no hidden

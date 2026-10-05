@@ -28,6 +28,9 @@ class DrawRange(
  * Mesh data (three.js `BufferGeometry`): named vertex attributes, an optional index, material
  * groups and bounds. Well-known attribute names: `position`, `normal`, `uv`, `color`,
  * `skinIndex`, `skinWeight`; any other name is a custom attribute for a material effect.
+ *
+ * Thread confinement: the scene model is confined to one thread (hot paths share scratch objects, like
+ * three.js). Do not touch it from two threads at the same time.
  */
 @Suppress("TooManyFunctions") // mirrors the three.js BufferGeometry API
 open class Geometry : GpuResource() {
@@ -320,9 +323,7 @@ open class Geometry : GpuResource() {
             return used / 3
         }
 
-    private companion object {
-        val scratch = Mat4()
-        val scratch2 = Vec3()
-        val scratchBox = Box3()
-    }
+    private val scratch = Mat4()
+    private val scratch2 = Vec3()
+    private val scratchBox = Box3()
 }
