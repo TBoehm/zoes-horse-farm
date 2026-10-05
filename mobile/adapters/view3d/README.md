@@ -72,9 +72,19 @@ starts it, the host calls `engine.frame(nowSeconds)` once per display frame (Com
 - **Device loss:** `onContextLost` / `onContextRestored`, `takeGraphicsHint`, `takeCrashHint`,
   `startRestoreWatchdog` / `cancelRestoreWatchdog` (8 s), `setVisible` (lifecycle, for the loss rule).
 - **Battery and thermal levers** (default: nothing changes): `setPaused(true)` draws one more frame and
-  then stops drawing until something visible changes (`wantsFrames` / `demandListener` tell the host it
-  may stop its display link); `setCapTo30Fps(true)` skips frames that come too early (the graphics
-  automatic and the low-fps hint do not measure then, 30 fps would look like a slow device).
+  then stops drawing until something visible changes (a resize, a stage, a restored device ...).
+  `wantsFrames` / `demandListener` tell the host it may stop its display link and when to start it
+  again; it stays on while the engine's own timer has work (restore watchdog, shader-compile hold),
+  because that timer only advances inside `frame()`. `run()` (start or stop) always ends a pause.
+  `setCapTo30Fps(true)` skips frames that come too early: at most 30 fps (about 28.8 at 144 Hz); the
+  graphics automatic and the low-fps hint do not measure then, 30 fps would look like a slow device.
+- **Host duties:** call `setVisible(false)` BEFORE the backend can report the loss of a background
+  device or surface (on pause, before the surface is destroyed); a loss that arrives first counts as
+  an overloaded device in the foreground and lowers the level (the backend listener cannot tell a
+  surface loss from an overload). Settings and crash-guard writes belong on the render thread, the
+  engine subscribes to them. While paused with the display link stopped the crash guard's heartbeat
+  stops too: harmless on native (one instance, no tab id), only the "seconds" of a crash in the debug
+  box end at the last heartbeat.
 - **Diagnostics:** `diagnostics()` fills one `EngineDiagnostics` object; `formatDebugText` turns it into
   the lines of the debug box.
 - The frame loop is allocation free (`EngineAllocationTest`); the level automatic reads the frame times

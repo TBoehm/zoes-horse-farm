@@ -75,9 +75,23 @@ class EngineRideTest {
                 finish = Line(Vec2(-3.0, 30.0), Vec2(3.0, 30.0), Vec2(0.0, 1.0)),
                 labelKeys = LineLabelKeys("a", "b"),
             )
+
+        fun visibleLineMeshes(): Int {
+            var count = 0
+            rig.engine.world.scene.traverseVisible { node ->
+                var parent = node.parent
+                while (parent != null && parent.name != "course-lines") parent = parent.parent
+                if (parent != null && node is app.zoeshorsefarm.scene.graph.Mesh) count++
+            }
+            return count
+        }
+        assertEquals(0, visibleLineMeshes())
         rig.engine.showLines(lines, "Start", "Finish")
+        assertTrue(visibleLineMeshes() >= 2) // the chalk lines with posts and the signs
         rig.engine.showLines(null, "", "")
+        assertEquals(0, visibleLineMeshes())
         rig.engine.showLines(lines, "Ziel", "Start")
+        assertTrue(visibleLineMeshes() >= 2)
     }
 
     @Test
