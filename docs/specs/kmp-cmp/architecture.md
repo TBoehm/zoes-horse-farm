@@ -118,6 +118,23 @@ das Filament-Backend austauschbar ist, gibt es ein schlankes, renderer-neutrales
 - Grafikstufen bleiben (Pixel-Ratio/Dynamic Resolution, Schatten an/aus und Mapgröße, Materialart,
   Dichte); MSAA über `View.multiSampleAntiAliasingOptions`.
 
+## Strom- und Wärme-Hebel der Engine (Abweichung von der Web-App, bewusst)
+
+Ergebnis der Performance-Recherche (Tablets drosseln bei Wärme): Die Engine (`view3d/engine`) kann
+Bilder sparen. **Standard: aus** – dann zeichnet sie jedes Bild wie die Web-App.
+
+- `setPaused(true)` (Ritt pausiert): ein Bild noch zeichnen, dann nicht mehr; wieder zeichnen bei
+  Größenänderung, Kamera-/Linien-Änderung, wiederhergestelltem Gerät, ausstehenden Grafik-Schritten.
+  Ein neuer Ritt (`run`) beginnt nie pausiert.
+- `setCapTo30Fps(true)`: höchstens ca. 30 Bilder/s (bei 144 Hz ca. 28,8); die Grafik-Automatik und der
+  „Stufe zu hoch“-Hinweis messen dann nicht (30 fps sähen sonst wie ein langsames Gerät aus).
+- `wantsFrames` / `demandListener`: sagt der Plattform-Hülle, ob sie den Display-Link (`CADisplayLink`,
+  `Choreographer`) anhalten darf. Solange die Engine eigene Zeitgeber hat (Wiederherstellungs-
+  Wächter, Kompilier-Sperre), will sie Bilder.
+- Pflichten der Hülle: `frame(now)` pro Display-Bild, `setViewSize` bei Layout-Änderung,
+  `setVisible(false)` **bevor** das Backend einen Verlust der Zeichenfläche im Hintergrund meldet (sonst
+  zählt jeder App-Wechsel als Überlastung).
+
 ## Gates (lokal = CI)
 
 Im Ordner `mobile/`:
