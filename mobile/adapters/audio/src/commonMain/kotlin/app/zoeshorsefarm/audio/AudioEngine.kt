@@ -9,6 +9,7 @@ import app.zoeshorsefarm.audio.synth.PartitionedConvolver
 import app.zoeshorsefarm.audio.synth.QUANTUM
 import app.zoeshorsefarm.audio.synth.Synth
 import app.zoeshorsefarm.audio.synth.convolverNormalizationScale
+import kotlin.concurrent.Volatile
 import kotlin.math.ceil
 
 internal const val MASTER_LEVEL = 2.0
@@ -31,6 +32,14 @@ private const val RUN_RELEASE_FAST = 0.25
 private const val RUN_FADE_FAST = 0.02
 private const val BUS_POOL = 4
 private const val VOICE_SEED = 2024
+private const val COMMAND_CAPACITY = 512
+
+private const val CMD_CHANNELS = 1
+private const val CMD_MASTER = 2
+private const val CMD_START_MUSIC = 3
+private const val CMD_STOP_MUSIC = 4
+private const val CMD_DROP_SESSION = 5
+private const val CMD_SFX = 6
 
 /**
  * The synthesiser and mixer behind the audio facade: the node graph of the web app, rendered as
@@ -46,20 +55,25 @@ private const val VOICE_SEED = 2024
  * advances with the rendered frames. The melody sequencer runs inside the render step (a lookahead
  * scheduler on the audio clock), so no timer thread is needed. Rendering does not allocate.
  *
- * Thread safety: [render] runs on the platform's audio thread, the controls on the game thread. Both
- * take [lock], a leaf lock: nothing inside calls out to the platform or the facade, so the facade can
- * safely call platform output methods (which may wait for the audio thread) while it holds its own lock.
+ * Thread safety: [render] runs on the platform's audio thread and never waits. The controls
+ * (called by the game thread, one at a time) do not touch the audio state: they put a small command
+ * into a lock-free single-producer/single-consumer [CommandQueue], and [render] executes the
+ * commands at the start of the next quantum. A full queue drops the command ([droppedCommands]).
+ * Only the plain counters and gains read by the tests are read directly, from the rendering thread.
  */
 internal class AudioEngine(
     val sampleRate: Int,
     settings: AudioSettings,
     hidden: Boolean,
-    private val lock: AudioLock,
 ) : PcmRenderer {
     private val rate = sampleRate.toDouble()
     private val synth = Synth(rate, createNoiseBuffer(sampleRate))
     private val voiceContext = VoiceContext(synth, Mulberry32(VOICE_SEED))
     private val loop = buildLoop()
+    private val commands = CommandQueue(COMMAND_CAPACITY)
+
+    @Volatile
+    private var musicRequested = false
 
     private val master = AutomationParam(rate, if (hidden) 0.0 else MASTER_LEVEL)
     private val musicChannel = AutomationParam(rate, channelGain(settings.musicVolume, settings.musicMuted))
@@ -101,7 +115,11 @@ internal class AudioEngine(
     /** Time of the next quantum on the audio clock, in seconds. */
     val currentTime: Double get() = synth.currentFrame / rate
 
-    val musicRunning: Boolean get() = lock.withLock { run != null }
+    /** The melody was started and not stopped since (as requested by the game thread). */
+    val musicRunning: Boolean get() = musicRequested
+
+    /** Commands that were dropped because the queue was full (debug counter). */
+    val droppedCommands: Int get() = commands.dropped
 
     val voicesStarted: Long get() = synth.voicesStarted
 
@@ -115,27 +133,72 @@ internal class AudioEngine(
 
     val masterGain: Double get() = master.peek
 
-    // ---- Controls (game thread) ----
+    // ---- Controls (game thread): queue a command, the audio thread executes it ----
 
     /** Fades the channels to their new gains (no clicks while dragging a volume slider). */
     fun setChannelTargets(
         musicGain: Double,
         sfxGain: Double,
-    ) = lock.withLock {
+    ) {
+        commands.offer(CMD_CHANNELS, 0, musicGain, sfxGain)
+    }
+
+    fun setMasterHidden(hidden: Boolean) {
+        commands.offer(CMD_MASTER, if (hidden) 1 else 0, 0.0, 0.0)
+    }
+
+    /** Starts the melody from the beginning with a soft fade-in. */
+    fun startMusic() {
+        if (musicRequested) return
+        musicRequested = true
+        commands.offer(CMD_START_MUSIC, 0, 0.0, 0.0)
+    }
+
+    /** Fades the melody out. The fast variant is for the background: the audio stops almost at once. */
+    fun stopMusic(fast: Boolean) {
+        if (!musicRequested) return
+        musicRequested = false
+        commands.offer(CMD_STOP_MUSIC, if (fast) 1 else 0, 0.0, 0.0)
+    }
+
+    /** Cuts all running effects (pause, background); later effects use a new session. */
+    fun dropSfxSession() {
+        commands.offer(CMD_DROP_SESSION, 0, 0.0, 0.0)
+    }
+
+    /** Plays an effect a few milliseconds from the next quantum on the current effects session. */
+    fun playSfx(
+        name: SfxName,
+        gait: String = "",
+    ) {
+        commands.offer(CMD_SFX, name.ordinal, SfxVoices.gaitIndex(gait).toDouble(), 0.0)
+    }
+
+    // ---- Commands (audio thread) ----
+
+    private fun executeCommands() {
+        commands.drain { kind, arg, first, second ->
+            when (kind) {
+                CMD_CHANNELS -> applyChannelTargets(first, second)
+                CMD_MASTER -> master.setTargetAtTime(if (arg == 1) 0.0 else MASTER_LEVEL, currentTime, MASTER_SMOOTH)
+                CMD_START_MUSIC -> startMusicNow()
+                CMD_STOP_MUSIC -> stopMusicNow(arg == 1)
+                CMD_DROP_SESSION -> dropSfxSessionNow()
+                CMD_SFX -> playSfxNow(arg, first.toInt())
+            }
+        }
+    }
+
+    private fun applyChannelTargets(
+        musicGain: Double,
+        sfxGain: Double,
+    ) {
         val now = currentTime
         musicChannel.setTargetAtTime(musicGain, now, SMOOTH)
         sfxChannel.setTargetAtTime(sfxGain, now, SMOOTH)
     }
 
-    fun setMasterHidden(hidden: Boolean) =
-        lock.withLock {
-            master.setTargetAtTime(if (hidden) 0.0 else MASTER_LEVEL, currentTime, MASTER_SMOOTH)
-        }
-
-    /** Starts the melody from the beginning with a soft fade-in. */
-    fun startMusic() = lock.withLock { startMusicLocked() }
-
-    private fun startMusicLocked() {
+    private fun startMusicNow() {
         if (run != null) return
         val now = currentTime
         val bus = acquire(musicRuns)
@@ -148,10 +211,7 @@ internal class AudioEngine(
         tickMusic()
     }
 
-    /** Fades the melody out. The fast variant is for the background: the audio stops almost at once. */
-    fun stopMusic(fast: Boolean) = lock.withLock { stopMusicLocked(fast) }
-
-    private fun stopMusicLocked(fast: Boolean) {
+    private fun stopMusicNow(fast: Boolean) {
         val bus = run ?: return
         run = null
         val now = currentTime
@@ -160,26 +220,24 @@ internal class AudioEngine(
         bus.killFrame = synth.currentFrame + framesOf(if (fast) RUN_RELEASE_FAST else RUN_RELEASE)
     }
 
-    /** Cuts all running effects (pause, background); later effects use a new session. */
-    fun dropSfxSession() = lock.withLock { dropSfxSessionLocked() }
-
-    private fun dropSfxSessionLocked() {
+    private fun dropSfxSessionNow() {
         val old = session ?: return
         session = null
         old.gain.setTargetAtTime(0.0, currentTime, SFX_SESSION_FADE)
         old.killFrame = synth.currentFrame + framesOf(SFX_SESSION_RELEASE)
     }
 
-    /** Plays an effect [recipe] a few milliseconds from now on the current effects session. */
-    fun playSfx(recipe: (VoiceContext, GainBus, Double) -> Unit) =
-        lock.withLock {
-            val bus =
-                session ?: acquire(sfxSessions).also {
-                    it.open(synth.currentFrame, 1.0)
-                    session = it
-                }
-            recipe(voiceContext, bus, currentTime + SFX_START_OFFSET)
-        }
+    private fun playSfxNow(
+        nameOrdinal: Int,
+        gaitIndex: Int,
+    ) {
+        val bus =
+            session ?: acquire(sfxSessions).also {
+                it.open(synth.currentFrame, 1.0)
+                session = it
+            }
+        SfxVoices.play(voiceContext, bus, currentTime + SFX_START_OFFSET, nameOrdinal, gaitIndex)
+    }
 
     private fun framesOf(seconds: Double): Long = ceil(seconds * rate).toLong()
 
@@ -224,25 +282,24 @@ internal class AudioEngine(
         right: FloatArray,
         frames: Int,
     ) {
-        lock.withLock {
-            var done = 0
-            while (done < frames) {
-                if (bufferedFrames == 0) {
-                    renderQuantum()
-                    bufferedFrames = QUANTUM
-                }
-                val n = minOf(bufferedFrames, frames - done)
-                val from = QUANTUM - bufferedFrames
-                outLeft.copyInto(left, done, from, from + n)
-                outRight.copyInto(right, done, from, from + n)
-                bufferedFrames -= n
-                done += n
+        var done = 0
+        while (done < frames) {
+            if (bufferedFrames == 0) {
+                renderQuantum()
+                bufferedFrames = QUANTUM
             }
+            val n = minOf(bufferedFrames, frames - done)
+            val from = QUANTUM - bufferedFrames
+            outLeft.copyInto(left, done, from, from + n)
+            outRight.copyInto(right, done, from, from + n)
+            bufferedFrames -= n
+            done += n
         }
     }
 
     private fun renderQuantum() {
         val frame = synth.currentFrame
+        executeCommands()
         tickMusic()
         endExpiredBuses(frame)
         synth.render(QUANTUM)

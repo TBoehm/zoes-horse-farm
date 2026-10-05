@@ -12,7 +12,7 @@ class AudioEngineTest {
     private fun engine(
         settings: AudioSettings = AudioSettings(),
         hidden: Boolean = false,
-    ) = AudioEngine(sampleRate, settings, hidden, AudioLock())
+    ) = AudioEngine(sampleRate, settings, hidden)
 
     /** Renders [seconds] in blocks of [block] frames and returns the left channel. */
     private fun AudioEngine.render(
@@ -45,9 +45,6 @@ class AudioEngineTest {
         return p
     }
 
-    private fun AudioEngine.sfx(play: (VoiceContext, app.zoeshorsefarm.audio.synth.GainBus, Double) -> Unit) =
-        playSfx(play)
-
     @Test
     fun staysSilentWithoutSounds() {
         val e = engine()
@@ -58,7 +55,7 @@ class AudioEngineTest {
     @Test
     fun anEffectSoundsAndThenDiesOut() {
         val e = engine()
-        e.sfx { v, out, t -> SfxVoices.hoof(v, out, t, "canter") }
+        e.playSfx(SfxName.Hoof, "canter")
         val out = e.render(1.0)
         assertTrue(peak(out, 0.0, 0.15) > 0.05f, "audible")
         assertTrue(peak(out, 0.5, 1.0) < 1e-4f, "silent afterwards")
@@ -68,7 +65,7 @@ class AudioEngineTest {
     @Test
     fun anEffectStartsAfterTheSchedulingLatencyAndTheLookAheadDelay() {
         val e = engine()
-        e.sfx { v, out, t -> SfxVoices.hoof(v, out, t, "trot") }
+        e.playSfx(SfxName.Hoof, "trot")
         val out = e.render(0.1)
         // 4 ms scheduling offset + 6 ms pre-delay of the compressor
         assertEquals(0f, peak(out, 0.0, 0.009))
@@ -78,7 +75,8 @@ class AudioEngineTest {
     @Test
     fun anUnknownGaitStartsNoVoice() {
         val e = engine()
-        e.sfx { v, out, t -> SfxVoices.hoof(v, out, t, "halt") }
+        e.playSfx(SfxName.Hoof, "halt")
+        e.render(0.05)
         assertEquals(0L, e.voicesStarted)
         assertEquals(0, e.activeVoices)
     }
@@ -86,22 +84,23 @@ class AudioEngineTest {
     @Test
     fun everyEffectStartsVoices() {
         val effects =
-            mapOf<String, (VoiceContext, app.zoeshorsefarm.audio.synth.GainBus, Double) -> Unit>(
-                "back" to { v, o, t -> SfxVoices.hoof(v, o, t, "back") },
-                "walk" to { v, o, t -> SfxVoices.hoof(v, o, t, "walk") },
-                "trot" to { v, o, t -> SfxVoices.hoof(v, o, t, "trot") },
-                "canter" to { v, o, t -> SfxVoices.hoof(v, o, t, "canter") },
-                "takeoff" to { v, o, t -> SfxVoices.takeoff(v, o, t) },
-                "landing" to { v, o, t -> SfxVoices.landing(v, o, t) },
-                "railDown" to { v, o, t -> SfxVoices.railDown(v, o, t) },
-                "startSignal" to { v, o, t -> SfxVoices.startSignal(v, o, t) },
-                "finishSignal" to { v, o, t -> SfxVoices.finishSignal(v, o, t) },
+            listOf(
+                SfxName.Hoof to "back",
+                SfxName.Hoof to "walk",
+                SfxName.Hoof to "trot",
+                SfxName.Hoof to "canter",
+                SfxName.Takeoff to "",
+                SfxName.Landing to "",
+                SfxName.RailDown to "",
+                SfxName.StartSignal to "",
+                SfxName.FinishSignal to "",
             )
-        for ((name, play) in effects) {
+        for ((name, gait) in effects) {
             val e = engine()
-            e.sfx(play)
-            assertTrue(e.voicesStarted > 0, name)
-            assertTrue(peak(e.render(0.8)) > 0.01f, name)
+            e.playSfx(name, gait)
+            val out = e.render(0.8)
+            assertTrue(e.voicesStarted > 0, "$name $gait")
+            assertTrue(peak(out) > 0.01f, "$name $gait")
         }
     }
 
@@ -109,7 +108,7 @@ class AudioEngineTest {
     fun aQuieterChannelGainMakesEffectsQuieter() {
         fun levelAt(sfxVolume: Double): Float {
             val e = engine(AudioSettings(sfxVolume = sfxVolume))
-            e.sfx { v, out, t -> SfxVoices.hoof(v, out, t, "canter") }
+            e.playSfx(SfxName.Hoof, "canter")
             return peak(e.render(0.3))
         }
         assertTrue(levelAt(0.25) < levelAt(0.5))
@@ -133,7 +132,7 @@ class AudioEngineTest {
         val e = engine()
         e.setChannelTargets(musicGain = 0.25, sfxGain = 0.0)
         e.render(0.3)
-        e.sfx { v, out, t -> SfxVoices.landing(v, out, t) }
+        e.playSfx(SfxName.Landing)
         assertTrue(peak(e.render(0.5)) < 1e-4f)
     }
 
@@ -142,18 +141,18 @@ class AudioEngineTest {
         val e = engine()
         e.setMasterHidden(true)
         e.render(0.3)
-        e.sfx { v, out, t -> SfxVoices.landing(v, out, t) }
+        e.playSfx(SfxName.Landing)
         assertTrue(peak(e.render(0.5)) < 1e-4f)
         e.setMasterHidden(false)
         e.render(0.3)
-        e.sfx { v, out, t -> SfxVoices.landing(v, out, t) }
+        e.playSfx(SfxName.Landing)
         assertTrue(peak(e.render(0.5)) > 0.05f)
     }
 
     @Test
     fun theEngineCanStartHidden() {
         val e = engine(hidden = true)
-        e.sfx { v, out, t -> SfxVoices.landing(v, out, t) }
+        e.playSfx(SfxName.Landing)
         assertEquals(0f, peak(e.render(0.3)))
     }
 
@@ -161,7 +160,7 @@ class AudioEngineTest {
     fun droppingTheEffectsSessionCutsRunningEffects() {
         fun run(drop: Boolean): FloatArray {
             val e = engine()
-            e.sfx { v, out, t -> SfxVoices.railDown(v, out, t) }
+            e.playSfx(SfxName.RailDown)
             e.render(0.05)
             if (drop) e.dropSfxSession()
             return e.render(0.8)
@@ -173,10 +172,10 @@ class AudioEngineTest {
     @Test
     fun effectsAfterADroppedSessionPlayInANewSession() {
         val e = engine()
-        e.sfx { v, out, t -> SfxVoices.landing(v, out, t) }
+        e.playSfx(SfxName.Landing)
         e.dropSfxSession()
         e.render(0.05)
-        e.sfx { v, out, t -> SfxVoices.landing(v, out, t) }
+        e.playSfx(SfxName.Landing)
         assertTrue(peak(e.render(0.5), 0.05, 0.5) > 0.05f)
     }
 
@@ -244,7 +243,7 @@ class AudioEngineTest {
         fun run(block: Int): FloatArray {
             val e = engine()
             e.startMusic()
-            e.sfx { v, out, t -> SfxVoices.hoof(v, out, t, "walk") }
+            e.playSfx(SfxName.Hoof, "walk")
             return e.render(1.5, block)
         }
         assertContentEquals(run(512), run(77))
@@ -255,7 +254,7 @@ class AudioEngineTest {
         fun run(): FloatArray {
             val e = engine()
             e.startMusic()
-            e.sfx { v, out, t -> SfxVoices.landing(v, out, t) }
+            e.playSfx(SfxName.Landing)
             return e.render(1.0)
         }
         assertContentEquals(run(), run())
@@ -274,9 +273,21 @@ class AudioEngineTest {
     @Test
     fun anExhaustedVoicePoolDropsNotesWithoutFailing() {
         val e = engine()
-        repeat(30) { e.sfx { v, out, t -> SfxVoices.railDown(v, out, t) } }
-        assertTrue(e.voicesDropped > 0)
+        repeat(30) { e.playSfx(SfxName.RailDown) }
         assertTrue(peak(e.render(0.3)) > 0f)
+        assertTrue(e.voicesDropped > 0)
+    }
+
+    @Test
+    fun commandsBeyondTheQueueCapacityAreDroppedAndCounted() {
+        val e = engine()
+        repeat(600) { e.playSfx(SfxName.Hoof, "walk") }
+        assertTrue(e.droppedCommands > 0)
+        e.render(0.2)
+        val dropped = e.droppedCommands
+        e.playSfx(SfxName.Hoof, "walk")
+        e.render(0.05)
+        assertEquals(dropped, e.droppedCommands, "the queue is usable again after draining")
     }
 
     @Test
@@ -284,9 +295,9 @@ class AudioEngineTest {
         val e = engine()
         e.startMusic()
         repeat(4) {
-            e.sfx { v, out, t -> SfxVoices.landing(v, out, t) }
-            e.sfx { v, out, t -> SfxVoices.finishSignal(v, out, t) }
-            e.sfx { v, out, t -> SfxVoices.hoof(v, out, t, "canter") }
+            e.playSfx(SfxName.Landing)
+            e.playSfx(SfxName.FinishSignal)
+            e.playSfx(SfxName.Hoof, "canter")
         }
         assertTrue(peak(e.render(2.0)) <= 1.0f)
     }

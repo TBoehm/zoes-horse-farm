@@ -109,10 +109,14 @@ so tests inject `FakePcmOutput` and a manual timer.
 ## Threading
 
 The game thread calls the facade, the platform's audio thread calls `AudioEngine.render`. The facade has
-its own lock for its state and calls platform output methods while holding it. The engine has a separate,
-leaf lock that the facade methods and `render` take for short moments (scheduling a sound, rendering one
-block): the audio thread never needs the facade lock, so `AVAudioEngine.pause()` waiting for the audio
-thread cannot deadlock. On Kotlin/Native a garbage collection can still pause the audio thread; keep the
+its own lock for its state and calls platform output methods while holding it. The engine has no lock: the
+facade sends small commands (set volumes, hide, start/stop music, drop the effects session, play an effect
+by name) through a preallocated lock-free single-producer/single-consumer `CommandQueue`, and `render`
+executes them at the start of the next 128-frame quantum. The audio thread therefore never waits for the
+game thread (no priority inversion, however many voices an effect starts) and never takes the facade lock,
+so `AVAudioEngine.pause()` waiting for the audio thread cannot deadlock. A full queue (512 commands) drops
+the command and counts it in `AudioEngine.droppedCommands`. The iOS output holds its renderer in an
+`AtomicReference`. On Kotlin/Native a garbage collection can still pause the audio thread; keep the
 frame loops free of allocations as well.
 
 ## Deviations from the web app

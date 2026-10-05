@@ -76,9 +76,9 @@ class JvmAudioTest {
 
     @Test
     fun renderingABlockDoesNotAllocate() {
-        val engine = AudioEngine(44100, AudioSettings(), false, AudioLock())
+        val engine = AudioEngine(44100, AudioSettings(), false)
         engine.startMusic()
-        engine.playSfx { v, out, t -> SfxVoices.railDown(v, out, t) }
+        engine.playSfx(SfxName.RailDown)
         val left = FloatArray(512)
         val right = FloatArray(512)
         // warm up: the JIT compiles the render path and the melody has started all its voice types
