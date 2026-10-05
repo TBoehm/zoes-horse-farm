@@ -291,6 +291,43 @@ class AudioEngineTest {
     }
 
     @Test
+    fun aFullQueueDoesNotLoseMusicOrMasterState() {
+        val e = engine()
+        e.setMasterHidden(true)
+        e.render(0.3)
+        repeat(600) { e.playSfx(SfxName.Hoof, "walk") } // overflows the queue
+        assertTrue(e.droppedCommands > 0)
+        e.startMusic()
+        e.setMasterHidden(false)
+        e.setChannelTargets(musicGain = 0.25, sfxGain = 0.5)
+        assertTrue(e.musicRunning)
+        e.render(0.5)
+        assertEquals(MASTER_LEVEL, e.masterGain, 0.01, "un-hidden")
+        assertEquals(0.25, e.musicChannelGain, 0.01)
+        assertEquals(0.5, e.sfxChannelGain, 0.01)
+        assertTrue(peak(e.render(1.0)) > 0.01f, "the melody plays")
+        e.stopMusic(fast = false)
+        repeat(600) { e.playSfx(SfxName.Hoof, "walk") }
+        assertEquals(false, e.musicRunning)
+        e.render(3.0)
+        assertEquals(0, e.activeVoices, "the melody stopped")
+    }
+
+    @Test
+    fun theLatestControlValueWinsWithinOneQuantum() {
+        val e = engine()
+        e.startMusic()
+        e.stopMusic(fast = false)
+        e.startMusic()
+        e.setMasterHidden(true)
+        e.setMasterHidden(false)
+        e.render(1.0)
+        assertTrue(e.musicRunning)
+        assertEquals(MASTER_LEVEL, e.masterGain, 0.01)
+        assertTrue(peak(e.render(0.5)) > 0.01f)
+    }
+
+    @Test
     fun theOutputStaysWithinFullScaleEvenWithEverythingPlaying() {
         val e = engine()
         e.startMusic()
