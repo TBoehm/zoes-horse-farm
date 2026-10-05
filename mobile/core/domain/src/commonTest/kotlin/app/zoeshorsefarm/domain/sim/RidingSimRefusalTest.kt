@@ -43,11 +43,8 @@ private fun atCenter(
     return zone.far * 0.5 + zone.near * 0.5
 }
 
-private fun untilQuiet(
-    s: RidingSim,
-    @Suppress("UNUSED_PARAMETER") ev: List<SimEvent>,
-    @Suppress("UNUSED_PARAMETER") t: Double,
-) = s.horse.jump == null && s.horse.refusal == null && s.horse.z > 4
+private val untilQuiet: (RidingSim, List<SimEvent>, Double) -> Boolean =
+    { s, _, _ -> s.horse.jump == null && s.horse.refusal == null && s.horse.z > 4 }
 
 private val vertical = ElementKind.VERTICAL
 private val cross = ElementKind.CROSS
@@ -61,7 +58,7 @@ class RidingSimRefusalTest {
         val v = makeElement(vertical, 0.6)
         val sim = makeSim(listOf(v))
         placeBefore(sim, v, 8.0, speed = 5.8, gallop = true)
-        val result = drive(sim, CANTER, until = ::untilQuiet)
+        val result = drive(sim, CANTER, until = untilQuiet)
         val take = result.events.ofType<SimEvent.Takeoff>()
         assertEquals(1, take.size)
         assertTrue(take[0].self)
@@ -101,7 +98,7 @@ class RidingSimRefusalTest {
             drive(
                 sim,
                 { s, _ -> SimInput(gallop = (sim.approach?.distance ?: 0.0) < 8 || s.horse.gallop) },
-                until = ::untilQuiet,
+                until = untilQuiet,
             )
         assertEquals(0, result.events.ofType<SimEvent.Refusal>().size)
         assertEquals(1, result.events.ofType<SimEvent.Landed>().size)
@@ -126,7 +123,7 @@ class RidingSimRefusalTest {
                     val correcting = since != null && t - since < 0.3
                     press(s, t).copy(steer = if (correcting) 0.5 else 0.0)
                 },
-                until = ::untilQuiet,
+                until = untilQuiet,
                 maxT = 6.0,
                 onStep = { s, _, _ -> maxHeading = max(maxHeading, abs(s.horse.heading)) },
             )
@@ -259,18 +256,15 @@ class RidingSimRefusalTest {
 
     // ---- Lock after refusal (rule 22) ----
 
-    private fun untilStopped(
-        s: RidingSim,
-        @Suppress("UNUSED_PARAMETER") ev: List<SimEvent>,
-        @Suppress("UNUSED_PARAMETER") t: Double,
-    ) = s.horse.refusal == null && s.horse.speed == 0.0
+    private val untilStopped: (RidingSim, List<SimEvent>, Double) -> Boolean =
+        { s, _, _ -> s.horse.refusal == null && s.horse.speed == 0.0 }
 
     @Test
     fun approachingAgainWithinTheApproachDistanceEvasionInsteadOfRefusal() {
         val v = makeElement(vertical, 0.6)
         val sim = makeSim(listOf(v))
         placeBefore(sim, v, 6.0, speed = S.trotMedium)
-        drive(sim, TROT, maxT = 3.0, until = ::untilStopped)
+        drive(sim, TROT, maxT = 3.0, until = untilStopped)
         turnInPlace(sim, PI)
         drive(sim, SimInput(throttle = 1.0), until = { s, _, _ -> s.horse.z < -7 }, maxT = 20.0)
         brakeToHalt(sim)
@@ -300,13 +294,13 @@ class RidingSimRefusalTest {
         val v = makeElement(vertical, 0.6)
         val sim = makeSim(listOf(v))
         placeBefore(sim, v, 6.0, speed = S.trotMedium)
-        drive(sim, TROT, maxT = 3.0, until = ::untilStopped)
+        drive(sim, TROT, maxT = 3.0, until = untilStopped)
         turnInPlace(sim, PI)
         drive(sim, SimInput(throttle = 1.0), until = { s, _, _ -> s.horse.z < -9 }, maxT = 20.0)
         brakeToHalt(sim)
         turnInPlace(sim, 0.0)
         sim.step(1.0 / 60, SimInput(gallop = false))
-        val result = drive(sim, pressAt(CANTER, ::atCenter), until = ::untilQuiet)
+        val result = drive(sim, pressAt(CANTER, ::atCenter), until = untilQuiet)
         val take = result.events.ofType<SimEvent.Takeoff>()
         assertEquals(1, take.size)
         assertFalse(take[0].self)
@@ -318,7 +312,7 @@ class RidingSimRefusalTest {
         val v = makeElement(vertical, 0.6)
         val sim = makeSim(listOf(v))
         placeBefore(sim, v, 6.0, speed = S.trotMedium)
-        drive(sim, TROT, maxT = 3.0, until = ::untilStopped)
+        drive(sim, TROT, maxT = 3.0, until = untilStopped)
         turnInPlace(sim, PI)
         drive(
             sim,
@@ -380,7 +374,7 @@ class RidingSimRefusalTest {
         val v = makeElement(vertical, 0.6)
         val sim = makeSim(listOf(v), canRefuse = { _, _ -> false })
         placeBefore(sim, v, 8.0, speed = 5.8, gallop = true)
-        val result = drive(sim, pressAt(CANTER, ::atCenter), until = ::untilQuiet)
+        val result = drive(sim, pressAt(CANTER, ::atCenter), until = untilQuiet)
         val take = result.events.ofType<SimEvent.Takeoff>()[0]
         assertFalse(take.self)
         assertEquals(0.0, take.risk)
@@ -449,7 +443,7 @@ class RidingSimRefusalTest {
         val v = makeElement(vertical, 0.6)
         val sim = makeSim(listOf(v))
         placeBefore(sim, v, 6.0, speed = S.trotMedium)
-        drive(sim, TROT, maxT = 3.0, until = ::untilStopped)
+        drive(sim, TROT, maxT = 3.0, until = untilStopped)
         assertEquals(0.0, sim.horse.speed)
         var inside = false
         val result =
@@ -564,7 +558,7 @@ class RidingSimRefusalTest {
         val v = makeElement(vertical, 0.6)
         val sim = makeSim(listOf(v))
         placeBefore(sim, v, 6.0, speed = 1.2)
-        drive(sim, TROT, maxT = 8.0, until = ::untilStopped)
+        drive(sim, TROT, maxT = 8.0, until = untilStopped)
         val distance = -toLocal(v, sim.horse.x, sim.horse.z).along
         assertTrue(distance >= 0.35)
         assertTrue(distance < 1)
@@ -575,7 +569,7 @@ class RidingSimRefusalTest {
         val v = makeElement(vertical, 0.6)
         val sim = makeSim(listOf(v))
         placeBefore(sim, v, 6.0, speed = S.trotMedium)
-        drive(sim, TROT, maxT = 3.0, until = ::untilStopped)
+        drive(sim, TROT, maxT = 3.0, until = untilStopped)
         // back off 5 m, then ride sideways far beyond 12 m from the center, but along the
         // approach axis always closer than the approach distance
         turnInPlace(sim, PI)
