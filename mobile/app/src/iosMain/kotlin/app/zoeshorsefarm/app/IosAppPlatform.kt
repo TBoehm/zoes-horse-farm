@@ -3,6 +3,7 @@
 package app.zoeshorsefarm.app
 
 import app.zoeshorsefarm.audio.createPlatformAudio
+import app.zoeshorsefarm.platform.DeviceClass
 import app.zoeshorsefarm.platform.DeviceInfoSource
 import app.zoeshorsefarm.platform.SystemClock
 import app.zoeshorsefarm.platform.SystemDeviceInfo
@@ -90,17 +91,25 @@ class IosMaterialCache(
 
 /**
  * The platform of an iPhone or iPad. [debug] switches the debug box of the ride on; [log] gets every
- * error line of the app (default: `println`, which shows in the Xcode console).
+ * error line of the app (default: `println`, which shows in the Xcode console). [inputDevice]: pass
+ * `DeviceClass.HYBRID` for an iPad with a keyboard (the shell knows: `GCKeyboard.coalescedKeyboard`); the
+ * touch controls then show on the first touch and hide on the first game key. [capTo30Fps] starts the
+ * battery lever.
  */
 fun createIosAppPlatform(
     debug: Boolean = false,
     log: (String) -> Unit = { println(it) },
     deviceInfo: DeviceInfoSource = SystemDeviceInfo,
+    inputDevice: DeviceClass = DeviceClass.TOUCH,
+    capTo30Fps: Boolean = false,
 ): AppPlatform =
     AppPlatform(
         keyValueBackend = UserDefaultsKeyValueBackend(),
         audio = createPlatformAudio(),
-        renderBackends = FilamentBackendFactory(IosMaterialCache()) { (it as IosSurface).toNative() },
+        renderBackends =
+            FilamentBackendFactory(IosMaterialCache(), log, {
+                deviceInfo.read().gpuName
+            }) { (it as IosSurface).toNative() },
         deviceInfo = deviceInfo,
         clock = SystemClock,
         timeZone =
@@ -111,6 +120,8 @@ fun createIosAppPlatform(
         logSink = log,
         preferredLanguages = NSLocale.preferredLanguages.map { it as? String },
         appVersion = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String,
+        inputDevice = inputDevice,
+        capTo30Fps = capTo30Fps,
         debug = debug,
         shutdown = { FilamentMaterialCompiler.shutdown() },
     )

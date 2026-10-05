@@ -299,24 +299,27 @@ class AppRideTest {
     }
 
     @Test
-    fun aRideThatStartsBeforeTheSurfaceWaitsPausedAndGoesOnWhenItArrives() {
+    fun aRideThatStartsBeforeTheSurfaceWaitsWithoutAPauseAndRunsWhenItArrives() {
         val rig = startedRig(withSurface = false)
 
         rig.app.navigator.go(Route.Ride())
         val ride = rig.app.model<RideScreenModel>()
-        rig.frames(5)
-        assertTrue(ride.paused)
-        assertNotNull(ride.lostNote)
+        val start = ride.view.horse.let { it.x to it.z }
+        ride.input.touch.moveStick(1.0, PI / 2)
+        rig.frames(30)
+        // waiting is no lost device: no pause, no note, and nothing is stepped yet
+        assertFalse(ride.paused)
+        assertNull(ride.lostNote)
+        assertEquals(start, ride.view.horse.let { it.x to it.z })
         assertEquals(0, rig.backends.created.size)
 
         rig.createSurface()
-        assertNull(ride.lostNote)
-        ride.onPauseAction(PauseAction.RESUME)
-        rig.frames(5)
+        rig.frames(60)
 
         assertEquals(1, rig.backends.created.size)
         assertFalse(ride.paused)
-        assertTrue(rig.rendered() >= 5)
+        assertTrue(ride.view.horse.let { it.x to it.z } != start)
+        assertTrue(rig.rendered() >= 60)
     }
 
     @Test
@@ -378,15 +381,17 @@ class AppRideTest {
     }
 
     @Test
-    fun aLossInTheForegroundBlocksTheLevelAndAsksForALowerOne() {
+    fun aRealLossOfTheDeviceInTheForegroundBlocksTheLevelAndAsksForALowerOne() {
         val rig = startedRig(level = GraphicsLevel.MEDIUM)
         rig.app.navigator.go(Route.Ride())
         val ride = rig.app.model<RideScreenModel>()
         rig.frames(60)
 
-        // the same loss without the lifecycle first: the engine thinks the device is overloaded
-        rig.app.onSurfaceDestroyed()
-        rig.createSurface()
+        // the backend itself reports the loss (the shell did not take the surface away)
+        rig.backends.last.fake
+            .simulateContextLoss()
+        rig.backends.last.fake
+            .simulateContextRestore()
         ride.onPauseAction(PauseAction.RESUME)
         rig.frames(5)
 
@@ -397,6 +402,38 @@ class AppRideTest {
                 .blockedLevels,
         )
         assertNotNull(ride.feedbackText)
+    }
+
+    @Test
+    fun aSurfaceTakenAwayByTheShellInTheForegroundIsNoOverload() {
+        val rig = startedRig(level = GraphicsLevel.MEDIUM)
+        rig.app.navigator.go(Route.Ride())
+        val ride = rig.app.model<RideScreenModel>()
+        rig.frames(60)
+
+        // no lifecycle event before it: a split screen or a resize of the window, not an app switch
+        rig.app.onSurfaceDestroyed()
+        rig.frames(10)
+        assertTrue(ride.paused)
+        rig.createSurface()
+        ride.onPauseAction(PauseAction.RESUME)
+        rig.frames(5)
+
+        assertTrue(
+            rig.app.store
+                .get(CrashGuardSection)
+                .blockedLevels
+                .isEmpty(),
+        )
+        assertEquals(
+            GraphicsLevel.MEDIUM,
+            rig.app.settings
+                .get()
+                .graphicsLevel,
+        )
+        assertFalse(ride.paused)
+        assertNull(ride.feedbackText)
+        assertEquals(2, rig.backends.last.attachCount)
     }
 
     // ---- background and the crash guard ----

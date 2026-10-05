@@ -23,8 +23,8 @@ kotlin {
             api(project(":adapters:render-filament"))
             api(project(":adapters:storage"))
             api(project(":adapters:platform"))
-            // NativeSurface: the factory of the Filament backend turns the shell's surface into one
-            implementation(libs.filament)
+            // NativeSurface: the shells hand `FilamentBackendFactory` a function to a Filament surface
+            api(libs.filament)
         }
         commonTest.dependencies {
             implementation(project(":core:application-testing"))

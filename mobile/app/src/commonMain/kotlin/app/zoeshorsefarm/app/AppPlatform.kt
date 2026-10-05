@@ -92,6 +92,7 @@ fun interface RenderBackendFactory {
  * @param appVersion version text of the build (`versionName` / `CFBundleShortVersionString`), null = dev
  * @param inputDevice phones and tablets are TOUCH; a tablet with a hardware keyboard may be HYBRID
  * @param initialAppState normally FOREGROUND
+ * @param capTo30Fps battery lever: draw at most 30 frames per second (see `ZoesHorseFarmApp.setCapTo30Fps`)
  * @param debug the debug box of the ride (`ZoesHorseFarmApp.debugText`) is switched on
  * @param random the random source of the ride (web: `Math.random`)
  * @param shutdown called once by `ZoesHorseFarmApp.dispose` after everything else (e.g. the Filament
@@ -111,6 +112,7 @@ class AppPlatform(
     val appVersion: String? = null,
     val inputDevice: DeviceClass = DeviceClass.TOUCH,
     val initialAppState: AppState = AppState.FOREGROUND,
+    val capTo30Fps: Boolean = false,
     val debug: Boolean = false,
     val random: Rng = { Random.nextDouble() },
     val shutdown: () -> Unit = {},

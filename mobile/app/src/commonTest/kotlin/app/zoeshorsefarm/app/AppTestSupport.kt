@@ -7,6 +7,8 @@ import app.zoeshorsefarm.audio.Cancellable
 import app.zoeshorsefarm.audio.OutputState
 import app.zoeshorsefarm.audio.PcmOutput
 import app.zoeshorsefarm.audio.PcmRenderer
+import app.zoeshorsefarm.platform.AppState
+import app.zoeshorsefarm.platform.DeviceClass
 import app.zoeshorsefarm.platform.DeviceInfo
 import app.zoeshorsefarm.presentation.nav.ScreenModel
 import app.zoeshorsefarm.scene.graph.Camera
@@ -152,11 +154,13 @@ internal class TestBackends(
     val created = ArrayList<TestSurfaceBackend>()
     var antialias: Boolean? = null
     var available = true
+    var failWith: Throwable? = null
 
     val last: TestSurfaceBackend get() = created.last()
 
     override fun create(antialias: Boolean): SurfaceBackend? {
         this.antialias = antialias
+        failWith?.let { throw it }
         if (!available) return null
         val made =
             if (quiet) {
@@ -196,8 +200,6 @@ internal class TestPcmOutput : PcmOutput {
     }
 }
 
-internal fun testAudio() = AudioPlatform({ TestPcmOutput() }, { _, _ -> Cancellable { } })
-
 internal val BIG_DEVICE = DeviceInfo(8L * 1024 * 1024 * 1024, 8, true, 2400, 1080, "Test GPU")
 
 internal inline fun <reified T : ScreenModel> ZoesHorseFarmApp.model(): T {
@@ -213,6 +215,10 @@ internal class AppRig(
     languages: List<String?> = listOf("en"),
     debug: Boolean = false,
     withSurface: Boolean = true,
+    state: AppState = AppState.FOREGROUND,
+    capTo30Fps: Boolean = false,
+    inputDevice: DeviceClass = DeviceClass.TOUCH,
+    unlockOutput: TestPcmOutput? = null,
 ) {
     val clock = ManualClock(1_700_000_000_000L)
     val backends = TestBackends(quiet)
@@ -222,7 +228,7 @@ internal class AppRig(
     val platform =
         AppPlatform(
             keyValueBackend = storage,
-            audio = testAudio(),
+            audio = AudioPlatform({ unlockOutput ?: TestPcmOutput() }, { _, _ -> Cancellable { } }),
             renderBackends = backends,
             deviceInfo = { BIG_DEVICE },
             clock = clock,
@@ -231,9 +237,12 @@ internal class AppRig(
             preferredLanguages = languages,
             random = seededRng(1),
             debug = debug,
+            initialAppState = state,
+            capTo30Fps = capTo30Fps,
+            inputDevice = inputDevice,
             shutdown = { shutdowns++ },
         )
-    val app = ZoesHorseFarmApp(platform)
+    val app = (ZoesHorseFarmApp.create(platform) as AppCreation.Created).app
     val surface = TestSurface()
 
     init {

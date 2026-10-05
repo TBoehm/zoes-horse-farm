@@ -83,4 +83,20 @@ class UiSchedulerTest {
         advance(200)
         assertEquals(emptyList(), log)
     }
+
+    @Test
+    fun tellsWhenATaskIsPostedAndWhetherItIsIdle() {
+        var posted = 0
+        scheduler.onPosted = { posted++ }
+        assertEquals(true, scheduler.isIdle)
+
+        val task = scheduler.postDelayed(100) { log += "a" }
+        assertEquals(1, posted)
+        assertEquals(false, scheduler.isIdle)
+
+        task.cancel()
+        assertEquals(false, scheduler.isIdle) // dropped by the next tick
+        advance(1)
+        assertEquals(true, scheduler.isIdle)
+    }
 }
