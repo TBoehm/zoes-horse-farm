@@ -46,22 +46,27 @@ fun programKey(
         listOf(
             material.type,
             material.customProgramCacheKey(),
-            if (instanced != null) "inst" else "",
-            if (instanced?.instanceColor != null) "instColor" else "",
-            if (node is SkinnedMesh) "skin" else "",
-            if (node is Points) "points" else "",
-            if (material.vertexColors) "vc" else "",
-            if (material.map != null) "map" else "",
-            if (material is StandardMaterial && material.normalMap != null) "nmap" else "",
-            if (material.alphaMap != null) "amap" else "",
-            if (material.side == Side.DOUBLE) "double" else "",
-            if (material.transparent) "transp" else "",
-            if (state.fog && material.fog) "fog" else "",
-            if (state.environment && material is StandardMaterial) "env" else "",
-            if (state.shadows && node.receiveShadow) "shadow" else "",
+            flag(instanced != null, "inst"),
+            flag(instanced?.instanceColor != null, "instColor"),
+            flag(node is SkinnedMesh, "skin"),
+            flag(node is Points, "points"),
+            flag(material.vertexColors, "vc"),
+            flag(material.map != null, "map"),
+            flag(material is StandardMaterial && material.normalMap != null, "nmap"),
+            flag(material.alphaMap != null, "amap"),
+            flag(material.side == Side.DOUBLE, "double"),
+            flag(material.transparent, "transp"),
+            flag(state.fog && material.fog, "fog"),
+            flag(state.environment && material is StandardMaterial, "env"),
+            flag(state.shadows && node.receiveShadow, "shadow"),
         )
     return flags.joinToString("|")
 }
+
+private fun flag(
+    on: Boolean,
+    name: String,
+): String = if (on) name else ""
 
 /**
  * A stand-in for what the GPU keeps, for JVM tests (rule 4: the peak of live shader programs and

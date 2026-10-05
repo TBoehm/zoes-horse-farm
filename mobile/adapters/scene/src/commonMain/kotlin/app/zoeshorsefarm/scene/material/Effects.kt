@@ -30,7 +30,7 @@ enum class WindKind {
     /** Grass tuft tips sway (instanced). */
     TUFT,
 
-    /** Stems bend; the geometry's float attribute `petal` (1 on petals) picks the vertices that take the instance colour. */
+    /** Stems bend; the float attribute `petal` (1 on petals) picks the vertices that take the instance colour. */
     BLOSSOMS,
 
     /** Pennants flutter; needs the vec3 attribute `aFlutter` (direction times weight). */

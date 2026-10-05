@@ -19,54 +19,76 @@ class Rgba(
 object CssColor {
     private val FUNCTION = Regex("""^([a-zA-Z]+)\(\s*([^)]*)\)$""")
 
-    /** `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, `hsl()`, `hsla()` or a colour name; null if unknown. */
+    /** `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, `hsl()`, `hsla()` or a name; null if unknown. */
     fun parse(style: String): Rgba? {
         val text = style.trim()
-        if (text.startsWith("#")) return parseHex(text.substring(1))
         val fn = FUNCTION.matchEntire(text)
-        if (fn != null) {
-            val parts =
-                fn.groupValues[2]
-                    .split(',', ' ', '/')
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-            return when (fn.groupValues[1].lowercase()) {
-                "rgb", "rgba" -> parseRgb(parts)
-                "hsl", "hsla" -> parseHsl(parts)
-                else -> null
-            }
+        return when {
+            text.startsWith("#") -> parseHex(text.substring(1))
+            fn != null -> parseFunction(fn.groupValues[1].lowercase(), fn.groupValues[2])
+            else -> parseName(text.lowercase())
         }
-        val lower = text.lowercase()
-        if (lower == "transparent") return Rgba.TRANSPARENT
-        val named = Color.NAMES[lower] ?: return null
-        return Rgba(
-            ((named shr 16) and 255).toDouble(),
-            ((named shr 8) and 255).toDouble(),
-            (named and 255).toDouble(),
-            1.0,
-        )
     }
 
     /** Like [parse], but an unparsable colour is a programming error. */
     fun require(style: String): Rgba = parse(style) ?: error("unknown CSS colour '$style'")
 
-    private fun parseHex(hex: String): Rgba? {
-        if (hex.isEmpty() || !hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
-        return when (hex.length) {
-            3, 4 -> {
-                val v = hex.map { it.digitToInt(16) * 17.0 }
-                Rgba(v[0], v[1], v[2], if (v.size == 4) v[3] / 255 else 1.0)
+    private fun parseName(lower: String): Rgba? {
+        val named = Color.NAMES[lower]
+        return when {
+            lower == "transparent" -> {
+                Rgba.TRANSPARENT
             }
 
-            6, 8 -> {
-                val v = (0 until hex.length / 2).map { hex.substring(it * 2, it * 2 + 2).toInt(16).toDouble() }
-                Rgba(v[0], v[1], v[2], if (v.size == 4) v[3] / 255 else 1.0)
+            named == null -> {
+                null
             }
 
             else -> {
-                null
+                Rgba(
+                    ((named shr 16) and 255).toDouble(),
+                    ((named shr 8) and 255).toDouble(),
+                    (named and 255).toDouble(),
+                    1.0,
+                )
             }
         }
+    }
+
+    private fun parseFunction(
+        name: String,
+        arguments: String,
+    ): Rgba? {
+        val parts = arguments.split(',', ' ', '/').map { it.trim() }.filter { it.isNotEmpty() }
+        return when (name) {
+            "rgb", "rgba" -> parseRgb(parts)
+            "hsl", "hsla" -> parseHsl(parts)
+            else -> null
+        }
+    }
+
+    private fun isHexDigit(c: Char) = c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F'
+
+    private fun parseHex(hex: String): Rgba? {
+        val values =
+            when {
+                hex.isEmpty() || !hex.all(::isHexDigit) -> {
+                    null
+                }
+
+                hex.length == 3 || hex.length == 4 -> {
+                    hex.map { it.digitToInt(16) * 17.0 }
+                }
+
+                hex.length == 6 || hex.length == 8 -> {
+                    (0 until hex.length / 2).map { hex.substring(it * 2, it * 2 + 2).toInt(16).toDouble() }
+                }
+
+                else -> {
+                    null
+                }
+            }
+        return values?.let { Rgba(it[0], it[1], it[2], if (it.size == 4) it[3] / 255 else 1.0) }
     }
 
     private fun channel(
@@ -76,35 +98,42 @@ object CssColor {
         if (text.endsWith("%")) text.dropLast(1).toDoubleOrNull()?.let { it / 100 * scale } else text.toDoubleOrNull()
 
     private fun alpha(text: String?): Double? =
-        if (text ==
-            null
-        ) {
-            1.0
-        } else if (text.endsWith("%")) {
-            text.dropLast(1).toDoubleOrNull()?.let { it / 100 }
-        } else {
-            text.toDoubleOrNull()
+        when {
+            text == null -> 1.0
+            text.endsWith("%") -> text.dropLast(1).toDoubleOrNull()?.let { it / 100 }
+            else -> text.toDoubleOrNull()
         }
 
     private fun parseRgb(parts: List<String>): Rgba? {
-        if (parts.size < 3) return null
-        val r = channel(parts[0], 255.0) ?: return null
-        val g = channel(parts[1], 255.0) ?: return null
-        val b = channel(parts[2], 255.0) ?: return null
-        val a = alpha(parts.getOrNull(3)) ?: return null
-        return Rgba(r.coerceIn(0.0, 255.0), g.coerceIn(0.0, 255.0), b.coerceIn(0.0, 255.0), a.coerceIn(0.0, 1.0))
+        val values = parts.take(3).map { channel(it, 255.0) }
+        val a = alpha(parts.getOrNull(3))
+        val valid = parts.size >= 3 && a != null && values.none { it == null }
+        return if (valid) {
+            val (r, g, b) = values.map { it?.coerceIn(0.0, 255.0) ?: 0.0 }
+            Rgba(r, g, b, (a ?: 1.0).coerceIn(0.0, 1.0))
+        } else {
+            null
+        }
     }
 
     private fun parseHsl(parts: List<String>): Rgba? {
-        if (parts.size < 3) return null
-        val h = parts[0].removeSuffix("deg").toDoubleOrNull() ?: return null
-        val s = parts[1].removeSuffix("%").toDoubleOrNull()?.div(100) ?: return null
-        val l = parts[2].removeSuffix("%").toDoubleOrNull()?.div(100) ?: return null
-        val a = alpha(parts.getOrNull(3)) ?: return null
+        val h = parts.getOrNull(0)?.removeSuffix("deg")?.toDoubleOrNull()
+        val s = parts.getOrNull(1)?.removeSuffix("%")?.toDoubleOrNull()
+        val l = parts.getOrNull(2)?.removeSuffix("%")?.toDoubleOrNull()
+        val a = alpha(parts.getOrNull(3))
+        val hsl = listOfNotNull(h, s, l)
+        return if (hsl.size == 3 && a != null) hslToRgba(hsl[0], hsl[1] / 100, hsl[2] / 100, a) else null
+    }
+
+    private fun hslToRgba(
+        h: Double,
+        s: Double,
+        l: Double,
+        a: Double,
+    ): Rgba {
         val hueDeg = ((h % 360) + 360) % 360
-        val sat = s.coerceIn(0.0, 1.0)
         val light = l.coerceIn(0.0, 1.0)
-        val chroma = sat * minOf(light, 1 - light)
+        val chroma = s.coerceIn(0.0, 1.0) * minOf(light, 1 - light)
 
         fun channel(n: Double): Double {
             val k = (n + hueDeg / 30) % 12

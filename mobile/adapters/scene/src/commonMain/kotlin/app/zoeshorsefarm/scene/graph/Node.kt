@@ -14,6 +14,7 @@ typealias Object3D = Node
  * which stay in sync), scale, children and the world matrix. Renderable subclasses are [Mesh],
  * [InstancedMesh], [SkinnedMesh], [Points] and [Sprite]; [Group] and [Bone] are plain containers.
  */
+@Suppress("TooManyFunctions") // mirrors the three.js Object3D API
 open class Node : Traversable {
     var name: String = ""
     var parent: Node? = null

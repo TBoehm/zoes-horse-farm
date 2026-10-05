@@ -517,7 +517,7 @@ class Raster2DTest {
             r.lineWidth = 0.6 + rng() * 1.1
             for (ox in intArrayOf(-size, 0, size)) {
                 for (oy in intArrayOf(-size, 0, size)) {
-                    if (x + ox < -12 || x + ox > size + 12 || y + oy < -12 || y + oy > size + 12) continue
+                    if (x + ox !in -12.0..size + 12.0 || y + oy !in -12.0..size + 12.0) continue
                     r.beginPath()
                     r.moveTo(x + ox, y + oy)
                     r.lineTo(x + ox + kotlin.math.cos(ang) * len, y + oy + kotlin.math.sin(ang) * len)

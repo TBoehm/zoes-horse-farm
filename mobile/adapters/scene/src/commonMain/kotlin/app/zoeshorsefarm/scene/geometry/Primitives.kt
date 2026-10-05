@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:function-naming") // builders keep the three.js names (BoxGeometry(...))
+
 package app.zoeshorsefarm.scene.geometry
 
 import app.zoeshorsefarm.scene.math.Vec2
@@ -152,6 +154,7 @@ fun PlaneGeometry(
 }
 
 /** Cylinder along Y (top at +height/2) with optional caps; groups: 0 torso, 1 top cap, 2 bottom cap. */
+@Suppress("CyclomaticComplexMethod") // direct port of three.js CylinderGeometry
 fun CylinderGeometry(
     radiusTop: Double = 1.0,
     radiusBottom: Double = 1.0,
@@ -328,11 +331,46 @@ private fun PolyhedronGeometry(
     indices: IntArray,
     radius: Double,
     detail: Int,
-): Geometry {
-    val vertexBuffer = DoubleBuf()
-    val uvBuffer = DoubleBuf()
+): Geometry = PolyhedronBuilder(vertices, indices).build(radius, detail)
 
-    fun getVertexByIndex(
+/** The steps of three.js `PolyhedronGeometry`: subdivide, project onto the sphere, generate and fix the UVs. */
+private class PolyhedronBuilder(
+    private val vertices: DoubleArray,
+    private val indices: IntArray,
+) {
+    private val vertexBuffer = DoubleBuf()
+    private val uvBuffer = DoubleBuf()
+
+    fun build(
+        radius: Double,
+        detail: Int,
+    ): Geometry {
+        subdivide(detail)
+        applyRadius(radius)
+        generateUVs()
+        val geometry = Geometry()
+        geometry.setAttribute("position", vertexBuffer.toAttribute(3))
+        geometry.setAttribute("normal", vertexBuffer.toAttribute(3))
+        geometry.setAttribute("uv", uvBuffer.toAttribute(2))
+        if (detail == 0) geometry.computeVertexNormals() else geometry.normalizeNormals()
+        return geometry
+    }
+
+    private fun subdivide(detail: Int) {
+        val a = Vec3()
+        val b = Vec3()
+        val c = Vec3()
+        var i = 0
+        while (i < indices.size) {
+            getVertexByIndex(indices[i], a)
+            getVertexByIndex(indices[i + 1], b)
+            getVertexByIndex(indices[i + 2], c)
+            subdivideFace(a, b, c, detail)
+            i += 3
+        }
+    }
+
+    private fun getVertexByIndex(
         i: Int,
         vertex: Vec3,
     ) {
@@ -342,47 +380,68 @@ private fun PolyhedronGeometry(
         vertex.z = vertices[stride + 2]
     }
 
-    fun pushVertex(vertex: Vec3) = vertexBuffer.add(vertex.x, vertex.y, vertex.z)
+    private fun pushVertex(vertex: Vec3) = vertexBuffer.add(vertex.x, vertex.y, vertex.z)
 
-    fun subdivideFace(
+    private fun subdivideFace(
         a: Vec3,
         b: Vec3,
         c: Vec3,
         detail: Int,
     ) {
         val cols = detail + 1
-        val v = ArrayList<Array<Vec3?>>()
+        val v = ArrayList<Array<Vec3>>()
         for (i in 0..cols) {
             val rows = cols - i
-            val row = arrayOfNulls<Vec3>(rows + 1)
             val aj = a.clone().lerp(c, i.toDouble() / cols)
             val bj = b.clone().lerp(c, i.toDouble() / cols)
-            for (j in 0..rows) {
-                row[j] = if (j == 0 && i == cols) aj else aj.clone().lerp(bj, j.toDouble() / rows)
-            }
-            v.add(row)
+            v.add(Array(rows + 1) { j -> if (j == 0 && i == cols) aj else aj.clone().lerp(bj, j.toDouble() / rows) })
         }
         for (i in 0 until cols) {
             for (j in 0 until 2 * (cols - i) - 1) {
                 val k = j / 2
                 if (j % 2 == 0) {
-                    pushVertex(requireNotNull(v[i][k + 1]))
-                    pushVertex(requireNotNull(v[i + 1][k]))
-                    pushVertex(requireNotNull(v[i][k]))
+                    pushVertex(v[i][k + 1])
+                    pushVertex(v[i + 1][k])
+                    pushVertex(v[i][k])
                 } else {
-                    pushVertex(requireNotNull(v[i][k + 1]))
-                    pushVertex(requireNotNull(v[i + 1][k + 1]))
-                    pushVertex(requireNotNull(v[i + 1][k]))
+                    pushVertex(v[i][k + 1])
+                    pushVertex(v[i + 1][k + 1])
+                    pushVertex(v[i + 1][k])
                 }
             }
         }
     }
 
-    fun azimuth(vector: Vec3): Double = atan2(vector.z, -vector.x)
+    private fun applyRadius(radius: Double) {
+        val vertex = Vec3()
+        var i = 0
+        while (i < vertexBuffer.size) {
+            vertex.set(vertexBuffer[i], vertexBuffer[i + 1], vertexBuffer[i + 2]).normalize().multiplyScalar(radius)
+            vertexBuffer[i] = vertex.x
+            vertexBuffer[i + 1] = vertex.y
+            vertexBuffer[i + 2] = vertex.z
+            i += 3
+        }
+    }
 
-    fun inclination(vector: Vec3): Double = atan2(-vector.y, sqrt((vector.x * vector.x) + (vector.z * vector.z)))
+    private fun generateUVs() {
+        val vertex = Vec3()
+        var i = 0
+        while (i < vertexBuffer.size) {
+            vertex.set(vertexBuffer[i], vertexBuffer[i + 1], vertexBuffer[i + 2])
+            uvBuffer.add(azimuth(vertex) / 2 / PI + 0.5, 1 - (inclination(vertex) / PI + 0.5))
+            i += 3
+        }
+        correctUVs()
+        correctSeam()
+    }
 
-    fun correctUV(
+    private fun azimuth(vector: Vec3): Double = atan2(vector.z, -vector.x)
+
+    private fun inclination(vector: Vec3): Double =
+        atan2(-vector.y, sqrt((vector.x * vector.x) + (vector.z * vector.z)))
+
+    private fun correctUV(
         uv: Vec2,
         stride: Int,
         vector: Vec3,
@@ -392,7 +451,7 @@ private fun PolyhedronGeometry(
         if (vector.x == 0.0 && vector.z == 0.0) uvBuffer[stride] = azimuth / 2 / PI + 0.5
     }
 
-    fun correctUVs() {
+    private fun correctUVs() {
         val a = Vec3()
         val b = Vec3()
         val c = Vec3()
@@ -423,7 +482,7 @@ private fun PolyhedronGeometry(
         }
     }
 
-    fun correctSeam() {
+    private fun correctSeam() {
         var i = 0
         while (i < uvBuffer.size) {
             val x0 = uvBuffer[i]
@@ -439,155 +498,64 @@ private fun PolyhedronGeometry(
             i += 6
         }
     }
-
-    val a = Vec3()
-    val b = Vec3()
-    val c = Vec3()
-    var i = 0
-    while (i < indices.size) {
-        getVertexByIndex(indices[i], a)
-        getVertexByIndex(indices[i + 1], b)
-        getVertexByIndex(indices[i + 2], c)
-        subdivideFace(a, b, c, detail)
-        i += 3
-    }
-    val vertex = Vec3()
-    i = 0
-    while (i < vertexBuffer.size) {
-        vertex.set(vertexBuffer[i], vertexBuffer[i + 1], vertexBuffer[i + 2]).normalize().multiplyScalar(radius)
-        vertexBuffer[i] = vertex.x
-        vertexBuffer[i + 1] = vertex.y
-        vertexBuffer[i + 2] = vertex.z
-        i += 3
-    }
-    i = 0
-    while (i < vertexBuffer.size) {
-        vertex.set(vertexBuffer[i], vertexBuffer[i + 1], vertexBuffer[i + 2])
-        val u = azimuth(vertex) / 2 / PI + 0.5
-        val v = inclination(vertex) / PI + 0.5
-        uvBuffer.add(u, 1 - v)
-        i += 3
-    }
-    correctUVs()
-    correctSeam()
-
-    val geometry = Geometry()
-    geometry.setAttribute("position", vertexBuffer.toAttribute(3))
-    geometry.setAttribute("normal", vertexBuffer.toAttribute(3))
-    geometry.setAttribute("uv", uvBuffer.toAttribute(2))
-    if (detail == 0) geometry.computeVertexNormals() else geometry.normalizeNormals()
-    return geometry
 }
+
+private val ICOSAHEDRON_T = (1 + sqrt(5.0)) / 2
+
+private val ICOSAHEDRON_VERTICES =
+    doubleArrayOf(
+        -1.0,
+        ICOSAHEDRON_T,
+        0.0,
+        1.0,
+        ICOSAHEDRON_T,
+        0.0,
+        -1.0,
+        -ICOSAHEDRON_T,
+        0.0,
+        1.0,
+        -ICOSAHEDRON_T,
+        0.0,
+    ) +
+        doubleArrayOf(
+            0.0,
+            -1.0,
+            ICOSAHEDRON_T,
+            0.0,
+            1.0,
+            ICOSAHEDRON_T,
+            0.0,
+            -1.0,
+            -ICOSAHEDRON_T,
+            0.0,
+            1.0,
+            -ICOSAHEDRON_T,
+        ) +
+        doubleArrayOf(
+            ICOSAHEDRON_T,
+            0.0,
+            -1.0,
+            ICOSAHEDRON_T,
+            0.0,
+            1.0,
+            -ICOSAHEDRON_T,
+            0.0,
+            -1.0,
+            -ICOSAHEDRON_T,
+            0.0,
+            1.0,
+        )
+
+private val ICOSAHEDRON_INDICES =
+    intArrayOf(0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11) +
+        intArrayOf(1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8) +
+        intArrayOf(3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9) +
+        intArrayOf(4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1)
 
 fun IcosahedronGeometry(
     radius: Double = 1.0,
     detail: Int = 0,
-): Geometry {
-    val t = (1 + sqrt(5.0)) / 2
-    val vertices =
-        doubleArrayOf(
-            -1.0,
-            t,
-            0.0,
-            1.0,
-            t,
-            0.0,
-            -1.0,
-            -t,
-            0.0,
-            1.0,
-            -t,
-            0.0,
-            0.0,
-            -1.0,
-            t,
-            0.0,
-            1.0,
-            t,
-            0.0,
-            -1.0,
-            -t,
-            0.0,
-            1.0,
-            -t,
-            t,
-            0.0,
-            -1.0,
-            t,
-            0.0,
-            1.0,
-            -t,
-            0.0,
-            -1.0,
-            -t,
-            0.0,
-            1.0,
-        )
-    val indices =
-        intArrayOf(
-            0,
-            11,
-            5,
-            0,
-            5,
-            1,
-            0,
-            1,
-            7,
-            0,
-            7,
-            10,
-            0,
-            10,
-            11,
-            1,
-            5,
-            9,
-            5,
-            11,
-            4,
-            11,
-            10,
-            2,
-            10,
-            7,
-            6,
-            7,
-            1,
-            8,
-            3,
-            9,
-            4,
-            3,
-            4,
-            2,
-            3,
-            2,
-            6,
-            3,
-            6,
-            8,
-            3,
-            8,
-            9,
-            4,
-            9,
-            5,
-            2,
-            4,
-            11,
-            6,
-            2,
-            10,
-            8,
-            6,
-            7,
-            9,
-            8,
-            1,
-        )
-    return PolyhedronGeometry(vertices, indices, radius, detail)
-}
+): Geometry = PolyhedronGeometry(ICOSAHEDRON_VERTICES, ICOSAHEDRON_INDICES, radius, detail)
 
 fun OctahedronGeometry(
     radius: Double = 1.0,

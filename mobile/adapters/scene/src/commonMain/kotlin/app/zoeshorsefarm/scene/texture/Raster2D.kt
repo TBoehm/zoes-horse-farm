@@ -77,29 +77,29 @@ class CanvasGradient private constructor(
         out: DoubleArray,
     ) {
         val t = if (radial) radialT(px, py) else linearT(px, py)
-        if (t.isNaN() || stops.isEmpty()) {
-            out[0] = 0.0
-            out[1] = 0.0
-            out[2] = 0.0
-            out[3] = 0.0
-            return
-        }
+        if (t.isNaN() || stops.isEmpty()) put(Rgba.TRANSPARENT, out) else interpolate(t, out)
+    }
+
+    private fun interpolate(
+        t: Double,
+        out: DoubleArray,
+    ) {
         val first = stops[0]
         val last = stops[stops.size - 1]
-        if (t <= first.offset) return put(first.color, out)
-        if (t >= last.offset) return put(last.color, out)
-        for (i in 1 until stops.size) {
-            val b = stops[i]
-            if (t <= b.offset) {
-                val a = stops[i - 1]
-                val span = b.offset - a.offset
-                val k = if (span == 0.0) 1.0 else (t - a.offset) / span
-                out[0] = a.color.r + (b.color.r - a.color.r) * k
-                out[1] = a.color.g + (b.color.g - a.color.g) * k
-                out[2] = a.color.b + (b.color.b - a.color.b) * k
-                out[3] = a.color.a + (b.color.a - a.color.a) * k
-                return
-            }
+        if (t <= first.offset) {
+            put(first.color, out)
+        } else if (t >= last.offset) {
+            put(last.color, out)
+        } else {
+            val index = stops.indexOfFirst { t <= it.offset }
+            val a = stops[index - 1]
+            val b = stops[index]
+            val span = b.offset - a.offset
+            val k = if (span == 0.0) 1.0 else (t - a.offset) / span
+            out[0] = a.color.r + (b.color.r - a.color.r) * k
+            out[1] = a.color.g + (b.color.g - a.color.g) * k
+            out[2] = a.color.b + (b.color.b - a.color.b) * k
+            out[3] = a.color.a + (b.color.a - a.color.a) * k
         }
     }
 
@@ -137,26 +137,38 @@ class CanvasGradient private constructor(
         val a = cdx * cdx + cdy * cdy - dr * dr
         val b = pdx * cdx + pdy * cdy + r0 * dr
         val c = pdx * pdx + pdy * pdy - r0 * r0
-        if (a == 0.0) {
-            if (b == 0.0) return Double.NaN
-            val t = c / (2 * b)
-            return if (r0 + t * dr >= 0) t else Double.NaN
-        }
         val disc = b * b - a * c
-        if (disc < 0) return Double.NaN
-        val root = sqrt(disc)
-        val tA = (b + root) / a
-        val tB = (b - root) / a
-        val hi = max(tA, tB)
-        val lo = min(tA, tB)
-        return if (r0 + hi * dr >= 0) {
-            hi
-        } else if (r0 + lo * dr >= 0) {
-            lo
+        return when {
+            a == 0.0 -> {
+                if (b == 0.0) Double.NaN else pickRadius(c / (2 * b), Double.NaN, dr)
+            }
+
+            disc < 0 -> {
+                Double.NaN
+            }
+
+            else -> {
+                val root = sqrt(disc)
+                val tA = (b + root) / a
+                val tB = (b - root) / a
+                pickRadius(max(tA, tB), min(tA, tB), dr)
+            }
+        }
+    }
+
+    // the larger root whose circle has a non-negative radius (NaN compares false)
+    private fun pickRadius(
+        high: Double,
+        low: Double,
+        dr: Double,
+    ): Double =
+        if (r0 + high * dr >= 0) {
+            high
+        } else if (r0 + low * dr >= 0) {
+            low
         } else {
             Double.NaN
         }
-    }
 
     companion object {
         internal fun linear(
@@ -234,7 +246,7 @@ private class ClipMask(
     ): Float {
         val lx = x - x0
         val ly = y - y0
-        return if (lx < 0 || ly < 0 || lx >= width || ly >= height) 0f else coverage[ly * width + lx]
+        return if (lx !in 0 until width || ly !in 0 until height) 0f else coverage[ly * width + lx]
     }
 }
 
@@ -250,6 +262,7 @@ private class ClipMask(
  * transform, `lineJoin` is always round, overlapping strokes of one `stroke()` call merge by
  * clamping their coverage.
  */
+@Suppress("TooManyFunctions", "LargeClass") // the 2D canvas API is wide by nature
 class Raster2D(
     override val width: Int,
     override val height: Int,
@@ -513,7 +526,8 @@ class Raster2D(
         val len0 = sqrt(v0x * v0x + v0y * v0y)
         val len2 = sqrt(v2x * v2x + v2y * v2y)
         val cross = v0x * v2y - v0y * v2x
-        if (radius == 0.0 || len0 == 0.0 || len2 == 0.0 || abs(cross) < 1e-12) {
+        val zeroLength = len0 == 0.0 || len2 == 0.0
+        if (radius == 0.0 || zeroLength || abs(cross) < 1e-12) {
             lineTo(x1, y1)
             return
         }
@@ -571,7 +585,7 @@ class Raster2D(
         val x1 = max(dx0, dx1)
         val y0 = min(dy0, dy1)
         val y1 = max(dy0, dy1)
-        if (isWhole(x0) && isWhole(x1) && isWhole(y0) && isWhole(y1)) {
+        if (allWhole(x0, x1, y0, y1)) {
             solidRect(x0.toInt(), y0.toInt(), x1.toInt(), y1.toInt(), fillStyle)
         } else {
             val saved = ArrayList(subpaths)
@@ -614,33 +628,41 @@ class Raster2D(
     /** Intersects the clip with the current path (an axis-aligned whole-pixel rectangle is kept cheap). */
     fun clip() {
         val polys = subpaths.filter { it.points.size >= 6 }.map { it.points.data.copyOf(it.points.size) }
+        val rectangle = polys.size == 1 && isAxisRect(polys[0]) && clipToWholeRect(polys[0])
         if (polys.isEmpty()) {
-            clipX1 = clipX0
-            clipY1 = clipY0
+            clipEverything()
+        } else if (!rectangle) {
+            clipToCoverage(polys)
+        }
+    }
+
+    private fun clipEverything() {
+        clipX1 = clipX0
+        clipY1 = clipY0
+    }
+
+    /** Narrows the clip rectangle to a rectangle with whole-pixel edges; false if the edges are fractional. */
+    private fun clipToWholeRect(p: DoubleArray): Boolean {
+        val x0 = min(p[0], p[4])
+        val x1 = max(p[0], p[4])
+        val y0 = min(p[1], p[5])
+        val y1 = max(p[1], p[5])
+        val whole = allWhole(x0, x1, y0, y1)
+        if (whole) {
+            clipX0 = max(clipX0, x0.toInt())
+            clipX1 = max(clipX0, min(clipX1, x1.toInt()))
+            clipY0 = max(clipY0, y0.toInt())
+            clipY1 = max(clipY0, min(clipY1, y1.toInt()))
+        }
+        return whole
+    }
+
+    private fun clipToCoverage(polys: List<DoubleArray>) {
+        val region = coverageOf(polys, clipX0, clipY0, clipX1, clipY1)
+        if (region == null) {
+            clipEverything()
             return
         }
-        if (polys.size == 1 && isAxisRect(polys[0])) {
-            val p = polys[0]
-            val x0 = min(p[0], p[4])
-            val x1 = max(p[0], p[4])
-            val y0 = min(p[1], p[5])
-            val y1 = max(p[1], p[5])
-            if (isWhole(x0) && isWhole(x1) && isWhole(y0) && isWhole(y1)) {
-                clipX0 = max(clipX0, x0.toInt())
-                clipX1 = min(clipX1, x1.toInt())
-                clipY0 = max(clipY0, y0.toInt())
-                clipY1 = min(clipY1, y1.toInt())
-                if (clipX1 < clipX0) clipX1 = clipX0
-                if (clipY1 < clipY0) clipY1 = clipY0
-                return
-            }
-        }
-        val region =
-            coverageOf(polys, clipX0, clipY0, clipX1, clipY1) ?: run {
-                clipX1 = clipX0
-                clipY1 = clipY0
-                return
-            }
         val old = clipMask
         if (old != null) {
             for (y in 0 until region.height) {
@@ -667,22 +689,9 @@ class Raster2D(
         if (text.isEmpty()) return
         val spec = FontSpec.parse(font)
         val mask = textRasterizer.rasterize(text, spec)
-        val advance = textRasterizer.measure(text, spec)
         val metrics = textRasterizer.metrics(spec)
-        val penX =
-            when (textAlign) {
-                "center" -> x - advance / 2
-                "right", "end" -> x - advance
-                else -> x
-            }
-        val baseline =
-            when (textBaseline) {
-                "middle" -> y + (metrics.ascent - metrics.descent) / 2
-                "top" -> y + metrics.ascent
-                "hanging" -> y + metrics.ascent * 0.8
-                "bottom" -> y - metrics.descent
-                else -> y
-            }
+        val penX = alignedPenX(x, textRasterizer.measure(text, spec))
+        val baseline = baselineY(y, metrics)
         val originX = round(penX * sx + tx).toInt() + mask.offsetX
         val originY = round(baseline * sy + ty).toInt() + mask.offsetY
         val paint = resolve(fillStyle)
@@ -691,12 +700,33 @@ class Raster2D(
             if (py < clipY0 || py >= clipY1) continue
             for (mx in 0 until mask.width) {
                 val px = originX + mx
-                if (px < clipX0 || px >= clipX1) continue
                 val coverage = (mask.alpha[my * mask.width + mx].toInt() and 0xFF) / 255.0
-                if (coverage > 0) paintPixel(px, py, paint, coverage)
+                if (px in clipX0 until clipX1 && coverage > 0) paintPixel(px, py, paint, coverage)
             }
         }
     }
+
+    private fun alignedPenX(
+        x: Double,
+        advance: Double,
+    ): Double =
+        when (textAlign) {
+            "center" -> x - advance / 2
+            "right", "end" -> x - advance
+            else -> x
+        }
+
+    private fun baselineY(
+        y: Double,
+        metrics: FontMetrics,
+    ): Double =
+        when (textBaseline) {
+            "middle" -> y + (metrics.ascent - metrics.descent) / 2
+            "top" -> y + metrics.ascent
+            "hanging" -> y + metrics.ascent * 0.8
+            "bottom" -> y - metrics.descent
+            else -> y
+        }
 
     /** Draws `source` with its top-left corner at (dx, dy), scaled to dw x dh (default: its own size). */
     fun drawImage(
@@ -743,7 +773,7 @@ class Raster2D(
             for (col in 0 until w) {
                 val sxp = x + col
                 val syp = y + row
-                if (sxp < 0 || syp < 0 || sxp >= width || syp >= height) continue
+                if (sxp !in 0 until width || syp !in 0 until height) continue
                 pixels.copyInto(out.data, (row * w + col) * 4, (syp * width + sxp) * 4, (syp * width + sxp) * 4 + 4)
             }
         }
@@ -822,6 +852,8 @@ class Raster2D(
     }
 
     private fun isWhole(v: Double) = abs(v - round(v)) < 1e-9
+
+    private fun allWhole(vararg values: Double): Boolean = values.all { isWhole(it) }
 
     private fun isAxisRect(p: DoubleArray): Boolean =
         p.size == 8 && p[1] == p[3] && p[2] == p[4] && p[5] == p[7] && p[6] == p[0]
@@ -1011,13 +1043,12 @@ class Raster2D(
         bx: Double,
         by: Double,
     ) {
-        if (ay == by) return
-        val dir = if (ay < by) 1.0 else -1.0
-        var x0 = if (ay < by) ax else bx
-        var y0 = if (ay < by) ay else by
-        var x1 = if (ay < by) bx else ax
-        var y1 = if (ay < by) by else ay
-        if (y1 <= 0 || y0 >= h) return
+        val up = ay < by
+        var x0 = if (up) ax else bx
+        var y0 = if (up) ay else by
+        var x1 = if (up) bx else ax
+        var y1 = if (up) by else ay
+        if (ay == by || y1 <= 0 || y0 >= h) return
         val dxdy = (x1 - x0) / (y1 - y0)
         if (y0 < 0) {
             x0 -= y0 * dxdy
@@ -1027,7 +1058,20 @@ class Raster2D(
             x1 = x0 + (h - y0) * dxdy
             y1 = h.toDouble()
         }
-        // split at x = 0 and x = w, parts outside become vertical edges on the border
+        addClippedEdge(acc, stride, w, if (up) 1.0 else -1.0, x0, y0, x1, y1)
+    }
+
+    // splits at x = 0 and x = w; the parts outside become vertical edges on the border
+    private fun addClippedEdge(
+        acc: FloatArray,
+        stride: Int,
+        w: Int,
+        dir: Double,
+        x0: Double,
+        y0: Double,
+        x1: Double,
+        y1: Double,
+    ) {
         val ts = ArrayList<Double>(4)
         ts.add(0.0)
         if (x1 != x0) {
@@ -1039,22 +1083,30 @@ class Raster2D(
             if (hi > 0 && hi < 1) ts.add(hi)
         }
         ts.add(1.0)
+        val right = w.toDouble()
         for (k in 0 until ts.size - 1) {
-            val ta = ts[k]
-            val tb = ts[k + 1]
-            var xa = x0 + (x1 - x0) * ta
-            var xb = x0 + (x1 - x0) * tb
-            val ya = y0 + (y1 - y0) * ta
-            val yb = y0 + (y1 - y0) * tb
+            val xa = x0 + (x1 - x0) * ts[k]
+            val xb = x0 + (x1 - x0) * ts[k + 1]
             val mid = (xa + xb) / 2
-            if (mid < 0) {
-                xa = 0.0
-                xb = 0.0
-            } else if (mid > w) {
-                xa = w.toDouble()
-                xb = w.toDouble()
-            }
-            accumulateLine(acc, stride, w, dir, xa.coerceIn(0.0, w.toDouble()), ya, xb.coerceIn(0.0, w.toDouble()), yb)
+            val ya = y0 + (y1 - y0) * ts[k]
+            val yb = y0 + (y1 - y0) * ts[k + 1]
+            val fromX =
+                if (mid < 0) {
+                    0.0
+                } else if (mid > w) {
+                    right
+                } else {
+                    xa.coerceIn(0.0, right)
+                }
+            val toX =
+                if (mid < 0) {
+                    0.0
+                } else if (mid > w) {
+                    right
+                } else {
+                    xb.coerceIn(0.0, right)
+                }
+            accumulateLine(acc, stride, w, dir, fromX, ya, toX, yb)
         }
     }
 
@@ -1120,46 +1172,53 @@ class Raster2D(
     ) {
         val pts = sub.points
         val count = pts.size / 2
-        if (count == 0) return
         val half = width / 2
-        val last = if (sub.closed) count else count - 1
         if (count == 1) {
             if (lineCap == "round") out.add(circle(pts.data[0], pts.data[1], half))
-            return
-        }
-        for (i in 0 until last) {
-            var x0 = pts.data[i * 2]
-            var y0 = pts.data[i * 2 + 1]
-            var x1 = pts.data[((i + 1) % count) * 2]
-            var y1 = pts.data[((i + 1) % count) * 2 + 1]
-            val dx = x1 - x0
-            val dy = y1 - y0
-            val len = sqrt(dx * dx + dy * dy)
-            if (len == 0.0) continue
-            val ux = dx / len
-            val uy = dy / len
-            if (lineCap == "square" && !sub.closed) {
-                if (i == 0) {
-                    x0 -= ux * half
-                    y0 -= uy * half
-                }
-                if (i == last - 1) {
-                    x1 += ux * half
-                    y1 += uy * half
-                }
+        } else if (count > 1) {
+            val last = if (sub.closed) count else count - 1
+            for (i in 0 until last) segmentQuad(pts, count, i, last, sub.closed, half)?.let { out.add(it) }
+            if (lineCap == "round" && !sub.closed) {
+                out.add(circle(pts.data[0], pts.data[1], half))
+                out.add(circle(pts.data[(count - 1) * 2], pts.data[(count - 1) * 2 + 1], half))
             }
-            val nx = -uy * half
-            val ny = ux * half
-            out.add(orient(doubleArrayOf(x0 + nx, y0 + ny, x1 + nx, y1 + ny, x1 - nx, y1 - ny, x0 - nx, y0 - ny)))
+            // round joins at the inner vertices
+            val joinFrom = if (sub.closed) 0 else 1
+            val joinTo = if (sub.closed) count else count - 1
+            for (i in joinFrom until joinTo) out.add(circle(pts.data[i * 2], pts.data[i * 2 + 1], half))
         }
-        if (lineCap == "round" && !sub.closed) {
-            out.add(circle(pts.data[0], pts.data[1], half))
-            out.add(circle(pts.data[(count - 1) * 2], pts.data[(count - 1) * 2 + 1], half))
+    }
+
+    /** The quad of segment `i` (extended for square caps at the open ends), or null for a zero-length segment. */
+    private fun segmentQuad(
+        pts: PointList,
+        count: Int,
+        i: Int,
+        last: Int,
+        closed: Boolean,
+        half: Double,
+    ): DoubleArray? {
+        var x0 = pts.data[i * 2]
+        var y0 = pts.data[i * 2 + 1]
+        var x1 = pts.data[((i + 1) % count) * 2]
+        var y1 = pts.data[((i + 1) % count) * 2 + 1]
+        val len = sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0))
+        val ux = (x1 - x0) / len
+        val uy = (y1 - y0) / len
+        if (lineCap == "square" && !closed && len > 0) {
+            if (i == 0) {
+                x0 -= ux * half
+                y0 -= uy * half
+            }
+            if (i == last - 1) {
+                x1 += ux * half
+                y1 += uy * half
+            }
         }
-        // round joins at the inner vertices
-        val joinFrom = if (sub.closed) 0 else 1
-        val joinTo = if (sub.closed) count else count - 1
-        for (i in joinFrom until joinTo) out.add(circle(pts.data[i * 2], pts.data[i * 2 + 1], half))
+        val nx = -uy * half
+        val ny = ux * half
+        val quad = doubleArrayOf(x0 + nx, y0 + ny, x1 + nx, y1 + ny, x1 - nx, y1 - ny, x0 - nx, y0 - ny)
+        return if (len == 0.0) null else orient(quad)
     }
 
     private fun circle(
