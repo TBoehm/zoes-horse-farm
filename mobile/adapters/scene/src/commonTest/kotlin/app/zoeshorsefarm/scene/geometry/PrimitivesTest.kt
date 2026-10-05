@@ -12,6 +12,7 @@ import kotlin.test.assertNull
  * Compares the builders with three.js r186: the vertex and index counts, the groups and
  * fingerprints (sum and position-weighted sum) of all attributes and of the index.
  */
+@Suppress("LargeClass", "LongMethod") // tables of reference values computed with three.js
 class PrimitivesTest {
     private class Fp(
         val name: String,

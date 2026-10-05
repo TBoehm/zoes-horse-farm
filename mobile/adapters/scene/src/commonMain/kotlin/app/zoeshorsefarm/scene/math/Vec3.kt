@@ -11,7 +11,13 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.truncate
 
-/** Mutable 3D vector (three.js `Vector3`). Methods mutate and return `this` so calls chain. */
+/**
+ * Mutable 3D vector (three.js `Vector3`). Methods mutate and return `this` so calls chain.
+ *
+ * Mutable value type: [equals] and [hashCode] compare the current values, so do not use an
+ * instance as a hash key while it is being mutated.
+ */
+@Suppress("TooManyFunctions") // mirrors the three.js Vector3 API
 class Vec3(
     var x: Double = 0.0,
     var y: Double = 0.0,
@@ -264,7 +270,9 @@ class Vec3(
 
     fun setFromColor(c: Color): Vec3 = set(c.r, c.g, c.b)
 
-    fun equals(v: Vec3): Boolean = v.x == x && v.y == y && v.z == z
+    override fun equals(other: Any?): Boolean = other is Vec3 && other.x == x && other.y == y && other.z == z
+
+    override fun hashCode(): Int = 31 * (31 * x.hashCode() + y.hashCode()) + z.hashCode()
 
     fun fromArray(
         array: DoubleArray,

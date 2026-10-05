@@ -10,6 +10,9 @@ enum class EulerOrder { XYZ, YXZ, ZXY, ZYX, YZX, XZY }
 /**
  * Mutable Euler angles in radians (three.js `Euler`). [onChange] fires after every change so a
  * node can keep its quaternion in sync.
+ *
+ * Mutable value type: [equals] and [hashCode] compare the current values, so do not use an
+ * instance as a hash key while it is being mutated.
  */
 class Euler(
     x: Double = 0.0,
@@ -71,6 +74,7 @@ class Euler(
     fun copy(e: Euler): Euler = set(e.ex, e.ey, e.ez, e.eorder)
 
     /** Expects the upper 3x3 of `m` to be a pure rotation. `update = false` skips [onChange]. */
+    @Suppress("LongMethod") // one branch per rotation order, as in three.js
     fun setFromRotationMatrix(
         m: Mat4,
         order: EulerOrder = eorder,
@@ -177,7 +181,10 @@ class Euler(
         return setFromQuaternion(scratchQuat, newOrder)
     }
 
-    fun equals(e: Euler): Boolean = e.ex == ex && e.ey == ey && e.ez == ez && e.eorder == eorder
+    override fun equals(other: Any?): Boolean =
+        other is Euler && other.ex == ex && other.ey == ey && other.ez == ez && other.eorder == eorder
+
+    override fun hashCode(): Int = 31 * (31 * (31 * ex.hashCode() + ey.hashCode()) + ez.hashCode()) + eorder.hashCode()
 
     override fun toString(): String = "Euler($ex, $ey, $ez, $eorder)"
 

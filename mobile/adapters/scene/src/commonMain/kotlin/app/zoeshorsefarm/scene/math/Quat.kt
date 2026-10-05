@@ -10,7 +10,11 @@ import kotlin.math.sqrt
 /**
  * Mutable quaternion (three.js `Quaternion`). Setting a component or calling a mutating method
  * fires [onChange], which a [app.zoeshorsefarm.scene.graph.Node] uses to keep its Euler angles in sync.
+ *
+ * Mutable value type: [equals] and [hashCode] compare the current values, so do not use an
+ * instance as a hash key while it is being mutated.
  */
+@Suppress("TooManyFunctions") // mirrors the three.js Quaternion API
 class Quat(
     x: Double = 0.0,
     y: Double = 0.0,
@@ -327,7 +331,10 @@ class Quat(
         t: Double,
     ): Quat = copy(qa).slerp(qb, t)
 
-    fun equals(q: Quat): Boolean = q.qx == qx && q.qy == qy && q.qz == qz && q.qw == qw
+    override fun equals(other: Any?): Boolean =
+        other is Quat && other.qx == qx && other.qy == qy && other.qz == qz && other.qw == qw
+
+    override fun hashCode(): Int = 31 * (31 * (31 * qx.hashCode() + qy.hashCode()) + qz.hashCode()) + qw.hashCode()
 
     fun fromArray(
         array: DoubleArray,

@@ -1,12 +1,11 @@
 package app.zoeshorsefarm.domain.progress
 
 import app.zoeshorsefarm.domain.course.RideResult
+import app.zoeshorsefarm.domain.sim.TUNING
 
 // Badges (concept rule 49): pure check logic, immutable.
 // The takeoff assist has no influence on awarding (rule 42).
 
-private const val JUMPS_FOR_JUMP_MOUSE = 100
-private const val RIDES_FOR_BUSY = 10
 const val COURSE_COUNT = 5
 
 /** Course ids as save-file keys: "1".."5". */
@@ -52,10 +51,18 @@ data class BadgeCheck(
     val awarded: List<String>,
 )
 
-private fun allCoursesThreeStars(progress: Progress) = COURSE_IDS.all { progress.courses[it]?.stars == 3 }
+private fun allCoursesThreeStars(progress: Progress) =
+    COURSE_IDS.all {
+        progress.courses[it]?.stars ==
+            TUNING.scoring.maxStars
+    }
 
 // Only the real courses count, not stray entries of a damaged or newer save.
-private fun anyCourseThreeStars(progress: Progress) = COURSE_IDS.any { progress.courses[it]?.stars == 3 }
+private fun anyCourseThreeStars(progress: Progress) =
+    COURSE_IDS.any {
+        progress.courses[it]?.stars ==
+            TUNING.scoring.maxStars
+    }
 
 /** Awards all still-missing badges from [conditions] (id -> fulfilled) with date [nowIso]. */
 private fun award(
@@ -81,7 +88,7 @@ fun checkInstantBadges(
     val jumps = progress.jumps
     return award(
         progress,
-        mapOf("firstJump" to (jumps >= 1), "jumpMouse" to (jumps >= JUMPS_FOR_JUMP_MOUSE)),
+        mapOf("firstJump" to (jumps >= 1), "jumpMouse" to (jumps >= TUNING.badges.jumpsForJumpMouse)),
         nowIso,
     )
 }
@@ -105,7 +112,7 @@ fun checkRideEndBadges(
             "comboPro" to (result?.cleanCombination == true),
             "allOpen" to (progress.unlocked >= COURSE_COUNT),
             "starRider" to allCoursesThreeStars(progress),
-            "busy" to (progress.finishedRides >= RIDES_FOR_BUSY),
+            "busy" to (progress.finishedRides >= TUNING.badges.ridesForBusy),
         ),
         nowIso,
     )

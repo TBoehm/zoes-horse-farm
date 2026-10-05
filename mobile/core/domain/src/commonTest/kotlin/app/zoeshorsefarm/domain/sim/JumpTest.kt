@@ -145,6 +145,16 @@ class JumpTest {
 
     // ---- Knockdown risk (rules 15, 18, 19, 20) ----
 
+    private fun assertNoRisk(
+        el: Element,
+        v: Double,
+        d: Double,
+        a: Double,
+    ) {
+        val gait = if (v <= TUNING.speeds.trotMax && el.kind == ElementKind.CROSS) Gait.TROT else Gait.CANTER
+        assertEquals(0.0, takeoffRisk(el, TakeoffState(gait, v, d, a), TUNING))
+    }
+
     @Test
     fun safeCoreExactly0AcrossTheWholeZoneTargetRangeAndAngleTolerance() {
         for (el in all) {
@@ -152,11 +162,7 @@ class JumpTest {
             for (v in listOf(band.min, (band.min + band.max) / 2, band.max)) {
                 val z = zoneForElement(el, v, TUNING)
                 for (d in listOf(z.near, z.center, z.far)) {
-                    for (a in listOf(0.0, safeAngle(el, TUNING))) {
-                        val gait =
-                            if (v <= TUNING.speeds.trotMax && el.kind == ElementKind.CROSS) Gait.TROT else Gait.CANTER
-                        assertEquals(0.0, takeoffRisk(el, TakeoffState(gait, v, d, a), TUNING))
-                    }
+                    listOf(0.0, safeAngle(el, TUNING)).forEach { a -> assertNoRisk(el, v, d, a) }
                 }
             }
         }
