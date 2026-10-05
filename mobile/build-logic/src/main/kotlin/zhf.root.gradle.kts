@@ -1,4 +1,4 @@
-// Root project: ktlint for the root scripts, the purity check of domain/application and the
+// Root project: ktlint for the root scripts, detekt via the modules, the purity check of domain/application and the
 // aggregate gate task `qa` (the same command runs locally and in CI).
 plugins {
     id("org.jlleitschuh.gradle.ktlint")
@@ -20,6 +20,7 @@ val forbiddenCalls =
 val gateTasks =
     listOf(
         "ktlintCheck",
+        "detekt",
         "jvmTest",
         "compileKotlinIosArm64",
         "compileKotlinIosSimulatorArm64",
@@ -29,7 +30,7 @@ val gateTasks =
 
 tasks.register("qa") {
     group = "verification"
-    description = "All gates of the native app: lint/format, unit tests, iOS compilation, purity check."
+    description = "All gates of the native app: ktlint, detekt, unit tests, iOS compilation, purity check."
     dependsOn(forbiddenCalls, "ktlintCheck", gradle.includedBuild("build-logic").task(":ktlintCheck"))
     // container projects (:core, :adapters) have no build file and no tasks
     val modules = subprojects.filter { it.buildFile.exists() }

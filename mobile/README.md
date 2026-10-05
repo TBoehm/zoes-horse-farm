@@ -8,6 +8,6 @@ Voraussetzung: JDK 21. iOS-App bauen und starten geht nur auf macOS mit Xcode.
 ## Quality Gates
 
 ```bash
-./gradlew qa                     # alle Gates: ktlint, Unit-Tests, iOS-Kompilierung, Zeit/Zufall-Prüfung
+./gradlew qa                     # alle Gates: ktlint, detekt, Unit-Tests, iOS-Kompilierung, Zeit/Zufall-Prüfung
 ./gradlew ktlintFormat           # Formatierung beheben
 ```

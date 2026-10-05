@@ -5,6 +5,7 @@
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
     id("org.jlleitschuh.gradle.ktlint")
+    id("dev.detekt")
 }
 
 kotlin {
@@ -27,6 +28,19 @@ kotlin {
 
 ktlint {
     version.set("1.8.0")
+}
+
+// detekt: static analysis (complexity, potential bugs, style); formatting stays with ktlint.
+detekt {
+    buildUponDefaultConfig.set(true)
+    config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+    parallel.set(true)
+    // the plain `detekt` task (no type resolution) covers every KMP source set of the module
+    source.setFrom(
+        listOf("commonMain", "commonTest", "jvmMain", "jvmTest", "iosMain", "iosTest", "androidMain")
+            .map { file("src/$it/kotlin") }
+            .filter { it.exists() },
+    )
 }
 
 // Test fixtures (:core:*-testing) bring kotlin-test with them: only test source sets may use them.

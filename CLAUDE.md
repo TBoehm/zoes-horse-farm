@@ -49,7 +49,7 @@ Format-Check und Unit-Tests über das ganze Repo; vor jedem Commit alle fünf. K
 Gate, auch kein WIP-Commit mit kaputtem Build.
 
 Native App (`mobile/`, Branch `kmp-cmp`, Spec `docs/specs/kmp-cmp/architecture.md`): zusätzlich
-`./gradlew qa` im Ordner `mobile/` (ktlint, Unit-Tests, iOS-Kompilierung, Zeit/Zufall-Prüfung für
+`./gradlew qa` im Ordner `mobile/` (ktlint, detekt, Unit-Tests, iOS-Kompilierung, Zeit/Zufall-Prüfung für
 Domain/Application). Die Schichtgrenzen erzwingen dort die Gradle-Module; Spielwerte stehen in `Tuning.kt`.
 
 Nach den Gates prüft immer ein frischer Opus-QA-Agent den gesamten Diff gegen alle Regeln dieser

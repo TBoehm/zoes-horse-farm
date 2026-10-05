@@ -1,0 +1,21 @@
+# Overrides on top of detekt's default rule set (buildUponDefaultConfig).
+# Formatting is ktlint's job; detekt checks complexity, potential bugs, naming and style.
+
+style:
+  MaxLineLength:
+    maxLineLength: 120
+  MagicNumber:
+    # Game values live in Tuning.kt (CLAUDE.md). Adapters build geometry, colours, sounds and
+    # layouts from literal numbers, as the web app does; tests and fixtures use literals freely.
+    excludes:
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/iosTest/**'
+      - '**/*-testing/**'
+      - '**/adapters/**'
+      - '**/Tuning.kt'
+
+naming:
+  FunctionNaming:
+    ignoreAnnotated:
+      - 'Composable'

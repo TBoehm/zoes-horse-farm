@@ -121,7 +121,9 @@ Im Ordner `mobile/`:
 ./gradlew ktlintFormat           # Formatierung beheben
 ```
 
-`qa` umfasst: ktlint (Module, Root-Skripte, build-logic), `jvmTest` aller Module, Kompilieren von
+`qa` umfasst: ktlint (Formatierung; Module, Root-Skripte, build-logic), detekt 2.0 (statische
+Analyse: Komplexität, mögliche Fehler, Benennung, Stil; Regeln in `mobile/config/detekt/detekt.yml`,
+`MagicNumber` gilt für `core/` außer `Tuning.kt` und Tests), `jvmTest` aller Module, Kompilieren von
 iOS-Haupt- und Testcode (`compileKotlinIos*`, `compileTestKotlinIos*`) und `forbiddenCallsCheck`
 (Domain/Application dürfen weder `kotlin.random`/`Random` noch Systemuhren direkt nutzen, Ersatz für
 die ESLint-Regeln der Web-App). Die Konvention bricht den Build ab, wenn Produktionscode ein

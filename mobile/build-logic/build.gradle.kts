@@ -11,6 +11,7 @@ dependencies {
     implementation(libs.kotlin.gradle.plugin)
     implementation(libs.kotlin.serialization.plugin)
     implementation(libs.ktlint.gradle.plugin)
+    implementation(libs.detekt.gradle.plugin)
 }
 
 // kotlin-dsl adds generated accessors (build/) to the main source set: lint only our own sources
