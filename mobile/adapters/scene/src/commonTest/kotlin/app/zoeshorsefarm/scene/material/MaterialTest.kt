@@ -110,6 +110,7 @@ class MaterialTest {
         assertEquals("wind-bunting-v1", WindEffect.bunting(wind).programKey)
         assertEquals("wind-wings-9.000-0.150-0.500", WindEffect.wings(wind, 9.0, 0.15, 0.5).programKey)
         assertEquals("zhf-horse-coat-low", CoatEffect(CoatUniforms(), low = true).programKey)
+        assertEquals("sand-v1", SandEffect(20.0, 35.0).programKey)
         assertEquals("zhf-horse-coat-std", CoatEffect(CoatUniforms(), low = false).programKey)
     }
 

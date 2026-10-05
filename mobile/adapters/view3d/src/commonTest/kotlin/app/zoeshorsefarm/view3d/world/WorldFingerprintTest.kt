@@ -6,6 +6,8 @@ import app.zoeshorsefarm.scene.graph.DirectionalLight
 import app.zoeshorsefarm.scene.graph.InstancedMesh
 import app.zoeshorsefarm.scene.graph.Mesh
 import app.zoeshorsefarm.scene.material.BasicMaterial
+import app.zoeshorsefarm.scene.render.FakeRenderBackend
+import app.zoeshorsefarm.scene.render.GpuTracker
 import app.zoeshorsefarm.scene.render.SceneStats
 import kotlin.math.abs
 import kotlin.test.Test
@@ -92,6 +94,25 @@ class WorldFingerprintTest {
         assertEquals(19, medium.calls)
         assertEquals(52078, medium.triangles)
         assertEquals(978, medium.instances)
+    }
+
+    @Test
+    fun `holds the same shader programs and draws the same calls on high as the web app`() {
+        val backend = FakeRenderBackend()
+        val own = buildWorld(backend)
+        // programs of the visible objects per level, counted by a fresh tracker each time
+        val programs = ArrayList<Int>()
+        for (level in LEVELS) {
+            showLevel(own, level)
+            val tracker = GpuTracker(own.scene) { backend.shadowsEnabled }
+            tracker.compile(own.compileRoot)
+            programs.add(tracker.snapshot().programs)
+        }
+        assertEquals(listOf(10, 12, 20), programs)
+        val high = SceneStats.of(own.scene)
+        assertEquals(26, high.calls)
+        assertEquals(187760, high.triangles)
+        assertEquals(16050, high.instances)
     }
 
     @Test
