@@ -6,7 +6,7 @@ package app.zoeshorsefarm.view3d.horse
 // nose-tail ~ 2.6 m.
 
 /** Left (+X) and right (-X) as seen by horse/rider. */
-val SIDES: List<Int> = listOf(1, -1)
+val SIDES: List<Double> = listOf(1.0, -1.0)
 
 /** Leg index 0..3 (footfall events). */
 val LEG_NAMES: List<String> = listOf("LF", "RF", "LH", "RH")
