@@ -105,9 +105,6 @@ private fun between(
     range: ClosedFloatingPointRange<Double>,
 ): Double = range.start + rng() * (range.endInclusive - range.start)
 
-/** JS `Math.round`: halves go up. */
-private fun jsRound(x: Double): Int = floor(x + 0.5).toInt()
-
 private class Colors(
     val color: Int,
     val accent: Int?,
