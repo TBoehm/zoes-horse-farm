@@ -46,8 +46,9 @@ private const val VOICE_SEED = 2024
  * advances with the rendered frames. The melody sequencer runs inside the render step (a lookahead
  * scheduler on the audio clock), so no timer thread is needed. Rendering does not allocate.
  *
- * All methods except [render] must be called with the [lock] held (the facade does so); [render] takes
- * it itself.
+ * Thread safety: [render] runs on the platform's audio thread, the controls on the game thread. Both
+ * take [lock], a leaf lock: nothing inside calls out to the platform or the facade, so the facade can
+ * safely call platform output methods (which may wait for the audio thread) while it holds its own lock.
  */
 internal class AudioEngine(
     val sampleRate: Int,
@@ -100,7 +101,7 @@ internal class AudioEngine(
     /** Time of the next quantum on the audio clock, in seconds. */
     val currentTime: Double get() = synth.currentFrame / rate
 
-    val musicRunning: Boolean get() = run != null
+    val musicRunning: Boolean get() = lock.withLock { run != null }
 
     val voicesStarted: Long get() = synth.voicesStarted
 
@@ -114,24 +115,27 @@ internal class AudioEngine(
 
     val masterGain: Double get() = master.peek
 
-    // ---- Controls (called with the lock held) ----
+    // ---- Controls (game thread) ----
 
     /** Fades the channels to their new gains (no clicks while dragging a volume slider). */
     fun setChannelTargets(
         musicGain: Double,
         sfxGain: Double,
-    ) {
+    ) = lock.withLock {
         val now = currentTime
         musicChannel.setTargetAtTime(musicGain, now, SMOOTH)
         sfxChannel.setTargetAtTime(sfxGain, now, SMOOTH)
     }
 
-    fun setMasterHidden(hidden: Boolean) {
-        master.setTargetAtTime(if (hidden) 0.0 else MASTER_LEVEL, currentTime, MASTER_SMOOTH)
-    }
+    fun setMasterHidden(hidden: Boolean) =
+        lock.withLock {
+            master.setTargetAtTime(if (hidden) 0.0 else MASTER_LEVEL, currentTime, MASTER_SMOOTH)
+        }
 
     /** Starts the melody from the beginning with a soft fade-in. */
-    fun startMusic() {
+    fun startMusic() = lock.withLock { startMusicLocked() }
+
+    private fun startMusicLocked() {
         if (run != null) return
         val now = currentTime
         val bus = acquire(musicRuns)
@@ -145,7 +149,9 @@ internal class AudioEngine(
     }
 
     /** Fades the melody out. The fast variant is for the background: the audio stops almost at once. */
-    fun stopMusic(fast: Boolean) {
+    fun stopMusic(fast: Boolean) = lock.withLock { stopMusicLocked(fast) }
+
+    private fun stopMusicLocked(fast: Boolean) {
         val bus = run ?: return
         run = null
         val now = currentTime
@@ -155,7 +161,9 @@ internal class AudioEngine(
     }
 
     /** Cuts all running effects (pause, background); later effects use a new session. */
-    fun dropSfxSession() {
+    fun dropSfxSession() = lock.withLock { dropSfxSessionLocked() }
+
+    private fun dropSfxSessionLocked() {
         val old = session ?: return
         session = null
         old.gain.setTargetAtTime(0.0, currentTime, SFX_SESSION_FADE)
@@ -163,14 +171,15 @@ internal class AudioEngine(
     }
 
     /** Plays an effect [recipe] a few milliseconds from now on the current effects session. */
-    fun playSfx(recipe: (VoiceContext, GainBus, Double) -> Unit) {
-        val bus =
-            session ?: acquire(sfxSessions).also {
-                it.open(synth.currentFrame, 1.0)
-                session = it
-            }
-        recipe(voiceContext, bus, currentTime + SFX_START_OFFSET)
-    }
+    fun playSfx(recipe: (VoiceContext, GainBus, Double) -> Unit) =
+        lock.withLock {
+            val bus =
+                session ?: acquire(sfxSessions).also {
+                    it.open(synth.currentFrame, 1.0)
+                    session = it
+                }
+            recipe(voiceContext, bus, currentTime + SFX_START_OFFSET)
+        }
 
     private fun framesOf(seconds: Double): Long = ceil(seconds * rate).toLong()
 

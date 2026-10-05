@@ -26,7 +26,7 @@ class SfxTest {
     @Test
     fun everyHoofHasAClopBetween1And25KhzThatIsClearlyAudible() {
         for (gait in listOf("back", "walk", "trot", "canter")) {
-            val clop = clopsOf(record { v, o, t -> hoof(v, o, t, gait) })
+            val clop = clopsOf(record { v, o, t -> SfxVoices.hoof(v, o, t, gait) })
             assertTrue(clop.isNotEmpty(), gait)
             assertTrue(clop.maxOf { it.peak } >= 0.7, gait)
         }
@@ -34,14 +34,14 @@ class SfxTest {
 
     @Test
     fun landingHasAClopForEachOfItsTwoHoofImpacts() {
-        val clop = clopsOf(record { v, o, t -> landing(v, o, t) })
+        val clop = clopsOf(record { v, o, t -> SfxVoices.landing(v, o, t) })
         assertTrue(clop.size >= 2)
         assertTrue(clop.maxOf { it.peak } >= 1.5)
     }
 
     @Test
     fun theLouderGaitsAreNotQuieterInTheMidRange() {
-        fun peak(gait: String) = clopsOf(record { v, o, t -> hoof(v, o, t, gait) }).maxOf { it.peak }
+        fun peak(gait: String) = clopsOf(record { v, o, t -> SfxVoices.hoof(v, o, t, gait) }).maxOf { it.peak }
         assertTrue(peak("canter") >= peak("trot"))
         assertTrue(peak("trot") >= peak("walk"))
         assertTrue(peak("walk") >= peak("back"))
@@ -51,10 +51,10 @@ class SfxTest {
     fun anUnknownGaitSchedulesNothingAndDoesNotAdvanceTheHoofCounter() {
         val sink = RecordingSink()
         val v = VoiceContext(sink, Mulberry32(1))
-        hoof(v, out, 0.0, "halt")
+        SfxVoices.hoof(v, out, 0.0, "halt")
         assertEquals(0, sink.tones.size + sink.bursts.size)
         assertEquals(0, v.hoofCount)
-        hoof(v, out, 0.0, "walk")
+        SfxVoices.hoof(v, out, 0.0, "walk")
         assertEquals(1, v.hoofCount)
     }
 
@@ -62,8 +62,8 @@ class SfxTest {
     fun theHoofsAlternateBetweenALeftAndARightPitch() {
         val sink = RecordingSink()
         val v = VoiceContext(sink, RandomSource { 0.5 }) // no jitter
-        hoof(v, out, 0.0, "walk")
-        hoof(v, out, 0.0, "walk")
+        SfxVoices.hoof(v, out, 0.0, "walk")
+        SfxVoices.hoof(v, out, 0.0, "walk")
         val thuds = sink.tones.filter { it.freq in 90.0..130.0 }
         assertEquals(listOf(105.0 * 1.06, 105.0), thuds.map { it.freq })
     }
@@ -73,17 +73,17 @@ class SfxTest {
         // hoof: jitter(vol), jitter(freq), jitter(noise freq), noise offset, jitter(clop), noise offset (clop),
         // noise offset (lowpass), noise offset (highpass)
         val counted = CountingRandom()
-        hoof(VoiceContext(RecordingSink(), counted), out, 0.0, "trot")
+        SfxVoices.hoof(VoiceContext(RecordingSink(), counted), out, 0.0, "trot")
         assertEquals(8, counted.calls)
         val landingRandom = CountingRandom()
-        landing(VoiceContext(RecordingSink(), landingRandom), out, 0.0)
+        SfxVoices.landing(VoiceContext(RecordingSink(), landingRandom), out, 0.0)
         // 2 thuds, 2 bursts, 2 clops (jitter + noise offset each)
         assertEquals(8, landingRandom.calls)
     }
 
     @Test
     fun theStartSignalIsABellOfNinePartialsPlusAClick() {
-        val sink = record { v, o, t -> startSignal(v, o, t) }
+        val sink = record { v, o, t -> SfxVoices.startSignal(v, o, t) }
         assertEquals(9, sink.tones.size)
         assertEquals(1, sink.bursts.size)
         assertEquals(440.0 * 0.56, sink.tones.first().freq, 1e-9)
@@ -93,7 +93,7 @@ class SfxTest {
 
     @Test
     fun theFinishSignalIsARunOfSixChimesAndAFiveNoteChord() {
-        val sink = record { v, o, t -> finishSignal(v, o, t) }
+        val sink = record { v, o, t -> SfxVoices.finishSignal(v, o, t) }
         assertEquals(2 * (6 + 5), sink.tones.size)
         val triangles = sink.tones.filter { it.type == OscType.Triangle }
         assertEquals(11, triangles.size)
@@ -105,7 +105,7 @@ class SfxTest {
 
     @Test
     fun theRailFallsWithSixDenserAndQuieterHitsBeforeTheImpact() {
-        val sink = record { v, o, t -> railDown(v, o, t) }
+        val sink = record { v, o, t -> SfxVoices.railDown(v, o, t) }
         val clacks = sink.tones.filter { it.freq in 400.0..1000.0 && it.length > 0.07 && it.length < 0.072 }
         assertEquals(8, clacks.size)
         val firstSix = clacks.take(6)
@@ -117,7 +117,7 @@ class SfxTest {
 
     @Test
     fun takeoffHasTwoThudsAndASnort() {
-        val sink = record { v, o, t -> takeoff(v, o, t) }
+        val sink = record { v, o, t -> SfxVoices.takeoff(v, o, t) }
         assertEquals(2, sink.tones.size)
         assertEquals(4, sink.bursts.size)
         assertEquals(1, sink.bursts.count { it.type == FilterType.Bandpass && it.freq == 1900.0 })
