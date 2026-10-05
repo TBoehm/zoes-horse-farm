@@ -54,7 +54,7 @@ vom Build erzwungen (ersetzt `no-restricted-imports`).
 | `:adapters:audio` | `app.zoeshorsefarm.audio` | `src/adapters/audio/` als PCM-Synthese; Ausgabe pro Plattform (`expect`/`actual`) | shared |
 | `:adapters:storage` | `app.zoeshorsefarm.storage` | `src/adapters/storage/` (Key-Value + JSON) | application |
 | `:adapters:platform` | `app.zoeshorsefarm.platform` | Lebenszyklus, Geräte-Infos, Version | application |
-| `:adapters:input` | `app.zoeshorsefarm.input` | `src/adapters/input/` (Joystick-Mapping, Eingabezustand) | application |
+| `:adapters:input` | `app.zoeshorsefarm.input` | `src/adapters/input/` (Joystick-Mapping, Eingabezustand, Tastatur); die Touch-Bedienelemente gehören zu `:adapters:ui` | application, platform |
 | `:adapters:i18n` | `app.zoeshorsefarm.i18n` | `src/adapters/ui/i18n/` (Texttabellen DE/EN, `t()`) | application |
 | `:adapters:ui` (später) | `app.zoeshorsefarm.ui` | Compose-Bildschirme | alles Innere |
 | `:app` (später) | `app.zoeshorsefarm.app` | Composition Root, Android-App, iOS-Framework | alles |
@@ -97,6 +97,8 @@ das Filament-Backend austauschbar ist, gibt es ein schlankes, renderer-neutrales
   Filament-Backend implementiert ihn; Tests nutzen ein Fake.
 - **Szenen-Statistik** (Port von `tests/support/scene-stats.js` und `gpu-tracker.js`): Draw Calls,
   Dreiecke, Programme ohne GPU, damit die Budget-Tests der Web-App mitportiert werden können.
+  Bewusst Produktionscode (anders als in der Web-App): Diagnose-Box und GPU-Speicher-Schätzung
+  nutzen dieselben Zahlen; reine Test-Attrappen (Fake-Canvas, Fake-Backend) liegen in `commonTest`.
 
 ## Filament-Backend (`:adapters:render-filament`)
 
@@ -115,12 +117,16 @@ das Filament-Backend austauschbar ist, gibt es ein schlankes, renderer-neutrales
 Im Ordner `mobile/`:
 
 ```bash
-./gradlew ktlintCheck            # Lint + Format (beheben: ./gradlew ktlintFormat)
-./gradlew jvmTest                # Unit-Tests (alle Module)
-./gradlew compileKotlinIosArm64 compileKotlinIosSimulatorArm64   # iOS kompiliert
+./gradlew qa                     # alle Gates (lokal = CI)
+./gradlew ktlintFormat           # Formatierung beheben
 ```
 
-Warnungen sind Fehler (`allWarningsAsErrors`). Die Web-Gates (`npm run …`) bleiben unverändert grün.
+`qa` umfasst: ktlint (Module, Root-Skripte, build-logic), `jvmTest` aller Module, Kompilieren von
+iOS-Haupt- und Testcode (`compileKotlinIos*`, `compileTestKotlinIos*`) und `forbiddenCallsCheck`
+(Domain/Application dürfen weder `kotlin.random`/`Random` noch Systemuhren direkt nutzen, Ersatz für
+die ESLint-Regeln der Web-App). Die Konvention bricht den Build ab, wenn Produktionscode ein
+`*-testing`-Modul einbindet. Warnungen sind Fehler (`allWarningsAsErrors`). Gradle 9.8 (Wrapper).
+Die Web-Gates (`npm run …`) bleiben unverändert grün; ESLint und Prettier ignorieren `mobile/`.
 
 ## Arbeitsweise (parallele Agents)
 

@@ -7,6 +7,7 @@ App-Icon (`public/icon.svg`, PNGs werden beim Build erzeugt).
 - Konzept: [docs/features/springreiten-trainer/concept.md](docs/features/springreiten-trainer/concept.md)
 - Tickets: [docs/features/springreiten-trainer/tasks/](docs/features/springreiten-trainer/tasks/README.md)
 - Technische Spec: [docs/specs/springreiten-trainer/architecture.md](docs/specs/springreiten-trainer/architecture.md)
+- Native App (Android + iOS, Branch `kmp-cmp`): [mobile/README.md](mobile/README.md)
 
 ## Entwicklung
 

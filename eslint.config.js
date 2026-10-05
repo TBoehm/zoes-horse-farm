@@ -46,6 +46,7 @@ export default [
       'test-results/**',
       'playwright-report/**',
       '.claude/**',
+      'mobile/**',
     ],
   },
   js.configs.recommended,

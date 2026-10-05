@@ -95,6 +95,7 @@ jobs:
   mobile:
     name: Mobile (KMP)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: mobile
@@ -105,4 +106,8 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew ktlintCheck jvmTest compileKotlinIosArm64 compileKotlinIosSimulatorArm64
+      - uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('mobile/gradle/libs.versions.toml') }}
+      - run: ./gradlew qa
