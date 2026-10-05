@@ -106,6 +106,8 @@ class ControlsHelpTest {
                 i18n = app.i18n,
                 navigator = app.navigator,
                 scheduler = app.scheduler,
+                lifecycle = app.lifecycle,
+                badgeToasts = app.badgeToasts,
                 version = "x",
             )
         assertEquals(HelpMode.KEYBOARD, ControlsHelpModel(hybrid).mode)

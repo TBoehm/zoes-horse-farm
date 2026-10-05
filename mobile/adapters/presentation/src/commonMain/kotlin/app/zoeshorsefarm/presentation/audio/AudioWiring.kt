@@ -1,6 +1,5 @@
 package app.zoeshorsefarm.presentation.audio
 
-import app.zoeshorsefarm.platform.AppLifecycle
 import app.zoeshorsefarm.platform.AppState
 import app.zoeshorsefarm.presentation.AppContext
 
@@ -14,7 +13,6 @@ import app.zoeshorsefarm.presentation.AppContext
  */
 class AudioWiring(
     ctx: AppContext,
-    lifecycle: AppLifecycle,
 ) {
     private val gate = MusicGate(ctx.scheduler, ctx.sound::setMusicWanted)
     private val subscriptions = ArrayList<() -> Unit>()
@@ -25,7 +23,7 @@ class AudioWiring(
                 ctx.sound.setVolumes(s.musicVolume, s.musicMuted, s.sfxVolume, s.sfxMuted)
             }
         subscriptions += ctx.navigator.onScreen { gate.onScreen(it.music, it.musicDelayMs) }
-        subscriptions += lifecycle.onChange { ctx.sound.setHidden(it == AppState.BACKGROUND) }
+        subscriptions += ctx.lifecycle.onChange { ctx.sound.setHidden(it == AppState.BACKGROUND) }
     }
 
     fun dispose() {

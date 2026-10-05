@@ -8,9 +8,11 @@ import app.zoeshorsefarm.audio.Cancellable
 import app.zoeshorsefarm.audio.Scheduler
 import app.zoeshorsefarm.i18n.I18n
 import app.zoeshorsefarm.platform.InputMode
+import app.zoeshorsefarm.platform.ManualAppLifecycle
 import app.zoeshorsefarm.presentation.audio.SoundPort
 import app.zoeshorsefarm.presentation.nav.AppNavigator
 import app.zoeshorsefarm.presentation.nav.ScreenModel
+import app.zoeshorsefarm.presentation.profile.BadgeToastQueue
 
 /** A timer that only fires when the test advances time. */
 class ManualScheduler : Scheduler {
@@ -99,6 +101,8 @@ class TestApp(
     val sound = RecordingSound()
     val inputMode = if (touch) InputMode.mobile() else InputMode(app.zoeshorsefarm.platform.DeviceClass.KEYBOARD)
     val navigator = AppNavigator(i18n)
+    val lifecycle = ManualAppLifecycle()
+    val badgeToasts = BadgeToastQueue(i18n, scheduler, viewportHeight = { 800 })
     val ctx =
         AppContext(
             store = store,
@@ -109,6 +113,8 @@ class TestApp(
             navigator = navigator,
             sound = sound,
             scheduler = scheduler,
+            lifecycle = lifecycle,
+            badgeToasts = badgeToasts,
             version = "1.2.3",
         )
 

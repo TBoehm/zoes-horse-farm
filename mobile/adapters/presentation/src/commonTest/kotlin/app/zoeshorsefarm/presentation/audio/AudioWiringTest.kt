@@ -3,7 +3,6 @@ package app.zoeshorsefarm.presentation.audio
 import app.zoeshorsefarm.application.SoundChannel
 import app.zoeshorsefarm.audio.AudioSettings
 import app.zoeshorsefarm.platform.AppState
-import app.zoeshorsefarm.platform.ManualAppLifecycle
 import app.zoeshorsefarm.presentation.TestApp
 import app.zoeshorsefarm.presentation.nav.Route
 import app.zoeshorsefarm.presentation.nav.ScreenModel
@@ -18,8 +17,8 @@ private class MusicScreen(
 
 class AudioWiringTest {
     private val app = TestApp()
-    private val lifecycle = ManualAppLifecycle()
-    private val wiring = AudioWiring(app.ctx, lifecycle)
+    private val lifecycle = app.lifecycle
+    private val wiring = AudioWiring(app.ctx)
 
     init {
         app.navigator.register("menu") { MusicScreen(music = true) }
