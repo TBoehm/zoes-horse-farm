@@ -39,13 +39,28 @@ class UiScheduler(
     /** Tasks that are scheduled and neither run nor cancelled. */
     val pending: Int get() = tasks.count { !it.cancelled }
 
+    /**
+     * No task is waiting (cancelled ones count until the next [tick] drops them, so this may say "busy"
+     * a moment too long, never "idle" too early). Does not allocate: the shell asks it every frame.
+     */
+    val isIdle: Boolean get() = tasks.isEmpty()
+
+    /**
+     * Called whenever a task is posted: a shell that stopped its frame loop to save battery learns that
+     * [tick] is needed again.
+     */
+    var onPosted: (() -> Unit)? = null
+
     /** Runs [action] once after [delayMs] milliseconds (counted from the next [tick]s). */
     fun postDelayed(
         delayMs: Long,
         action: () -> Unit,
     ): UiTask {
         val base = if (running != NOT_RUNNING) running else clock.nowMs()
-        return Task(base + delayMs, action).also { tasks.add(it) }
+        val task = Task(base + delayMs, action)
+        tasks.add(task)
+        onPosted?.invoke()
+        return task
     }
 
     /** Runs the tasks that are due by now, in the order of their due time. */

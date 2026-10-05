@@ -1,6 +1,7 @@
 package app.zoeshorsefarm.app
 
 import app.zoeshorsefarm.render.filament.backend.FilamentRenderBackend
+import app.zoeshorsefarm.render.filament.backend.sync.SyncLog
 import app.zoeshorsefarm.render.filament.material.MaterialPackageCache
 import app.zoeshorsefarm.scene.render.RenderBackend
 import io.github.erkko68.filament.NativeSurface
@@ -15,13 +16,22 @@ private const val MSAA_SAMPLES = 4
  * Creates `FilamentRenderBackend`s. [toNative] turns the platform's [PlatformSurface] into Filament's
  * `NativeSurface` (iOS: the `CAMetalLayer` pointer; Android: the `Surface`). [cache] keeps the compiled
  * materials between runs (a file in the app's cache directory); without it every start compiles them.
+ * [log] gets the warnings of the backend (the app's log sink), [gpuName] is the name of the GPU for the
+ * debug box.
  */
 class FilamentBackendFactory(
     private val cache: MaterialPackageCache? = null,
+    private val log: (String) -> Unit = {},
+    private val gpuName: () -> String? = { null },
     private val toNative: (PlatformSurface) -> NativeSurface,
 ) : RenderBackendFactory {
     override fun create(antialias: Boolean): SurfaceBackend? {
-        val backend = FilamentRenderBackend.create(cache = cache) ?: return null
+        val backend =
+            FilamentRenderBackend.create(
+                cache = cache,
+                gpuName = gpuName() ?: "Filament",
+                log = SyncLog { log("[filament] $it") },
+            ) ?: return null
         backend.msaaSamples = if (antialias) MSAA_SAMPLES else 0
         return FilamentSurfaceBackend(backend, toNative)
     }

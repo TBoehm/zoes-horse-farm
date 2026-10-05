@@ -454,7 +454,10 @@ class FilamentContext private constructor(
             backend: Engine.Backend = Engine.Backend.DEFAULT,
             tracker: GpuResourceTracker = GpuResourceTracker(),
         ): FilamentContext? {
-            val engine = Engine.create(backend) ?: return null
+            // Metal: a frame without a drawable (the app went to the background, the layer has no size) is
+            // skipped instead of ending the process; the engine's own "panic" is meant for developers
+            val config = Engine.Config().apply { metalDisablePanicOnDrawableFailure = true }
+            val engine = Engine.create(backend, config = config) ?: return null
             val context = FilamentContext(engine, tracker)
             context.settings = settings
             context.build()

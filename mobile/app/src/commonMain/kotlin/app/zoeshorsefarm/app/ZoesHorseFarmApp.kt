@@ -1,5 +1,6 @@
 package app.zoeshorsefarm.app
 
+import app.zoeshorsefarm.application.Clock
 import app.zoeshorsefarm.application.CrashGuard
 import app.zoeshorsefarm.application.PreviousRun
 import app.zoeshorsefarm.application.SaveEnv
@@ -47,7 +48,7 @@ import app.zoeshorsefarm.storage.LocalStore
  * safe: call everything from the one thread that draws (the UI / render thread).
  */
 @Suppress("TooManyFunctions") // the entry points of the shells, one small function per platform event
-class ZoesHorseFarmApp(
+class ZoesHorseFarmApp private constructor(
     private val platform: AppPlatform,
 ) {
     /** The last errors for the debug box; the shell feeds uncaught errors with [recordError]. */
@@ -66,8 +67,16 @@ class ZoesHorseFarmApp(
 
     val inputMode = InputMode(platform.inputDevice)
 
-    /** Delayed tasks of the screens; ticked by [onFrame]. */
-    val scheduler = UiScheduler(platform.clock)
+    /**
+     * Delayed tasks of the screens; ticked by [onFrame]. It counts on the monotonic clock of the platform
+     * (a change of the wall clock must not delay or hurry a toast); [AppContext.clock] stays the wall clock.
+     */
+    val scheduler =
+        UiScheduler(
+            object : Clock {
+                override fun nowMs(): Long = (platform.secondsClock.nowSeconds() * MS_PER_SECOND).toLong()
+            },
+        )
 
     /** The screen stack; the UI shows `currentModel` and listens to `onScreen`. */
     val navigator = AppNavigator(i18n)
@@ -104,6 +113,7 @@ class ZoesHorseFarmApp(
     private val bridge: EngineBridge
     private val audioWiring: AudioWiring
     private var viewportHeightDp = 0
+    private var lastDemand = true
     private var started = false
     private var disposed = false
     private val subscriptions = ArrayList<() -> Unit>()
@@ -145,18 +155,36 @@ class ZoesHorseFarmApp(
                 timeZone = platform.timeZone,
             )
         audioWiring = AudioWiring(context)
-        bridge = EngineBridge(context, platform, crashGuard, previousRun, errorLog, platform.random, ::showNoGraphics)
+        bridge =
+            EngineBridge(
+                context,
+                platform,
+                crashGuard,
+                previousRun,
+                errorLog,
+                platform.random,
+                onNotice = ::showNotice,
+                onDemandChanged = ::notifyDemand,
+            )
+        scheduler.onPosted = ::notifyDemand
         registerScreens(context, platform.random, bridge)
         // the ride gets its own factory: the bridge wires every ride model to the engine
         navigator.register(Route.Ride.NAME) { bridge.createRide(it as Route.Ride) }
-        subscriptions += navigator.onScreen(bridge::onScreenChanged)
+        subscriptions +=
+            navigator.onScreen {
+                bridge.onScreenChanged(it)
+                notifyDemand()
+            }
 
         rotateNotice = RotateNotice(i18n, inputMode, 0, 0, onBlockedChange = navigator::emitRotateBlocked)
         if (store.shouldShowSaveNotice()) saveNotice.show()
         store.onSaveFailed { if (store.shouldShowSaveNotice()) saveNotice.show() }
+        // an app that starts in the background is not drawing: not a crash, and no sound
+        if (lifecycle.state == AppState.BACKGROUND) {
+            crashGuard.markBackground()
+            audio.setHidden(true)
+        }
     }
-
-    private fun showNoGraphics() = showNotice(NoticeKind.NO_3D)
 
     private fun showNotice(kind: NoticeKind) {
         notice = FullNotice(kind, i18n)
@@ -202,8 +230,36 @@ class ZoesHorseFarmApp(
     fun onFrame(nowSeconds: Double) {
         if (disposed) return
         tickScheduler()
-        bridge.frame(nowSeconds)
+        // nothing is drawn in the background (Metal even kills an app that draws there); the timers go on
+        if (lifecycle.state == AppState.FOREGROUND) bridge.frame(nowSeconds)
+        notifyDemand()
     }
+
+    // ---- battery ----
+
+    /**
+     * The app needs [onFrame] calls: a ride is drawing, or a timer of a screen (toast, music delay) is
+     * waiting. While it is false the shell may stop its display link; [onDemandChanged] says when to start
+     * it again. A paused ride draws one picture and then stops wanting frames (the crash guard's heartbeat
+     * stops with it, which is harmless on native: one instance, no tab id).
+     */
+    val wantsFrames: Boolean get() = !disposed && (bridge.wantsFrames || !scheduler.isIdle)
+
+    /** Called with the new value whenever [wantsFrames] changes (on the thread that drives the app). */
+    var onDemandChanged: ((Boolean) -> Unit)? = null
+
+    private fun notifyDemand() {
+        val now = wantsFrames
+        if (now == lastDemand) return
+        lastDemand = now
+        onDemandChanged?.invoke(now)
+    }
+
+    /**
+     * Battery lever: draw at most 30 frames per second (the graphics automatic does not measure then).
+     * Starts from [AppPlatform.capTo30Fps] and survives a reload of the 3D view.
+     */
+    fun setCapTo30Fps(on: Boolean) = bridge.setCapTo30Fps(on)
 
     // a task of a screen that throws must not take the frame loop of the shell down
     @Suppress("TooGenericExceptionCaught")
@@ -230,21 +286,30 @@ class ZoesHorseFarmApp(
         widthPx: Int,
         heightPx: Int,
         density: Double,
-    ) = bridge.onSurfaceCreated(surface, SurfaceSize(widthPx, heightPx, density))
+    ) {
+        bridge.onSurfaceCreated(surface, SurfaceSize(widthPx, heightPx, density))
+        notifyDemand()
+    }
 
     /** The surface changed its size or density (rotation, split screen). */
     fun onSurfaceResized(
         widthPx: Int,
         heightPx: Int,
         density: Double,
-    ) = bridge.onSurfaceResized(SurfaceSize(widthPx, heightPx, density))
+    ) {
+        bridge.onSurfaceResized(SurfaceSize(widthPx, heightPx, density))
+        notifyDemand()
+    }
 
     /**
      * The surface goes away; nothing may be drawn on it after this returns. On a switch to the
      * background call [onLifecycle] with BACKGROUND first: the engine must know the app is hidden before
      * the device is reported lost, or the level would be lowered for an ordinary app switch.
      */
-    fun onSurfaceDestroyed() = bridge.onSurfaceDestroyed()
+    fun onSurfaceDestroyed() {
+        bridge.onSurfaceDestroyed()
+        notifyDemand()
+    }
 
     // ---- events of the platform ----
 
@@ -252,6 +317,7 @@ class ZoesHorseFarmApp(
     fun onLifecycle(state: AppState) {
         lifecycle.update(state)
         if (state == AppState.FOREGROUND) audio.unlock() // the system may have stopped the output
+        notifyDemand()
     }
 
     /** The size of the window in dp: the rotate notice and the toasts follow it. */
@@ -268,6 +334,7 @@ class ZoesHorseFarmApp(
     fun onTouch() {
         inputMode.onTouch()
         audio.onUserInteraction()
+        notifyDemand()
     }
 
     /**
@@ -280,7 +347,11 @@ class ZoesHorseFarmApp(
         repeat: Boolean = false,
         inEditableField: Boolean = false,
     ): Boolean {
-        if (down) inputMode.onKey(key, inEditableField)
+        if (down) {
+            inputMode.onKey(key, inEditableField)
+            // any key but Escape (and not typing) unlocks the sound, like the web's gesture listeners
+            if (key != GameKey.ESCAPE && !inEditableField) audio.onUserInteraction()
+        }
         val ride = bridge.rideModel
         return when {
             key == null || inEditableField || ride == null -> false
@@ -301,4 +372,40 @@ class ZoesHorseFarmApp(
         errorLog.record(error)
         platform.logSink(describeError(error))
     }
+
+    companion object {
+        private const val MS_PER_SECOND = 1000.0
+
+        /**
+         * Builds the app. Anything that goes wrong while the parts are wired (web: the `try/catch` around
+         * `boot()`) gives [AppCreation.Failed] with the child-friendly error notice instead of an exception.
+         */
+        @Suppress("TooGenericExceptionCaught") // an unexpected error of any kind shows the notice
+        fun create(platform: AppPlatform): AppCreation =
+            try {
+                AppCreation.Created(ZoesHorseFarmApp(platform))
+            } catch (error: Throwable) {
+                platform.logSink("The app could not start\n${error.stackTraceToString()}")
+                AppCreation.Failed(errorNotice(platform), error)
+            }
+
+        private fun errorNotice(platform: AppPlatform): FullNotice {
+            val texts = I18n()
+            runCatching { texts.setLang(detectLang(platform.preferredLanguages)) }
+            return FullNotice(NoticeKind.ERROR, texts)
+        }
+    }
+}
+
+/** The result of [ZoesHorseFarmApp.create]. */
+sealed interface AppCreation {
+    class Created(
+        val app: ZoesHorseFarmApp,
+    ) : AppCreation
+
+    /** The app could not be built: show [notice] instead of the UI. */
+    class Failed(
+        val notice: FullNotice,
+        val error: Throwable,
+    ) : AppCreation
 }

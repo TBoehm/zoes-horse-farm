@@ -18,6 +18,7 @@ import app.zoeshorsefarm.presentation.UiTask
 import app.zoeshorsefarm.presentation.nav.Route
 import app.zoeshorsefarm.presentation.nav.ScreenChange
 import app.zoeshorsefarm.presentation.nav.ScreenModel
+import app.zoeshorsefarm.presentation.notice.NoticeKind
 import app.zoeshorsefarm.presentation.ride.FrameResult
 import app.zoeshorsefarm.presentation.ride.RideEnginePort
 import app.zoeshorsefarm.presentation.ride.RideScreenModel
@@ -25,6 +26,7 @@ import app.zoeshorsefarm.presentation.ride.createRideScreen
 import app.zoeshorsefarm.view3d.CONTEXT_RESTORE_TIMEOUT_MS
 import app.zoeshorsefarm.view3d.engine.DebugBox
 import app.zoeshorsefarm.view3d.engine.DebugError
+import app.zoeshorsefarm.view3d.engine.DemandListener
 import app.zoeshorsefarm.view3d.engine.Engine
 import app.zoeshorsefarm.view3d.engine.EngineConfig
 import app.zoeshorsefarm.view3d.engine.FrameHandler
@@ -40,8 +42,9 @@ import app.zoeshorsefarm.view3d.quality.canHintLowerLevel
  *
  * The 3D side is built lazily: the first ride that has a surface creates the render backend and the
  * [Engine] (like `getEngine` in the web app) and keeps them for the next rides. While there is no
- * surface (the shell has not sent one yet, or the backend cannot be created) the device counts as
- * lost: the ride starts paused with the "graphics lost" note and goes on when the surface arrives.
+ * surface yet (the shell's 3D view arrives with the screen) the ride just waits: nothing is stepped and
+ * nothing is drawn until the surface is there. A backend that cannot be created is a lost device (the
+ * ride pauses, "Reload" tries again) and the app shows a notice.
  */
 @Suppress("TooManyFunctions") // the port plus the surface and screen events the app forwards
 internal class EngineBridge(
@@ -51,7 +54,8 @@ internal class EngineBridge(
     private val previousRun: PreviousRun,
     private val errorLog: ErrorLog,
     private val rng: Rng,
-    private val onNoGraphics: () -> Unit,
+    private val onNotice: (NoticeKind) -> Unit,
+    private val onDemandChanged: () -> Unit,
 ) : RideEnginePort {
     /** One backend with its engine, from the first ride until [teardownStack]. */
     private class Stack(
@@ -66,6 +70,9 @@ internal class EngineBridge(
     private var size: SurfaceSize? = null
     private var stack: Stack? = null
     private var backendFailed = false
+    private var attached = false // the backend of the stack has the surface
+    private var startupCrash: StartupCrash? = startupCrashOf(previousRun) // only the first engine reports it
+    private var capTo30Fps = platform.capTo30Fps
     private var visible = ctx.lifecycle.state == AppState.FOREGROUND
 
     // the ride that is on screen (or covered by the settings), null between rides
@@ -97,10 +104,21 @@ internal class EngineBridge(
     /** The text of the debug box, null unless `AppPlatform.debug` is on and a ride built the engine. */
     val debugText: String? get() = stack?.debugBox?.text
 
+    /** The engine wants display frames (see `Engine.wantsFrames`); false without an engine. */
+    val wantsFrames: Boolean get() = stack?.engine?.wantsFrames ?: false
+
+    /** The 30 fps battery lever; kept when the engine is built again. */
+    fun setCapTo30Fps(on: Boolean) {
+        capTo30Fps = on
+        stack?.engine?.setCapTo30Fps(on)
+    }
+
     // ---- screens ----
 
     /** The factory of the ride route: the model of the screen, wired to the engine when it is a ride. */
     fun createRide(route: Route.Ride): ScreenModel {
+        // the previous ride is gone: the port calls of the new model must not reach its session
+        detachRide()
         val screen = createRideScreen(ctx, route, rng, this)
         if (screen is RideScreenModel) attach(screen)
         return screen
@@ -184,8 +202,13 @@ internal class EngineBridge(
 
     /** One display frame: the engine runs its frame loop while a ride is on screen. */
     fun frame(nowSeconds: Double) {
-        stack?.engine?.frame(nowSeconds)
+        if (hasArea) stack?.engine?.frame(nowSeconds)
     }
+
+    private val canBuild: Boolean get() = hasArea && !backendFailed
+
+    // a surface of size 0 (the layout has not happened yet) cannot be drawn on
+    private val hasArea: Boolean get() = size?.let { it.widthPx > 0 && it.heightPx > 0 } == true
 
     /** The ride model that is attached to the engine, for the keyboard. */
     val rideModel: RideScreenModel? get() = model
@@ -198,25 +221,49 @@ internal class EngineBridge(
     ) {
         this.surface = surface
         this.size = size
-        val current = stack
-        if (current != null) {
-            current.surface.attach(surface, size)
-            current.engine.setViewSize(size.widthDp, size.heightDp, size.density)
-        } else if (model != null) {
-            startRide() // a ride was waiting for the surface
-        }
+        attached = false // a new surface object: the backend has to be given it
+        surfaceChanged()
     }
 
     fun onSurfaceResized(size: SurfaceSize) {
         this.size = size
-        val current = stack ?: return
-        current.surface.resize(size)
-        current.engine.setViewSize(size.widthDp, size.heightDp, size.density)
+        surfaceChanged()
     }
 
+    // The surface or its size changed: give it to the backend, resize, or build the engine a ride waits for.
+    // A surface without area (the layout has not happened yet) waits for its first size.
+    private fun surfaceChanged() {
+        val target = surface
+        val area = size
+        val current = stack
+        if (target == null || area == null || !hasArea) return
+        when {
+            current == null -> {
+                if (model != null) startRide()
+            }
+
+            !attached -> {
+                current.surface.attach(target, area)
+                attached = true
+                current.engine.setViewSize(area.widthDp, area.heightDp, area.density)
+                current.engine.setVisible(visible) // the detach said "hidden", the app is not
+            }
+
+            else -> {
+                current.surface.resize(area)
+                current.engine.setViewSize(area.widthDp, area.heightDp, area.density)
+            }
+        }
+    }
+
+    // The shell takes the surface away: on native this is the only way a device is "lost", and it is no sign
+    // of overload. The engine is told "hidden" first so that the loss rule leaves the level alone.
     fun onSurfaceDestroyed() {
         surface = null
-        stack?.surface?.detach()
+        val current = stack ?: return
+        current.engine.setVisible(false)
+        attached = false
+        current.surface.detach()
     }
 
     // ---- building and tearing down the 3D side ----
@@ -228,16 +275,28 @@ internal class EngineBridge(
         stack?.let { return it }
         val target = surface
         val area = size
-        val built = if (target == null || area == null || backendFailed) null else build(target, area)
+        val built = if (target == null || area == null || !canBuild) null else build(target, area)
         if (built != null) {
             stack = built
+            startupCrash = null
             applyKnownState(built.engine)
-            if (reportedLost) {
-                reportedLost = false
-                for (listener in restoredListeners.toList()) listener()
-            }
+            if (reportedLost) fireRestored()
+            onDemandChanged()
         }
         return built
+    }
+
+    // No 3D view: a lost device for the ride that waits (it pauses, "Reload" tries again) and a notice
+    private fun failBuild(kind: NoticeKind) {
+        backendFailed = true
+        reportedLost = true
+        onNotice(kind)
+        if (model != null) for (listener in lostListeners.toList()) listener()
+    }
+
+    private fun fireRestored() {
+        reportedLost = false
+        for (listener in restoredListeners.toList()) listener()
     }
 
     @Suppress("TooGenericExceptionCaught") // the backend or the engine may fail in any way: 3D is off then
@@ -253,18 +312,17 @@ internal class EngineBridge(
         return try {
             backend = platform.renderBackends.create(plan.antialiasChosen)
             if (backend == null) {
-                backendFailed = true
-                onNoGraphics()
+                failBuild(NoticeKind.NO_3D)
                 return null
             }
             backend.attach(target, area)
+            attached = true
             val engine = Engine(backend.backend, ctx.settings, engineConfig(view, device, plan.contextAntialias))
             Stack(backend, engine, debugBoxOf(engine)).also { subscribe(it) }
         } catch (error: Throwable) {
             logError("Cannot start the 3D view", error)
-            backendFailed = true
             runCatching { backend?.backend?.dispose() }
-            onNoGraphics()
+            failBuild(NoticeKind.ERROR)
             null
         }
     }
@@ -277,7 +335,8 @@ internal class EngineBridge(
         view = view,
         device = device,
         contextAntialias = antialias,
-        startupCrash = startupCrashOf(previousRun),
+        startupCrash = startupCrash,
+        capTo30Fps = capTo30Fps,
         crashGuard = crashGuard,
         textRasterizer = platform.textRasterizer,
         clock = platform.secondsClock,
@@ -299,6 +358,7 @@ internal class EngineBridge(
 
     private fun subscribe(built: Stack) {
         val engine = built.engine
+        engine.demandListener = DemandListener { onDemandChanged() }
         built.subscriptions +=
             engine.onContextLost { for (listener in lostListeners.toList()) listener() }
         built.subscriptions +=
@@ -326,8 +386,10 @@ internal class EngineBridge(
     private fun teardownStack() {
         val old = stack ?: return
         stack = null
+        attached = false
         old.subscriptions.forEach { it() }
         old.engine.horse.onFootfall = null
+        old.engine.demandListener = null
         guarded("Cannot free the 3D view") { old.engine.dispose() }
         guarded("Cannot free the render backend") { old.surface.backend.dispose() }
     }
@@ -357,12 +419,13 @@ internal class EngineBridge(
     override val graphicsLevel: GraphicsLevel get() = stack?.engine?.level ?: ctx.settings.get().graphicsLevel
 
     // Asking builds the engine if the surface is there: a ride that starts must not see a "lost" device
-    // only because nothing has drawn yet.
+    // only because nothing has drawn yet. Without a surface the ride waits, that is not a loss; a backend
+    // that cannot be built is.
     override val contextLost: Boolean
         get() {
             val current = ensureStack()
-            if (current == null) reportedLost = true
-            return current?.engine?.contextLost ?: true
+            if (current == null && backendFailed) reportedLost = true
+            return current?.engine?.contextLost ?: backendFailed
         }
 
     override fun onContextLost(listener: () -> Unit): () -> Unit {
@@ -443,6 +506,8 @@ internal class EngineBridge(
         reportedLost = true
         restartPending = true // the new engine knows neither the look of the horse nor its pose
         if (ride != null) attach(ride) else ensureStack()
+        // no surface (yet): the ride waits for it, which is not a loss, so "Reload" is no dead end
+        if (stack == null && !backendFailed) fireRestored()
     }
 
     /** The app ends: the engine, the backend and the listeners go. */
