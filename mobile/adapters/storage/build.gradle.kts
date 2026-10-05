@@ -9,5 +9,8 @@ kotlin {
             api(project(":core:application"))
             implementation(libs.kotlinx.serialization.json)
         }
+        commonTest.dependencies {
+            implementation(project(":core:application-testing"))
+        }
     }
 }
