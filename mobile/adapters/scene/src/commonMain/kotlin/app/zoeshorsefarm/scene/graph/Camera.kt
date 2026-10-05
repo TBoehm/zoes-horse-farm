@@ -42,11 +42,9 @@ abstract class Camera : Node() {
         }
     }
 
-    private companion object {
-        val position0 = Vec3()
-        val quaternion0 = Quat()
-        val scale0 = Vec3()
-    }
+    private val position0 = Vec3()
+    private val quaternion0 = Quat()
+    private val scale0 = Vec3()
 }
 
 /** Perspective camera (three.js `PerspectiveCamera`, vertical field of view in degrees). */
@@ -93,9 +91,7 @@ class PerspectiveCamera(
         return target.set(maxX - minX, maxY - minY)
     }
 
-    private companion object {
-        val viewPoint = Vec3()
-    }
+    private val viewPoint = Vec3()
 }
 
 /** Orthographic camera (three.js `OrthographicCamera`), used for shadow maps. */

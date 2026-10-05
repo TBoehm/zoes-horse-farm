@@ -11,6 +11,9 @@ import kotlin.math.sqrt
  *
  * Mutable value type: [equals] and [hashCode] compare the current values, so do not use an
  * instance as a hash key while it is being mutated.
+ *
+ * Thread confinement: the scene model is confined to one thread (hot paths share scratch objects, like
+ * three.js). Do not touch it from two threads at the same time.
  */
 @Suppress("TooManyFunctions", "LargeClass") // mirrors the three.js Matrix4 API
 class Mat4 {

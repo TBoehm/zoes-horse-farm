@@ -140,6 +140,7 @@ class FloatAttribute(
 
     /** Transforms every item (itemSize 3) as a point. */
     fun applyMatrix4(m: Mat4): FloatAttribute {
+        val scratch = Vec3()
         for (i in 0 until count) {
             scratch.set(getX(i), getY(i), getZ(i)).applyMatrix4(m)
             setXYZ(i, scratch.x, scratch.y, scratch.z)
@@ -149,6 +150,7 @@ class FloatAttribute(
 
     /** Transforms every item (itemSize 3) as a normal and renormalises it. */
     fun applyNormalMatrix(m: Mat3): FloatAttribute {
+        val scratch = Vec3()
         for (i in 0 until count) {
             scratch.set(getX(i), getY(i), getZ(i)).applyNormalMatrix(m)
             setXYZ(i, scratch.x, scratch.y, scratch.z)
@@ -157,10 +159,6 @@ class FloatAttribute(
     }
 
     override fun clone(): FloatAttribute = copyMetaTo(FloatAttribute(array.copyOf(), itemSize)) as FloatAttribute
-
-    private companion object {
-        val scratch = Vec3()
-    }
 }
 
 /** Uint16 attribute (bone indices of skinned meshes); values are 0..65535. */

@@ -291,11 +291,9 @@ class CatmullRomCurve3(
         }
     }
 
-    private companion object {
-        val tmp = Vec3()
-        val tmp2 = Vec3()
-        val px = CubicPoly()
-        val py = CubicPoly()
-        val pz = CubicPoly()
-    }
+    private val tmp = Vec3()
+    private val tmp2 = Vec3()
+    private val px = CubicPoly()
+    private val py = CubicPoly()
+    private val pz = CubicPoly()
 }
