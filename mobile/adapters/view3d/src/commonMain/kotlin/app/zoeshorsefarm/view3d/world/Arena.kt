@@ -9,6 +9,7 @@ import app.zoeshorsefarm.scene.graph.InstancedMesh
 import app.zoeshorsefarm.scene.graph.Mesh
 import app.zoeshorsefarm.scene.material.Material
 import app.zoeshorsefarm.scene.material.MaterialParams
+import app.zoeshorsefarm.scene.material.SandEffect
 import app.zoeshorsefarm.scene.material.Wind
 import app.zoeshorsefarm.scene.math.Color
 import app.zoeshorsefarm.scene.math.Euler
@@ -37,7 +38,7 @@ import kotlin.math.max
 
 // Arena: sand footing with track, wooden fence (instanced), gate; the start and finish lines are in
 // CourseLinesView.kt. The worn track and the large-scale variation of the sand are a shader patch
-// of the sand material in the web app (`patchSandMaterial`); see the README for the open point.
+// of the sand material in the web app (`patchSandMaterial`): here the `SandEffect` of the sand materials.
 
 private const val SAND_TILE = 4.0 // m per texture tile
 private const val PATH_HEIGHT = 0.004
@@ -275,6 +276,10 @@ class Arena(
                     vertexColors = true,
                 ),
             )
+        // worn track and large-scale variation of the sand (a fragment patch of the backend)
+        val sandEffect = SandEffect(ARENA.width / 2, ARENA.length / 2)
+        sandMats.standard.effect = sandEffect
+        sandMats.lambert.effect = sandEffect
         ground = Mesh(buildSandGeometry(path), sandMats.standard)
         ground.name = "arena-ground"
         ground.receiveShadow = true
