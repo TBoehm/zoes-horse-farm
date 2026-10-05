@@ -5,6 +5,8 @@ import app.zoeshorsefarm.view3d.FENCE
 import app.zoeshorsefarm.view3d.FenceStyle
 import app.zoeshorsefarm.view3d.GATE
 import app.zoeshorsefarm.view3d.PADDOCK
+import app.zoeshorsefarm.view3d.horse.AvoidCircle
+import app.zoeshorsefarm.view3d.horse.GRAZING
 import app.zoeshorsefarm.view3d.paddockPoint
 import app.zoeshorsefarm.view3d.planFence
 import kotlin.math.atan2
@@ -158,4 +160,24 @@ fun planPaddockProps(): PaddockProps {
         trough = PropSpot(trough.x, trough.z, PADDOCK.rotation),
         rack = PropSpot(rack.x, rack.z, PADDOCK.rotation),
     )
+}
+
+// Radius (m) of the circle around each prop that holds its footprint (the shelter with the roof
+// overhang; the trough and the rack are about 1 m from their middle to their corners)
+private const val SHELTER_FOOTPRINT = 3.2
+private const val TROUGH_FOOTPRINT = 1.2
+private const val RACK_FOOTPRINT = 1.0
+
+/**
+ * Circles around the props of the paddock, for the grazing horses (world space). The horses are
+ * planned by their body centre, and the whole horse lies within `GRAZING.bodyRadius` of it, so a
+ * circle is the footprint of the prop plus that reach.
+ */
+fun planPaddockKeepOut(): List<AvoidCircle> {
+    val props = planPaddockProps()
+    return listOf(
+        props.shelter to SHELTER_FOOTPRINT,
+        props.trough to TROUGH_FOOTPRINT,
+        props.rack to RACK_FOOTPRINT,
+    ).map { (spot, footprint) -> AvoidCircle(spot.x, spot.z, footprint + GRAZING.bodyRadius) }
 }

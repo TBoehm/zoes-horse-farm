@@ -37,7 +37,7 @@ Later ports add their rows here (keep the table sorted by JS file).
 | `textures.js` (surfaces) | `Textures.kt` | `TexturesTest.kt` | canvas = scene `Raster2D`, labels via `TextRasterizer`; no JS test |
 | `textures.js` (geometry helpers) | `GeometryBuilder.kt` | `GeometryBuilderTest.kt` | `createGeometryBuilder` -> `GeometryBuilder` class |
 | `wildlife.js` | `world/Wildlife.kt` | `WorldBudgetTest.kt` | |
-| `world.js` | `world/World.kt`, `world/Managed.kt` | `WorldBudgetTest.kt`, `WorldFingerprintTest.kt` | `World(backend, preset, release, textRasterizer)`; stages take the stage id string of `QualityStage.id` |
+| `world.js` | `world/World.kt`, `world/Managed.kt` | `WorldBudgetTest.kt`, `WorldStagesTest.kt`, `GrazingWorldTest.kt`, `WorldFingerprintTest.kt`, `WorldAllocationTest.kt` (jvmTest) | `World(backend, preset, release, textRasterizer)`; stages take the stage id string of `QualityStage.id` |
 | `world-layout.js` | `WorldLayout.kt`, `SiteLayout.kt`, `FallingPoles.kt` | `WorldLayoutTest.kt` | split by topic: obstacles/stand/lines, fence/site/paddock/scatter, falling poles |
 | (helper) | `JsNumbers.kt` | – | `jsRound`: JS `Math.round` semantics (halves go up) |
 
@@ -49,3 +49,12 @@ Later ports add their rows here (keep the table sorted by JS file).
 - Randomness comes from the seeded generators of the JS (same numbers as the web app); time comes
   in as a parameter or through the `Scheduler` port.
 - Per-frame paths (`CameraRig.update`, flight poses, …) reuse scratch objects and do not allocate.
+
+## Open points of the world
+
+- **Sand shader patch.** The web app's `patchSandMaterial` (worn track along the fence, large-scale
+  variation of the sand colour, program key `sand-v1`) has no counterpart in `:adapters:scene`: its
+  `MaterialEffect` is a sealed class, so view3d cannot add one. Needed: a `SandEffect(arenaHalfWidth,
+  arenaHalfLength)` in `Effects.kt` (key `sand-v1`), set on `sandMats.standard` and `.lambert` in
+  `world/Arena.kt`, and the shader in the Filament backend. Until then `GpuTracker` counts one program
+  less on low than the web app (the Lambert sand and the Lambert grass share a program).

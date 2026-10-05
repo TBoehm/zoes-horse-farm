@@ -5,7 +5,9 @@ import app.zoeshorsefarm.view3d.FENCE
 import app.zoeshorsefarm.view3d.FenceStyle
 import app.zoeshorsefarm.view3d.GATE
 import app.zoeshorsefarm.view3d.PADDOCK
+import app.zoeshorsefarm.view3d.horse.GRAZING
 import app.zoeshorsefarm.view3d.paddockContains
+import app.zoeshorsefarm.view3d.paddockPoint
 import app.zoeshorsefarm.view3d.planFence
 import kotlin.math.PI
 import kotlin.math.abs
@@ -130,5 +132,49 @@ class PlanPaddockPropsTest {
         var d = p.rotation - toCenter
         d -= round(d / (2 * PI)) * 2 * PI
         assertTrue(abs(d) < PI / 2)
+    }
+}
+
+class PlanPaddockKeepOutTest {
+    private val props = planPaddockProps()
+    private val circles = planPaddockKeepOut()
+
+    private fun circleOf(spot: PropSpot) = circles.first { it.x == spot.x && it.z == spot.z }
+
+    @Test
+    fun `a circle is the footprint of the prop plus the reach of a horse around its body centre`() {
+        // the shelter is 4.4 m x 2.8 m with a roof that overhangs by 0.35 m at the sides and 0.4 m at
+        // the front and back: the corners of the roof are 3.1 m from its middle
+        assertTrue(circleOf(props.shelter).r >= hypot(2.55, 1.8) + GRAZING.bodyRadius)
+        assertTrue(circleOf(props.trough).r >= hypot(1.0, 0.3) + GRAZING.bodyRadius)
+        assertTrue(circleOf(props.rack).r >= hypot(0.9, 0.35) + GRAZING.bodyRadius)
+    }
+
+    @Test
+    fun `has a circle around every prop centred on it`() {
+        assertEquals(3, circles.size)
+        for (spot in listOf(props.shelter, props.trough, props.rack)) {
+            assertTrue(circles.any { it.x == spot.x && it.z == spot.z })
+        }
+    }
+
+    @Test
+    fun `leaves room in the paddock for the horses between the circles and the fence`() {
+        var free = 0
+        var u = -0.9
+        while (u <= 0.9) {
+            var v = -0.9
+            while (v <= 0.9) {
+                val p = paddockPoint(u, v)
+                if (paddockContains(p.x, p.z, GRAZING.margin) &&
+                    circles.none { hypot(p.x - it.x, p.z - it.z) < it.r }
+                ) {
+                    free++
+                }
+                v += 0.1
+            }
+            u += 0.1
+        }
+        assertTrue(free > 150)
     }
 }

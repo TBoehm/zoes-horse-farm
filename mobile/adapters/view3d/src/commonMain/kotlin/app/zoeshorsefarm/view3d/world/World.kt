@@ -1,6 +1,7 @@
 package app.zoeshorsefarm.view3d.world
 
 import app.zoeshorsefarm.application.GraphicsLevel
+import app.zoeshorsefarm.domain.horse.Coat
 import app.zoeshorsefarm.domain.sim.Obstacle
 import app.zoeshorsefarm.domain.sim.Zone
 import app.zoeshorsefarm.scene.GpuObject
@@ -30,11 +31,15 @@ import app.zoeshorsefarm.scene.render.RenderBackend
 import app.zoeshorsefarm.scene.texture.BlockTextRasterizer
 import app.zoeshorsefarm.scene.texture.TextRasterizer
 import app.zoeshorsefarm.scene.texture.Texture
+import app.zoeshorsefarm.scene.texture.createRng
 import app.zoeshorsefarm.view3d.CourseLines
 import app.zoeshorsefarm.view3d.DetailHold
 import app.zoeshorsefarm.view3d.PADDOCK
 import app.zoeshorsefarm.view3d.SITE
 import app.zoeshorsefarm.view3d.createWind
+import app.zoeshorsefarm.view3d.horse.GrazingHorses
+import app.zoeshorsefarm.view3d.horse.PaddockArea
+import app.zoeshorsefarm.view3d.horse.createGrazingHorses
 import app.zoeshorsefarm.view3d.isOnArenaSand
 import app.zoeshorsefarm.view3d.quality.MEDIUM_PRESET
 import app.zoeshorsefarm.view3d.quality.MERGED_STAGE_ID
@@ -59,6 +64,10 @@ private const val FLOOR_COLOR = 0x5d6e3e // green ground for the lower hemispher
 
 // The horses are only animated while the paddock (a sphere around it) is in view
 private val PADDOCK_SPHERE_RADIUS = hypot(PADDOCK.width, PADDOCK.depth) / 2 + 3
+
+// Grazing horses in the paddock: different coats, a fixed seed (the same picture every time)
+private val GRAZING_COATS = listOf(Coat.GREY, Coat.CHESTNUT)
+private const val GRAZING_SEED = 31
 
 // Weakest footfall that raises hoof dust (a step at the walk does not)
 private const val DUST_MIN_STRENGTH = 0.3
@@ -140,6 +149,10 @@ class World(
 
     // hoof dust over the sand; the pool follows the level (none on low)
     private val dust = Dust(DustQuality.LOW, release)
+
+    // grazing horses of the paddock: built when a level has them (see syncGrazing)
+    private var grazing: GrazingHorses? = null
+    private var grazingCount = 0
 
     // image-based light from the sky (built lazily, freed on "low", rebuilt after a lost device)
     private var envLight: EnvironmentLight? = null
@@ -457,7 +470,41 @@ class World(
                 else -> DustQuality.MEDIUM
             }
         dust.setQuality(dustLevel)
+        syncGrazing(p)
         applyMeshes() // holds the details back if the materials stage is not at this level yet
+    }
+
+    /**
+     * The grazing horses of a level: made when the level has them, thrown away (and their GPU
+     * objects released) when it has none, rebuilt when their number changes, otherwise only their
+     * geometry detail follows the level.
+     */
+    private fun syncGrazing(p: QualityPreset) {
+        val wanted = p.grazingHorses
+        if (grazing != null && wanted != grazingCount) {
+            grazing?.dispose()
+            grazing = null
+        }
+        grazingCount = wanted
+        if (wanted <= 0) return
+        val existing = grazing
+        if (existing != null) {
+            existing.setQuality(p)
+            return
+        }
+        val area =
+            PaddockArea(PADDOCK.x, PADDOCK.z, PADDOCK.width, PADDOCK.depth, PADDOCK.rotation, planPaddockKeepOut())
+        val horses =
+            createGrazingHorses(
+                area = area,
+                quality = p,
+                count = wanted,
+                coats = GRAZING_COATS,
+                rng = createRng(GRAZING_SEED),
+                release = release,
+            )
+        scene.add(horses.group)
+        grazing = horses
     }
 
     private fun paddockInView(camera: Camera?): Boolean {
@@ -639,6 +686,7 @@ class World(
         camera: Camera?,
     ) {
         dust.update(dt)
+        grazing?.let { if (paddockInView(camera)) it.update(dt) }
         sky.update(dt, camera)
         environment.update(dt)
         obstacles.update(dt, camera)
@@ -650,6 +698,8 @@ class World(
     fun gpuObjects(): List<GpuObject> = collectGpuObjects(scene, listOfNotNull(envLight))
 
     fun dispose() {
+        grazing?.dispose()
+        grazing = null
         dust.dispose()
         obstacles.dispose()
         lines.dispose()
