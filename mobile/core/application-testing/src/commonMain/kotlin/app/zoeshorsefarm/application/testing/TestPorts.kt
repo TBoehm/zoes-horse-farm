@@ -55,7 +55,7 @@ open class FakeStore(
     @Suppress("UNCHECKED_CAST") // the value under a section name was stored by a call with that section
     override fun <T : Any> get(section: Section<T>): T = data.getOrPut(section.name) { section.defaults() } as T
 
-    override fun <T : Any> update(
+    private fun <T : Any> write(
         section: Section<T>,
         change: (T) -> T,
     ): T {
@@ -65,11 +65,16 @@ open class FakeStore(
         return next
     }
 
+    override fun <T : Any> update(
+        section: Section<T>,
+        change: (T) -> T,
+    ): T = write(section, change)
+
     /** Same as [update]; a test simulates another tab by calling [set] before the call. */
     override fun <T : Any> updateThrough(
         section: Section<T>,
         change: (T) -> T,
-    ): T = update(section, change)
+    ): T = write(section, change)
 
     override fun <T : Any> onChange(
         section: Section<T>,
