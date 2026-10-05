@@ -124,6 +124,25 @@ class InstanceDataTest {
     }
 
     @Test
+    fun `row bytes start at the first float of the first row`() {
+        val floats = FloatArray(InstanceData.floatCount(300)) { it.toFloat() }
+        val rows = 1..1
+        val bytes = InstanceData.rowBytes(floats, rows, ByteArray(0))
+        assertEquals(InstanceData.rowByteCount(rows), bytes.size)
+        val firstFloat = InstanceData.TEXTURE_WIDTH * 4
+        assertContentEquals(
+            InstanceData.toBytes(floatArrayOf(firstFloat.toFloat()), 1, ByteArray(0)),
+            bytes.copyOfRange(0, 4),
+        )
+    }
+
+    @Test
+    fun `the byte count of rows is the width times 16 bytes per row`() {
+        assertEquals(1024 * 16, InstanceData.rowByteCount(0..0))
+        assertEquals(2 * 1024 * 16, InstanceData.rowByteCount(3..4))
+    }
+
+    @Test
     fun `floats convert to little endian bytes`() {
         val bytes = InstanceData.toBytes(floatArrayOf(1f, -2f), 2, ByteArray(0))
         assertContentEquals(byteArrayOf(0, 0, -128, 63, 0, 0, 0, -64), bytes)

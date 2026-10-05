@@ -66,4 +66,19 @@ class MeshData(
     }
 
     val isSkinned: Boolean get() = skinIndices != null
+
+    /** The attributes this mesh provides, to check against `MaterialSpec.requiredAttributes()`. */
+    val semantics: Set<VertexSemantic>
+        get() {
+            val provided = linkedSetOf(VertexSemantic.POSITION)
+            if (normals != null) provided += VertexSemantic.TANGENTS
+            if (colors != null) provided += VertexSemantic.COLOR
+            if (uvs != null) provided += VertexSemantic.UV0
+            if (skinIndices != null) {
+                provided += VertexSemantic.BONE_INDICES
+                provided += VertexSemantic.BONE_WEIGHTS
+            }
+            for (attribute in custom) provided += VertexSemantic.custom(attribute.slot)
+            return provided
+        }
 }

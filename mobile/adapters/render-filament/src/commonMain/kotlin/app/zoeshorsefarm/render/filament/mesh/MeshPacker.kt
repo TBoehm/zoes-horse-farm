@@ -124,16 +124,18 @@ object MeshPacker {
     }
 
     /**
-     * Writes `count` floats as little endian bytes into `scratch` and returns it, or into a new
-     * array when `scratch` is too small. Dynamic vertex data (particles) reuses one scratch array.
+     * Writes `count` floats (from `values` at `sourceOffset`) as little endian bytes into `scratch`
+     * and returns it, or into a new array when `scratch` is too small. Dynamic data (particles)
+     * reuses scratch arrays, see [UploadRing].
      */
     fun packFloatsInto(
         values: FloatArray,
         count: Int,
         scratch: ByteArray,
+        sourceOffset: Int = 0,
     ): ByteArray {
         val bytes = if (scratch.size >= count * 4) scratch else ByteArray(count * 4)
-        for (i in 0 until count) putInt(bytes, i * 4, values[i].toRawBits())
+        for (i in 0 until count) putInt(bytes, i * 4, values[sourceOffset + i].toRawBits())
         return bytes
     }
 

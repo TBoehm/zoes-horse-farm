@@ -40,6 +40,9 @@ enum class AttributeFormat(
     USHORT4(8),
     ;
 
+    /** Stored as plain floats: the attributes that can be rewritten from a `FloatArray`. */
+    val isFloat: Boolean get() = this == FLOAT1 || this == FLOAT2 || this == FLOAT3 || this == FLOAT4
+
     companion object {
         fun floats(components: Int): AttributeFormat =
             when (components) {

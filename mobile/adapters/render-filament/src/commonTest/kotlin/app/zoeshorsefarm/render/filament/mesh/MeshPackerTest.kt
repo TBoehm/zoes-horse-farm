@@ -240,6 +240,12 @@ class MeshPackerTest {
     }
 
     @Test
+    fun `packFloatsInto reads from a source offset`() {
+        val result = MeshPacker.packFloatsInto(floatArrayOf(9f, 1f, 2f), 2, ByteArray(0), sourceOffset = 1)
+        assertContentEquals(floatBytes(1f, 2f), result)
+    }
+
+    @Test
     fun `an empty mesh is allowed and has an empty box`() {
         val packed = MeshPacker.pack(MeshData(positions = FloatArray(0)))
         assertEquals(0, packed.vertexCount)

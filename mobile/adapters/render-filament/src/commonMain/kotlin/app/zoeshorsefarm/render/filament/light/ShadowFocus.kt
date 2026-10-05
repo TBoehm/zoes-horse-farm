@@ -9,9 +9,9 @@ import kotlin.math.sqrt
  * The shadow area that follows a focus point (the web `setShadowFocus`): the point is snapped to the
  * texel grid of the shadow map in light space, so the shadows do not shimmer while the focus moves.
  *
- * `sunX/Y/Z` is the direction towards the sun (normalized). The sun's `halfExtent` (24 m) and the map
- * size give the texel size on the ground. The snapped focus and the sun position (focus + direction
- * times [SUN_DISTANCE]) are what three.js set as `sun.target` and `sun.position`.
+ * `toSunX/Y/Z` is the direction towards the sun. The sun's `halfExtent` (24 m) and the map size give
+ * the texel size on the ground. The snapped focus and the sun position (focus + direction times
+ * [SUN_DISTANCE]) are what three.js set as `sun.target` and `sun.position`.
  *
  * Filament fits the shadow map of a directional light to the camera frustum instead of to a box
  * around a target, so the focus acts through [shadowFar]: the shadowed part of the view ends just
@@ -21,9 +21,9 @@ import kotlin.math.sqrt
  * Mutable scratch values, no allocation after construction.
  */
 class ShadowFocus(
-    sunX: Float,
-    sunY: Float,
-    sunZ: Float,
+    toSunX: Float,
+    toSunY: Float,
+    toSunZ: Float,
     val halfExtent: Float = DEFAULT_HALF_EXTENT,
     mapSize: Int,
 ) {
@@ -52,22 +52,27 @@ class ShadowFocus(
 
     init {
         require(mapSize > 0) { "mapSize must be positive" }
-        val length = sqrt(sunX * sunX + sunY * sunY + sunZ * sunZ)
+        val length = sqrt(toSunX * toSunX + toSunY * toSunY + toSunZ * toSunZ)
         require(length > 0f) { "the sun direction must not be zero" }
-        dirX = sunX / length
-        dirY = sunY / length
-        dirZ = sunZ / length
+        dirX = toSunX / length
+        dirY = toSunY / length
+        dirZ = toSunZ / length
         // forward = -dir (the light travels from the sun to the ground); right = forward x (0, 1, 0)
         val fx = -dirX
         val fy = -dirY
         val fz = -dirZ
-        var rx = fy * 0f - fz * 1f
-        var ry = fz * 0f - fx * 0f
-        var rz = fx * 1f - fy * 0f
-        val rl = sqrt(rx * rx + ry * ry + rz * rz)
-        rx /= rl
-        ry /= rl
-        rz /= rl
+        var rx = -fz
+        var ry = 0f
+        var rz = fx
+        val rl = sqrt(rx * rx + rz * rz)
+        if (rl < PARALLEL_EPSILON) {
+            // the sun stands straight above: any horizontal axis will do
+            rx = 1f
+            rz = 0f
+        } else {
+            rx /= rl
+            rz /= rl
+        }
         var ux = ry * fz - rz * fy
         var uy = rz * fx - rx * fz
         var uz = rx * fy - ry * fx
@@ -132,5 +137,6 @@ class ShadowFocus(
         const val SUN_DISTANCE = 90f
         const val MIN_SHADOW_FAR = 8f
         private const val EPSILON = 1e-4f
+        private const val PARALLEL_EPSILON = 1e-6f
     }
 }

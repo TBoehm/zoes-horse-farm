@@ -92,4 +92,22 @@ object InstanceData {
         count: Int,
         scratch: ByteArray,
     ): ByteArray = MeshPacker.packFloatsInto(floats, count, scratch)
+
+    /** The floats of the whole rows `rows` of the texture, as bytes in `scratch` (see [rowRange]). */
+    fun rowBytes(
+        floats: FloatArray,
+        rows: IntRange,
+        scratch: ByteArray,
+    ): ByteArray {
+        val floatsPerRow = TEXTURE_WIDTH * FLOATS_PER_TEXEL
+        return MeshPacker.packFloatsInto(
+            floats,
+            (rows.last - rows.first + 1) * floatsPerRow,
+            scratch,
+            rows.first * floatsPerRow,
+        )
+    }
+
+    /** Bytes of the whole rows `rows`. */
+    fun rowByteCount(rows: IntRange): Int = (rows.last - rows.first + 1) * TEXTURE_WIDTH * BYTES_PER_TEXEL
 }

@@ -41,6 +41,20 @@ class ShadowFocusTest {
     ) = (x * f.upX + y * f.upY + z * f.upZ) / f.texelSize
 
     @Test
+    fun `a sun straight above still gets valid axes`() {
+        val f = ShadowFocus(0f, 1f, 0f, 24f, 1024)
+        f.moveTo(3.3f, 0f, 4.4f)
+        assertTrue(f.x.isFinite() && f.y.isFinite() && f.z.isFinite())
+        assertNear(1f, f.rightX * f.rightX + f.rightY * f.rightY + f.rightZ * f.rightZ, 1e-5f)
+        assertNear(1f, f.upX * f.upX + f.upY * f.upY + f.upZ * f.upZ, 1e-5f)
+    }
+
+    @Test
+    fun `a zero sun direction is rejected`() {
+        assertTrue(runCatching { ShadowFocus(0f, 0f, 0f, 24f, 1024) }.isFailure)
+    }
+
+    @Test
     fun `a texel is the shadow extent divided by the map size`() {
         assertNear(48f / 2048f, focus(2048).texelSize, 1e-7f)
         assertNear(48f / 1024f, focus(1024).texelSize, 1e-7f)
