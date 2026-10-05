@@ -91,3 +91,18 @@ jobs:
           name: playwright-report
           path: playwright-report
           retention-days: 7
+
+  mobile:
+    name: Mobile (KMP)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew ktlintCheck jvmTest compileKotlinIosArm64 compileKotlinIosSimulatorArm64

@@ -48,6 +48,10 @@ README. Nach jedem Implementierungsschritt (jedes Agent-Ergebnis) laufen mindest
 Format-Check und Unit-Tests über das ganze Repo; vor jedem Commit alle fünf. Kein Commit mit rotem
 Gate, auch kein WIP-Commit mit kaputtem Build.
 
+Native App (`mobile/`, Branch `kmp-cmp`, Spec `docs/specs/kmp-cmp/architecture.md`): zusätzlich
+`./gradlew ktlintCheck jvmTest compileKotlinIosArm64 compileKotlinIosSimulatorArm64` im Ordner
+`mobile/`. Die Schichtgrenzen erzwingen dort die Gradle-Module.
+
 Nach den Gates prüft immer ein frischer Opus-QA-Agent den gesamten Diff gegen alle Regeln dieser
 Datei und die globalen Regeln des Users (Englisch, Schichten, TDD, Stil). Verstöße sind `major`;
 erst bei 0 blocker/major ist ein Schritt fertig.

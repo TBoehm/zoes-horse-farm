@@ -1,0 +1,131 @@
+# Zoe's Horse Farm – Native App (KMP/CMP + Filament) – Architektur-Vertrag
+
+Branch `kmp-cmp`. Ziel: die bestehende Web-App (`src/`, Spec
+`docs/specs/springreiten-trainer/architecture.md`, Konzept `docs/features/springreiten-trainer/concept.md`)
+**vollständig und verhaltensgleich** als native App für **Android und iOS** nachbauen:
+Kotlin Multiplatform (KMP), UI mit Compose Multiplatform (CMP), 3D mit Google Filament über
+[filament-kmp](https://github.com/Erkko68/filament-kmp) (`io.github.erkko68.filament:*`).
+Die Web-App bleibt unverändert im Repo und ist die **fachliche Referenz** („Was“). Dieses Dokument
+regelt das „Wie“ der nativen App. Abweichungen erst hier ändern.
+
+## Grundsätze
+
+- **Port, keine Neuerfindung.** Jede Regel, jeder Spielwert (`tuning.js` → `Tuning.kt`), jede
+  Wertung, jede Freischaltung, jedes Pferd-/Reiter-Detail verhält sich wie in der Web-App. Die
+  Vitest-Tests werden **mitportiert** (gleiche Fälle, Kotlin, `kotlin.test`); sie sind die Abnahme.
+- **CLAUDE.md gilt unverändert:** Code, Kommentare, Testnamen, Logs auf Englisch; Texte nur in
+  i18n (DE + EN); TDD für Domain/Application (beim Port: Test zuerst portieren, rot sehen, dann Code);
+  Clean Architecture; Spielwerte nur in `Tuning.kt`.
+- **Keine Asset-Dateien** (wie Web): Geometrie, Texturen, Materialien (Filament-Materialien werden zur
+  Laufzeit mit `filamat`/`MaterialBuilder` aus Quelltext gebaut) und Klänge entstehen im Code.
+  Ausnahme später: App-Icon.
+- **Kein Allokieren pro Frame** in Sim-, Animations- und Render-Pfaden (Scratch-Objekte wie in JS).
+- **Zeit/Zufall injiziert** (Ports `Clock`, `Rng`), nie `System.currentTimeMillis()`/`Random` in
+  Domain/Application.
+
+## Plattformen und Ziele (Kotlin-Targets)
+
+| Target | Zweck |
+| --- | --- |
+| `jvm` | schnelle Unit-Tests auf jedem Rechner/CI (nicht ausgeliefert) |
+| `iosArm64`, `iosSimulatorArm64` | iOS-App (klibs lassen sich auf Linux kompilieren, Linken braucht macOS/Xcode) |
+| `androidTarget` | Android-App; kommt dazu, sobald Google Maven (`dl.google.com`) und Android SDK erreichbar sind |
+
+Stand der Build-Umgebung (Cloud-Container): `dl.google.com` und `download.jetbrains.com` sind
+gesperrt. Damit fehlen Android Gradle Plugin, androidx und Compose Multiplatform (hängt an androidx).
+Bis dahin werden alle Module ohne Compose/Android gebaut und geprüft; UI (`:adapters:ui`) und App
+(`:app`) folgen in einer späteren Welle.
+
+## Module (Gradle = Schichtgrenzen)
+
+Projekt unter `mobile/`. Jedes Modul nutzt die Konvention `zhf.kmp-library` (`mobile/build-logic`).
+Ein Modul sieht nur, was es als Abhängigkeit deklariert: die Abhängigkeitsrichtung ist damit
+vom Build erzwungen (ersetzt `no-restricted-imports`).
+
+| Modul | Paket | Inhalt (Web-Vorlage) | Darf nutzen |
+| --- | --- | --- | --- |
+| `:core:shared` | `app.zoeshorsefarm.shared` | `src/shared/` (Events, Math, Spring, Reach) | – |
+| `:core:domain` | `app.zoeshorsefarm.domain.{sim,course,progress,horse}` | `src/domain/` | shared |
+| `:core:application` | `app.zoeshorsefarm.application` | `src/application/` | domain, shared |
+| `:core:domain-testing`, `:core:application-testing` | `…testing` | Test-Hilfen aus `tests/support/` (Autopilot, Layout-Prüfer, Fake-Store/-Uhr …); nur als `commonTest`-Abhängigkeit | domain bzw. application |
+| `:adapters:scene` | `app.zoeshorsefarm.scene` | renderer-neutrales Szenenmodell („three-lite“, siehe unten), Mathe, Geometrie-Bausteine, `Raster2D` (Canvas-Ersatz für Texturen), Szenen-Statistik | shared |
+| `:adapters:view3d` | `app.zoeshorsefarm.view3d` | `src/adapters/view3d/` (Welt, Hindernisse, Pferd, Reiter, Kamera, Grafikstufen, Engine-Logik) auf dem Szenenmodell | scene, application, domain, shared |
+| `:adapters:render-filament` | `app.zoeshorsefarm.render.filament` | Filament-Backend: überträgt das Szenenmodell auf Filament (Entities, Puffer, Materialien, Licht, Schatten, Kamera) | scene, filament |
+| `:adapters:audio` | `app.zoeshorsefarm.audio` | `src/adapters/audio/` als PCM-Synthese; Ausgabe pro Plattform (`expect`/`actual`) | shared |
+| `:adapters:storage` | `app.zoeshorsefarm.storage` | `src/adapters/storage/` (Key-Value + JSON) | application |
+| `:adapters:platform` | `app.zoeshorsefarm.platform` | Lebenszyklus, Geräte-Infos, Version | application |
+| `:adapters:input` | `app.zoeshorsefarm.input` | `src/adapters/input/` (Joystick-Mapping, Eingabezustand) | application |
+| `:adapters:i18n` | `app.zoeshorsefarm.i18n` | `src/adapters/ui/i18n/` (Texttabellen DE/EN, `t()`) | application |
+| `:adapters:ui` (später) | `app.zoeshorsefarm.ui` | Compose-Bildschirme | alles Innere |
+| `:app` (später) | `app.zoeshorsefarm.app` | Composition Root, Android-App, iOS-Framework | alles |
+
+Namenskonvention beim Port: JS-Datei `kebab-case.js` → Kotlin-Datei `PascalCase.kt` im passenden
+Unterpaket (`domain/sim/riding-sim.js` → `domain/sim/RidingSim.kt`); Tests `XxxTest.kt` in
+`src/commonTest/kotlin/...`. JS-Objekte mit festen Feldern → `data class`/`class`; String-Unions →
+`enum class` (mit `id`, wo der String gespeichert/übersetzt wird); Factory-Funktionen
+(`createX(...)`) dürfen Klassen werden. Test-Hilfen aus `tests/support/` liegen in
+`:core:domain-testing` bzw. `:core:application-testing` (oder im `commonTest` des einzigen Moduls,
+das sie braucht).
+
+## Szenenmodell (`:adapters:scene`)
+
+Die View-Logik der Web-App baut three.js-Objekte. Damit sie (a) ohne GPU testbar bleibt und (b)
+das Filament-Backend austauschbar ist, gibt es ein schlankes, renderer-neutrales Modell:
+
+- **Mathe:** `Vec3`, `Quat`, `Mat4`, `Euler` (mutable, three.js-Semantik und -Reihenfolgen),
+  `Color` (sRGB-Eingabe, linear gespeichert wie three.js-ColorManagement).
+- **Knoten:** `Node` (Position, Quaternion/Rotation, Skalierung, `visible`, Kinder, Welt-Matrix,
+  `castShadow`, `receiveShadow`, `frustumCulled`, `renderOrder`), `Group`, `Mesh(geometry, material)`,
+  `InstancedMesh(geometry, material, capacity)` mit Instanz-Matrizen, optionalen Instanz-Farben und
+  `count`, `SkinnedMesh` mit `Skeleton` (Knochen sind `Node`s, Bind-Matrizen), `Points` (falls nötig).
+- **Geometrie:** `Geometry` mit Attributen (`position`, `normal`, `color`, `uv`, `skinIndex`,
+  `skinWeight`, freie Zusatzattribute) als `FloatArray`/`ShortArray`, Index (`IntArray`), `version`
+  für Neu-Upload, `dynamic`-Flag. Bausteine nach Bedarf der Web-App (Box, Plane, Cylinder, Cone,
+  Sphere, Circle, Lathe, Tube, Torus …, `mergeGeometries`, `computeVertexNormals`).
+- **Material:** Beschreibungen, keine Shader: `StandardMaterial`, `LambertMaterial`, `BasicMaterial`
+  (unlit), `SkyMaterial`, `PointsMaterial`, Felder wie three.js (Farbe, Roughness, Metalness, Map,
+  Normal-Map, Vertex-Farben, Transparenz, Opacity, Seite, Emissive, Fog, Depth-Write) plus
+  benannte Effekte statt `onBeforeCompile` (z. B. `wind`, Fell-Muster des Pferdes) als Parameter.
+- **Textur:** `Texture` mit RGBA8-Pixeln (`ByteArray`), Größe, Wrap, Filter, Mipmaps, Anisotropie,
+  Farbraum, `version`. Gezeichnet wird mit `Raster2D` (Rechtecke, Kreise, Bögen, Pfade,
+  Verläufe, Rauschen, Alpha-Blending). Text in Texturen kommt über den Port `TextRasterizer`
+  (Plattform/Compose liefert später die echte Schrift).
+- **Szene:** `Scene` (Wurzel, Hintergrund, Fog), `PerspectiveCamera`, `DirectionalLight` (mit
+  Schatten-Kamera/-Mapgröße), `HemisphereLight`, Umgebungslicht-Beschreibung (statt PMREM).
+- **Port `RenderBackend`:** `render(scene, camera)`, `setSize`, `setPixelRatio`, `compile(...)`,
+  `info` (Draw Calls, Dreiecke, Programme), `dispose(...)`, Kontext-/Geräteverlust-Ereignis. Das
+  Filament-Backend implementiert ihn; Tests nutzen ein Fake.
+- **Szenen-Statistik** (Port von `tests/support/scene-stats.js` und `gpu-tracker.js`): Draw Calls,
+  Dreiecke, Programme ohne GPU, damit die Budget-Tests der Web-App mitportiert werden können.
+
+## Filament-Backend (`:adapters:render-filament`)
+
+- filament-kmp 0.7.1 (Filament 1.77.x): gemeinsame API in `commonMain`, auf iOS Metal, auf Android
+  OpenGL ES/Vulkan.
+- Materialien zur Laufzeit mit `filamat` (`MaterialBuilder`): lit (Standard), „lambert“ (billig:
+  lit mit Roughness 1 oder unlit mit eigener Diffus-Rechnung), unlit, Himmel, Varianten für
+  Skinning, Instanzen (Instanz-Farben über `getInstanceIndex()`), Vertex-Farben, Wind.
+- Vertex-Daten: Filament braucht Tangenten-Frames als Quaternion (`TANGENTS`) statt Normalen;
+  Umrechnung im Backend.
+- Grafikstufen bleiben (Pixel-Ratio/Dynamic Resolution, Schatten an/aus und Mapgröße, Materialart,
+  Dichte); MSAA über `View.multiSampleAntiAliasingOptions`.
+
+## Gates (lokal = CI)
+
+Im Ordner `mobile/`:
+
+```bash
+./gradlew ktlintCheck            # Lint + Format (beheben: ./gradlew ktlintFormat)
+./gradlew jvmTest                # Unit-Tests (alle Module)
+./gradlew compileKotlinIosArm64 compileKotlinIosSimulatorArm64   # iOS kompiliert
+```
+
+Warnungen sind Fehler (`allWarningsAsErrors`). Die Web-Gates (`npm run …`) bleiben unverändert grün.
+
+## Arbeitsweise (parallele Agents)
+
+- Jeder Agent arbeitet in einem eigenen Git-Worktree und **nur in seinen Modul-Ordnern**.
+  `settings.gradle.kts`, `build-logic/`, `gradle/libs.versions.toml` und Build-Dateien fremder
+  Module ändert nur die Koordination; braucht ein Agent eine Abhängigkeit, meldet er das.
+- Nach jedem Agent-Ergebnis: alle drei Gates über das ganze Projekt, dann frischer Opus-QA-Review
+  gegen CLAUDE.md und diese Spec; erst bei 0 blocker/major wird gemergt.
